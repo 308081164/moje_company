@@ -55,6 +55,19 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
+
+    - name: Validate SSH secrets
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${{ secrets.SSH_HOST }}" ] || [ -z "${{ secrets.SSH_USERNAME }}" ]; then
+          echo "Missing required secrets: SSH_HOST / SSH_USERNAME"
+          exit 1
+        fi
+        if [ -z "${{ secrets.SSH_PASSWORD }}" ] && [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          echo "Missing SSH credential: set either SSH_PASSWORD or SSH_PRIVATE_KEY (recommended)."
+          exit 1
+        fi
     
     - name: Deploy to production server
       uses: appleboy/ssh-action@v0.1.5
@@ -123,8 +136,11 @@ jobs:
             jewelry_logs:
       with:
         host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT || 22 }}
         username: ${{ secrets.SSH_USERNAME }}
         password: ${{ secrets.SSH_PASSWORD }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
         script: |
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
