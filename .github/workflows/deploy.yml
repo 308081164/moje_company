@@ -91,8 +91,10 @@ jobs:
                 - jewelry-network
               healthcheck:
                 test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${{ secrets.DB_PASSWORD }}"]
-                timeout: 20s
-                retries: 10
+                interval: 10s
+                timeout: 5s
+                retries: 30
+                start_period: 60s
 
             backend:
               image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
@@ -176,7 +178,17 @@ jobs:
           docker compose -f docker-compose.prod.yml pull
           
           echo "启动服务..."
-          docker compose -f docker-compose.prod.yml up -d --force-recreate
+          docker compose -f docker-compose.prod.yml up -d --force-recreate || {
+            echo "docker compose up 失败，输出诊断信息..."
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            echo "--- jewelry-mysql logs ---"
+            docker logs jewelry-mysql --tail 200 || true
+            echo "--- jewelry-backend logs ---"
+            docker logs jewelry-backend --tail 200 || true
+            echo "--- jewelry-mysql health ---"
+            docker inspect -f '{{json .State.Health}}' jewelry-mysql 2>/dev/null || true
+            exit 1
+          }
           
           # ========== 5. 验证部署 ==========
           echo "等待服务启动..."
