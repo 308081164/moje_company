@@ -1,10 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-// 修复 __dirname 在 ES 模块中的问题
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // 保持窗口对象的全局引用，避免被垃圾回收
 let mainWindow: BrowserWindow | null = null;
@@ -23,9 +18,11 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      // 开发期：允许跨域请求（后端若未配置 CORS，会在 renderer 里表现为 Axios Network Error）
+      // 打包/生产环境请保持 webSecurity=true
+      webSecurity: !isDev,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../../assets/icon.png'),
     show: false, // 先隐藏，等加载完成再显示
     frame: true,
     titleBarStyle: 'default'
@@ -33,14 +30,32 @@ function createWindow() {
 
   // 加载应用
   if (isDev) {
-    // 开发环境：加载本地开发服务器
-    mainWindow.loadURL('http://localhost:3000');
+    // 开发环境：直接加载 dist/index.html（避免 dev-server 客户端在 nodeIntegration=false 下触发 require/global 报错）
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
     // 打开开发者工具
     mainWindow.webContents.openDevTools();
   } else {
     // 生产环境：加载打包后的文件
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
   }
+
+  // 关键加载/渲染事件日志（用于排查白屏）
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[renderer] did-fail-load', { errorCode, errorDescription, validatedURL });
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[renderer] did-finish-load', mainWindow?.webContents.getURL());
+  });
+
+  mainWindow.webContents.on('dom-ready', () => {
+    console.log('[renderer] dom-ready', mainWindow?.webContents.getURL());
+  });
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const lvl = ['debug', 'info', 'warn', 'error'][level] ?? String(level);
+    console.log(`[renderer console:${lvl}] ${message} (${sourceId}:${line})`);
+  });
 
   // 窗口加载完成后显示
   mainWindow.once('ready-to-show', () => {

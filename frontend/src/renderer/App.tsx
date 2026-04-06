@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout, Spin, message, notification } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,17 +10,15 @@ import OrderManagementPage from '@/pages/OrderManagementPage';
 import UserManagementPage from '@/pages/UserManagementPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
-import AppHeader from '@/components/layout/AppHeader';
-import AppSider from '@/components/layout/AppSider';
-import AppFooter from '@/components/layout/AppFooter';
+import AppLayout from '@/components/layout/AppLayout';
 import './App.css';
-
-const { Content } = Layout;
 
 const App: React.FC = () => {
   const { isAuthenticated, user, loading: authLoading, checkAuth } = useAuthStore();
   const { appReady, initializeApp } = useAppStore();
   const [initializing, setInitializing] = useState(true);
+
+  console.log('[App] render', { initializing, authLoading, appReady, isAuthenticated });
 
   // 初始化应用
   useEffect(() => {
@@ -48,15 +46,16 @@ const App: React.FC = () => {
     };
 
     init();
-  }, [checkAuth, initializeApp, isAuthenticated, user]);
+  }, [checkAuth, initializeApp]);
 
   // 监听Electron菜单事件
   useEffect(() => {
-    if (window.electronAPI) {
+    const electronAPI = window.electronAPI;
+    if (electronAPI) {
       const handleNewOrder = () => {
         if (isAuthenticated) {
           // 跳转到新建订单页面
-          window.location.href = '/orders/new';
+          window.location.hash = '#/orders/new';
         }
       };
 
@@ -68,18 +67,19 @@ const App: React.FC = () => {
         });
       };
 
-      window.electronAPI.onMenuNewOrder(handleNewOrder);
-      window.electronAPI.onShowAbout(handleShowAbout);
+      electronAPI.onMenuNewOrder(handleNewOrder);
+      electronAPI.onShowAbout(handleShowAbout);
 
       return () => {
-        window.electronAPI.removeMenuNewOrderListener(handleNewOrder);
-        window.electronAPI.removeShowAboutListener(handleShowAbout);
+        electronAPI.removeMenuNewOrderListener(handleNewOrder);
+        electronAPI.removeShowAboutListener(handleShowAbout);
       };
     }
   }, [isAuthenticated]);
 
   // 显示加载状态
   if (initializing || authLoading || !appReady) {
+    console.log('[App] show initializing screen');
     return (
       <div style={{
         display: 'flex',
@@ -99,6 +99,7 @@ const App: React.FC = () => {
 
   // 未认证用户重定向到登录页
   if (!isAuthenticated) {
+    console.log('[App] not authenticated -> login router');
     return (
       <Router>
         <Routes>
@@ -110,27 +111,19 @@ const App: React.FC = () => {
   }
 
   // 主应用布局
+  console.log('[App] authenticated -> main router');
   return (
     <Router>
-      <Layout style={{ minHeight: '100vh' }}>
-        <AppSider />
-        <Layout>
-          <AppHeader />
-          <Content style={{ margin: '16px', overflow: 'auto' }}>
-            <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/orders/*" element={<OrderManagementPage />} />
-                <Route path="/users/*" element={<UserManagementPage />} />
-                <Route path="/system/*" element={<SystemConfigPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </div>
-          </Content>
-          <AppFooter />
-        </Layout>
-      </Layout>
+      <Routes>
+        <Route path="/" element={<AppLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="orders/*" element={<OrderManagementPage />} />
+          <Route path="users/*" element={<UserManagementPage />} />
+          <Route path="system/*" element={<SystemConfigPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
     </Router>
   );
 };

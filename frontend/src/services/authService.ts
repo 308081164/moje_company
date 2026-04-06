@@ -1,5 +1,5 @@
 import api from './api';
-import { LoginRequest, LoginResponse, UserInfo } from '@/types/auth';
+import { LoginRequest, LoginResponse, UserInfo, UserStatus } from '@/types/auth';
 
 // 认证服务
 export const authService = {
@@ -25,6 +25,9 @@ export const authService = {
           role: response.role,
           roleDescription: response.roleDescription,
           permissions: response.permissions || [],
+          status: UserStatus.ACTIVE,
+          createdAt: response.loginTime || new Date().toISOString(),
+          updatedAt: response.loginTime || new Date().toISOString(),
         };
         localStorage.setItem('user_info', JSON.stringify(userInfo));
       }

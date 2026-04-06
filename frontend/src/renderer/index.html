@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>珠宝定制管理系统</title>
-    <link rel="icon" href="assets/icon.png" type="image/png">
+    <!-- 开发环境可能没有打包图标资源，避免 404 干扰 -->
     <style>
         * {
             margin: 0;
@@ -24,6 +24,7 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            position: relative;
         }
         
         .loading-container {
@@ -34,6 +35,9 @@
             height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            position: absolute;
+            inset: 0;
+            z-index: 9999;
         }
         
         .loading-spinner {
@@ -121,7 +125,6 @@
         <!-- 应用标题栏（仅在macOS上显示） -->
         <div class="app-title-bar" id="titleBar" style="display: none;">
             <div class="app-title">
-                <img src="assets/icon.png" alt="图标" class="app-title-icon">
                 <span>珠宝定制管理系统</span>
             </div>
             <div class="window-controls">
@@ -138,8 +141,8 @@
             <div class="loading-subtext">请稍候</div>
         </div>
         
-        <!-- React应用容器 -->
-        <div id="app" style="display: none; flex: 1;"></div>
+        <!-- React应用容器：默认可见，避免 app-loaded 未触发时白屏 -->
+        <div id="app" style="flex: 1;"></div>
     </div>
     
     <script>
@@ -169,9 +172,18 @@
         
         // 应用加载完成后的处理
         window.addEventListener('app-loaded', () => {
+            console.log('[index.html] app-loaded');
             document.getElementById('loadingScreen').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
         });
+
+        // 兜底：如果渲染进程未触发 app-loaded，避免一直遮挡导致“白屏”
+        setTimeout(() => {
+            const loading = document.getElementById('loadingScreen');
+            if (loading && loading.style.display !== 'none') {
+                console.warn('[index.html] app-loaded not fired, hide loading by fallback');
+                loading.style.display = 'none';
+            }
+        }, 3000);
         
         // 错误处理
         window.addEventListener('error', (event) => {

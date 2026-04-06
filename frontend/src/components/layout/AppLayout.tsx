@@ -45,10 +45,10 @@ const AppLayout: React.FC = () => {
   } = theme.useToken();
 
   // 根据用户角色获取菜单项
-  const getMenuItems = () => {
+  const getMenuItems = (): any[] => {
     if (!user) return [];
 
-    const baseItems = [
+    const baseItems: any[] = [
       {
         key: '/dashboard',
         icon: <DashboardOutlined />,

@@ -1,11 +1,22 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ConfigProvider } from 'antd';
+import 'antd/dist/reset.css';
 import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import App from './App';
 import './index.css';
+
+// Webpack 5 + Electron 环境兼容：部分依赖会在运行期读取 global
+// 这里在入口最早处显式注入，避免 "global is not defined"
+(globalThis as any).global = globalThis;
+
+console.log('[renderer] boot', {
+  href: window.location.href,
+  hasAppEl: !!document.getElementById('app'),
+  hasRootEl: !!document.getElementById('root'),
+});
 
 // 配置dayjs本地化
 dayjs.locale('zh-cn');
@@ -162,8 +173,10 @@ root.render(
 );
 
 // 热模块替换（开发环境）
-if (import.meta.hot) {
-  import.meta.hot.accept();
+// Webpack HMR（避免 import.meta 在 commonjs module 下报错）
+declare const module: any;
+if (module?.hot) {
+  module.hot.accept();
 }
 
 // 全局错误处理

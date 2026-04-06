@@ -9,6 +9,8 @@ export enum OrderSource {
   OTHER = 'OTHER',             // 其他
 }
 
+export type { PaginatedResponse } from './auth';
+
 // 订单状态枚举
 export enum OrderStatus {
   PENDING_DESIGN = 'PENDING_DESIGN',           // 待设计师设计

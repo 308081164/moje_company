@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authService } from '@/services/authService';
-import { LoginRequest, LoginResponse, UserInfo, UserRole } from '@/types/auth';
+import { LoginRequest, LoginResponse, UserInfo, UserRole, UserStatus } from '@/types/auth';
 
 interface AuthState {
   // 状态
@@ -50,7 +50,7 @@ export const useAuthStore = create<AuthState>()(
               role: response.role,
               roleDescription: response.roleDescription,
               permissions: response.permissions || [],
-              status: 'ACTIVE',
+              status: UserStatus.ACTIVE,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -121,15 +121,15 @@ export const useAuthStore = create<AuthState>()(
           });
           
           // 尝试获取最新用户信息
-          try {
-            const currentUser = await authService.getCurrentUser();
-            set({
-              user: currentUser,
+          authService
+            .getCurrentUser()
+            .then((currentUser) => {
+              set({ user: currentUser });
+            })
+            .catch((error) => {
+              console.error('获取最新用户信息失败:', error);
+              // 不影响认证状态
             });
-          } catch (error) {
-            console.error('获取最新用户信息失败:', error);
-            // 不影响认证状态
-          }
           
           return true;
         } catch (error) {

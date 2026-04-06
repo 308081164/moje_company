@@ -1,12 +1,19 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
 
 // API基础配置
-const API_BASE_URL = window.env?.API_URL || 'http://localhost:8851/api';
+const API_ORIGIN = 'http://39.102.213.51:8851';
+
+type ApiClient = {
+  get: <T = any>(url: string, config?: any) => Promise<T>;
+  post: <T = any>(url: string, data?: any, config?: any) => Promise<T>;
+  put: <T = any>(url: string, data?: any, config?: any) => Promise<T>;
+  delete: <T = any>(url: string, config?: any) => Promise<T>;
+};
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_ORIGIN,
   timeout: 30000, // 30秒超时
   headers: {
     'Content-Type': 'application/json',
@@ -16,6 +23,13 @@ const api: AxiosInstance = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
+    // 统一将相对路径映射到 /api/*
+    if (config.url && !/^https?:\/\//i.test(config.url)) {
+      config.url = config.url.startsWith('/api')
+        ? config.url
+        : `/api${config.url.startsWith('/') ? '' : '/'}${config.url}`;
+    }
+
     // 从本地存储获取token
     const token = localStorage.getItem('access_token');
     if (token) {
@@ -29,6 +43,9 @@ api.interceptors.request.use(
         _t: Date.now(),
       };
     }
+
+    const finalUrl = `${config.baseURL || ''}${config.url || ''}`;
+    console.log('[API] request', config.method?.toUpperCase(), finalUrl);
     
     return config;
   },
@@ -68,13 +85,13 @@ api.interceptors.response.use(
           message.error(data?.message || '请求参数错误');
           break;
         case 401:
-          message.error('登录已过期，请重新登录');
+          message.error('认证失败（后端返回401），请检查后端认证配置');
           // 清除本地存储
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_info');
           // 跳转到登录页
-          window.location.href = '/login';
+          window.location.hash = '#/login';
           break;
         case 403:
           message.error('权限不足，无法访问');
@@ -95,7 +112,7 @@ api.interceptors.response.use(
       }
     } else if (error.request) {
       // 请求已发出但没有收到响应
-      message.error('网络连接失败，请检查网络设置');
+      message.error('网络请求失败，请检查后端地址、反向代理与CORS/认证配置');
     } else {
       // 请求配置错误
       message.error('请求配置错误');
@@ -128,4 +145,4 @@ export const uploadConfig = {
 };
 
 // 导出API实例
-export default api;
+export default api as unknown as ApiClient;

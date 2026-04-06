@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
   entry: './src/renderer/index.tsx',
@@ -33,7 +34,9 @@ module.exports = {
   },
   output: {
     path: path.join(__dirname, 'dist'),
-    filename: 'renderer.js'
+    filename: 'renderer.js',
+    // 让 webpack runtime 使用 globalThis（避免依赖读取 global 时崩溃）
+    globalObject: 'globalThis'
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -52,14 +55,26 @@ module.exports = {
       template: './src/renderer/index.html',
       filename: 'index.html',
       inject: 'body'
-    })
+    }),
+    new webpack.DefinePlugin({
+      global: 'globalThis',
+    }),
+    // 在 bundle 最前面注入 global（先于任何 import/模块执行）
+    new webpack.BannerPlugin({
+      raw: true,
+      banner: 'var global = globalThis;',
+    }),
   ],
   devServer: {
     static: {
       directory: path.join(__dirname, 'dist')
     },
     port: 3000,
-    hot: true,
+    // Electron 渲染进程在 nodeIntegration=false 时没有 require，
+    // webpack HMR 客户端会间接依赖 node polyfill，容易触发 "require is not defined"。
+    // 这里关闭 hot，使用 liveReload 进行开发期刷新。
+    hot: false,
+    liveReload: true,
     historyApiFallback: true
   }
 };
