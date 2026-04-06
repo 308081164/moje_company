@@ -148,6 +148,9 @@ jobs:
           set -euo pipefail
           : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
           : "${DB_PASSWORD:?DB_PASSWORD is empty (missing GitHub secret DB_PASSWORD)}"
+
+          # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
+          export DB_PASSWORD OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
