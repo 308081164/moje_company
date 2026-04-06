@@ -138,8 +138,10 @@ jobs:
         password: ${{ secrets.SSH_PASSWORD }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        envs: DOCKER_COMPOSE_CONFIG
         script: |
           set -euo pipefail
+          : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
