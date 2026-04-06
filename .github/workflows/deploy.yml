@@ -125,7 +125,7 @@ jobs:
               networks:
                 - jewelry-network
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8851/actuator/health"]
+                test: ["CMD", "curl", "-f", "http://localhost:8851/api/actuator/health"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -205,7 +205,7 @@ jobs:
           docker ps --filter "name=jewelry" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           
           echo "检查服务健康..."
-          if curl -f http://localhost:8851/actuator/health > /dev/null 2>&1; then
+          if curl -f http://localhost:8851/api/actuator/health > /dev/null 2>&1; then
             echo "✅ 服务健康检查通过"
           else
             echo "⚠️  服务健康检查失败，查看日志..."
@@ -220,3 +220,4 @@ jobs:
           echo "=== 部署完成 ==="
           echo "服务地址: http://${{ secrets.SSH_HOST }}:8851"
           echo "健康检查: http://${{ secrets.SSH_HOST }}:8851/actuator/health"
+          echo "健康检查: http://${{ secrets.SSH_HOST }}:8851/api/actuator/health"
