@@ -86,7 +86,6 @@ jobs:
                 TZ: Asia/Shanghai
               volumes:
                 - jewelry_mysql_data:/var/lib/mysql
-                - ./backend/src/main/resources/db:/docker-entrypoint-initdb.d:ro
               command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
               networks:
                 - jewelry-network
@@ -116,7 +115,6 @@ jobs:
               ports:
                 - "8851:8851"
               volumes:
-                - ./backend/src/main/resources/db:/app/db:ro
                 - ./logs:/app/logs
               restart: unless-stopped
               networks:
@@ -158,22 +156,7 @@ jobs:
           # 宿主机持久化目录
           mkdir -p ./logs
           
-          # ========== 2. 传输必要文件 ==========
-          echo "传输数据库迁移文件..."
-          mkdir -p backend/src/main/resources/db
-          
-          # 克隆或更新项目代码
-          if [ ! -d ".git" ]; then
-            echo "克隆项目代码..."
-            rm -rf ./* ./.??* || true
-            git clone https://github.com/${{ github.repository }}.git .
-          else
-            echo "更新项目代码..."
-            git fetch origin main
-            git reset --hard origin/main
-          fi
-          
-          # ========== 3. 创建docker-compose配置 ==========
+          # ========== 2. 创建docker-compose配置 ==========
           echo "创建docker-compose.prod.yml..."
           cat > docker-compose.prod.yml << DOCKER_EOF
           ${DOCKER_COMPOSE_CONFIG}
@@ -182,18 +165,18 @@ jobs:
           echo "校验 docker compose 配置..."
           docker compose -f docker-compose.prod.yml config >/dev/null
           
-          # ========== 4. 设置环境变量 ==========
+          # ========== 3. 设置环境变量 ==========
           echo "设置环境变量..."
           export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
-          # ========== 5. 部署服务 ==========
+          # ========== 4. 部署服务 ==========
           echo "拉取最新镜像..."
           docker compose -f docker-compose.prod.yml pull
           
           echo "启动服务..."
           docker compose -f docker-compose.prod.yml up -d --force-recreate
           
-          # ========== 6. 验证部署 ==========
+          # ========== 5. 验证部署 ==========
           echo "等待服务启动..."
           sleep 15
           
@@ -209,7 +192,7 @@ jobs:
             exit 1
           fi
           
-          # ========== 7. 清理 ==========
+          # ========== 6. 清理 ==========
           echo "清理未使用的镜像..."
           docker image prune -f
           
