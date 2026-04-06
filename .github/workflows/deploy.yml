@@ -58,6 +58,69 @@ jobs:
     
     - name: Deploy to production server
       uses: appleboy/ssh-action@v0.1.5
+      env:
+        DOCKER_COMPOSE_CONFIG: |
+          version: "3.9"
+
+          services:
+            mysql:
+              image: mysql:8.4
+              container_name: jewelry-mysql
+              restart: unless-stopped
+              environment:
+                MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                MYSQL_DATABASE: moje_database
+                TZ: Asia/Shanghai
+              volumes:
+                - jewelry_mysql_data:/var/lib/mysql
+                - ./backend/src/main/resources/db:/docker-entrypoint-initdb.d:ro
+              command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
+              networks:
+                - jewelry-network
+              healthcheck:
+                test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${{ secrets.DB_PASSWORD }}"]
+                timeout: 20s
+                retries: 10
+
+            backend:
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+              container_name: jewelry-backend
+              depends_on:
+                mysql:
+                  condition: service_healthy
+              environment:
+                DB_HOST: mysql
+                DB_PORT: 3306
+                DB_NAME: moje_database
+                DB_USER: root
+                DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+                OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+                OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
+                OSS_BUCKET: moje-jewelry-files
+                SERVER_PORT: 8851
+                SPRING_PROFILES_ACTIVE: prod
+              ports:
+                - "8851:8851"
+              volumes:
+                - ./backend/src/main/resources/db:/app/db:ro
+                - jewelry_logs:/app/logs
+              restart: unless-stopped
+              networks:
+                - jewelry-network
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8851/actuator/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+
+          networks:
+            jewelry-network:
+              driver: bridge
+
+          volumes:
+            jewelry_mysql_data:
+            jewelry_logs:
       with:
         host: ${{ secrets.SSH_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
@@ -90,69 +153,9 @@ jobs:
           
           # ========== 3. 创建docker-compose配置 ==========
           echo "创建docker-compose.prod.yml..."
-          cat > docker-compose.prod.yml << 'EOF'
-version: "3.9"
-
-services:
-  mysql:
-    image: mysql:8.4
-    container_name: jewelry-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      MYSQL_DATABASE: moje_database
-      TZ: Asia/Shanghai
-    volumes:
-      - jewelry_mysql_data:/var/lib/mysql
-      - ./backend/src/main/resources/db:/docker-entrypoint-initdb.d:ro
-    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
-    networks:
-      - jewelry-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${{ secrets.DB_PASSWORD }}"]
-      timeout: 20s
-      retries: 10
-
-  backend:
-    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-    container_name: jewelry-backend
-    depends_on:
-      mysql:
-        condition: service_healthy
-    environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: moje_database
-      DB_USER: root
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
-      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-      OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
-      OSS_BUCKET: moje-jewelry-files
-      SERVER_PORT: 8851
-      SPRING_PROFILES_ACTIVE: prod
-    ports:
-      - "8851:8851"
-    volumes:
-      - ./backend/src/main/resources/db:/app/db:ro
-      - jewelry_logs:/app/logs
-    restart: unless-stopped
-    networks:
-      - jewelry-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8851/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-networks:
-  jewelry-network:
-    driver: bridge
-
-volumes:
-  jewelry_mysql_data:
-  jewelry_logs:
-EOF
+          cat > docker-compose.prod.yml << 'DOCKER_EOF'
+          $DOCKER_COMPOSE_CONFIG
+          DOCKER_EOF
           
           # ========== 4. 设置环境变量 ==========
           echo "设置环境变量..."
