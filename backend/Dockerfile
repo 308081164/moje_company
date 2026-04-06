@@ -20,7 +20,7 @@ FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # 安装网络工具（用于健康检查）
-RUN apt-get update && apt-get install -y netcat && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y netcat curl && rm -rf /var/lib/apt/lists/*
 
 # 复制构建产物
 COPY --from=builder /app/target/*.jar app.jar

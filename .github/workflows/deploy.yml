@@ -117,7 +117,7 @@ jobs:
                 - "8851:8851"
               volumes:
                 - ./backend/src/main/resources/db:/app/db:ro
-                - jewelry_logs:/app/logs
+                - ./logs:/app/logs
               restart: unless-stopped
               networks:
                 - jewelry-network
@@ -133,7 +133,6 @@ jobs:
 
           volumes:
             jewelry_mysql_data:
-            jewelry_logs:
       with:
         host: ${{ secrets.SSH_HOST }}
         port: ${{ secrets.SSH_PORT || 22 }}
@@ -142,6 +141,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         script: |
+          set -euo pipefail
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
@@ -149,10 +149,14 @@ jobs:
           echo "检查现有服务目录..."
           ls -la /opt/
           
-          # 创建珠宝系统目录
-          JEWELRY_DIR="/opt/jewelry-system"
-          mkdir -p $JEWELRY_DIR
-          cd $JEWELRY_DIR
+          # 部署到指定磁盘目录（避免系统盘空间/权限问题）
+          JEWELRY_DIR="/mnt/newdisk/app/MOJE"
+          APP_DIR="$JEWELRY_DIR"
+          mkdir -p "$APP_DIR"
+          cd "$APP_DIR"
+          
+          # 宿主机持久化目录
+          mkdir -p ./logs
           
           # ========== 2. 传输必要文件 ==========
           echo "传输数据库迁移文件..."
@@ -161,17 +165,22 @@ jobs:
           # 克隆或更新项目代码
           if [ ! -d ".git" ]; then
             echo "克隆项目代码..."
+            rm -rf ./* ./.??* || true
             git clone https://github.com/${{ github.repository }}.git .
           else
             echo "更新项目代码..."
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
           fi
           
           # ========== 3. 创建docker-compose配置 ==========
           echo "创建docker-compose.prod.yml..."
-          cat > docker-compose.prod.yml << 'DOCKER_EOF'
-          $DOCKER_COMPOSE_CONFIG
+          cat > docker-compose.prod.yml << DOCKER_EOF
+          ${DOCKER_COMPOSE_CONFIG}
           DOCKER_EOF
+
+          echo "校验 docker compose 配置..."
+          docker compose -f docker-compose.prod.yml config >/dev/null
           
           # ========== 4. 设置环境变量 ==========
           echo "设置环境变量..."
