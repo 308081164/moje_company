@@ -1,20 +1,19 @@
 # 使用多阶段构建减少镜像大小
-FROM eclipse-temurin:17-jdk-jammy AS builder
+# backend 构建上下文中没有 Maven Wrapper（mvnw/.mvn），因此这里直接使用 Maven 官方镜像构建
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
 WORKDIR /app
 
-# 复制Maven包装器和配置文件
-COPY mvnw .
-COPY .mvn .mvn
+# 复制 Maven 配置文件
 COPY pom.xml .
 
 # 下载依赖
-RUN ./mvnw dependency:go-offline -B
+RUN mvn -B dependency:go-offline
 
 # 复制源代码
 COPY src src
 
 # 构建应用
-RUN ./mvnw package -DskipTests
+RUN mvn -B package -DskipTests
 
 # 运行时镜像
 FROM eclipse-temurin:17-jre-jammy
