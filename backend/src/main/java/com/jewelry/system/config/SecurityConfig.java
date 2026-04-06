@@ -22,8 +22,8 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/refresh-token").permitAll()
-                        .requestMatchers("/api/actuator/health").permitAll()
+                        .requestMatchers("/auth/login", "/auth/refresh-token").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
                         .anyRequest().permitAll()
                 );
 
