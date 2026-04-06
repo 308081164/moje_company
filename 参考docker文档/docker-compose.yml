@@ -1,0 +1,104 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: autoattend-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: autoattend
+      MYSQL_USER: autoattend
+      MYSQL_PASSWORD: autoattend_pwd
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - autoattend_mysql_data:/var/lib/mysql
+      - ./atuo_attend_backend/src/main/resources/db/schema_mysql.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_collab_mysql.sql:/docker-entrypoint-initdb.d/02_schema_collab.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_ai_mysql.sql:/docker-entrypoint-initdb.d/03_schema_ai.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_quote_mysql.sql:/docker-entrypoint-initdb.d/04_schema_quote.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 25s
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: autoattend-minio
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - autoattend_minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9002:9001"   # 控制台用 9002，避免与主机已占用的 9001 冲突
+
+  # 数据库「增量更新」：无需在宿主机执行 SQL。backend 每次启动时 docker-entrypoint.sh 会按 /app/db/migrate_manifest.txt
+  # 顺序执行迁移文件；下方挂载保证与仓库 db 目录一致（改迁移后 docker compose restart backend 即可）。
+  backend:
+    build:
+      context: ./atuo_attend_backend
+    container_name: autoattend-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./atuo_attend_backend/src/main/resources/db:/app/db:ro
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: autoattend
+      DB_USER: autoattend
+      DB_PASSWORD: autoattend_pwd
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: autoattend-attachments
+    ports:
+      - "8848:8848"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8848/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    build:
+      context: ./auto_attend_forntend
+    container_name: autoattend-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8849:80"
+    restart: unless-stopped
+
+  platform-monitor-frontend:
+    build:
+      context: ./platform_monitor_frontend
+    container_name: autoattend-platform-monitor-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8850:80"
+    restart: unless-stopped
+
+volumes:
+  autoattend_mysql_data:
+  autoattend_minio_data:
+

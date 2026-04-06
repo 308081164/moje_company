@@ -1,0 +1,117 @@
+# 生产环境使用：仅拉取镜像，不 build。镜像由 GitHub Actions 构建并推送到 ghcr.io。
+# 使用前在服务器上设置环境变量（或由 deploy workflow 自动设置）：
+#   export IMAGE_BACKEND=ghcr.io/你的用户名/autoattend-backend:latest
+#   export IMAGE_FRONTEND=ghcr.io/你的用户名/autoattend-frontend:latest
+#   export IMAGE_PLATFORM_MONITOR_FRONTEND=ghcr.io/你的用户名/platform-monitor-frontend:latest
+#
+# ========== 数据库更新（无需在服务器手工执行 mysql / 迁移命令）==========
+# 1) 你在仓库 atuo_attend_backend/src/main/resources/db/ 新增或修改 SQL，并维护 migrate_manifest.txt
+# 2) push 后 CI：scp 整个 atuo_attend_backend 到服务器，docker compose pull && up，并强制重建 backend
+# 3) backend 容器每次启动：docker-entrypoint.sh 等待 MySQL 后按清单执行 SQL，再启动 Spring Boot
+# 下方挂载 ./atuo_attend_backend/.../db -> /app/db，保证线上执行的是本次部署同步下来的清单（与镜像内 COPY 的 db 双保险）
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: autoattend-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: autoattend
+      MYSQL_USER: autoattend
+      MYSQL_PASSWORD: autoattend_pwd
+      TZ: Asia/Shanghai
+    # 不映射 3306 到主机，避免与服务器上已有 MySQL 冲突；backend 通过 Docker 网络访问 mysql:3306
+    # 若需从主机连接：docker exec -it autoattend-mysql mysql -u root -p
+    volumes:
+      - autoattend_mysql_data:/var/lib/mysql
+      - ./atuo_attend_backend/src/main/resources/db/schema_mysql.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_collab_mysql.sql:/docker-entrypoint-initdb.d/02_schema_collab.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_ai_mysql.sql:/docker-entrypoint-initdb.d/03_schema_ai.sql:ro
+      - ./atuo_attend_backend/src/main/resources/db/schema_quote_mysql.sql:/docker-entrypoint-initdb.d/04_schema_quote.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 25s
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: autoattend-minio
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - autoattend_minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9002:9001"   # 控制台用 9002，避免与主机已占用的 9001 冲突
+
+  backend:
+    image: ${IMAGE_BACKEND:-ghcr.io/please-set/autoattend-backend:latest}
+    container_name: autoattend-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: autoattend
+      DB_USER: autoattend
+      DB_PASSWORD: autoattend_pwd
+      # ADMIN_USERNAME: admin  # 已废弃：旧版环境变量管理员，系统已迁移到多租户手机号认证
+      # ADMIN_PASSWORD: admin123  # 已废弃：旧版环境变量管理员，系统已迁移到多租户手机号认证
+      # GitHub Token 仅通过管理后台「AI 配置」页填写并存入数据库，不在此处配置，避免泄露
+      # 大陆服务器可设置 HTTP/SOCKS 代理以访问 api.github.com，如 http://127.0.0.1:7890
+      GITHUB_API_PROXY: ${GITHUB_API_PROXY:-}
+      # 本地 Git 兜底目录（容器内路径固定为 /data/git-repos，宿主机路径见下方 volume）
+      GIT_WORKSPACE: /data/git-repos
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: autoattend-attachments
+      PLATFORM_OPS_PASSWORD: liubangproject
+    volumes:
+      # 与仓库同步的迁移清单与 SQL（deploy workflow 会 scp atuo_attend_backend 到本目录）
+      - ./atuo_attend_backend/src/main/resources/db:/app/db:ro
+      # 本地 Git 兜底：宿主机目录挂载到容器 /data/git-repos，建议设到新硬盘（如 GIT_REPOS_HOST_PATH=/mnt/newdisk/app/AutoAttend/git-repos）
+      - ${GIT_REPOS_HOST_PATH:-./git-repos}:/data/git-repos
+    ports:
+      - "8848:8848"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8848/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    image: ${IMAGE_FRONTEND:-ghcr.io/please-set/autoattend-frontend:latest}
+    container_name: autoattend-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8849:80"
+    restart: unless-stopped
+
+  platform-monitor-frontend:
+    image: ${IMAGE_PLATFORM_MONITOR_FRONTEND:-ghcr.io/please-set/platform-monitor-frontend:latest}
+    container_name: autoattend-platform-monitor-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8850:80"
+    restart: unless-stopped
+
+volumes:
+  autoattend_mysql_data:
+  autoattend_minio_data:

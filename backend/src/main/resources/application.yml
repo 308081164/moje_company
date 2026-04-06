@@ -1,0 +1,112 @@
+spring:
+  application:
+    name: jewelry-system
+
+  # Database Configuration
+  datasource:
+    url: jdbc:mysql://localhost:3306/moje_database?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: @Group666
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # JPA Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # File Upload Configuration
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+# Server Configuration
+server:
+  port: 8851
+  servlet:
+    context-path: /api
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+# Security Configuration
+jwt:
+  secret: jewelry-system-secret-key-2026-04-06-change-in-production
+  expiration: 86400000 # 24 hours in milliseconds
+
+# AliCloud OSS Configuration
+aliyun:
+  oss:
+    endpoint: oss-cn-guangzhou.aliyuncs.com
+    access-key-id: ${OSS_ACCESS_KEY_ID:LTAI5tFTJEe9v9Vr7HRh4J9F}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    bucket-name: moje-jewelry-files
+    max-size: 104857600 # 100MB
+    allowed-extensions: .jpg,.jpeg,.png,.gif,.bmp,.pdf,.stl,.obj,.jad
+
+# Logging Configuration
+logging:
+  level:
+    com.jewelry: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  file:
+    name: logs/jewelry-system.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Application Configuration
+app:
+  # Default admin user
+  default-admin:
+    username: kuangjun
+    password: moje666
+    real-name: 系统管理员
+  # Order configuration
+  order:
+    number-prefix: JZ
+    auto-generate: true
+  # Price calculation
+  price:
+    silver-margin: 0.035 # 3.5%
+    gold-margin: 10 # 10元
+    design-copyright-fee: 500 # 设计买断费用
+    appraisal-certificate-fee: 300 # 鉴定证书费用
