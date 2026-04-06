@@ -1,5 +1,5 @@
 # 使用多阶段构建减少镜像大小
-FROM openjdk:17-jdk-slim as builder
+FROM eclipse-temurin:17-jdk-jammy AS builder
 WORKDIR /app
 
 # 复制Maven包装器和配置文件
@@ -17,7 +17,7 @@ COPY src src
 RUN ./mvnw package -DskipTests
 
 # 运行时镜像
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 # 安装网络工具（用于健康检查）
