@@ -1,0 +1,746 @@
+  .ant-empty {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-empty-image svg {
+    fill: rgba(255, 255, 255, 0.2) !important;
+  }
+  
+  .ant-empty-description {
+    color: rgba(255, 255, 255, 0.45) !important;
+  }
+  
+  .ant-statistic-title {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-statistic-content-value {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-descriptions-item-label {
+    background: #262626 !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-descriptions-item-content {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-list-header {
+    background: #262626 !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    border-bottom-color: #303030 !important;
+  }
+  
+  .ant-list-item {
+    border-bottom-color: #303030 !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-list-item:hover {
+    background: #262626 !important;
+  }
+  
+  .ant-breadcrumb-link {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-breadcrumb-link:hover {
+    color: #40a9ff !important;
+  }
+  
+  .ant-breadcrumb-separator {
+    color: rgba(255, 255, 255, 0.45) !important;
+  }
+  
+  .ant-alert {
+    background: #262626 !important;
+    border-color: #303030 !important;
+  }
+  
+  .ant-alert-message {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-alert-description {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-result-title {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-result-subtitle {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-skeleton {
+    background: #262626 !important;
+  }
+  
+  .ant-skeleton-header .ant-skeleton-avatar {
+    background: #303030 !important;
+  }
+  
+  .ant-skeleton-title,
+  .ant-skeleton-paragraph > li {
+    background: #303030 !important;
+  }
+  
+  .ant-slider-track {
+    background: #1890ff !important;
+  }
+  
+  .ant-slider-handle {
+    border-color: #1890ff !important;
+    background: #fff !important;
+  }
+  
+  .ant-switch {
+    background: #434343 !important;
+  }
+  
+  .ant-switch-checked {
+    background: #1890ff !important;
+  }
+  
+  .ant-tree-node-selected {
+    background: #15395b !important;
+  }
+  
+  .ant-tree-node-content-wrapper:hover {
+    background: #262626 !important;
+  }
+  
+  .ant-tree-switcher {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-tree-switcher:hover {
+    color: #40a9ff !important;
+  }
+  
+  .ant-picker-calendar {
+    background: #1f1f1f !important;
+  }
+  
+  .ant-picker-calendar-header {
+    border-bottom-color: #303030 !important;
+  }
+  
+  .ant-picker-calendar-date {
+    border-color: #303030 !important;
+    background: #262626 !important;
+  }
+  
+  .ant-picker-calendar-date-today {
+    border-color: #1890ff !important;
+  }
+  
+  .ant-picker-calendar-date-selected {
+    background: #15395b !important;
+    border-color: #1890ff !important;
+  }
+  
+  .ant-timeline-item-tail {
+    border-left-color: #303030 !important;
+  }
+  
+  .ant-timeline-item-head {
+    border-color: #1890ff !important;
+  }
+  
+  .ant-comment {
+    border-bottom-color: #303030 !important;
+  }
+  
+  .ant-comment-content-author {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-comment-content-author-time {
+    color: rgba(255, 255, 255, 0.45) !important;
+  }
+  
+  .ant-comment-content-detail {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-anchor {
+    background: #262626 !important;
+  }
+  
+  .ant-anchor-link-title {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-anchor-link-active > .ant-anchor-link-title {
+    color: #1890ff !important;
+  }
+  
+  .ant-back-top-content {
+    background: #1890ff !important;
+  }
+  
+  .ant-back-top-content:hover {
+    background: #40a9ff !important;
+  }
+  
+  .ant-watermark-content {
+    color: rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .ant-split-pane {
+    background: #1f1f1f !important;
+  }
+  
+  .ant-split-trigger {
+    background: #303030 !important;
+  }
+  
+  .ant-split-trigger-bar {
+    background: #434343 !important;
+  }
+  
+  .ant-split-trigger-bar:hover {
+    background: #1890ff !important;
+  }
+}
+
+/* 自定义主题变量 */
+:root {
+  --primary-color: #1890ff;
+  --primary-color-hover: #40a9ff;
+  --primary-color-active: #096dd9;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #ff4d4f;
+  --info-color: #1890ff;
+  --text-color: rgba(0, 0, 0, 0.85);
+  --text-color-secondary: rgba(0, 0, 0, 0.65);
+  --text-color-disabled: rgba(0, 0, 0, 0.25);
+  --border-color-base: #d9d9d9;
+  --border-color-split: #f0f0f0;
+  --background-color-base: #f5f5f5;
+  --background-color-light: #fafafa;
+  --box-shadow-base: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --box-shadow-secondary: 0 6px 16px rgba(0, 0, 0, 0.08);
+  --border-radius-base: 6px;
+  --border-radius-sm: 4px;
+  --border-radius-lg: 8px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-sm: 12px;
+  --line-height-base: 1.5715;
+  --line-height-lg: 1.5;
+  --line-height-sm: 1.6667;
+  --padding-lg: 24px;
+  --padding-md: 16px;
+  --padding-sm: 12px;
+  --padding-xs: 8px;
+  --margin-lg: 24px;
+  --margin-md: 16px;
+  --margin-sm: 12px;
+  --margin-xs: 8px;
+}
+
+/* 暗色主题变量 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary-color: #40a9ff;
+    --primary-color-hover: #69c0ff;
+    --primary-color-active: #096dd9;
+    --success-color: #73d13d;
+    --warning-color: #ffc53d;
+    --error-color: #ff7875;
+    --info-color: #40a9ff;
+    --text-color: rgba(255, 255, 255, 0.85);
+    --text-color-secondary: rgba(255, 255, 255, 0.65);
+    --text-color-disabled: rgba(255, 255, 255, 0.25);
+    --border-color-base: #434343;
+    --border-color-split: #303030;
+    --background-color-base: #141414;
+    --background-color-light: #1f1f1f;
+    --box-shadow-base: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --box-shadow-secondary: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* 工具类使用变量 */
+.primary-color {
+  color: var(--primary-color) !important;
+}
+
+.success-color {
+  color: var(--success-color) !important;
+}
+
+.warning-color {
+  color: var(--warning-color) !important;
+}
+
+.error-color {
+  color: var(--error-color) !important;
+}
+
+.info-color {
+  color: var(--info-color) !important;
+}
+
+.bg-primary {
+  background-color: var(--primary-color) !important;
+}
+
+.bg-success {
+  background-color: var(--success-color) !important;
+}
+
+.bg-warning {
+  background-color: var(--warning-color) !important;
+}
+
+.bg-error {
+  background-color: var(--error-color) !important;
+}
+
+.bg-info {
+  background-color: var(--info-color) !important;
+}
+
+.border-primary {
+  border-color: var(--primary-color) !important;
+}
+
+.border-success {
+  border-color: var(--success-color) !important;
+}
+
+.border-warning {
+  border-color: var(--warning-color) !important;
+}
+
+.border-error {
+  border-color: var(--error-color) !important;
+}
+
+.border-info {
+  border-color: var(--info-color) !important;
+}
+
+/* 动画延迟 */
+.delay-100 {
+  animation-delay: 100ms !important;
+}
+
+.delay-200 {
+  animation-delay: 200ms !important;
+}
+
+.delay-300 {
+  animation-delay: 300ms !important;
+}
+
+.delay-400 {
+  animation-delay: 400ms !important;
+}
+
+.delay-500 {
+  animation-delay: 500ms !important;
+}
+
+/* 动画持续时间 */
+.duration-100 {
+  animation-duration: 100ms !important;
+}
+
+.duration-200 {
+  animation-duration: 200ms !important;
+}
+
+.duration-300 {
+  animation-duration: 300ms !important;
+}
+
+.duration-400 {
+  animation-duration: 400ms !important;
+}
+
+.duration-500 {
+  animation-duration: 500ms !important;
+}
+
+/* 动画填充模式 */
+.animation-fill-both {
+  animation-fill-mode: both !important;
+}
+
+.animation-fill-forwards {
+  animation-fill-mode: forwards !important;
+}
+
+.animation-fill-backwards {
+  animation-fill-mode: backwards !important;
+}
+
+.animation-fill-none {
+  animation-fill-mode: none !important;
+}
+
+/* 动画时序函数 */
+.animation-ease {
+  animation-timing-function: ease !important;
+}
+
+.animation-ease-in {
+  animation-timing-function: ease-in !important;
+}
+
+.animation-ease-out {
+  animation-timing-function: ease-out !important;
+}
+
+.animation-ease-in-out {
+  animation-timing-function: ease-in-out !important;
+}
+
+.animation-linear {
+  animation-timing-function: linear !important;
+}
+
+/* 动画迭代次数 */
+.animation-infinite {
+  animation-iteration-count: infinite !important;
+}
+
+.animation-once {
+  animation-iteration-count: 1 !important;
+}
+
+.animation-twice {
+  animation-iteration-count: 2 !important;
+}
+
+.animation-thrice {
+  animation-iteration-count: 3 !important;
+}
+
+/* 动画方向 */
+.animation-normal {
+  animation-direction: normal !important;
+}
+
+.animation-reverse {
+  animation-direction: reverse !important;
+}
+
+.animation-alternate {
+  animation-direction: alternate !important;
+}
+
+.animation-alternate-reverse {
+  animation-direction: alternate-reverse !important;
+}
+
+/* 动画播放状态 */
+.animation-running {
+  animation-play-state: running !important;
+}
+
+.animation-paused {
+  animation-play-state: paused !important;
+}
+
+/* 过渡效果 */
+.transition-all {
+  transition: all 0.3s ease !important;
+}
+
+.transition-colors {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease !important;
+}
+
+.transition-transform {
+  transition: transform 0.3s ease !important;
+}
+
+.transition-opacity {
+  transition: opacity 0.3s ease !important;
+}
+
+.transition-shadow {
+  transition: box-shadow 0.3s ease !important;
+}
+
+/* 变换效果 */
+.transform-none {
+  transform: none !important;
+}
+
+.transform-scale-90 {
+  transform: scale(0.9) !important;
+}
+
+.transform-scale-95 {
+  transform: scale(0.95) !important;
+}
+
+.transform-scale-100 {
+  transform: scale(1) !important;
+}
+
+.transform-scale-105 {
+  transform: scale(1.05) !important;
+}
+
+.transform-scale-110 {
+  transform: scale(1.1) !important;
+}
+
+.transform-rotate-90 {
+  transform: rotate(90deg) !important;
+}
+
+.transform-rotate-180 {
+  transform: rotate(180deg) !important;
+}
+
+.transform-rotate-270 {
+  transform: rotate(270deg) !important;
+}
+
+.transform-rotate-360 {
+  transform: rotate(360deg) !important;
+}
+
+.transform-translate-x-0 {
+  transform: translateX(0) !important;
+}
+
+.transform-translate-x-full {
+  transform: translateX(100%) !important;
+}
+
+.transform-translate-x-negative-full {
+  transform: translateX(-100%) !important;
+}
+
+.transform-translate-y-0 {
+  transform: translateY(0) !important;
+}
+
+.transform-translate-y-full {
+  transform: translateY(100%) !important;
+}
+
+.transform-translate-y-negative-full {
+  transform: translateY(-100%) !important;
+}
+
+/* 变换原点 */
+.transform-origin-center {
+  transform-origin: center !important;
+}
+
+.transform-origin-top {
+  transform-origin: top !important;
+}
+
+.transform-origin-bottom {
+  transform-origin: bottom !important;
+}
+
+.transform-origin-left {
+  transform-origin: left !important;
+}
+
+.transform-origin-right {
+  transform-origin: right !important;
+}
+
+.transform-origin-top-left {
+  transform-origin: top left !important;
+}
+
+.transform-origin-top-right {
+  transform-origin: top right !important;
+}
+
+.transform-origin-bottom-left {
+  transform-origin: bottom left !important;
+}
+
+.transform-origin-bottom-right {
+  transform-origin: bottom right !important;
+}
+
+/* 光标样式 */
+.cursor-pointer {
+  cursor: pointer !important;
+}
+
+.cursor-default {
+  cursor: default !important;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed !important;
+}
+
+.cursor-wait {
+  cursor: wait !important;
+}
+
+.cursor-text {
+  cursor: text !important;
+}
+
+.cursor-move {
+  cursor: move !important;
+}
+
+.cursor-help {
+  cursor: help !important;
+}
+
+.cursor-crosshair {
+  cursor: crosshair !important;
+}
+
+/* 用户选择 */
+.select-none {
+  user-select: none !important;
+}
+
+.select-text {
+  user-select: text !important;
+}
+
+.select-all {
+  user-select: all !important;
+}
+
+.select-auto {
+  user-select: auto !important;
+}
+
+/* 指针事件 */
+.pointer-events-none {
+  pointer-events: none !important;
+}
+
+.pointer-events-auto {
+  pointer-events: auto !important;
+}
+
+/* 可见性 */
+.visible {
+  visibility: visible !important;
+}
+
+.invisible {
+  visibility: hidden !important;
+}
+
+/* 溢出 */
+.overflow-auto {
+  overflow: auto !important;
+}
+
+.overflow-hidden {
+  overflow: hidden !important;
+}
+
+.overflow-visible {
+  overflow: visible !important;
+}
+
+.overflow-scroll {
+  overflow: scroll !important;
+}
+
+.overflow-x-auto {
+  overflow-x: auto !important;
+}
+
+.overflow-y-auto {
+  overflow-y: auto !important;
+}
+
+.overflow-x-hidden {
+  overflow-x: hidden !important;
+}
+
+.overflow-y-hidden {
+  overflow-y: hidden !important;
+}
+
+.overflow-x-visible {
+  overflow-x: visible !important;
+}
+
+.overflow-y-visible {
+  overflow-y: visible !important;
+}
+
+.overflow-x-scroll {
+  overflow-x: scroll !important;
+}
+
+.overflow-y-scroll {
+  overflow-y: scroll !important;
+}
+
+/* 文本溢出 */
+.text-ellipsis {
+  text-overflow: ellipsis !important;
+}
+
+.text-clip {
+  text-overflow: clip !important;
+}
+
+/* 空白处理 */
+.whitespace-normal {
+  white-space: normal !important;
+}
+
+.whitespace-nowrap {
+  white-space: nowrap !important;
+}
+
+.whitespace-pre {
+  white-space: pre !important;
+}
+
+.whitespace-pre-line {
+  white-space: pre-line !important;
+}
+
+.whitespace-pre-wrap {
+  white-space: pre-wrap !important;
+}
+
+/* 断词 */
+.break-normal {
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.break-words {
+  overflow-wrap: break-word !important;
+}
+
+.break-all {
+  word-break: break-all !important;
+}
+
+/* 文本装饰 */
+.underline {
+  text-decoration: underline !important;
+}
+
+.line-through {
+  text-decoration: line-through !important;
+}
+

@@ -1,0 +1,433 @@
+/* 订单管理页面样式 */
+.order-management-page {
+  padding: 0;
+}
+
+/* 页面标题区域 */
+.order-management-page .ant-card:first-child {
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.order-management-page .ant-typography {
+  margin: 0;
+}
+
+/* 搜索区域 */
+.order-management-page .ant-form-inline .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.order-management-page .ant-form-inline .ant-form-item-label {
+  min-width: 80px;
+  text-align: right;
+}
+
+.order-management-page .ant-input,
+.order-management-page .ant-select-selector {
+  border-radius: 6px;
+}
+
+.order-management-page .ant-picker {
+  border-radius: 6px;
+  width: 100%;
+}
+
+/* 标签页样式 */
+.order-management-page .ant-tabs {
+  margin-top: 0;
+}
+
+.order-management-page .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.order-management-page .ant-tabs-tab {
+  padding: 12px 16px;
+  font-weight: 500;
+}
+
+.order-management-page .ant-tabs-tab-active {
+  background: #e6f7ff;
+  border-radius: 6px;
+}
+
+.order-management-page .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #1890ff;
+}
+
+.order-management-page .ant-tabs-ink-bar {
+  background: #1890ff;
+}
+
+/* 表格样式 */
+.order-management-page .ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.order-management-page .ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #f0f0f0;
+  padding: 12px 16px;
+}
+
+.order-management-page .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 16px;
+}
+
+.order-management-page .ant-table-tbody > tr:hover > td {
+  background: #fafafa;
+}
+
+.order-management-page .ant-table-pagination {
+  margin: 16px 0;
+  padding: 0 16px;
+}
+
+/* 操作按钮样式 */
+.order-management-page .ant-btn-link {
+  padding: 4px 8px;
+  font-weight: 500;
+}
+
+.order-management-page .ant-btn-link:hover {
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+/* 下拉菜单样式 */
+.order-management-page .ant-dropdown-menu {
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  padding: 8px 0;
+}
+
+.order-management-page .ant-dropdown-menu-item {
+  padding: 8px 16px;
+  border-radius: 0;
+}
+
+.order-management-page .ant-dropdown-menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.order-management-page .ant-dropdown-menu-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.order-management-page .ant-dropdown-menu-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+/* 模态框样式 */
+.order-management-page .ant-modal {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.order-management-page .ant-modal-header {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 24px;
+}
+
+.order-management-page .ant-modal-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.order-management-page .ant-modal-body {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.order-management-page .ant-modal-footer {
+  border-top: 1px solid #f0f0f0;
+  padding: 16px 24px;
+}
+
+/* 描述列表样式 */
+.order-management-page .ant-descriptions {
+  background: #fff;
+}
+
+.order-management-page .ant-descriptions-header {
+  margin-bottom: 16px;
+}
+
+.order-management-page .ant-descriptions-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.order-management-page .ant-descriptions-view {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.order-management-page .ant-descriptions-row > th,
+.order-management-page .ant-descriptions-row > td {
+  padding: 12px 16px;
+}
+
+.order-management-page .ant-descriptions-item-label {
+  background: #fafafa;
+  font-weight: 500;
+  color: #333;
+}
+
+.order-management-page .ant-descriptions-item-content {
+  color: #666;
+}
+
+/* 表单样式 */
+.order-management-page .ant-form-vertical .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.order-management-page .ant-form-vertical .ant-form-item-label {
+  padding: 0 0 4px;
+  font-weight: 500;
+}
+
+.order-management-page .ant-form-vertical .ant-form-item-control {
+  min-height: 32px;
+}
+
+/* 徽章样式 */
+.order-management-page .ant-badge-count {
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 标签样式 */
+.order-management-page .ant-tag {
+  border-radius: 4px;
+  font-weight: 500;
+  padding: 2px 8px;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* 卡片样式 */
+.order-management-page .ant-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.order-management-page .ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 24px;
+}
+
+.order-management-page .ant-card-head-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.order-management-page .ant-card-body {
+  padding: 24px;
+}
+
+/* 按钮样式 */
+.order-management-page .ant-btn {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.order-management-page .ant-btn-primary {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.order-management-page .ant-btn-primary:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+}
+
+.order-management-page .ant-btn-default {
+  border-color: #d9d9d9;
+}
+
+.order-management-page .ant-btn-default:hover {
+  border-color: #40a9ff;
+  color: #40a9ff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .order-management-page .ant-card-body {
+    padding: 16px;
+  }
+  
+  .order-management-page .ant-form-inline .ant-form-item {
+    margin-bottom: 12px;
+  }
+  
+  .order-management-page .ant-table-thead > tr > th,
+  .order-management-page .ant-table-tbody > tr > td {
+    padding: 8px 12px;
+  }
+  
+  .order-management-page .ant-modal-body {
+    padding: 16px;
+    max-height: 70vh;
+  }
+  
+  .order-management-page .ant-descriptions-row > th,
+  .order-management-page .ant-descriptions-row > td {
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .order-management-page .ant-card-body {
+    padding: 12px;
+  }
+  
+  .order-management-page .ant-form-inline .ant-form-item {
+    margin-bottom: 8px;
+  }
+  
+  .order-management-page .ant-table-thead > tr > th,
+  .order-management-page .ant-table-tbody > tr > td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .order-management-page .ant-modal {
+    width: 95% !important;
+    margin: 8px auto;
+  }
+  
+  .order-management-page .ant-modal-body {
+    padding: 12px;
+    max-height: 80vh;
+  }
+  
+  .order-management-page .ant-descriptions-row > th,
+  .order-management-page .ant-descriptions-row > td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
+/* 滚动条样式 */
+.order-management-page .ant-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.order-management-page .ant-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.order-management-page .ant-modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.order-management-page .ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.order-management-page .ant-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.order-management-page .ant-table {
+  animation: fadeIn 0.3s ease-out 0.1s both;
+}
+
+/* 加载状态 */
+.order-management-page .ant-spin {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.order-management-page .ant-spin-dot-item {
+  background-color: #1890ff;
+}
+
+/* 空状态 */
+.order-management-page .ant-empty {
+  padding: 40px 0;
+}
+
+.order-management-page .ant-empty-image {
+  height: 100px;
+}
+
+.order-management-page .ant-empty-description {
+  color: #999;
+  font-size: 14px;
+}
+
+/* 工具提示 */
+.order-management-page .ant-tooltip {
+  font-size: 12px;
+}
+
+.order-management-page .ant-tooltip-inner {
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+/* 分割线 */
+.order-management-page .ant-divider {
+  margin: 16px 0;
+  border-color: #f0f0f0;
+}
+
+/* 空间间距 */
+.order-management-page .ant-space {
+  width: 100%;
+}
+
+.order-management-page .ant-space-vertical {
+  width: auto;
+}
+
+/* 行间距 */
+.order-management-page .ant-row {
+  margin-bottom: 0;
+}
+
+/* 列间距 */
+.order-management-page .ant-col {
+  padding: 0 8px;
+}
+
+/* 卡片阴影 */
+.order-management-page .ant-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.order-management-page .ant-card-bordered {
+  border: 1px solid #f0f0f0;
+}

@@ -1,0 +1,190 @@
+name: Build and Deploy Jewelry System
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/jewelry-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Build with Maven
+      run: mvn -f backend/pom.xml clean package -DskipTests
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    
+    - name: Run tests
+      run: mvn -f backend/pom.xml test
+  
+  deploy-to-server:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        password: ${{ secrets.SSH_PASSWORD }}
+        script: |
+          # ========== 1. 准备环境 ==========
+          echo "=== 开始部署珠宝定制系统 ==="
+          
+          # 检查现有服务目录结构
+          echo "检查现有服务目录..."
+          ls -la /opt/
+          
+          # 创建珠宝系统目录
+          JEWELRY_DIR="/opt/jewelry-system"
+          mkdir -p $JEWELRY_DIR
+          cd $JEWELRY_DIR
+          
+          # ========== 2. 传输必要文件 ==========
+          echo "传输数据库迁移文件..."
+          mkdir -p backend/src/main/resources/db
+          
+          # 克隆或更新项目代码
+          if [ ! -d ".git" ]; then
+            echo "克隆项目代码..."
+            git clone https://github.com/${{ github.repository }}.git .
+          else
+            echo "更新项目代码..."
+            git pull origin main
+          fi
+          
+          # ========== 3. 创建docker-compose配置 ==========
+          echo "创建docker-compose.prod.yml..."
+          cat > docker-compose.prod.yml << 'EOF'
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: jewelry-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      MYSQL_DATABASE: moje_database
+      TZ: Asia/Shanghai
+    volumes:
+      - jewelry_mysql_data:/var/lib/mysql
+      - ./backend/src/main/resources/db:/docker-entrypoint-initdb.d:ro
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
+    networks:
+      - jewelry-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${{ secrets.DB_PASSWORD }}"]
+      timeout: 20s
+      retries: 10
+
+  backend:
+    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+    container_name: jewelry-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: moje_database
+      DB_USER: root
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
+      OSS_BUCKET: moje-jewelry-files
+      SERVER_PORT: 8851
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8851:8851"
+    volumes:
+      - ./backend/src/main/resources/db:/app/db:ro
+      - jewelry_logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - jewelry-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8851/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  jewelry-network:
+    driver: bridge
+
+volumes:
+  jewelry_mysql_data:
+  jewelry_logs:
+EOF
+          
+          # ========== 4. 设置环境变量 ==========
+          echo "设置环境变量..."
+          export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          
+          # ========== 5. 部署服务 ==========
+          echo "拉取最新镜像..."
+          docker compose -f docker-compose.prod.yml pull
+          
+          echo "启动服务..."
+          docker compose -f docker-compose.prod.yml up -d --force-recreate
+          
+          # ========== 6. 验证部署 ==========
+          echo "等待服务启动..."
+          sleep 15
+          
+          echo "检查容器状态..."
+          docker ps --filter "name=jewelry" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          
+          echo "检查服务健康..."
+          if curl -f http://localhost:8851/actuator/health > /dev/null 2>&1; then
+            echo "✅ 服务健康检查通过"
+          else
+            echo "⚠️  服务健康检查失败，查看日志..."
+            docker logs jewelry-backend --tail 50
+            exit 1
+          fi
+          
+          # ========== 7. 清理 ==========
+          echo "清理未使用的镜像..."
+          docker image prune -f
+          
+          echo "=== 部署完成 ==="
+          echo "服务地址: http://${{ secrets.SSH_HOST }}:8851"
+          echo "健康检查: http://${{ secrets.SSH_HOST }}:8851/actuator/health"
