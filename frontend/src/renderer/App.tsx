@@ -119,7 +119,8 @@ const App: React.FC = () => {
     <Router>
       <Routes>
         <Route path="/" element={<AppLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
+          <Route index element={<DashboardPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="workbench" element={<WorkbenchPage />} />
           <Route path="orders/*" element={<OrderManagementPage />} />
@@ -131,7 +132,7 @@ const App: React.FC = () => {
             path="system/*"
             element={isAdmin ? <SystemConfigPage /> : <Navigate to="/dashboard" replace />}
           />
-          <Route path="*" element={<NotFoundPage />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
     </Router>
