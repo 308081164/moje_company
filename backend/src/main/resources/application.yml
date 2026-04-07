@@ -54,7 +54,8 @@ server:
 # Security Configuration
 jwt:
   secret: jewelry-system-secret-key-2026-04-06-change-in-production
-  expiration: 86400000 # 24 hours in milliseconds
+  expiration: 86400000 # 24 hours in milliseconds (access token)
+  refresh-expiration: 604800000 # 7 days in milliseconds (refresh token)
 
 # AliCloud OSS Configuration
 aliyun:
@@ -95,6 +96,7 @@ management:
 
 # Application Configuration
 app:
+  upload-dir: ${APP_UPLOAD_DIR:uploads/jewelry}
   # Default admin user
   default-admin:
     username: kuangjun

@@ -217,25 +217,35 @@ const AppLayout: React.FC = () => {
     },
   }));
 
-  // 获取当前选中的菜单项
-  const getSelectedKeys = () => {
+  // 获取当前选中的菜单项（HashRouter 下 pathname 为 /users、/system/config 等）
+  const getSelectedKeys = (): string[] => {
     const path = location.pathname;
     const items = getMenuItems();
-    
-    // 查找匹配的菜单项
+
+    if (path.startsWith('/users')) {
+      return ['/users'];
+    }
+    if (path.startsWith('/system')) {
+      return ['/system/config'];
+    }
+    if (path.startsWith('/dashboard')) {
+      return ['/dashboard'];
+    }
+
     for (const item of items) {
       if (item.key === path) {
         return [item.key];
       }
       if (item.children) {
         for (const child of item.children) {
-          if (child.key === path) {
+          const ckey = String(child.key);
+          if (ckey === path || path.startsWith(ckey.split('?')[0])) {
             return [item.key, child.key];
           }
         }
       }
     }
-    
+
     return ['/dashboard'];
   };
 

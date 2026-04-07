@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.dto.LoginRequest;
 import com.jewelry.system.dto.LoginResponse;
+import com.jewelry.system.dto.user.UserResponse;
 
 public interface AuthService {
 
@@ -11,6 +12,6 @@ public interface AuthService {
 
     LoginResponse refreshToken(String refreshToken);
 
-    Object getCurrentUser();
+    UserResponse getCurrentUser();
 }
 

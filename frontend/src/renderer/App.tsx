@@ -110,7 +110,9 @@ const App: React.FC = () => {
     );
   }
 
-  // 主应用布局
+  // 主应用布局（用户管理/系统配置仅管理员可访问，与《功能设计文档》4.1 一致）
+  const isAdmin = user?.role === 'ADMIN';
+
   console.log('[App] authenticated -> main router');
   return (
     <Router>
@@ -119,8 +121,14 @@ const App: React.FC = () => {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="orders/*" element={<OrderManagementPage />} />
-          <Route path="users/*" element={<UserManagementPage />} />
-          <Route path="system/*" element={<SystemConfigPage />} />
+          <Route
+            path="users/*"
+            element={isAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route
+            path="system/*"
+            element={isAdmin ? <SystemConfigPage /> : <Navigate to="/dashboard" replace />}
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

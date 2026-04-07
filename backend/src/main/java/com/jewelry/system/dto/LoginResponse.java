@@ -1,6 +1,5 @@
 package com.jewelry.system.dto;
 
-import com.jewelry.system.enums.UserRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -31,8 +30,8 @@ public class LoginResponse {
     @Schema(description = "真实姓名", example = "系统管理员")
     private String realName;
     
-    @Schema(description = "用户角色")
-    private UserRole role;
+    @Schema(description = "用户角色（与前端一致：PRE_SALES、ADMIN 等）")
+    private String role;
     
     @Schema(description = "角色描述", example = "管理员")
     private String roleDescription;
