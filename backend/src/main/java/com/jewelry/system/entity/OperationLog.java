@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "operation_log")
+@Table(name = "operation_logs")
 @EntityListeners(AuditingEntityListener.class)
 public class OperationLog {
 
