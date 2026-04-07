@@ -39,9 +39,6 @@ public class ModelingInfo {
     @Column(name = "approval_notes", columnDefinition = "TEXT")
     private String approvalNotes;
 
-    @Column(name = "model_notes", columnDefinition = "TEXT")
-    private String modelNotes;
-
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

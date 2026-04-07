@@ -2,7 +2,8 @@ package com.jewelry.system.service;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -10,8 +11,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 @Service
-@Slf4j
 public class AliyunOssService {
+
+    private static final Logger log = LoggerFactory.getLogger(AliyunOssService.class);
 
     @Value("${aliyun.oss.endpoint:}")
     private String endpoint;

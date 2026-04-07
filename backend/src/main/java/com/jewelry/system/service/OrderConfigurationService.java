@@ -35,8 +35,8 @@ public class OrderConfigurationService {
     @Transactional(readOnly = true)
     public OrderSystemConfigDto getOrderSystemConfig() {
         OrderSystemConfigDto dto = new OrderSystemConfigDto();
-        dto.setDesignBuyoutPrice(parseDouble(readValue(KEY_DESIGN_FEE), 500));
-        dto.setCertificatePrice(parseDouble(readValue(KEY_CERT_FEE), 300));
+        dto.setDesignBuyoutPrice(parseDouble(readValue(KEY_DESIGN_FEE, "500"), 500));
+        dto.setCertificatePrice(parseDouble(readValue(KEY_CERT_FEE, "300"), 300));
         dto.setSilverPriceFormula(readValue(KEY_SILVER, "0.035"));
         dto.setGoldPriceFormula(readValue(KEY_GOLD, "10"));
         return dto;
