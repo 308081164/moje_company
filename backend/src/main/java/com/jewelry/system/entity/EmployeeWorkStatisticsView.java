@@ -23,6 +23,12 @@ public class EmployeeWorkStatisticsView {
     @Column(name = "real_name")
     private String realName;
 
+    /**
+     * users.role 是 ENUM，映射到视图后 JDBC 类型会落在 CHAR 上。
+     * Hibernate 在 ddl-auto=validate 下如果按默认 VARCHAR 校验会失败，
+     * 因此这里显式按 CHAR 预期列类型。
+     */
+    @Column(name = "role", columnDefinition = "CHAR(20)")
     private String role;
 
     @Column(name = "pending_design_count")
