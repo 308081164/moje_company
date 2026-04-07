@@ -1,4 +1,5 @@
 import api from './api';
+import { downloadWithAuth } from '@/utils/download';
 import {
   OrderInfo,
   OrderCreateRequest,
@@ -12,7 +13,6 @@ import {
   OrderQueryParams,
   OrderStatistics,
   EmployeeWorkStatistics,
-  OrderExportConfig,
   OrderReminder,
   OrderOperationLog,
   PaginatedResponse,
@@ -32,6 +32,28 @@ export const orderService = {
       console.error('获取订单列表失败:', error);
       throw error;
     }
+  },
+
+  /** 设计师工作台 */
+  async workbenchDesignerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/designer/todo', { params: { page, size } });
+  },
+  async workbenchDesignerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/designer/done', { params: { page, size } });
+  },
+  /** 建模师工作台 */
+  async workbenchModelerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/modeler/todo', { params: { page, size } });
+  },
+  async workbenchModelerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/modeler/done', { params: { page, size } });
+  },
+  /** 跟单员工作台 */
+  async workbenchTrackerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/todo', { params: { page, size } });
+  },
+  async workbenchTrackerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/done', { params: { page, size } });
   },
   
   // 获取订单详情
@@ -272,20 +294,24 @@ export const orderService = {
     }
   },
   
-  // 导出订单
-  async exportOrders(orderIds: number[], config: OrderExportConfig): Promise<Blob> {
-    try {
-      const response = await api.post('/orders/export', {
-        orderIds,
-        config,
-      }, {
-        responseType: 'blob',
-      });
-      return response.data;
-    } catch (error) {
-      console.error('导出订单失败:', error);
-      throw error;
-    }
+  /** 导出订单 CSV（后端 OrderExportRequest：orderIds + 可选 config） */
+  async exportOrdersCsv(orderIds: number[]): Promise<Blob> {
+    const response = (await api.post(
+      '/orders/export',
+      { orderIds },
+      { responseType: 'blob' }
+    )) as unknown as { data: Blob };
+    return response.data;
+  },
+
+  /** 浏览器下载：单订单 Markdown */
+  async downloadOrderMarkdown(orderId: number): Promise<void> {
+    await downloadWithAuth(`/orders/${orderId}/export`, `order-${orderId}.md`);
+  },
+
+  /** 浏览器下载：单订单 HTML */
+  async downloadOrderHtml(orderId: number): Promise<void> {
+    await downloadWithAuth(`/orders/${orderId}/export-html`, `order-${orderId}.html`);
   },
   
   // 批量导出订单文件

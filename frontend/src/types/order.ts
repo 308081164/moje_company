@@ -11,19 +11,17 @@ export enum OrderSource {
 
 export type { PaginatedResponse } from './auth';
 
-// 订单状态枚举
+// 订单状态枚举（与后端 OrderStatus 一致）
 export enum OrderStatus {
-  PENDING_DESIGN = 'PENDING_DESIGN',           // 待设计师设计
-  DESIGNING = 'DESIGNING',                     // 设计中
-  PENDING_MODEL = 'PENDING_MODEL',             // 待建模师设计
-  MODELING = 'MODELING',                       // 建模中
-  PENDING_REVIEW = 'PENDING_REVIEW',           // 待工艺评审
-  REVIEWING = 'REVIEWING',                     // 评审中
-  PENDING_QUOTATION = 'PENDING_QUOTATION',     // 待报价
-  PENDING_PRODUCTION = 'PENDING_PRODUCTION',   // 待生产
-  PRODUCING = 'PRODUCING',                     // 生产中
-  COMPLETED = 'COMPLETED',                     // 已完成
-  CANCELLED = 'CANCELLED',                     // 已取消
+  PENDING_DESIGN = 'PENDING_DESIGN',
+  DESIGNING = 'DESIGNING',
+  PENDING_MODEL = 'PENDING_MODEL',
+  MODELING = 'MODELING',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  PENDING_PRODUCTION = 'PENDING_PRODUCTION',
+  PRODUCING = 'PRODUCING',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 // 材质类型枚举

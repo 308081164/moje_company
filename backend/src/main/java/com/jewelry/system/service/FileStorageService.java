@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.UUID;
 
 @Service
 public class FileStorageService {
@@ -16,18 +15,15 @@ public class FileStorageService {
     @Value("${app.upload-dir:uploads/jewelry}")
     private String uploadDir;
 
-    public String saveOrderFile(long orderId, String subDir, MultipartFile file) throws IOException {
-        String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
-        String ext = "";
-        int dot = original.lastIndexOf('.');
-        if (dot >= 0) {
-            ext = original.substring(dot);
-        }
-        String stored = UUID.randomUUID() + ext;
+    /**
+     * 保存文件到本地磁盘，文件名由调用方决定（便于与 OSS 对齐）。
+     */
+    public String saveOrderFile(long orderId, String subDir, String storedFileName, MultipartFile file) throws IOException {
         Path dir = Paths.get(uploadDir, "order", String.valueOf(orderId), subDir);
         Files.createDirectories(dir);
-        Path target = dir.resolve(stored);
+        Path target = dir.resolve(storedFileName);
         file.transferTo(target.toFile());
         return target.toAbsolutePath().toString();
     }
 }
+

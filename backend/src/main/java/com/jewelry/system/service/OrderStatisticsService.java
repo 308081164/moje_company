@@ -4,6 +4,7 @@ import com.jewelry.system.dto.order.OrderStatisticsDto;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.OrderRepository;
+import com.jewelry.system.repository.OrderStatisticsViewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.Map;
 public class OrderStatisticsService {
 
     private final OrderRepository orderRepository;
+    private final OrderStatisticsViewRepository orderStatisticsViewRepository;
 
     @Transactional(readOnly = true)
     public OrderStatisticsDto statistics() {
@@ -82,7 +84,13 @@ public class OrderStatisticsService {
             stDist.add(m);
         }
         dto.setStatusDistribution(stDist);
-        dto.setMonthlyTrend(new ArrayList<>());
+        dto.setMonthlyTrend(orderStatisticsViewRepository.monthlyTrend().stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r.getMonth());
+            m.put("count", r.getCount());
+            m.put("revenue", nz(r.getRevenue()).doubleValue());
+            return m;
+        }).toList());
         return dto;
     }
 

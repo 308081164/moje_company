@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.entity.FileEntity;
 import com.jewelry.system.repository.FileEntityRepository;
+import com.jewelry.system.service.AliyunOssService;
 import com.jewelry.system.service.AuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +27,7 @@ import java.nio.file.Path;
 public class FileController {
 
     private final FileEntityRepository fileEntityRepository;
+    private final AliyunOssService aliyunOssService;
     private final AuditLogService auditLogService;
 
     @GetMapping("/{id:\\d+}/download")
@@ -33,18 +35,15 @@ public class FileController {
     public ResponseEntity<Resource> download(@PathVariable long id) throws IOException {
         FileEntity e = fileEntityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
-        Path path = Path.of(e.getFilePath());
-        if (!Files.isRegularFile(path)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文件已丢失");
+        String url = e.getFileUrl();
+        if (url == null || url.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文件 URL 不存在");
         }
-        Resource resource = new FileSystemResource(path);
-        String ct = Files.probeContentType(path);
-        MediaType mediaType = ct != null ? MediaType.parseMediaType(ct) : MediaType.APPLICATION_OCTET_STREAM;
         auditLogService.log("FILE_DOWNLOAD", "FILE", e.getId(), "下载文件: " + e.getOriginalName());
-        return ResponseEntity.ok()
-                .contentType(mediaType)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + e.getOriginalName() + "\"")
-                .body(resource);
+        // 统一重定向到 OSS URL，由浏览器直接下载
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, url)
+                .build();
     }
 
     @GetMapping("/{id:\\d+}/preview")
@@ -62,8 +61,8 @@ public class FileController {
     public void delete(@PathVariable long id) throws IOException {
         FileEntity e = fileEntityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
-        Path path = Path.of(e.getFilePath());
-        Files.deleteIfExists(path);
+        // filePath 存的是 OSS objectKey
+        aliyunOssService.deleteObject(e.getFilePath());
         fileEntityRepository.delete(e);
         auditLogService.log("FILE_DELETE", "FILE", e.getId(), "删除文件: " + e.getOriginalName());
     }

@@ -11,7 +11,7 @@ function normalizeApiOrigin(): string {
   return raw;
 }
 
-const API_ORIGIN = normalizeApiOrigin();
+export const API_ORIGIN = normalizeApiOrigin();
 
 type ApiClient = {
   get: <T = any>(url: string, config?: any) => Promise<T>;
@@ -43,6 +43,11 @@ api.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // multipart 需由浏览器自动带 boundary，不能固定为 application/json
+    if (config.data instanceof FormData) {
+      delete (config.headers as Record<string, unknown>)['Content-Type'];
     }
     
     // 添加请求时间戳（防止缓存）

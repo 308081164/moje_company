@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.dto.order.OrderInfoDto;
 import com.jewelry.system.entity.*;
+import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -106,5 +107,77 @@ public class OrderQueryService {
             spec = spec.and(dataScope);
         }
         return orderRepository.findAll(spec, p).stream().map(OrderApiMapper::toOrderInfo).toList();
+    }
+
+    // ================= 工作台查询 =================
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageDesignerTodo(Pageable pageable, Long designerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("designer").get("id"), designerId),
+                root.get("status").in(OrderStatus.PENDING_DESIGN, OrderStatus.DESIGNING)
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageDesignerDone(Pageable pageable, Long designerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("designer").get("id"), designerId),
+                root.get("status").in(
+                        OrderStatus.PENDING_MODEL,
+                        OrderStatus.MODELING,
+                        OrderStatus.PENDING_REVIEW,
+                        OrderStatus.PENDING_PRODUCTION,
+                        OrderStatus.PRODUCING,
+                        OrderStatus.COMPLETED
+                )
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageModelerTodo(Pageable pageable, Long modelerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("modeler").get("id"), modelerId),
+                root.get("status").in(OrderStatus.PENDING_MODEL, OrderStatus.MODELING)
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageModelerDone(Pageable pageable, Long modelerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("modeler").get("id"), modelerId),
+                root.get("status").in(
+                        OrderStatus.PENDING_REVIEW,
+                        OrderStatus.PENDING_PRODUCTION,
+                        OrderStatus.PRODUCING,
+                        OrderStatus.COMPLETED
+                )
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageTrackerTodo(Pageable pageable, Long trackerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("followUp").get("id"), trackerId),
+                cb.equal(root.get("status"), OrderStatus.PENDING_REVIEW)
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageTrackerDone(Pageable pageable, Long trackerId) {
+        Specification<Order> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("followUp").get("id"), trackerId),
+                root.get("status").in(
+                        OrderStatus.PENDING_PRODUCTION,
+                        OrderStatus.PRODUCING,
+                        OrderStatus.COMPLETED
+                )
+        );
+        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 }

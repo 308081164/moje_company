@@ -399,12 +399,16 @@ public class OrderCommandService {
         List<Order> list = orderRepository.findAllById(orderIds);
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("订单编号,客户,状态,定金,创建时间\n");
+        sb.append("订单编号,客户,联系方式,来源,状态,定金,创建时间\n");
         DateTimeFormatter iso = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
         for (Order o : list) {
             sb.append(csv(o.getOrderNumber()))
                     .append(',')
                     .append(csv(o.getCustomerName()))
+                    .append(',')
+                    .append(csv(firstNonBlank(o.getCustomerPhone(), o.getCustomerWechat())))
+                    .append(',')
+                    .append(o.getSource() != null ? o.getSource().name() : "")
                     .append(',')
                     .append(o.getStatus() != null ? o.getStatus().name() : "")
                     .append(',')
@@ -414,6 +418,16 @@ public class OrderCommandService {
                     .append('\n');
         }
         return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        return "";
     }
 
     private static String csv(String s) {

@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.service.*;
+import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,7 +31,9 @@ public class OrderController {
     private final OrderCommandService orderCommandService;
     private final OrderConfigurationService orderConfigurationService;
     private final OrderStatisticsService orderStatisticsService;
+    private final EmployeeStatisticsService employeeStatisticsService;
     private final OrderFileService orderFileService;
+    private final OrderExportService orderExportService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -45,6 +48,56 @@ public class OrderController {
             @RequestParam(required = false) String endDate
     ) {
         return orderQueryService.pageOrders(pageable, keyword, status, designerId, modelerId, salesId, startDate, endDate);
+    }
+
+    // ================= 工作台接口 =================
+
+    @GetMapping("/workbench/designer/todo")
+    @Operation(summary = "设计师工作台-待办")
+    public Page<OrderInfoDto> designerTodo(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageDesignerTodo(pageable, uid);
+    }
+
+    @GetMapping("/workbench/designer/done")
+    @Operation(summary = "设计师工作台-已完成")
+    public Page<OrderInfoDto> designerDone(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageDesignerDone(pageable, uid);
+    }
+
+    @GetMapping("/workbench/modeler/todo")
+    @Operation(summary = "建模师工作台-待办")
+    public Page<OrderInfoDto> modelerTodo(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageModelerTodo(pageable, uid);
+    }
+
+    @GetMapping("/workbench/modeler/done")
+    @Operation(summary = "建模师工作台-已完成")
+    public Page<OrderInfoDto> modelerDone(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageModelerDone(pageable, uid);
+    }
+
+    @GetMapping("/workbench/tracker/todo")
+    @Operation(summary = "跟单员工作台-待评审")
+    public Page<OrderInfoDto> trackerTodo(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerTodo(pageable, uid);
+    }
+
+    @GetMapping("/workbench/tracker/done")
+    @Operation(summary = "跟单员工作台-已完成")
+    public Page<OrderInfoDto> trackerDone(Pageable pageable) {
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerDone(pageable, uid);
     }
 
     @GetMapping("/{id:\\d+}")
@@ -147,9 +200,12 @@ public class OrderController {
     }
 
     @GetMapping("/employee-statistics")
-    @Operation(summary = "员工工作统计（占位）")
-    public List<Map<String, Object>> employeeStatistics() {
-        return List.of();
+    @Operation(summary = "员工工作统计（管理员）")
+    public List<EmployeeWorkStatisticsDto> employeeStatistics(@RequestParam(required = false) Long employeeId) {
+        if (!"ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可查看员工统计");
+        }
+        return employeeStatisticsService.list(employeeId);
     }
 
     @GetMapping("/generate-order-number")
@@ -166,6 +222,26 @@ public class OrderController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=orders.csv")
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .body(csv);
+    }
+
+    @GetMapping("/{id:\\d+}/export")
+    @Operation(summary = "导出单个订单 Markdown 工单")
+    public ResponseEntity<byte[]> exportOne(@PathVariable long id) {
+        byte[] md = orderExportService.exportOrderMarkdown(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=order-" + id + ".md")
+                .contentType(MediaType.parseMediaType("text/markdown;charset=UTF-8"))
+                .body(md);
+    }
+
+    @GetMapping("/{id:\\d+}/export-html")
+    @Operation(summary = "导出单个订单 HTML 工单")
+    public ResponseEntity<byte[]> exportOneHtml(@PathVariable long id) {
+        byte[] html = orderExportService.exportOrderHtml(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=order-" + id + ".html")
+                .contentType(MediaType.parseMediaType("text/html;charset=UTF-8"))
+                .body(html);
     }
 
     @PostMapping("/export-files")

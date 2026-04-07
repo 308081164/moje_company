@@ -10,6 +10,7 @@ import OrderManagementPage from '@/pages/OrderManagementPage';
 import UserManagementPage from '@/pages/UserManagementPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import WorkbenchPage from '@/pages/WorkbenchPage';
 import AppLayout from '@/components/layout/AppLayout';
 import './App.css';
 
@@ -120,6 +121,7 @@ const App: React.FC = () => {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="workbench" element={<WorkbenchPage />} />
           <Route path="orders/*" element={<OrderManagementPage />} />
           <Route
             path="users/*"

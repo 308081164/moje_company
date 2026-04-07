@@ -102,9 +102,11 @@ const AppLayout: React.FC = () => {
             icon: <ShoppingCartOutlined />,
             label: '订单管理',
             children: [
-              { key: '/orders', label: '待对接设计师' },
-              { key: '/orders?status=PENDING_MODEL', label: '待分配建模师' },
-              { key: '/orders?status=PENDING_QUOTATION', label: '待报价订单' },
+              { key: '/orders', label: '全部订单' },
+              { key: '/orders?status=PENDING_DESIGN', label: '待设计' },
+              { key: '/orders?status=PENDING_MODEL', label: '待建模' },
+              { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
+              { key: '/orders?status=PENDING_PRODUCTION', label: '待生产' },
             ],
           },
         ];
@@ -112,13 +114,18 @@ const AppLayout: React.FC = () => {
         return [
           ...baseItems,
           {
+            key: '/workbench',
+            icon: <FileTextOutlined />,
+            label: '我的工作台',
+          },
+          {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
-            label: '设计管理',
+            label: '订单列表',
             children: [
-              { key: '/orders?status=PENDING_DESIGN', label: '待设计订单' },
-              { key: '/orders?status=DESIGNING', label: '设计中订单' },
-              { key: '/orders?status=COMPLETED', label: '已完成设计' },
+              { key: '/orders', label: '全部订单' },
+              { key: '/orders?status=PENDING_DESIGN', label: '待设计师设计' },
+              { key: '/orders?status=DESIGNING', label: '设计中' },
             ],
           },
         ];
@@ -126,13 +133,18 @@ const AppLayout: React.FC = () => {
         return [
           ...baseItems,
           {
+            key: '/workbench',
+            icon: <FileTextOutlined />,
+            label: '我的工作台',
+          },
+          {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
-            label: '建模管理',
+            label: '订单列表',
             children: [
-              { key: '/orders?status=PENDING_MODEL', label: '待建模订单' },
-              { key: '/orders?status=MODELING', label: '建模中订单' },
-              { key: '/orders?status=COMPLETED', label: '已完成建模' },
+              { key: '/orders', label: '全部订单' },
+              { key: '/orders?status=PENDING_MODEL', label: '待建模' },
+              { key: '/orders?status=MODELING', label: '建模中' },
             ],
           },
         ];
@@ -140,13 +152,17 @@ const AppLayout: React.FC = () => {
         return [
           ...baseItems,
           {
+            key: '/workbench',
+            icon: <FileTextOutlined />,
+            label: '我的工作台',
+          },
+          {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
-            label: '工艺评审',
+            label: '订单列表',
             children: [
-              { key: '/orders?status=PENDING_REVIEW', label: '待评审订单' },
-              { key: '/orders?status=REVIEWING', label: '评审中订单' },
-              { key: '/orders?status=COMPLETED', label: '已完成评审' },
+              { key: '/orders', label: '全部订单' },
+              { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
             ],
           },
         ];
@@ -230,6 +246,9 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/dashboard')) {
       return ['/dashboard'];
+    }
+    if (path.startsWith('/workbench')) {
+      return ['/workbench'];
     }
 
     for (const item of items) {

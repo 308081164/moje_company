@@ -26,6 +26,7 @@ public class OrderFileService {
 
     private final FileEntityRepository fileEntityRepository;
     private final FileStorageService fileStorageService;
+    private final AliyunOssService aliyunOssService;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -50,16 +51,35 @@ public class OrderFileService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
-        long uid = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
-        String path = fileStorageService.saveOrderFile(orderId, subDir, file);
+        long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        if (!aliyunOssService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "OSS 未配置，无法上传文件");
+        }
         String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String ext = "";
+        int dot = original.lastIndexOf('.');
+        if (dot >= 0) {
+            ext = original.substring(dot);
+        }
+        String storedFileName = java.util.UUID.randomUUID() + ext;
+        String objectKey = "order/" + orderId + "/" + subDir + "/" + storedFileName;
+
+        // 所有文件强制上传到 OSS，不再保留本地副本
+        String url;
+        try {
+            url = aliyunOssService.uploadObject(objectKey, file);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", e);
+        }
+
         FileEntity e = new FileEntity();
         e.setFileName(original);
         e.setOriginalName(original);
-        e.setFilePath(path);
+        e.setFilePath(objectKey);
+        e.setFileUrl(url);
         e.setFileSize(file.getSize());
         e.setFileType(fileType);
-        int dot = original.lastIndexOf('.');
         if (dot >= 0) {
             e.setFileExtension(original.substring(dot + 1));
         }
