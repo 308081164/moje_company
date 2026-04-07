@@ -18,6 +18,7 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
 
     @EntityGraph(attributePaths = {"salesMid"})
+    @Query("SELECT o FROM Order o")
     Page<Order> findAllWithSalesMid(Pageable pageable);
 
     @EntityGraph(attributePaths = {"salesMid", "salesPre", "designer", "modeler", "followUp"})
