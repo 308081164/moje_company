@@ -195,7 +195,7 @@ jobs:
             echo "--- jewelry-mysql logs ---"
             docker logs jewelry-mysql --tail 200 || true
             echo "--- jewelry-backend logs ---"
-            docker logs jewelry-backend --tail 200 || true
+            docker logs jewelry-backend --tail 1200 || true
             echo "--- jewelry-mysql health ---"
             docker inspect -f '{{json .State.Health}}' jewelry-mysql 2>/dev/null || true
             exit 1
@@ -213,7 +213,7 @@ jobs:
             echo "✅ 服务健康检查通过"
           else
             echo "⚠️  服务健康检查失败，查看日志..."
-            docker logs jewelry-backend --tail 50
+            docker logs jewelry-backend --tail 1200
             exit 1
           fi
           
