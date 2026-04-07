@@ -55,6 +55,39 @@ a:active {
   font-weight: 500;
 }
 
+/* 统一按钮高度（解决主按钮/默认按钮高度不一致导致布局不齐） */
+.ant-btn:not(.ant-btn-sm):not(.ant-btn-lg) {
+  height: 36px;
+  padding: 0 16px;
+  line-height: 34px; /* 36px - 2px border */
+}
+
+.ant-btn-sm {
+  height: 28px;
+  padding: 0 12px;
+  line-height: 26px;
+}
+
+.ant-btn-lg {
+  height: 44px;
+  padding: 0 20px;
+  line-height: 42px;
+}
+
+/* 图标按钮保持正方形 */
+.ant-btn-icon-only:not(.ant-btn-sm):not(.ant-btn-lg) {
+  width: 36px;
+  padding: 0;
+}
+.ant-btn-icon-only.ant-btn-sm {
+  width: 28px;
+  padding: 0;
+}
+.ant-btn-icon-only.ant-btn-lg {
+  width: 44px;
+  padding: 0;
+}
+
 .ant-btn-primary {
   background: #1890ff;
   border-color: #1890ff;
@@ -119,24 +152,10 @@ a:active {
   min-height: calc(100vh - 64px - 70px);
 }
 
-/* 菜单样式 */
-.ant-menu {
-  border-right: none;
-}
-
-.ant-menu-item {
-  border-radius: 0;
-  margin: 0 !important;
-  width: 100% !important;
-}
-
-.ant-menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.ant-menu-item-selected {
-  background-color: #1890ff !important;
-}
+/* 菜单样式
+ * 不在全局强行覆盖 antd Menu（会导致侧边栏选中整块蓝底等问题）。
+ * Menu 的视觉规则统一在 `components/layout/AppLayout.css` 里做局部定制。
+ */
 
 /* 标签页样式 */
 .ant-tabs {

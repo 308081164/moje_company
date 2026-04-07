@@ -374,19 +374,19 @@ const AppLayout: React.FC = () => {
             </Dropdown>
 
             {/* 用户信息 */}
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <Space style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: 8 }}>
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+              <Space className="user-info-trigger" style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: 8 }}>
                 <Avatar
                   size="default"
                   icon={<UserOutlined />}
                   style={{ backgroundColor: '#1890ff' }}
                 />
                 {!collapsed && (
-                  <Space direction="vertical" size={0}>
-                    <Text strong style={{ fontSize: 14 }}>
+                  <Space direction="vertical" size={0} className="user-info-text">
+                    <Text strong className="user-info-name">
                       {user?.realName || user?.username}
                     </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" className="user-info-role">
                       {user?.roleDescription}
                     </Text>
                   </Space>

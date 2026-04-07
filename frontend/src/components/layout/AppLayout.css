@@ -274,6 +274,36 @@
   animation: slideIn 0.3s ease-out;
 }
 
+/* 右上角用户信息（避免挤压/换行导致走形） */
+.user-info-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 240px;
+  min-width: 140px;
+}
+
+.user-info-text {
+  line-height: 1.2;
+}
+
+.user-info-name,
+.user-info-role {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-info-name {
+  font-size: 14px;
+}
+
+.user-info-role {
+  font-size: 12px;
+}
+
 /* 悬停效果 */
 .logo-container:hover {
   background-color: #fafafa;
