@@ -58,12 +58,12 @@ public class JwtTokenProvider {
         Date now = new Date();
         Date exp = new Date(now.getTime() + accessExpirationMs);
         return Jwts.builder()
-                .subject(String.valueOf(user.getId()))
+                .setSubject(String.valueOf(user.getId()))
                 .claim(CLAIM_TYP, TYP_ACCESS)
                 .claim("username", user.getUsername())
                 .claim(CLAIM_ROLE, roleApi)
-                .issuedAt(now)
-                .expiration(exp)
+                .setIssuedAt(now)
+                .setExpiration(exp)
                 .signWith(key)
                 .compact();
     }
@@ -72,10 +72,10 @@ public class JwtTokenProvider {
         Date now = new Date();
         Date exp = new Date(now.getTime() + refreshExpirationMs);
         return Jwts.builder()
-                .subject(String.valueOf(user.getId()))
+                .setSubject(String.valueOf(user.getId()))
                 .claim(CLAIM_TYP, TYP_REFRESH)
-                .issuedAt(now)
-                .expiration(exp)
+                .setIssuedAt(now)
+                .setExpiration(exp)
                 .signWith(key)
                 .compact();
     }
@@ -97,10 +97,10 @@ public class JwtTokenProvider {
     }
 
     private Claims parseClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
                 .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .parseClaimsJws(token)
+                .getBody();
     }
 }
