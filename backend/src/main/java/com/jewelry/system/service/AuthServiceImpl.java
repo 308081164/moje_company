@@ -28,6 +28,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuditLogService auditLogService;
 
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
@@ -42,12 +43,15 @@ public class AuthServiceImpl implements AuthService {
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "账号未激活或已禁用");
         }
-        return buildLoginResponse(user);
+        LoginResponse resp = buildLoginResponse(user);
+        auditLogService.log("LOGIN", "USER", user.getId(), "用户登录: " + user.getUsername());
+        return resp;
     }
 
     @Override
     public void logout(String token) {
         // JWT 无服务端会话，客户端丢弃令牌即可
+        auditLogService.log("LOGOUT", "USER", null, "用户登出");
     }
 
     @Override
@@ -67,7 +71,9 @@ public class AuthServiceImpl implements AuthService {
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "账号未激活或已禁用");
         }
-        return buildLoginResponse(user);
+        LoginResponse resp = buildLoginResponse(user);
+        auditLogService.log("REFRESH_TOKEN", "USER", user.getId(), "刷新访问令牌: " + user.getUsername());
+        return resp;
     }
 
     private LoginResponse buildLoginResponse(User user) {

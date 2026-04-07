@@ -40,6 +40,7 @@ public class OrderCommandService {
     private final MaterialConfigRepository materialConfigRepository;
     private final ObjectMapper objectMapper;
     private final OrderQueryService orderQueryService;
+    private final AuditLogService auditLogService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -70,6 +71,7 @@ public class OrderCommandService {
                 .ifPresent(uid -> o.setSalesPre(userRepository.getReferenceById(uid)));
 
         orderRepository.save(o);
+        auditLogService.log("ORDER_CREATE", "ORDER", o.getId(), "创建订单: " + o.getOrderNumber());
         return orderQueryService.getOrder(o.getId());
     }
 
@@ -111,6 +113,7 @@ public class OrderCommandService {
             o.setCustomerWechat(req.getCustomerWechat());
         }
         orderRepository.save(o);
+        auditLogService.log("ORDER_UPDATE", "ORDER", o.getId(), "更新订单基本信息: " + o.getOrderNumber());
         return orderQueryService.getOrder(id);
     }
 
@@ -120,6 +123,7 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在");
         }
         orderRepository.deleteById(id);
+        auditLogService.log("ORDER_DELETE", "ORDER", id, "删除订单 ID=" + id);
     }
 
     @Transactional
@@ -128,6 +132,7 @@ public class OrderCommandService {
             return;
         }
         orderRepository.deleteAllById(orderIds);
+        auditLogService.log("ORDER_DELETE_BATCH", "ORDER", null, "批量删除订单: " + orderIds);
     }
 
     @Transactional
@@ -173,6 +178,7 @@ public class OrderCommandService {
             order.setDesigner(userRepository.getReferenceById(req.getDesignerId()));
         }
         orderRepository.save(order);
+        auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息");
         return orderQueryService.getOrder(orderId);
     }
 
@@ -195,6 +201,7 @@ public class OrderCommandService {
             order.setModeler(userRepository.getReferenceById(req.getModelerId()));
         }
         orderRepository.save(order);
+        auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息");
         return orderQueryService.getOrder(orderId);
     }
 
@@ -225,7 +232,7 @@ public class OrderCommandService {
         }
         pr.setReviewTime(LocalDateTime.now());
         processReviewRepository.save(pr);
-
+        auditLogService.log("ORDER_UPDATE_REVIEW", "ORDER", orderId, "更新工艺评审信息");
         return orderQueryService.getOrder(orderId);
     }
 
@@ -256,6 +263,7 @@ public class OrderCommandService {
         q.setSubtotal(BigDecimal.valueOf(total));
         q.setTotalAmount(BigDecimal.valueOf(total));
         quotationRepository.save(q);
+        auditLogService.log("ORDER_UPDATE_QUOTATION", "ORDER", orderId, "更新报价信息");
         return orderQueryService.getOrder(orderId);
     }
 
@@ -269,6 +277,7 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
+        auditLogService.log("ORDER_CHANGE_STATUS", "ORDER", orderId, "变更状态为: " + target.name());
         return orderQueryService.getOrder(orderId);
     }
 
@@ -288,6 +297,7 @@ public class OrderCommandService {
             order.setFollowUp(userRepository.getReferenceById(req.getTrackerId()));
         }
         orderRepository.save(order);
+        auditLogService.log("ORDER_ASSIGN", "ORDER", orderId, "分配人员: sales=" + req.getSalesId() + ", designer=" + req.getDesignerId() + ", modeler=" + req.getModelerId() + ", tracker=" + req.getTrackerId());
         return orderQueryService.getOrder(orderId);
     }
 
@@ -372,6 +382,7 @@ public class OrderCommandService {
             quotationRepository.save(n);
         });
 
+        auditLogService.log("ORDER_COPY", "ORDER", neo.getId(), "从订单 " + sourceId + " 复制创建");
         return orderQueryService.getOrder(neo.getId());
     }
 

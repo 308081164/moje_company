@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.entity.FileEntity;
 import com.jewelry.system.repository.FileEntityRepository;
+import com.jewelry.system.service.AuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 public class FileController {
 
     private final FileEntityRepository fileEntityRepository;
+    private final AuditLogService auditLogService;
 
     @GetMapping("/{id:\\d+}/download")
     @Operation(summary = "下载文件")
@@ -38,6 +40,7 @@ public class FileController {
         Resource resource = new FileSystemResource(path);
         String ct = Files.probeContentType(path);
         MediaType mediaType = ct != null ? MediaType.parseMediaType(ct) : MediaType.APPLICATION_OCTET_STREAM;
+        auditLogService.log("FILE_DOWNLOAD", "FILE", e.getId(), "下载文件: " + e.getOriginalName());
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + e.getOriginalName() + "\"")
@@ -49,7 +52,9 @@ public class FileController {
     public String preview(@PathVariable long id) {
         FileEntity e = fileEntityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
-        return e.getFileUrl() != null ? e.getFileUrl() : e.getFilePath();
+        String url = e.getFileUrl() != null ? e.getFileUrl() : e.getFilePath();
+        auditLogService.log("FILE_PREVIEW", "FILE", e.getId(), "预览文件: " + e.getOriginalName());
+        return url;
     }
 
     @DeleteMapping("/{id:\\d+}")
@@ -60,5 +65,6 @@ public class FileController {
         Path path = Path.of(e.getFilePath());
         Files.deleteIfExists(path);
         fileEntityRepository.delete(e);
+        auditLogService.log("FILE_DELETE", "FILE", e.getId(), "删除文件: " + e.getOriginalName());
     }
 }

@@ -26,6 +26,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public Page<UserResponse> list(String username, String realName, String roleApi, String statusStr, Pageable pageable) {
@@ -77,6 +78,7 @@ public class UserService {
         u.setRole(ApiRoleMapper.fromApiRole(req.getRole()));
         u.setStatus(parseStatus(req.getStatus(), UserStatus.ACTIVE));
         userRepository.save(u);
+        auditLogService.log("USER_CREATE", "USER", u.getId(), "创建用户: " + u.getUsername());
         return UserMapper.toResponse(u);
     }
 
@@ -100,6 +102,7 @@ public class UserService {
             u.setStatus(parseStatus(req.getStatus(), u.getStatus()));
         }
         userRepository.save(u);
+        auditLogService.log("USER_UPDATE", "USER", u.getId(), "更新用户信息: " + u.getUsername());
         return UserMapper.toResponse(u);
     }
 
@@ -109,11 +112,13 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
         }
         userRepository.deleteById(id);
+        auditLogService.log("USER_DELETE", "USER", id, "删除用户 ID=" + id);
     }
 
     @Transactional
     public void deleteBatch(List<Long> userIds) {
         userRepository.deleteAllById(userIds);
+        auditLogService.log("USER_DELETE_BATCH", "USER", null, "批量删除用户: " + userIds);
     }
 
     @Transactional
@@ -125,6 +130,7 @@ public class UserService {
         }
         u.setPassword(passwordEncoder.encode(body.getNewPassword()));
         userRepository.save(u);
+        auditLogService.log("USER_RESET_PASSWORD", "USER", u.getId(), "管理员重置密码: " + u.getUsername());
     }
 
     @Transactional
@@ -133,6 +139,7 @@ public class UserService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         u.setStatus(UserStatus.ACTIVE);
         userRepository.save(u);
+        auditLogService.log("USER_ENABLE", "USER", u.getId(), "启用用户: " + u.getUsername());
     }
 
     @Transactional
@@ -141,6 +148,7 @@ public class UserService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         u.setStatus(UserStatus.INACTIVE);
         userRepository.save(u);
+        auditLogService.log("USER_DISABLE", "USER", u.getId(), "禁用用户: " + u.getUsername());
     }
 
     private static UserStatus parseStatus(String raw, UserStatus defaultStatus) {
