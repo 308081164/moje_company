@@ -203,17 +203,35 @@ jobs:
           
           # ========== 5. 验证部署 ==========
           echo "等待服务启动..."
-          sleep 15
+          # 给 JVM / Flyway / JPA 更多启动时间
+          sleep 25
           
           echo "检查容器状态..."
           docker ps --filter "name=jewelry" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           
           echo "检查服务健康..."
-          if curl -f http://localhost:8851/api/actuator/health > /dev/null 2>&1; then
+          ok=0
+          for i in $(seq 1 24); do
+            if curl -fsS "http://localhost:8851/api/actuator/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            echo "健康检查未通过，重试 ${i}/24 ..."
+            sleep 5
+          done
+          
+          if [ "$ok" = "1" ]; then
             echo "✅ 服务健康检查通过"
           else
-            echo "⚠️  服务健康检查失败，查看日志..."
-            docker logs jewelry-backend --tail 1200
+            echo "⚠️  服务健康检查最终失败，输出诊断信息..."
+            echo "--- curl /api/actuator/health ---"
+            curl -i "http://localhost:8851/api/actuator/health" || true
+            echo "--- curl /actuator/health (排除 context-path 影响) ---"
+            curl -i "http://localhost:8851/actuator/health" || true
+            echo "--- docker ps ---"
+            docker ps --filter "name=jewelry" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            echo "--- jewelry-backend logs ---"
+            docker logs jewelry-backend --tail 2000 || true
             exit 1
           fi
           
