@@ -1,11 +1,18 @@
 import React from 'react';
 import { Card, Descriptions, Space, Tag, Typography } from 'antd';
 import { useAuthStore } from '@/stores/authStore';
+import { UserStatus } from '@/types/auth';
 
 const { Title, Text } = Typography;
 
 const ProfilePage: React.FC = () => {
   const { user } = useAuthStore();
+  const statusTextMap: Record<UserStatus, string> = {
+    [UserStatus.ACTIVE]: '活跃',
+    [UserStatus.INACTIVE]: '未激活',
+    [UserStatus.LOCKED]: '锁定',
+    [UserStatus.DELETED]: '已删除',
+  };
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -24,7 +31,7 @@ const ProfilePage: React.FC = () => {
           <Descriptions.Item label="手机号">{user?.phone || '-'}</Descriptions.Item>
           <Descriptions.Item label="账号状态">
             <Tag color={user?.status === 'ACTIVE' ? 'green' : 'orange'}>
-              {user?.statusDescription || user?.status || '未知'}
+              {user?.status ? statusTextMap[user.status] : '未知'}
             </Tag>
           </Descriptions.Item>
         </Descriptions>
