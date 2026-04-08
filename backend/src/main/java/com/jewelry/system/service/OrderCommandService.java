@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
@@ -63,7 +64,7 @@ public class OrderCommandService {
         if (req.getCustomerWechat() != null && !req.getCustomerWechat().isBlank()) {
             o.setCustomerWechat(req.getCustomerWechat());
         }
-        o.setOrderTime(LocalDateTime.parse(req.getOrderTime()));
+        o.setOrderTime(parseOrderTime(req.getOrderTime()));
         o.setOrderNumber(generateOrderNumber());
         o.setStatus(OrderStatus.PENDING_DESIGN);
 
@@ -95,7 +96,7 @@ public class OrderCommandService {
             o.setBasicRequirements(req.getBasicRequirements());
         }
         if (req.getOrderTime() != null && !req.getOrderTime().isBlank()) {
-            o.setOrderTime(LocalDateTime.parse(req.getOrderTime()));
+            o.setOrderTime(parseOrderTime(req.getOrderTime()));
         }
         if (req.getStyle() != null) {
             o.setStyleInfo(req.getStyle());
@@ -521,6 +522,29 @@ public class OrderCommandService {
         } catch (JsonProcessingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JSON 序列化失败");
         }
+    }
+
+    private static LocalDateTime parseOrderTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "orderTime 不能为空");
+        }
+        String value = raw.trim();
+        List<DateTimeFormatter> fmts = List.of(
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")
+        );
+        for (DateTimeFormatter fmt : fmts) {
+            try {
+                return LocalDateTime.parse(value, fmt);
+            } catch (DateTimeParseException ignored) {
+                // try next formatter
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "orderTime 格式不正确，支持示例：2026-04-08T16:44:13 或 2026-04-08 16:44:13");
     }
 
     private static double nz(Double d) {
