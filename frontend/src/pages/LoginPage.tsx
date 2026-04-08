@@ -16,7 +16,6 @@ import {
 import {
   UserOutlined,
   LockOutlined,
-  SafetyCertificateOutlined,
   EyeInvisibleOutlined,
   EyeTwoTone,
 } from '@ant-design/icons';
@@ -30,8 +29,6 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [captcha, setCaptcha] = useState('');
-  const [captchaLoading, setCaptchaLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   
   const { login, error, clearError } = useAuthStore();
@@ -44,30 +41,8 @@ const LoginPage: React.FC = () => {
     }
   }, [navigate]);
 
-  // 生成验证码
-  const generateCaptcha = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let captcha = '';
-    for (let i = 0; i < 4; i++) {
-      captcha += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setCaptcha(captcha);
-  };
-
-  // 初始化验证码
-  useEffect(() => {
-    generateCaptcha();
-  }, []);
-
   // 处理登录
   const handleLogin = async (values: any) => {
-    // 验证验证码
-    if (values.captcha.toUpperCase() !== captcha.toUpperCase()) {
-      message.error('验证码错误，请重新输入');
-      generateCaptcha();
-      return;
-    }
-
     setLoading(true);
     clearError();
 
@@ -90,7 +65,6 @@ const LoginPage: React.FC = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error('登录失败:', error);
-      generateCaptcha(); // 登录失败时刷新验证码
     } finally {
       setLoading(false);
     }
@@ -192,43 +166,6 @@ const LoginPage: React.FC = () => {
                     }
                     allowClear
                   />
-                </Form.Item>
-
-                <Form.Item
-                  name="captcha"
-                  label="验证码"
-                  rules={[{ required: true, message: '请输入验证码' }]}
-                >
-                  <Row gutter={8}>
-                    <Col span={16}>
-                      <Input
-                        prefix={<SafetyCertificateOutlined />}
-                        placeholder="请输入验证码"
-                        allowClear
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Button
-                        type="default"
-                        onClick={generateCaptcha}
-                        loading={captchaLoading}
-                        style={{ width: '100%', height: '100%' }}
-                      >
-                        <div
-                          style={{
-                            fontFamily: 'monospace',
-                            fontSize: 20,
-                            fontWeight: 'bold',
-                            letterSpacing: 2,
-                            color: '#1890ff',
-                            userSelect: 'none',
-                          }}
-                        >
-                          {captcha}
-                        </div>
-                      </Button>
-                    </Col>
-                  </Row>
                 </Form.Item>
 
                 <Form.Item>

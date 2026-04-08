@@ -51,6 +51,13 @@ const OrderCreatePage: React.FC = () => {
 
   return (
     <Card bordered={false}>
+      <div
+        style={{
+          maxHeight: 'calc(100vh - 220px)',
+          overflowY: 'auto',
+          paddingRight: 8,
+        }}
+      >
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>
@@ -127,6 +134,7 @@ const OrderCreatePage: React.FC = () => {
           </Form.Item>
         </Form>
       </Space>
+      </div>
     </Card>
   );
 };
