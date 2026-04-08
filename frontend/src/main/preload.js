@@ -39,7 +39,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   print: (options) => ipcRenderer.invoke('print', options),
   
   // 日志
-  log: (level, message, data) => ipcRenderer.invoke('log', { level, message, data })
+  log: (level, message, data) => ipcRenderer.invoke('log', { level, message, data }),
+
+  // 更新
+  checkForUpdates: () => ipcRenderer.invoke('check-updates'),
+  quitAndInstallUpdate: () => ipcRenderer.invoke('quit-and-install-update')
 });
 
 // 监听主进程消息
@@ -53,6 +57,18 @@ ipcRenderer.on('update-downloaded', (event, info) => {
 
 ipcRenderer.on('update-error', (event, error) => {
   window.dispatchEvent(new CustomEvent('electron-update-error', { detail: error }));
+});
+
+ipcRenderer.on('update-checking', (event, info) => {
+  window.dispatchEvent(new CustomEvent('electron-update-checking', { detail: info }));
+});
+
+ipcRenderer.on('update-not-available', (event, info) => {
+  window.dispatchEvent(new CustomEvent('electron-update-not-available', { detail: info }));
+});
+
+ipcRenderer.on('update-download-progress', (event, progress) => {
+  window.dispatchEvent(new CustomEvent('electron-update-download-progress', { detail: progress }));
 });
 
 // 暴露Node.js模块（有限制地）

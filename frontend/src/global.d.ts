@@ -17,6 +17,8 @@ declare global {
       maximizeWindow: () => void;
 
       log: (level: 'info' | 'warn' | 'error', message: string, meta?: any) => void;
+      checkForUpdates: () => Promise<{ checked: boolean; reason?: string }>;
+      quitAndInstallUpdate: () => Promise<void>;
     };
   }
 }

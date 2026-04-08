@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
 import path from 'path';
+import { autoUpdater } from 'electron-updater';
 
 // 保持窗口对象的全局引用，避免被垃圾回收
 let mainWindow: BrowserWindow | null = null;
@@ -7,6 +8,47 @@ let tray: Tray | null = null;
 
 // 开发环境判断
 const isDev = process.env.NODE_ENV === 'development';
+
+function setupAutoUpdater() {
+  if (isDev) {
+    console.log('[updater] 开发模式，跳过自动更新');
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[updater] checking-for-update');
+    mainWindow?.webContents.send('update-checking');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[updater] update-available', info?.version);
+    mainWindow?.webContents.send('update-available', info);
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[updater] update-not-available', info?.version);
+    mainWindow?.webContents.send('update-not-available', info);
+  });
+
+  autoUpdater.on('error', (error) => {
+    console.error('[updater] error', error);
+    mainWindow?.webContents.send('update-error', {
+      message: error?.message || '自动更新失败',
+    });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update-download-progress', progress);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[updater] update-downloaded', info?.version);
+    mainWindow?.webContents.send('update-downloaded', info);
+  });
+}
 
 function createWindow() {
   // 创建浏览器窗口
@@ -113,6 +155,7 @@ function createTray() {
 // 应用准备就绪
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdater();
   
   // macOS 应用激活
   app.on('activate', () => {
@@ -123,6 +166,15 @@ app.whenReady().then(() => {
   
   // 创建应用菜单
   createApplicationMenu();
+
+  // 应用启动后稍等检查更新，避免和首屏加载竞争
+  setTimeout(() => {
+    if (!isDev) {
+      autoUpdater.checkForUpdates().catch((e) => {
+        console.error('[updater] checkForUpdates failed', e);
+      });
+    }
+  }, 5000);
 });
 
 // 所有窗口关闭时退出应用（macOS 除外）
@@ -250,6 +302,20 @@ ipcMain.handle('maximize-window', () => {
 ipcMain.handle('close-window', () => {
   if (mainWindow) {
     mainWindow.close();
+  }
+});
+
+ipcMain.handle('check-updates', async () => {
+  if (isDev) {
+    return { checked: false, reason: 'development' };
+  }
+  await autoUpdater.checkForUpdates();
+  return { checked: true };
+});
+
+ipcMain.handle('quit-and-install-update', () => {
+  if (!isDev) {
+    autoUpdater.quitAndInstall();
   }
 });
 

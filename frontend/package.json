@@ -53,6 +53,7 @@
     "antd": "^5.0.0",
     "axios": "^1.0.0",
     "dayjs": "^1.0.0",
+    "electron-updater": "^6.3.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.0.0",
@@ -81,6 +82,12 @@
       "target": "AppImage",
       "icon": "assets/icon.png"
     },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://moje-jewelry-files.oss-cn-guangzhou.aliyuncs.com/desktop-updates/win"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

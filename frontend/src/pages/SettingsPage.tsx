@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button, Card, Form, Select, Space, Switch, Typography, message } from 'antd';
 
 const { Title, Text } = Typography;
@@ -13,6 +13,7 @@ const STORAGE_KEY = 'app_settings_v1';
 
 const SettingsPage: React.FC = () => {
   const [form] = Form.useForm<SettingsForm>();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const initialValues: SettingsForm = {
     theme: 'light',
@@ -24,6 +25,28 @@ const SettingsPage: React.FC = () => {
   const handleSave = (values: SettingsForm) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
     message.success('设置已保存');
+  };
+
+  const handleCheckUpdate = async () => {
+    if (!window.electronAPI?.checkForUpdates) {
+      message.info('当前环境不支持自动更新检查');
+      return;
+    }
+
+    setCheckingUpdate(true);
+    try {
+      const result = await window.electronAPI.checkForUpdates();
+      if (result?.checked) {
+        message.success('已发起更新检查，请稍候查看通知');
+      } else {
+        message.info('当前环境为开发模式，未执行更新检查');
+      }
+    } catch (error) {
+      console.error('手动检查更新失败:', error);
+      message.error('检查更新失败，请稍后重试');
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   return (
@@ -67,6 +90,17 @@ const SettingsPage: React.FC = () => {
             </Button>
           </Form.Item>
         </Form>
+      </Card>
+
+      <Card bordered={false} title="应用更新">
+        <Space direction="vertical">
+          <Text type="secondary">
+            可主动检查是否有新版本可下载，若检测到更新会在右上角通知并自动下载。
+          </Text>
+          <Button onClick={handleCheckUpdate} loading={checkingUpdate}>
+            手动检查更新
+          </Button>
+        </Space>
       </Card>
 
       <Text type="secondary">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout, Spin, message, notification } from 'antd';
+import { Button, Modal, Spin, message, notification } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -78,6 +78,73 @@ const App: React.FC = () => {
         electronAPI.removeShowAboutListener(handleShowAbout);
       };
     }
+  }, [isAuthenticated]);
+
+  // 自动更新监听
+  useEffect(() => {
+    const electronAPI = window.electronAPI;
+    if (!electronAPI || !isAuthenticated) {
+      return;
+    }
+
+    electronAPI.checkForUpdates().catch((e) => {
+      console.error('[updater] 主动检查更新失败', e);
+    });
+
+    const onAvailable = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      notification.info({
+        message: '发现新版本',
+        description: `检测到新版本 ${detail.version || ''}，正在后台下载...`,
+        duration: 5,
+      });
+    };
+
+    const onDownloaded = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      Modal.confirm({
+        title: '新版本已下载完成',
+        content: `版本 ${detail.version || ''} 已准备就绪，是否立即重启并安装更新？`,
+        okText: '立即安装',
+        cancelText: '稍后',
+        onOk: () => electronAPI.quitAndInstallUpdate(),
+      });
+    };
+
+    const onError = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      notification.warning({
+        message: '更新检查失败',
+        description: detail.message || '暂时无法获取更新信息',
+        duration: 4,
+      });
+    };
+
+    const onProgress = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      if (typeof detail.percent === 'number') {
+        const p = Math.round(detail.percent);
+        if (p > 0 && p % 25 === 0) {
+          message.loading({ content: `更新下载中 ${p}%`, key: 'update-progress', duration: 1 });
+        }
+        if (p >= 100) {
+          message.destroy('update-progress');
+        }
+      }
+    };
+
+    window.addEventListener('electron-update-available', onAvailable);
+    window.addEventListener('electron-update-downloaded', onDownloaded);
+    window.addEventListener('electron-update-error', onError);
+    window.addEventListener('electron-update-download-progress', onProgress);
+
+    return () => {
+      window.removeEventListener('electron-update-available', onAvailable);
+      window.removeEventListener('electron-update-downloaded', onDownloaded);
+      window.removeEventListener('electron-update-error', onError);
+      window.removeEventListener('electron-update-download-progress', onProgress);
+      message.destroy('update-progress');
+    };
   }, [isAuthenticated]);
 
   // 显示加载状态
