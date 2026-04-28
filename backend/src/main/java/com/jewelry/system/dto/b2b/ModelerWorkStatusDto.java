@@ -10,5 +10,8 @@ public class ModelerWorkStatusDto {
     private String workMode;
     private String status;
     private Integer todoCount;
+    private Integer c2cTodoCount;
+    private Integer b2bTodoCount;
+    private Boolean autoAssignEnabled;
     private String pauseReason;
 }

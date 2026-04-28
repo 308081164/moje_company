@@ -77,6 +77,10 @@ public class Order {
     @JoinColumn(name = "follow_up_id")
     private User followUp;
     
+    // B端标识
+    @Column(name = "is_b2b")
+    private Boolean isB2b = false;
+    
     // 时间信息
     @Column(name = "order_time")
     private LocalDateTime orderTime;
@@ -98,6 +102,15 @@ public class Order {
     
     @Column(name = "cancelled_time")
     private LocalDateTime cancelledTime;
+    
+    @Column(name = "assigned_to_designer_at")
+    private LocalDateTime assignedToDesignerAt;
+    
+    @Column(name = "assigned_to_modeler_at")
+    private LocalDateTime assignedToModelerAt;
+    
+    @Column(name = "last_reminder_sent_at")
+    private LocalDateTime lastReminderSentAt;
     
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

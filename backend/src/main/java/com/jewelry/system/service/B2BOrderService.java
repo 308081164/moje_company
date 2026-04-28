@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -31,11 +32,12 @@ public class B2BOrderService {
     private final OrderDetailRepository orderDetailRepository;
     private final UserRepository userRepository;
     private final OrderAccessLinkService linkService;
-    private final ModelerWorkStatusService workStatusService;
+    private final ModelerWorkStatusService modelerWorkStatusService;
     private final WebSocketService webSocketService;
     private final EmailNotificationService emailNotificationService;
     private final OrderQueryService orderQueryService;
     private final PasswordEncoder passwordEncoder;
+    private final TaskAssignmentService taskAssignmentService;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -59,6 +61,7 @@ public class B2BOrderService {
         }
 
         Order order = new Order();
+        order.setIsB2b(true); // 标记为B端订单
         order.setSource(OrderSource.INFLUENCER);
         order.setInfluencerName(req.getSourceDetail());
         order.setDeposit(req.getDepositAmount() != null ? BigDecimal.valueOf(req.getDepositAmount()) : BigDecimal.ZERO);
@@ -73,12 +76,14 @@ public class B2BOrderService {
 
         orderRepository.save(order);
 
-        Long modelerId = workStatusService.findAvailableModelerForB2B();
+        // 使用智能任务分配寻找建模师
+        Long modelerId = taskAssignmentService.findSuitableModelerForB2B();
         if (modelerId != null) {
             User modeler = userRepository.getReferenceById(modelerId);
             order.setModeler(modeler);
             order.setStatus(OrderStatus.MODELING);
-            workStatusService.assignTask(modelerId);
+            order.setAssignedToModelerAt(LocalDateTime.now());
+            taskAssignmentService.incrementModelerTodo(modelerId, true);
             webSocketService.notifyNewOrder(modelerId, order.getId(), order.getOrderNumber());
         }
 
@@ -87,7 +92,7 @@ public class B2BOrderService {
         B2BOrderAccessDto accessDto = linkService.createLink(order.getId(), client != null ? client.getId() : null);
         
         emailNotificationService.sendOrderNotification(order.getOrderNumber(), 
-            client != null ? client.getContact() : req.getContact(), "B2B业务");
+                client != null ? client.getContact() : req.getContact(), "B2B业务");
 
         return accessDto;
     }
@@ -99,9 +104,9 @@ public class B2BOrderService {
 
     public List<OrderInfoDto> getClientOrders(Long clientId) {
         return orderRepository.findByCustomerPhone(
-            clientRepository.findById(clientId)
-                .map(B2BClient::getContact)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "客户不存在"))
+                clientRepository.findById(clientId)
+                        .map(B2BClient::getContact)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "客户不存在"))
         ).stream()
         .map(o -> orderQueryService.getOrder(o.getId()))
         .toList();

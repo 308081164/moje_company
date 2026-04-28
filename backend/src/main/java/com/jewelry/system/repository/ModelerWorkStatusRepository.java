@@ -22,10 +22,10 @@ public interface ModelerWorkStatusRepository extends JpaRepository<ModelerWorkSt
     @Query("SELECT m FROM ModelerWorkStatus m WHERE m.status = 'AVAILABLE'")
     List<ModelerWorkStatus> findAllAvailable();
     
-    @Query("SELECT m FROM ModelerWorkStatus m WHERE m.workMode IN ('AUTO', 'B2B_ONLY') AND m.status = 'AVAILABLE'")
+    @Query("SELECT m FROM ModelerWorkStatus m WHERE m.workMode IN ('AUTO', 'B2B_ONLY') AND m.status = 'AVAILABLE' AND m.autoAssignEnabled = true")
     List<ModelerWorkStatus> findB2BAvailable();
     
-    @Query("SELECT m FROM ModelerWorkStatus m WHERE m.workMode IN ('AUTO', 'C2C_ONLY') AND m.status = 'AVAILABLE'")
+    @Query("SELECT m FROM ModelerWorkStatus m WHERE m.workMode IN ('AUTO', 'C2C_ONLY') AND m.status = 'AVAILABLE' AND m.autoAssignEnabled = true")
     List<ModelerWorkStatus> findC2CAvailable();
     
     @Modifying
@@ -35,4 +35,20 @@ public interface ModelerWorkStatusRepository extends JpaRepository<ModelerWorkSt
     @Modifying
     @Query("UPDATE ModelerWorkStatus m SET m.todoCount = m.todoCount - 1 WHERE m.userId = :userId AND m.todoCount > 0")
     void decrementTodoCount(@Param("userId") Long userId);
+    
+    @Modifying
+    @Query("UPDATE ModelerWorkStatus m SET m.c2cTodoCount = m.c2cTodoCount + 1, m.todoCount = m.todoCount + 1 WHERE m.userId = :userId")
+    void incrementC2CTodoCount(@Param("userId") Long userId);
+    
+    @Modifying
+    @Query("UPDATE ModelerWorkStatus m SET m.c2cTodoCount = m.c2cTodoCount - 1, m.todoCount = m.todoCount - 1 WHERE m.userId = :userId AND m.c2cTodoCount > 0")
+    void decrementC2CTodoCount(@Param("userId") Long userId);
+    
+    @Modifying
+    @Query("UPDATE ModelerWorkStatus m SET m.b2bTodoCount = m.b2bTodoCount + 1, m.todoCount = m.todoCount + 1 WHERE m.userId = :userId")
+    void incrementB2BTodoCount(@Param("userId") Long userId);
+    
+    @Modifying
+    @Query("UPDATE ModelerWorkStatus m SET m.b2bTodoCount = m.b2bTodoCount - 1, m.todoCount = m.todoCount - 1 WHERE m.userId = :userId AND m.b2bTodoCount > 0")
+    void decrementB2BTodoCount(@Param("userId") Long userId);
 }

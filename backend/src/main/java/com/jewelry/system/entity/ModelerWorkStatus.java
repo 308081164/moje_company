@@ -32,6 +32,24 @@ public class ModelerWorkStatus {
     @Column(name = "todo_count", nullable = false)
     private Integer todoCount = 0;
 
+    @Column(name = "c2c_todo_count", nullable = false)
+    private Integer c2cTodoCount = 0;
+
+    @Column(name = "b2b_todo_count", nullable = false)
+    private Integer b2bTodoCount = 0;
+
+    @Column(name = "auto_assign_enabled", nullable = false)
+    private Boolean autoAssignEnabled = true;
+
+    @Column(name = "last_priority_bonus_time")
+    private LocalDateTime lastPriorityBonusTime;
+
+    @Column(name = "reason_for_pause", length = 500)
+    private String reasonForPause;
+
+    @Column(name = "last_activity_time")
+    private LocalDateTime lastActivityTime;
+
     @Column(name = "pause_reason", length = 500)
     private String pauseReason;
 
@@ -48,6 +66,6 @@ public class ModelerWorkStatus {
     }
 
     public enum WorkStatus {
-        AVAILABLE, PAUSED, BUSY
+        AVAILABLE, PAUSED, BUSY, OVERLOADED
     }
 }

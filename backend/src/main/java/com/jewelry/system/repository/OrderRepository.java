@@ -46,4 +46,16 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByStatusAndUpdatedAtAfter(OrderStatus status, LocalDateTime t);
 
     List<Order> findByCustomerPhone(String customerPhone);
+
+    // C端/B端统计相关
+    long countByIsB2b(Boolean isB2b);
+
+    long countByIsB2bAndStatus(Boolean isB2b, OrderStatus status);
+
+    @Query("SELECT COALESCE(SUM(o.deposit), 0) FROM Order o WHERE o.isB2b = :isB2b")
+    BigDecimal sumDepositByIsB2b(@Param("isB2b") Boolean isB2b);
+
+    long countByCreatedAtAfterAndIsB2b(LocalDateTime t, Boolean isB2b);
+
+    List<Order> findByModelerIdAndStatusIn(Long modelerId, List<OrderStatus> statuses);
 }
