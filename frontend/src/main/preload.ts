@@ -19,7 +19,7 @@ const electronAPI = {
   onUpdateChecking: (handler: () => void) => ipcRenderer.on('update-checking', handler),
   onUpdateAvailable: (handler: (info: any) => void) => ipcRenderer.on('update-available', handler),
   onUpdateNotAvailable: (handler: (info: any) => void) => ipcRenderer.on('update-not-available', handler),
-  onUpdateError: (handler: (error: { message: string }) => void) => ipcRenderer.on('update-error', handler),
+  onUpdateError: (handler: (error: any) => void) => ipcRenderer.on('update-error', handler),
   onUpdateDownloadProgress: (handler: (progress: any) => void) => ipcRenderer.on('update-download-progress', handler),
   onUpdateDownloaded: (handler: (info: any) => void) => ipcRenderer.on('update-downloaded', handler),
 

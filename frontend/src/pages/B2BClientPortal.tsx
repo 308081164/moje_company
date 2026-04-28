@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, Tabs, message, Modal, Typography, Space, Row, Col } from 'antd';
-import { DiamondOutlined, QrCodeOutlined, LinkOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { GemOutlined, QrcodeOutlined, LinkOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { b2bService, B2BOrderAccessDto } from '../services/b2bService';
 import './B2BClientPortal.css';
 
@@ -94,7 +94,7 @@ const B2BClientPortal: React.FC = () => {
         <Card className="b2b-portal-card" bordered={false}>
           <div className="b2b-portal-header">
             <div className="b2b-portal-logo">
-              <DiamondOutlined className="b2b-logo-icon" />
+              <GemOutlined className="b2b-logo-icon" />
               <div className="b2b-logo-text">
                 <Title level={2} className="b2b-logo-title">MOJE</Title>
                 <Text className="b2b-logo-subtitle">珠宝定制服务平台</Text>
@@ -281,7 +281,7 @@ const B2BClientPortal: React.FC = () => {
         {orderResult && (
           <div className="success-content">
             <div className="success-header">
-              <DiamondOutlined className="success-icon" />
+              <GemOutlined className="success-icon" />
               <Title level={3} className="success-title">订单创建成功</Title>
             </div>
             <div className="gold-divider" />
@@ -306,7 +306,7 @@ const B2BClientPortal: React.FC = () => {
               </div>
               <div className="result-item">
                 <Text strong className="result-label">
-                  <QrCodeOutlined className="result-icon" />
+                  <QrcodeOutlined className="result-icon" />
                   二维码
                 </Text>
                 <div className="qrcode-container">

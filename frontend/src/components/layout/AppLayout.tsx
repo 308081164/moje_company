@@ -24,7 +24,7 @@ import {
   MenuUnfoldOutlined,
   TeamOutlined,
   FileTextOutlined,
-  DiamondOutlined,
+  GemOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -285,12 +285,12 @@ const AppLayout: React.FC = () => {
         <div className="logo-container">
           {collapsed ? (
             <div className="logo-collapsed">
-              <DiamondOutlined style={{ fontSize: 28, background: 'linear-gradient(135deg, #C9A962 0%, #8B7355 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />
+              <GemOutlined style={{ fontSize: 28, background: 'linear-gradient(135deg, #C9A962 0%, #8B7355 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />
             </div>
           ) : (
             <div className="logo-expanded">
               <div className="logo-main">
-                <DiamondOutlined className="logo-icon" />
+                <GemOutlined className="logo-icon" />
                 <div className="logo-text-container">
                   <Text className="logo-title">MOJE</Text>
                   <Text className="logo-subtitle">珠宝定制系统</Text>

@@ -18,7 +18,7 @@ import {
   LockOutlined,
   EyeInvisibleOutlined,
   EyeTwoTone,
-  DiamondOutlined,
+  GemOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { LoginRequest } from '@/types/auth';
@@ -97,7 +97,7 @@ const LoginPage: React.FC = () => {
             <Card className="login-card" bordered={false}>
               <div className="login-header">
                 <div className="login-logo">
-                  <DiamondOutlined className="logo-diamond" />
+                  <GemOutlined className="logo-diamond" />
                   <div className="logo-text">
                     <Title level={2} className="logo-title">MOJE</Title>
                     <Text className="logo-subtitle">珠宝定制管理系统</Text>
