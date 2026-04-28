@@ -5,28 +5,46 @@ interface WebSocketMessage {
   data: Record<string, unknown>;
 }
 
+const WS_ORIGIN = (() => {
+  if (typeof window !== 'undefined' && window.env?.API_URL) {
+    const url = window.env.API_URL.replace(/^http/, 'ws').replace(/\/api$/, '');
+    return url;
+  }
+  return 'ws://39.102.213.51:8851';
+})();
+
 class WebSocketService {
   private socket: WebSocket | null = null;
   private handlers: Record<string, ((data: Record<string, unknown>) => void)[]> = {};
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private currentUserId: number | null = null;
+  private currentRole: string | null = null;
 
   connect(userId: number, role: string) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.close();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
+    this.currentUserId = userId;
+    this.currentRole = role;
+    
     const path = role === 'MODELER' ? '/ws/modeler' : '/ws/admin';
+    const url = `${WS_ORIGIN}${path}?userId=${userId}&role=${role}`;
     
-    const url = `${protocol}//${host}${path}?userId=${userId}&role=${role}`;
+    console.log('[WebSocket] Connecting to:', url);
     
-    this.socket = new WebSocket(url);
+    try {
+      this.socket = new WebSocket(url);
+    } catch (error) {
+      console.error('[WebSocket] Failed to create WebSocket:', error);
+      return;
+    }
 
     this.socket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('[WebSocket] Connected successfully');
       this.reconnectAttempts = 0;
+      message.success('实时消息连接成功');
     };
 
     this.socket.onmessage = (event) => {
@@ -34,28 +52,36 @@ class WebSocketService {
         const wsMessage: WebSocketMessage = JSON.parse(event.data);
         this.handleMessage(wsMessage);
       } catch (error) {
-        console.error('WebSocket message parse error:', error);
+        console.error('[WebSocket] Message parse error:', error);
       }
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error('[WebSocket] Error:', error);
     };
 
-    this.socket.onclose = () => {
-      console.log('WebSocket closed');
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+    this.socket.onclose = (event) => {
+      console.log('[WebSocket] Closed:', event.code, event.reason);
+      if (this.reconnectAttempts < this.maxReconnectAttempts && this.currentUserId && this.currentRole) {
         this.reconnectAttempts++;
-        setTimeout(() => this.connect(userId, role), 2000 * this.reconnectAttempts);
+        const delay = 2000 * this.reconnectAttempts;
+        console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+        setTimeout(() => this.connect(this.currentUserId!, this.currentRole!), delay);
+      } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        console.error('[WebSocket] Max reconnection attempts reached');
+        message.warning('实时消息连接失败，请刷新页面重试');
       }
     };
   }
 
   disconnect() {
+    this.reconnectAttempts = this.maxReconnectAttempts;
     if (this.socket) {
       this.socket.close();
       this.socket = null;
     }
+    this.currentUserId = null;
+    this.currentRole = null;
   }
 
   on(eventType: string, handler: (data: Record<string, unknown>) => void) {

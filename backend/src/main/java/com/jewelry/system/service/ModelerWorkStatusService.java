@@ -8,14 +8,10 @@ import com.jewelry.system.entity.User;
 import com.jewelry.system.repository.ModelerWorkStatusRepository;
 import com.jewelry.system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,9 +39,8 @@ public class ModelerWorkStatusService {
     }
 
     public ModelerWorkStatusDto getStatus(Long userId) {
-        return statusRepository.findByUserId(userId)
-                .map(this::toDto)
-                .orElse(null);
+        ModelerWorkStatus status = getOrCreateStatus(userId);
+        return toDto(status);
     }
 
     public List<ModelerWorkStatusDto> getAllModelerStatus() {
@@ -104,7 +99,7 @@ public class ModelerWorkStatusService {
                     status.setWorkMode(WorkMode.AUTO);
                     status.setStatus(WorkStatus.AVAILABLE);
                     status.setTodoCount(0);
-                    return status;
+                    return statusRepository.save(status);
                 });
     }
 
