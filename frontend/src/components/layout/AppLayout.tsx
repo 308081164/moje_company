@@ -78,6 +78,11 @@ const AppLayout: React.FC = () => {
             icon: <SettingOutlined />,
             label: '系统配置',
           },
+          {
+            key: '/system/monitor',
+            icon: <ShopOutlined />,
+            label: '系统监控',
+          },
         ];
       case 'PRE_SALES':
         return [
@@ -234,7 +239,7 @@ const AppLayout: React.FC = () => {
       return ['/users'];
     }
     if (path.startsWith('/system')) {
-      return ['/system/config'];
+      return [path];
     }
     if (path.startsWith('/dashboard')) {
       return ['/dashboard'];

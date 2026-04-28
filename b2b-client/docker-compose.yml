@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  b2b-client:
+    build: .
+    image: moje-b2b-client:latest
+    container_name: moje-b2b-client
+    ports:
+      - "8852:80"
+    restart: unless-stopped
+    networks:
+      - moje-network
+
+networks:
+  moje-network:
+    external: true

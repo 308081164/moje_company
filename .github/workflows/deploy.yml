@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/jewelry-backend
+  B2B_IMAGE_NAME: ${{ github.repository }}/moje-b2b-client
 
 jobs:
   build-and-push:
@@ -44,6 +45,15 @@ jobs:
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    
+    - name: Build and push B2B client image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./b2b-client
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:${{ github.sha }}
     
     - name: Run tests
       run: mvn -f backend/pom.xml test
@@ -132,6 +142,17 @@ jobs:
                 timeout: 10s
                 retries: 3
 
+            b2b-client:
+              image: ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
+              container_name: moje-b2b-client
+              depends_on:
+                - backend
+              ports:
+                - "8852:80"
+              restart: unless-stopped
+              networks:
+                - jewelry-network
+
           networks:
             jewelry-network:
               driver: bridge
@@ -207,7 +228,7 @@ jobs:
           sleep 25
           
           echo "检查容器状态..."
-          docker ps --filter "name=jewelry" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          docker ps --filter "name=jewelry" --filter "name=moje" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           
           echo "检查服务健康..."
           ok=0

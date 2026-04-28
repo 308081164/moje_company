@@ -206,6 +206,20 @@ const LoginPage: React.FC = () => {
 
                 <div className="gold-divider" />
 
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <Button
+                    type="link"
+                    icon={<ShopOutlined />}
+                    onClick={() => navigate('/b2b')}
+                    style={{ color: '#C9A962' }}
+                  >
+                    B端客户门户
+                  </Button>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    &nbsp;|&nbsp;企业客户请访问此入口
+                  </Text>
+                </div>
+
                 <div className="login-footer">
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     <Row justify="space-between">

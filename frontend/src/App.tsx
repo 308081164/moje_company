@@ -12,6 +12,8 @@ import OrderManagementPage from './pages/OrderManagementPage';
 import UserManagementPage from './pages/UserManagementPage';
 import SystemConfigPage from './pages/SystemConfigPage';
 import NotFoundPage from './pages/NotFoundPage';
+import B2BClientPortal from './pages/B2BClientPortal';
+import AdminMonitorPage from './pages/AdminMonitorPage';
 
 // 布局组件
 import AppLayout from './components/layout/AppLayout';
@@ -117,6 +119,9 @@ const App: React.FC = () => {
       <AntdApp>
         <Router>
           <Routes>
+            {/* B端客户门户 - 公开路由 */}
+            <Route path="/b2b" element={<B2BClientPortal />} />
+            
             {/* 公开路由 */}
             <Route path="/login" element={<LoginPage />} />
             
@@ -181,6 +186,16 @@ const App: React.FC = () => {
                 element={
                   <RoleRoute allowedRoles={['ADMIN']}>
                     <SystemConfigPage />
+                  </RoleRoute>
+                }
+              />
+              
+              {/* 管理员监控 - 仅管理员可访问 */}
+              <Route
+                path="system/monitor"
+                element={
+                  <RoleRoute allowedRoles={['ADMIN']}>
+                    <AdminMonitorPage />
                   </RoleRoute>
                 }
               />

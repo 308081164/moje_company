@@ -11,6 +11,7 @@ import { orderService } from '@/services/orderService';
 import type { EmployeeWorkStatistics, OrderStatistics } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusLabel } from '@/utils/orderLabels';
+import ModelerStatusPanel from '@/components/ModelerStatusPanel';
 
 const { Title, Text } = Typography;
 
@@ -75,6 +76,9 @@ const DashboardPage: React.FC = () => {
       <Text type="secondary">
         欢迎回来，{user?.realName || user?.username}
       </Text>
+      
+      {/* 建模师工作状态面板 */}
+      {user?.role === UserRole.MODELER && <ModelerStatusPanel />}
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} sm={12} md={8}>
