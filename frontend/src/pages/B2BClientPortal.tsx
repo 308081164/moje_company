@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Tabs, message, Modal, Typography, Space } from 'antd';
+import { Form, Input, Button, Card, Tabs, message, Modal, Typography, Space, Row, Col } from 'antd';
+import { DiamondOutlined, QrCodeOutlined, LinkOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { b2bService, B2BOrderAccessDto } from '../services/b2bService';
+import './B2BClientPortal.css';
 
 const { TabPane } = Tabs;
 const { Title, Text } = Typography;
@@ -85,140 +87,188 @@ const B2BClientPortal: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px' }}>
-      <Card>
-        <Title level={2} style={{ textAlign: 'center', marginBottom: 30 }}>
-          珠宝定制服务平台
-        </Title>
-        
-        <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane tab="创建订单" key="create">
-            <Form form={orderForm} layout="vertical" onFinish={handleCreateOrder}>
-              <Title level={4}>联系方式（创建订单必需）</Title>
-              <Form.Item
-                name="contact"
-                label="联系方式"
-                rules={[{ required: true, message: '请输入手机号或微信号' }]}
-              >
-                <Input placeholder="手机号或微信号" />
-              </Form.Item>
-              <Form.Item name="password" label="设置密码（选填）">
-                <Input.Password placeholder="设置密码方便下次登录" />
-              </Form.Item>
-              <Form.Item name="companyName" label="公司名称">
-                <Input placeholder="公司或店铺名称" />
-              </Form.Item>
-              <Form.Item name="contactPerson" label="联系人">
-                <Input placeholder="联系人姓名" />
-              </Form.Item>
-              <Form.Item name="email" label="邮箱">
-                <Input placeholder="电子邮箱" />
-              </Form.Item>
-
-              <Title level={4}>订单需求</Title>
-              <Form.Item
-                name="basicRequirements"
-                label="基础需求"
-                rules={[{ required: true, message: '请描述您的需求' }]}
-              >
-                <Input.TextArea rows={4} placeholder="请描述您的珠宝定制需求..." />
-              </Form.Item>
-              <Form.Item name="styleInfo" label="款式信息">
-                <Input.TextArea rows={3} placeholder="款式描述，如：戒指、项链、手镯..." />
-              </Form.Item>
-              <Form.Item name="materialInfo" label="材质信息">
-                <Input.TextArea rows={3} placeholder="材质要求，如：925银、足金、K金..." />
-              </Form.Item>
-              <Form.Item name="depositAmount" label="定金金额">
-                <Input type="number" placeholder="定金金额（选填）" />
-              </Form.Item>
-              <Form.Item name="sourceDetail" label="来源备注">
-                <Input placeholder="如：抖音、小红书、达人推荐等" />
-              </Form.Item>
-
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={loading} block>
-                  创建订单
-                </Button>
-              </Form.Item>
-            </Form>
-          </TabPane>
-
-          <TabPane tab="登录" key="login">
-            <Form form={loginForm} layout="vertical" onFinish={handleLogin}>
-              <Form.Item
-                name="contact"
-                label="联系方式"
-                rules={[{ required: true, message: '请输入联系方式' }]}
-              >
-                <Input placeholder="手机号或微信号" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                label="密码"
-                rules={[{ required: true, message: '请输入密码' }]}
-              >
-                <Input.Password placeholder="密码" />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" block>
-                  登录
-                </Button>
-              </Form.Item>
-              <div style={{ textAlign: 'center', marginTop: 10 }}>
-                <Button type="link" onClick={() => setActiveTab('register')}>
-                  还没有账号？立即注册
-                </Button>
+    <div className="b2b-portal-container">
+      <div className="b2b-portal-background" />
+      
+      <div className="b2b-portal-content">
+        <Card className="b2b-portal-card" bordered={false}>
+          <div className="b2b-portal-header">
+            <div className="b2b-portal-logo">
+              <DiamondOutlined className="b2b-logo-icon" />
+              <div className="b2b-logo-text">
+                <Title level={2} className="b2b-logo-title">MOJE</Title>
+                <Text className="b2b-logo-subtitle">珠宝定制服务平台</Text>
               </div>
-            </Form>
-          </TabPane>
+            </div>
+            <Text className="b2b-portal-tagline">传承匠心工艺 · 定制专属珠宝</Text>
+          </div>
 
-          <TabPane tab="注册" key="register">
-            <Form form={registerForm} layout="vertical" onFinish={handleRegister}>
-              <Form.Item
-                name="contact"
-                label="联系方式"
-                rules={[{ required: true, message: '请输入手机号或微信号' }]}
-              >
-                <Input placeholder="手机号或微信号" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                label="密码"
-                rules={[{ required: true, message: '请输入密码' }]}
-              >
-                <Input.Password placeholder="密码" />
-              </Form.Item>
-              <Form.Item
-                name="confirmPassword"
-                label="确认密码"
-                rules={[{ required: true, message: '请确认密码' }]}
-              >
-                <Input.Password placeholder="确认密码" />
-              </Form.Item>
-              <Form.Item name="companyName" label="公司名称">
-                <Input placeholder="公司或店铺名称" />
-              </Form.Item>
-              <Form.Item name="contactPerson" label="联系人">
-                <Input placeholder="联系人姓名" />
-              </Form.Item>
-              <Form.Item name="email" label="邮箱">
-                <Input placeholder="电子邮箱" />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" block>
-                  注册
-                </Button>
-              </Form.Item>
-              <div style={{ textAlign: 'center', marginTop: 10 }}>
-                <Button type="link" onClick={() => setActiveTab('login')}>
-                  已有账号？立即登录
-                </Button>
-              </div>
-            </Form>
-          </TabPane>
-        </Tabs>
-      </Card>
+          <div className="gold-divider" />
+
+          <Tabs activeKey={activeTab} onChange={setActiveTab} className="b2b-tabs">
+            <TabPane tab={<span className="tab-label">创建订单</span>} key="create">
+              <Form form={orderForm} layout="vertical" onFinish={handleCreateOrder} className="b2b-form">
+                <div className="form-section">
+                  <div className="section-header">
+                    <Title level={4} className="section-title">联系方式</Title>
+                    <Text type="secondary" className="section-hint">（创建订单必需）</Text>
+                  </div>
+                  <Form.Item
+                    name="contact"
+                    label="联系方式"
+                    rules={[{ required: true, message: '请输入手机号或微信号' }]}
+                  >
+                    <Input className="b2b-input" placeholder="手机号或微信号" />
+                  </Form.Item>
+                  <Form.Item name="password" label="设置密码（选填）">
+                    <Input.Password className="b2b-input" placeholder="设置密码方便下次登录" />
+                  </Form.Item>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name="companyName" label="公司名称">
+                        <Input className="b2b-input" placeholder="公司或店铺名称" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="contactPerson" label="联系人">
+                        <Input className="b2b-input" placeholder="联系人姓名" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item name="email" label="邮箱">
+                    <Input className="b2b-input" placeholder="电子邮箱" />
+                  </Form.Item>
+                </div>
+
+                <div className="gold-divider-small" />
+
+                <div className="form-section">
+                  <div className="section-header">
+                    <Title level={4} className="section-title">订单需求</Title>
+                  </div>
+                  <Form.Item
+                    name="basicRequirements"
+                    label="基础需求"
+                    rules={[{ required: true, message: '请描述您的需求' }]}
+                  >
+                    <Input.TextArea className="b2b-textarea" rows={4} placeholder="请描述您的珠宝定制需求..." />
+                  </Form.Item>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name="styleInfo" label="款式信息">
+                        <Input.TextArea className="b2b-textarea" rows={3} placeholder="款式描述，如：戒指、项链、手镯..." />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="materialInfo" label="材质信息">
+                        <Input.TextArea className="b2b-textarea" rows={3} placeholder="材质要求，如：925银、足金、K金..." />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name="depositAmount" label="定金金额">
+                        <Input className="b2b-input" type="number" placeholder="定金金额（选填）" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="sourceDetail" label="来源备注">
+                        <Input className="b2b-input" placeholder="如：抖音、小红书、达人推荐等" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </div>
+
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" loading={loading} block className="b2b-submit-btn">
+                    创建订单
+                  </Button>
+                </Form.Item>
+              </Form>
+            </TabPane>
+
+            <TabPane tab={<span className="tab-label">登录</span>} key="login">
+              <Form form={loginForm} layout="vertical" onFinish={handleLogin} className="b2b-form">
+                <Form.Item
+                  name="contact"
+                  label="联系方式"
+                  rules={[{ required: true, message: '请输入联系方式' }]}
+                >
+                  <Input className="b2b-input" placeholder="手机号或微信号" />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label="密码"
+                  rules={[{ required: true, message: '请输入密码' }]}
+                >
+                  <Input.Password className="b2b-input" placeholder="密码" />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" block className="b2b-submit-btn">
+                    登录
+                  </Button>
+                </Form.Item>
+                <div className="form-footer">
+                  <Button type="link" onClick={() => setActiveTab('register')} className="b2b-link-btn">
+                    还没有账号？立即注册
+                  </Button>
+                </div>
+              </Form>
+            </TabPane>
+
+            <TabPane tab={<span className="tab-label">注册</span>} key="register">
+              <Form form={registerForm} layout="vertical" onFinish={handleRegister} className="b2b-form">
+                <Form.Item
+                  name="contact"
+                  label="联系方式"
+                  rules={[{ required: true, message: '请输入手机号或微信号' }]}
+                >
+                  <Input className="b2b-input" placeholder="手机号或微信号" />
+                </Form.Item>
+                <Form.Item
+                  name="password"
+                  label="密码"
+                  rules={[{ required: true, message: '请输入密码' }]}
+                >
+                  <Input.Password className="b2b-input" placeholder="密码" />
+                </Form.Item>
+                <Form.Item
+                  name="confirmPassword"
+                  label="确认密码"
+                  rules={[{ required: true, message: '请确认密码' }]}
+                >
+                  <Input.Password className="b2b-input" placeholder="确认密码" />
+                </Form.Item>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item name="companyName" label="公司名称">
+                      <Input className="b2b-input" placeholder="公司或店铺名称" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item name="contactPerson" label="联系人">
+                      <Input className="b2b-input" placeholder="联系人姓名" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Form.Item name="email" label="邮箱">
+                  <Input className="b2b-input" placeholder="电子邮箱" />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" block className="b2b-submit-btn">
+                    注册
+                  </Button>
+                </Form.Item>
+                <div className="form-footer">
+                  <Button type="link" onClick={() => setActiveTab('login')} className="b2b-link-btn">
+                    已有账号？立即登录
+                  </Button>
+                </div>
+              </Form>
+            </TabPane>
+          </Tabs>
+        </Card>
+      </div>
 
       <Modal
         title="订单创建成功"
@@ -226,33 +276,57 @@ const B2BClientPortal: React.FC = () => {
         footer={null}
         onCancel={() => setShowResult(false)}
         width={600}
+        className="success-modal"
       >
         {orderResult && (
-          <div>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <div>
-                <Text strong>订单编号：</Text>
-                <Text>{orderResult.orderNumber}</Text>
+          <div className="success-content">
+            <div className="success-header">
+              <DiamondOutlined className="success-icon" />
+              <Title level={3} className="success-title">订单创建成功</Title>
+            </div>
+            <div className="gold-divider" />
+            <Space direction="vertical" style={{ width: '100%', gap: '16px' }}>
+              <div className="result-item">
+                <Text strong className="result-label">订单编号</Text>
+                <Text className="result-value">{orderResult.orderNumber}</Text>
               </div>
-              <div>
-                <Text strong>访问链接：</Text>
-                <a href={orderResult.accessUrl} target="_blank" rel="noopener noreferrer">
+              <div className="result-item">
+                <Text strong className="result-label">
+                  <LinkOutlined className="result-icon" />
+                  访问链接
+                </Text>
+                <a 
+                  href={orderResult.accessUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="result-link"
+                >
                   {orderResult.accessUrl}
                 </a>
               </div>
-              <div>
-                <Text strong>二维码：</Text>
-                <img
-                  src={orderResult.qrcodeBase64}
-                  alt="订单二维码"
-                  style={{ width: 200, height: 200 }}
-                />
+              <div className="result-item">
+                <Text strong className="result-label">
+                  <QrCodeOutlined className="result-icon" />
+                  二维码
+                </Text>
+                <div className="qrcode-container">
+                  <img
+                    src={orderResult.qrcodeBase64}
+                    alt="订单二维码"
+                    className="qrcode-image"
+                  />
+                </div>
               </div>
-              <div>
-                <Text strong>有效期至：</Text>
-                <Text>{orderResult.expireTime}</Text>
+              <div className="result-item">
+                <Text strong className="result-label">
+                  <ClockCircleOutlined className="result-icon" />
+                  有效期至
+                </Text>
+                <Text className="result-value">{orderResult.expireTime}</Text>
               </div>
-              <p>请保存好以上信息，便于查看订单进度</p>
+              <div className="result-tip">
+                <Text type="secondary">请保存好以上信息，便于查看订单进度</Text>
+              </div>
             </Space>
           </div>
         )}

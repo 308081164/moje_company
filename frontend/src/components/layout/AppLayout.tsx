@@ -24,7 +24,7 @@ import {
   MenuUnfoldOutlined,
   TeamOutlined,
   FileTextOutlined,
-  HomeOutlined,
+  DiamondOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -44,7 +44,6 @@ const AppLayout: React.FC = () => {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  // 根据用户角色获取菜单项
   const getMenuItems = (): any[] => {
     if (!user) return [];
 
@@ -56,7 +55,6 @@ const AppLayout: React.FC = () => {
       },
     ];
 
-    // 根据角色添加菜单项
     switch (user.role) {
       case 'ADMIN':
         return [
@@ -171,12 +169,10 @@ const AppLayout: React.FC = () => {
     }
   };
 
-  // 处理菜单点击
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key);
   };
 
-  // 处理登出
   const handleLogout = async () => {
     try {
       await logout();
@@ -188,7 +184,6 @@ const AppLayout: React.FC = () => {
     }
   };
 
-  // 用户菜单
   const userMenuItems = [
     {
       key: 'profile',
@@ -213,7 +208,6 @@ const AppLayout: React.FC = () => {
     },
   ];
 
-  // 通知菜单
   const notificationItems = notifications.slice(0, 5).map((notification) => ({
     key: notification.id,
     label: (
@@ -228,12 +222,10 @@ const AppLayout: React.FC = () => {
       </Space>
     ),
     onClick: () => {
-      // 处理通知点击
       console.log('通知点击:', notification);
     },
   }));
 
-  // 获取当前选中的菜单项（HashRouter 下 pathname 为 /users、/system/config 等）
   const getSelectedKeys = (): string[] => {
     const path = location.pathname;
     const items = getMenuItems();
@@ -270,7 +262,6 @@ const AppLayout: React.FC = () => {
 
   return (
     <Layout className="app-layout">
-      {/* 侧边栏 */}
       <Sider
         width={240}
         collapsedWidth={80}
@@ -280,8 +271,8 @@ const AppLayout: React.FC = () => {
           toggleSidebar();
         }}
         style={{
-          background: colorBgContainer,
-          borderRight: '1px solid #f0f0f0',
+          background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
+          borderRight: '1px solid #e8e8e8',
           overflow: 'auto',
           height: '100vh',
           position: 'fixed',
@@ -291,28 +282,25 @@ const AppLayout: React.FC = () => {
           zIndex: 1000,
         }}
       >
-        {/* Logo区域 */}
         <div className="logo-container">
           {collapsed ? (
             <div className="logo-collapsed">
-              <HomeOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+              <DiamondOutlined style={{ fontSize: 28, background: 'linear-gradient(135deg, #C9A962 0%, #8B7355 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />
             </div>
           ) : (
             <div className="logo-expanded">
-              <Space>
-                <HomeOutlined style={{ fontSize: 24, color: '#1890ff' }} />
-                <Text strong style={{ fontSize: 18 }}>
-                  珠宝定制系统
-                </Text>
-              </Space>
-              <Text type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
-                {user?.roleDescription || '企业管理系统'}
-              </Text>
+              <div className="logo-main">
+                <DiamondOutlined className="logo-icon" />
+                <div className="logo-text-container">
+                  <Text className="logo-title">MOJE</Text>
+                  <Text className="logo-subtitle">珠宝定制系统</Text>
+                </div>
+              </div>
+              <Text className="logo-role">{user?.roleDescription || '企业管理系统'}</Text>
             </div>
           )}
         </div>
 
-        {/* 菜单 */}
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
@@ -326,14 +314,12 @@ const AppLayout: React.FC = () => {
         />
       </Sider>
 
-      {/* 主内容区域 */}
       <Layout style={{ marginLeft: collapsed ? 80 : 240, transition: 'all 0.2s' }}>
-        {/* 顶部导航栏 */}
         <Header
           style={{
             padding: '0 24px',
-            background: colorBgContainer,
-            borderBottom: '1px solid #f0f0f0',
+            background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
+            borderBottom: '1px solid #e8e8e8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -352,19 +338,18 @@ const AppLayout: React.FC = () => {
               }}
               style={{ fontSize: 16 }}
             />
-            <Text strong style={{ fontSize: 16 }}>
+            <Text strong className="header-title">
               {getMenuItems().find(item => item.key === getSelectedKeys()[0])?.label || '仪表盘'}
             </Text>
           </Space>
 
           <Space size="large">
-            {/* 通知 */}
             <Dropdown
               menu={{ items: notificationItems }}
               placement="bottomRight"
               trigger={['click']}
             >
-              <Badge count={unreadNotifications} size="small">
+              <Badge count={unreadNotifications} size="small" className="notification-badge">
                 <Button
                   type="text"
                   icon={<BellOutlined />}
@@ -373,13 +358,12 @@ const AppLayout: React.FC = () => {
               </Badge>
             </Dropdown>
 
-            {/* 用户信息 */}
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space className="user-info-trigger" style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: 8 }}>
                 <Avatar
                   size="default"
                   icon={<UserOutlined />}
-                  style={{ backgroundColor: '#1890ff' }}
+                  className="user-avatar"
                 />
                 {!collapsed && (
                   <Space direction="vertical" size={0} className="user-info-text">
@@ -396,18 +380,19 @@ const AppLayout: React.FC = () => {
           </Space>
         </Header>
 
-        {/* 内容区域 */}
         <Content
           style={{
             margin: '24px 16px',
             padding: 24,
             minHeight: 280,
-            background: colorBgContainer,
+            background: 'transparent',
             borderRadius: borderRadiusLG,
             overflow: 'auto',
           }}
         >
-          <Outlet />
+          <div className="content-wrapper">
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>

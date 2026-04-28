@@ -70,8 +70,8 @@ jobs:
       - name: Install ossutil
         run: |
           set -e
-          curl -L -o ossutil.zip https://gosspublic.alicdn.com/ossutil/1.7.18/ossutil64-linux.zip
-          unzip -q ossutil.zip
+          curl -L -o ossutil.tar.gz https://gosspublic.alicdn.com/ossutil/1.7.18/ossutil64-linux.tar.gz || curl -L -o ossutil.tar.gz https://github.com/aliyun/ossutil/releases/download/v1.7.18/ossutil64-linux.tar.gz
+          tar -zxf ossutil.tar.gz
           chmod +x ossutil64
 
       - name: Upload update files to OSS

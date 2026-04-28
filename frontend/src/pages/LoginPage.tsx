@@ -18,6 +18,7 @@ import {
   LockOutlined,
   EyeInvisibleOutlined,
   EyeTwoTone,
+  DiamondOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { LoginRequest } from '@/types/auth';
@@ -33,7 +34,6 @@ const LoginPage: React.FC = () => {
   
   const { login, error, clearError } = useAuthStore();
 
-  // 检查是否已登录
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (token) {
@@ -41,7 +41,6 @@ const LoginPage: React.FC = () => {
     }
   }, [navigate]);
 
-  // 处理登录
   const handleLogin = async (values: any) => {
     setLoading(true);
     clearError();
@@ -54,7 +53,6 @@ const LoginPage: React.FC = () => {
 
       await login(credentials);
       
-      // 记住用户名
       if (rememberMe) {
         localStorage.setItem('remembered_username', values.username);
       } else {
@@ -70,17 +68,14 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  // 处理忘记密码
   const handleForgotPassword = () => {
     message.info('请联系管理员重置密码');
   };
 
-  // 处理记住我
   const handleRememberMeChange = (e: any) => {
     setRememberMe(e.target.checked);
   };
 
-  // 加载记住的用户名
   useEffect(() => {
     const rememberedUsername = localStorage.getItem('remembered_username');
     if (rememberedUsername) {
@@ -92,8 +87,8 @@ const LoginPage: React.FC = () => {
   return (
     <div className="login-container">
       <div className="login-background">
-        <div className="login-background-overlay" />
-        <div className="login-background-pattern" />
+        <div className="login-background-gradient" />
+        <div className="login-background-shimmer" />
       </div>
       
       <div className="login-content">
@@ -102,17 +97,16 @@ const LoginPage: React.FC = () => {
             <Card className="login-card" bordered={false}>
               <div className="login-header">
                 <div className="login-logo">
-                  <div className="logo-icon">💎</div>
-                  <Title level={2} className="logo-text">
-                    珠宝定制管理系统
-                  </Title>
+                  <DiamondOutlined className="logo-diamond" />
+                  <div className="logo-text">
+                    <Title level={2} className="logo-title">MOJE</Title>
+                    <Text className="logo-subtitle">珠宝定制管理系统</Text>
+                  </div>
                 </div>
-                <Text type="secondary" className="login-subtitle">
-                  企业信息化管理平台
-                </Text>
+                <Text className="login-tagline">传承匠心工艺 · 定制专属珠宝</Text>
               </div>
 
-              <Divider />
+              <div className="gold-divider" />
 
               {error && (
                 <Alert
@@ -123,6 +117,7 @@ const LoginPage: React.FC = () => {
                   closable
                   onClose={clearError}
                   style={{ marginBottom: 24 }}
+                  className="error-alert"
                 />
               )}
 
@@ -133,6 +128,7 @@ const LoginPage: React.FC = () => {
                 onFinish={handleLogin}
                 autoComplete="off"
                 size="large"
+                className="login-form"
               >
                 <Form.Item
                   name="username"
@@ -144,9 +140,10 @@ const LoginPage: React.FC = () => {
                   ]}
                 >
                   <Input
-                    prefix={<UserOutlined />}
+                    prefix={<UserOutlined className="input-icon" />}
                     placeholder="请输入用户名"
                     allowClear
+                    className="login-input"
                   />
                 </Form.Item>
 
@@ -159,33 +156,34 @@ const LoginPage: React.FC = () => {
                   ]}
                 >
                   <Input.Password
-                    prefix={<LockOutlined />}
+                    prefix={<LockOutlined className="input-icon" />}
                     placeholder="请输入密码"
                     iconRender={(visible) =>
                       visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />
                     }
                     allowClear
+                    className="login-input"
                   />
                 </Form.Item>
 
-                <Form.Item>
+                <Form.Item className="login-options">
                   <Row justify="space-between" align="middle">
                     <Col>
-                      <label style={{ cursor: 'pointer' }}>
+                      <label className="remember-me-label">
                         <input
                           type="checkbox"
                           checked={rememberMe}
                           onChange={handleRememberMeChange}
-                          style={{ marginRight: 8 }}
+                          className="remember-me-checkbox"
                         />
-                        <Text>记住用户名</Text>
+                        <Text className="remember-me-text">记住用户名</Text>
                       </label>
                     </Col>
                     <Col>
                       <Button
                         type="link"
                         onClick={handleForgotPassword}
-                        style={{ padding: 0 }}
+                        className="forgot-password-btn"
                       >
                         忘记密码？
                       </Button>
@@ -200,29 +198,28 @@ const LoginPage: React.FC = () => {
                     loading={loading}
                     block
                     size="large"
+                    className="login-btn"
                   >
                     登录
                   </Button>
                 </Form.Item>
 
-                <Divider>
-                  <Text type="secondary">系统信息</Text>
-                </Divider>
+                <div className="gold-divider" />
 
                 <div className="login-footer">
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     <Row justify="space-between">
                       <Col>
-                        <Text type="secondary">版本: 1.0.0</Text>
+                        <Text type="secondary" className="footer-text">版本: 1.0.0</Text>
                       </Col>
                       <Col>
-                        <Text type="secondary">© 2024 珠宝定制工作室</Text>
+                        <Text type="secondary" className="footer-text">© 2024 MOJE Jewelry</Text>
                       </Col>
                     </Row>
                     <Row justify="center">
                       <Col>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          技术支持: support@jewelry.com
+                        <Text type="secondary" className="footer-contact">
+                          技术支持: support@moje-jewelry.com
                         </Text>
                       </Col>
                     </Row>
@@ -244,6 +241,7 @@ const LoginPage: React.FC = () => {
                 }
                 type="info"
                 showIcon
+                className="tips-alert"
               />
             </div>
           </Col>
