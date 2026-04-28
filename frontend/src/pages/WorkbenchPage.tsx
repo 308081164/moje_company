@@ -9,6 +9,7 @@ import type { OrderInfo } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import dayjs from 'dayjs';
+import ModelerStatusPanel from '@/components/ModelerStatusPanel';
 
 const { Title, Text } = Typography;
 
@@ -127,20 +128,22 @@ const WorkbenchPage: React.FC = () => {
   }
 
   return (
-    <Card bordered={false}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            {loader.title}
-          </Title>
-          <Text type="secondary">与后端 /orders/workbench/* 联调</Text>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={load}>
-          刷新
-        </Button>
-      </Space>
+    <div>
+      {role === UserRole.MODELER && <ModelerStatusPanel />}
+      <Card bordered={false}>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
+          <div>
+            <Title level={3} style={{ margin: 0 }}>
+              {loader.title}
+            </Title>
+            <Text type="secondary">与后端 /orders/workbench/* 联调</Text>
+          </div>
+          <Button icon={<ReloadOutlined />} onClick={load}>
+            刷新
+          </Button>
+        </Space>
 
-      <Tabs
+        <Tabs
         style={{ marginTop: 16 }}
         activeKey={tab}
         onChange={(k) => {
@@ -181,7 +184,8 @@ const WorkbenchPage: React.FC = () => {
           },
         }}
       />
-    </Card>
+      </Card>
+    </div>
   );
 };
 

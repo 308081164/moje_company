@@ -112,3 +112,6 @@ app:
     gold-margin: 10 # 10元
     design-copyright-fee: 500 # 设计买断费用
     appraisal-certificate-fee: 300 # 鉴定证书费用
+  # B2B configuration
+  b2b:
+    access-url-prefix: ${B2B_ACCESS_URL_PREFIX:http://localhost:8851/api/b2b/order/}
