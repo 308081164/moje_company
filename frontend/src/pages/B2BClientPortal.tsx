@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, Tabs, message, Modal, Typography, Space, Row, Col } from 'antd';
-import { GemOutlined, QrcodeOutlined, LinkOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { ShopOutlined, QrcodeOutlined, LinkOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { b2bService, B2BOrderAccessDto } from '../services/b2bService';
 import './B2BClientPortal.css';
 
@@ -89,12 +89,12 @@ const B2BClientPortal: React.FC = () => {
   return (
     <div className="b2b-portal-container">
       <div className="b2b-portal-background" />
-      
+
       <div className="b2b-portal-content">
         <Card className="b2b-portal-card" bordered={false}>
           <div className="b2b-portal-header">
             <div className="b2b-portal-logo">
-              <GemOutlined className="b2b-logo-icon" />
+              <ShopOutlined className="b2b-logo-icon" />
               <div className="b2b-logo-text">
                 <Title level={2} className="b2b-logo-title">MOJE</Title>
                 <Text className="b2b-logo-subtitle">珠宝定制服务平台</Text>
@@ -281,7 +281,7 @@ const B2BClientPortal: React.FC = () => {
         {orderResult && (
           <div className="success-content">
             <div className="success-header">
-              <GemOutlined className="success-icon" />
+              <ShopOutlined className="success-icon" />
               <Title level={3} className="success-title">订单创建成功</Title>
             </div>
             <div className="gold-divider" />
@@ -295,9 +295,9 @@ const B2BClientPortal: React.FC = () => {
                   <LinkOutlined className="result-icon" />
                   访问链接
                 </Text>
-                <a 
-                  href={orderResult.accessUrl} 
-                  target="_blank" 
+                <a
+                  href={orderResult.accessUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="result-link"
                 >

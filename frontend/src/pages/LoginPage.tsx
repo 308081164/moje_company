@@ -18,7 +18,7 @@ import {
   LockOutlined,
   EyeInvisibleOutlined,
   EyeTwoTone,
-  GemOutlined,
+  ShopOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { LoginRequest } from '@/types/auth';
@@ -31,7 +31,7 @@ const LoginPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   const { login, error, clearError } = useAuthStore();
 
   useEffect(() => {
@@ -52,7 +52,7 @@ const LoginPage: React.FC = () => {
       };
 
       await login(credentials);
-      
+
       if (rememberMe) {
         localStorage.setItem('remembered_username', values.username);
       } else {
@@ -90,14 +90,14 @@ const LoginPage: React.FC = () => {
         <div className="login-background-gradient" />
         <div className="login-background-shimmer" />
       </div>
-      
+
       <div className="login-content">
         <Row justify="center" align="middle" style={{ height: '100vh' }}>
           <Col xs={24} sm={20} md={16} lg={12} xl={8}>
             <Card className="login-card" bordered={false}>
               <div className="login-header">
                 <div className="login-logo">
-                  <GemOutlined className="logo-diamond" />
+                  <ShopOutlined className="logo-diamond" />
                   <div className="logo-text">
                     <Title level={2} className="logo-title">MOJE</Title>
                     <Text className="logo-subtitle">珠宝定制管理系统</Text>
