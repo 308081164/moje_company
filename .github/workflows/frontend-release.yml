@@ -83,11 +83,12 @@ jobs:
           OSS_UPDATE_PREFIX: ${{ secrets.OSS_UPDATE_PREFIX }}
         run: |
           set -euo pipefail
-          : "${OSS_ACCESS_KEY_ID:?missing OSS_ACCESS_KEY_ID}"
-          : "${OSS_ACCESS_KEY_SECRET:?missing OSS_ACCESS_KEY_SECRET}"
-          : "${OSS_ENDPOINT:?missing OSS_ENDPOINT}"
-          : "${OSS_BUCKET:?missing OSS_BUCKET}"
-          : "${OSS_UPDATE_PREFIX:?missing OSS_UPDATE_PREFIX}"
+          
+          if [ -z "${OSS_ACCESS_KEY_ID}" ] || [ -z "${OSS_ACCESS_KEY_SECRET}" ] || [ -z "${OSS_ENDPOINT}" ] || [ -z "${OSS_BUCKET}" ] || [ -z "${OSS_UPDATE_PREFIX}" ]; then
+            echo "Warning: OSS secrets not fully configured, skipping OSS upload"
+            ls -la ./release/
+            exit 0
+          fi
 
           TARGET_PREFIX="${OSS_UPDATE_PREFIX#/}"
           TARGET_PREFIX="${TARGET_PREFIX%/}"
@@ -95,6 +96,45 @@ jobs:
           ./ossutil64 config -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" -L CH
           ./ossutil64 cp -rf ./release/ "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
           ./ossutil64 ls "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
+
+  create-github-release:
+    needs: [detect-frontend-changes, build-and-release]
+    if: needs.detect-frontend-changes.outputs.frontend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-win-release
+          path: ./release
+
+      - name: Generate version tag
+        id: generate_tag
+        run: |
+          TAG_VERSION="v$(date +'%Y.%m.%d.%H%M%S')"
+          echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Creating release with tag: $TAG_VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.generate_tag.outputs.tag_version }}
+          name: Release ${{ steps.generate_tag.outputs.tag_version }}
+          body: |
+            自动构建发布 - ${{ steps.generate_tag.outputs.tag_version }}
+            
+            **更新内容:**
+            - 自动构建的 Electron 桌面应用
+            - 支持自动更新
+
+          draft: false
+          prerelease: false
+          files: |
+            ./release/*.exe
+            ./release/*.yml
+            ./release/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   skip-log:
     needs: detect-frontend-changes
