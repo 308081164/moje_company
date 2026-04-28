@@ -67,7 +67,7 @@ public class OrderAccessLinkService {
         return toDto(link);
     }
 
-    public B2BOrderAccessDto getOrderByToken(String token) {
+    public B2BOrderAccessDto getOrderAccessByToken(String token) {
         OrderAccessLink link = linkRepository.findByAccessToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "链接不存在或已过期"));
 
@@ -87,7 +87,7 @@ public class OrderAccessLinkService {
         return toDto(link);
     }
 
-    public Order getOrderByToken(String token) {
+    public Order getOrderEntityByToken(String token) {
         OrderAccessLink link = linkRepository.findByAccessToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "链接不存在"));
 

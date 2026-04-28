@@ -93,7 +93,7 @@ public class B2BOrderService {
     }
 
     public OrderInfoDto getOrderByToken(String token) {
-        Order order = linkService.getOrderByToken(token);
+        Order order = linkService.getOrderEntityByToken(token);
         return orderQueryService.getOrder(order.getId());
     }
 

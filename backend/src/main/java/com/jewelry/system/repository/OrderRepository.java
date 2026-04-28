@@ -44,4 +44,6 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     List<Object[]> aggregateByStatus();
 
     long countByStatusAndUpdatedAtAfter(OrderStatus status, LocalDateTime t);
+
+    List<Order> findByCustomerPhone(String customerPhone);
 }
