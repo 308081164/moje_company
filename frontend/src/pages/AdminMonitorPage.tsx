@@ -11,13 +11,13 @@ const AdminMonitorPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailForm] = Form.useForm();
-  const { userInfo } = useAuthStore();
+  const { user } = useAuthStore();
 
   useEffect(() => {
     fetchModelers();
 
-    if (userInfo?.id && userInfo?.role === 'ADMIN') {
-      webSocketService.connect(userInfo.id, userInfo.role);
+    if (user?.id && user?.role === 'ADMIN') {
+      webSocketService.connect(user.id, user.role);
     }
 
     return () => {

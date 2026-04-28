@@ -31,8 +31,8 @@ class WebSocketService {
 
     this.socket.onmessage = (event) => {
       try {
-        const message: WebSocketMessage = JSON.parse(event.data);
-        this.handleMessage(message);
+        const wsMessage: WebSocketMessage = JSON.parse(event.data);
+        this.handleMessage(wsMessage);
       } catch (error) {
         console.error('WebSocket message parse error:', error);
       }
@@ -71,21 +71,21 @@ class WebSocketService {
     }
   }
 
-  private handleMessage(message: WebSocketMessage) {
-    const handlers = this.handlers[message.type];
+  private handleMessage(wsMessage: WebSocketMessage) {
+    const handlers = this.handlers[wsMessage.type];
     if (handlers) {
-      handlers.forEach(handler => handler(message.data));
+      handlers.forEach(handler => handler(wsMessage.data));
     }
 
-    switch (message.type) {
+    switch (wsMessage.type) {
       case 'NEW_ORDER':
-        message.info(`您有新的订单任务：${message.data.orderNumber}`);
+        message.info(`您有新的订单任务：${wsMessage.data.orderNumber}`);
         break;
       case 'ORDER_STATUS_CHANGE':
-        console.log('订单状态变更:', message.data);
+        console.log('订单状态变更:', wsMessage.data);
         break;
       case 'ORDER_REJECTED':
-        message.warning(`订单 ${message.data.orderNumber} 已被驳回`);
+        message.warning(`订单 ${wsMessage.data.orderNumber} 已被驳回`);
         break;
     }
   }

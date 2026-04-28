@@ -13,21 +13,21 @@ const ModelerStatusPanel: React.FC = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [modeForm] = Form.useForm();
   const [statusForm] = Form.useForm();
-  const { userInfo } = useAuthStore();
+  const { user } = useAuthStore();
 
   useEffect(() => {
     fetchStatus();
   }, []);
 
   useEffect(() => {
-    if (userInfo?.id && userInfo?.role === 'MODELER') {
-      webSocketService.connect(userInfo.id, userInfo.role);
+    if (user?.id && user?.role === 'MODELER') {
+      webSocketService.connect(user.id, user.role);
     }
 
     return () => {
       webSocketService.disconnect();
     };
-  }, [userInfo]);
+  }, [user]);
 
   const fetchStatus = async () => {
     try {
