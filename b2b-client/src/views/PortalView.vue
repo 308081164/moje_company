@@ -162,7 +162,6 @@
                     v-model:file-list="fileList"
                     action="#"
                     :before-upload="beforeUpload"
-                    :file-list="fileList"
                     multiple
                     list-type="text"
                   >
