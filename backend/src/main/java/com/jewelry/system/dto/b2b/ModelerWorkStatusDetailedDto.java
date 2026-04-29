@@ -3,8 +3,6 @@ package com.jewelry.system.dto.b2b;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.List;
-
 @Data
 @Builder
 public class ModelerWorkStatusDetailedDto {
@@ -19,7 +17,7 @@ public class ModelerWorkStatusDetailedDto {
     private Integer b2bTodoCount;
     private Boolean autoAssignEnabled;
     private String reasonForPause;
-    private List<TaskTimeoutInfoDto> timeoutInfo;
+    private TaskTimeoutInfoDto timeoutInfo;
     private Boolean isOverloaded;
     
     @Data

@@ -124,6 +124,16 @@ public class WebSocketService {
         sendMessageToAllAdmins("ORDER_REJECTED", data);
     }
 
+    public void notifyTaskReassigned(Long orderId, String taskType, Long userId) {
+        Map<String, Object> data = Map.of(
+            "orderId", orderId,
+            "taskType", taskType,
+            "userId", userId
+        );
+        sendMessageToModeler(userId, "TASK_REASSIGNED", data);
+        sendMessageToAllAdmins("TASK_REASSIGNED", data);
+    }
+
     public static class MessagePayload {
         private String type;
         private Object data;
