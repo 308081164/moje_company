@@ -19,7 +19,7 @@ public class ModelerWorkStatusDetailedDto {
     private Integer b2bTodoCount;
     private Boolean autoAssignEnabled;
     private String reasonForPause;
-    private List<TaskTimeoutInfoDto timeoutInfo;
+    private List<TaskTimeoutInfoDto> timeoutInfo;
     private Boolean isOverloaded;
     
     @Data
