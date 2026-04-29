@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  backend:
+    image: moje-backend:latest
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: moje-backend
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=moje_db
+      - ALIYUN_OSS_ACCESS_KEY=${ALIYUN_OSS_ACCESS_KEY}
+      - ALIYUN_OSS_SECRET_KEY=${ALIYUN_OSS_SECRET_KEY}
+      - ALIYUN_OSS_BUCKET=${ALIYUN_OSS_BUCKET}
+      - ALIYUN_OSS_ENDPOINT=${ALIYUN_OSS_ENDPOINT}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ../backend/logs:/app/logs
+    depends_on:
+      - mysql
+    restart: unless-stopped
+    networks:
+      - moje-network
+
+  # 前端服务
+  web:
+    image: moje-b2b-web:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: moje-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - moje-ssl:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - moje-network
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: moje-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=moje_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    networks:
+      - moje-network
+
+  # 可选：Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: moje-redis
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - moje-network
+
+  # SSL证书自动续订服务（每周一凌晨2点运行）
+  ssl-renew:
+    image: certbot/certbot:latest
+    container_name: moje-ssl-renew
+    volumes:
+      - moje-ssl:/etc/letsencrypt
+    command: renew --standalone --non-interactive
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: none
+
+volumes:
+  mysql-data:
+  redis-data:
+  moje-ssl:
+
+networks:
+  moje-network:
+    driver: bridge

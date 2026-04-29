@@ -3,6 +3,16 @@
     <div class="b2b-portal-background"></div>
     <div class="b2b-portal-content">
       <a-card class="b2b-portal-card" :bordered="false">
+        <!-- Header with back button -->
+        <div class="portal-header">
+          <div class="portal-title">
+            <router-link to="/" class="back-btn">
+              <HomeOutlined />
+              返回首页
+            </router-link>
+          </div>
+        </div>
+
         <div class="b2b-portal-header">
           <div class="b2b-portal-logo">
             <ShopOutlined class="b2b-logo-icon" />
@@ -146,6 +156,27 @@
                     </a-form-item>
                   </a-col>
                 </a-row>
+
+                <a-form-item label="上传附件">
+                  <a-upload
+                    v-model:file-list="fileList"
+                    action="#"
+                    :before-upload="beforeUpload"
+                    :file-list="fileList"
+                    multiple
+                    list-type="text"
+                  >
+                    <a-button>
+                      <UploadOutlined />
+                      点击上传
+                    </a-button>
+                    <template #tip>
+                      <div class="ant-upload-hint">
+                        支持图片、Word、Excel、PDF等文件，可多选
+                      </div>
+                    </template>
+                  </a-upload>
+                </a-form-item>
               </div>
 
               <a-form-item>
@@ -388,7 +419,9 @@ import {
   ShopOutlined,
   QrcodeOutlined,
   LinkOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  HomeOutlined,
+  UploadOutlined
 } from '@ant-design/icons-vue'
 import { createOrder, loginClient, registerClient } from '@/api'
 import type {
@@ -397,11 +430,13 @@ import type {
   B2BClientRegisterRequest,
   B2BOrderAccessDto
 } from '@/api'
+import type { UploadProps, UploadFile } from 'ant-design-vue'
 
 const activeTab = ref('create')
 const loading = ref(false)
 const showResult = ref(false)
 const orderResult = ref<B2BOrderAccessDto | null>(null)
+const fileList = ref<UploadFile[]>([])
 
 const orderForm = ref<B2BOrderCreateRequest>({
   contact: '',
@@ -442,9 +477,25 @@ const confirmPasswordRules = computed(() => [
   }
 ])
 
+const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+  const isImageOrDoc = /\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|stl|obj|jad)$/i.test(file.name)
+  if (!isImageOrDoc) {
+    message.error('仅支持图片、Word、Excel、PDF和建模文件')
+    return false
+  }
+  const isLt20M = file.size / 1024 / 1024 < 20
+  if (!isLt20M) {
+    message.error('文件大小不能超过20MB')
+    return false
+  }
+  fileList.value.push(file as UploadFile)
+  return false
+}
+
 const handleCreateOrder = async () => {
   try {
     loading.value = true
+    // TODO: 在实际部署中需要先上传文件然后附加到订单
     const result = await createOrder(orderForm.value)
     orderResult.value = result
     showResult.value = true
@@ -460,6 +511,7 @@ const handleCreateOrder = async () => {
       materialInfo: '',
       sourceDetail: ''
     }
+    fileList.value = []
   } catch (error) {
     console.error('创建订单失败:', error)
   } finally {
@@ -499,4 +551,31 @@ const handleRegister = async () => {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.section-hint {
+  font-size: 13px;
+  color: #888;
+}
+
+.form-footer {
+  text-align: center;
+}
+
+.b2b-link-btn {
+  color: var(--primary-color);
+}
+</style>
