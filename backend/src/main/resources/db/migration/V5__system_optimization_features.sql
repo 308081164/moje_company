@@ -7,26 +7,176 @@
 USE moje_database;
 
 -- ============================================
--- 1. 增强建模师工作状态表
+-- 1. 增强建模师工作状态表（使用兼容MySQL 8.0的方式）
 -- ============================================
-ALTER TABLE modeler_work_status 
-ADD COLUMN IF NOT EXISTS c2c_todo_count INT NOT NULL DEFAULT 0 COMMENT 'C端待办任务数',
-ADD COLUMN IF NOT EXISTS b2b_todo_count INT NOT NULL DEFAULT 0 COMMENT 'B端待办任务数',
-ADD COLUMN IF NOT EXISTS auto_assign_enabled BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否允许自动派单',
-ADD COLUMN IF NOT EXISTS last_priority_bonus_time DATETIME COMMENT '最后优先派单时间',
-ADD COLUMN IF NOT EXISTS reason_for_pause VARCHAR(500) COMMENT '暂停接单原因',
-ADD COLUMN IF NOT EXISTS last_activity_time DATETIME COMMENT '最后活动时间';
+DELIMITER //
+
+-- 添加 c2c_todo_count 列
+CREATE PROCEDURE AddColumnIfNotExists()
+BEGIN
+    DECLARE col_exists INT;
+    
+    -- 检查 c2c_todo_count 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'c2c_todo_count';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN c2c_todo_count INT NOT NULL DEFAULT 0 COMMENT 'C端待办任务数';
+    END IF;
+    
+    -- 检查 b2b_todo_count 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'b2b_todo_count';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN b2b_todo_count INT NOT NULL DEFAULT 0 COMMENT 'B端待办任务数';
+    END IF;
+    
+    -- 检查 auto_assign_enabled 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'auto_assign_enabled';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN auto_assign_enabled BOOLEAN NOT NULL DEFAULT TRUE COMMENT '是否允许自动派单';
+    END IF;
+    
+    -- 检查 last_priority_bonus_time 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'last_priority_bonus_time';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN last_priority_bonus_time DATETIME COMMENT '最后优先派单时间';
+    END IF;
+    
+    -- 检查 reason_for_pause 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'reason_for_pause';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN reason_for_pause VARCHAR(500) COMMENT '暂停接单原因';
+    END IF;
+    
+    -- 检查 last_activity_time 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'modeler_work_status' 
+      AND column_name = 'last_activity_time';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE modeler_work_status 
+        ADD COLUMN last_activity_time DATETIME COMMENT '最后活动时间';
+    END IF;
+    
+END //
+
+DELIMITER ;
+
+CALL AddColumnIfNotExists();
+DROP PROCEDURE IF EXISTS AddColumnIfNotExists;
 
 -- ============================================
 -- 2. 订单表添加入派单时间和超时检测字段
 -- ============================================
-ALTER TABLE orders 
-ADD COLUMN IF NOT EXISTS assigned_to_designer_at DATETIME COMMENT '分配设计师时间',
-ADD COLUMN IF NOT EXISTS assigned_to_modeler_at DATETIME COMMENT '分配建模师时间',
-ADD COLUMN IF NOT EXISTS last_reminder_sent_at DATETIME COMMENT '最后提醒发送时间';
+DELIMITER //
+
+CREATE PROCEDURE AddOrderColumns()
+BEGIN
+    DECLARE col_exists INT;
+    
+    -- 检查 assigned_to_designer_at 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'orders' 
+      AND column_name = 'assigned_to_designer_at';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE orders 
+        ADD COLUMN assigned_to_designer_at DATETIME COMMENT '分配设计师时间';
+    END IF;
+    
+    -- 检查 assigned_to_modeler_at 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'orders' 
+      AND column_name = 'assigned_to_modeler_at';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE orders 
+        ADD COLUMN assigned_to_modeler_at DATETIME COMMENT '分配建模师时间';
+    END IF;
+    
+    -- 检查 last_reminder_sent_at 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'orders' 
+      AND column_name = 'last_reminder_sent_at';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE orders 
+        ADD COLUMN last_reminder_sent_at DATETIME COMMENT '最后提醒发送时间';
+    END IF;
+    
+END //
+
+DELIMITER ;
+
+CALL AddOrderColumns();
+DROP PROCEDURE IF EXISTS AddOrderColumns;
 
 -- ============================================
--- 3. 任务流转记录表
+-- 3. 订单详情表添加上传文件备注字段
+-- ============================================
+DELIMITER //
+
+CREATE PROCEDURE AddOrderDetailColumn()
+BEGIN
+    DECLARE col_exists INT;
+    
+    -- 检查 client_upload_notes 是否存在
+    SELECT COUNT(*) INTO col_exists 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE table_schema = DATABASE() 
+      AND table_name = 'order_details' 
+      AND column_name = 'client_upload_notes';
+    
+    IF col_exists = 0 THEN
+        ALTER TABLE order_details 
+        ADD COLUMN client_upload_notes TEXT COMMENT '客户上传文件备注';
+    END IF;
+    
+END //
+
+DELIMITER ;
+
+CALL AddOrderDetailColumn();
+DROP PROCEDURE IF EXISTS AddOrderDetailColumn;
+
+-- ============================================
+-- 4. 任务流转记录表
 -- ============================================
 CREATE TABLE IF NOT EXISTS task_assignment_logs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
@@ -46,7 +196,7 @@ CREATE TABLE IF NOT EXISTS task_assignment_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务流转记录表';
 
 -- ============================================
--- 4. 订单驳回流程表
+-- 5. 订单驳回流程表
 -- ============================================
 CREATE TABLE IF NOT EXISTS order_rejection_flows (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
@@ -67,20 +217,14 @@ CREATE TABLE IF NOT EXISTS order_rejection_flows (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单驳回流程表';
 
 -- ============================================
--- 5. B端客户上传文件增强
--- ============================================
-ALTER TABLE order_details 
-ADD COLUMN IF NOT EXISTS client_upload_notes TEXT COMMENT '客户上传文件备注';
-
--- ============================================
 -- 6. 初始化现有建模师记录（补充字段）
 -- ============================================
 UPDATE modeler_work_status 
 SET 
-    c2c_todo_count = todo_count, 
-    b2b_todo_count = 0,
-    auto_assign_enabled = TRUE
-WHERE c2c_todo_count IS NULL;
+    c2c_todo_count = COALESCE(c2c_todo_count, todo_count), 
+    b2b_todo_count = COALESCE(b2b_todo_count, 0),
+    auto_assign_enabled = COALESCE(auto_assign_enabled, TRUE)
+WHERE id > 0;
 
 -- ============================================
 -- 7. 系统配置表新增超时配置
