@@ -213,7 +213,21 @@ jobs:
           echo "设置环境变量..."
           export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
-          # ========== 4. 部署服务 ==========
+          # ========== 4. 修复 Flyway 状态 ==========
+          echo "检查 Flyway 状态..."
+          # 先启动 MySQL 来修复数据库状态
+          docker compose -f docker-compose.prod.yml up -d mysql
+          sleep 30
+          
+          # 删除失败的 V5 迁移记录（如果存在）
+          echo "清理 Flyway 失败状态..."
+          docker exec jewelry-mysql mysql -uroot -p${DB_PASSWORD} moje_database -e "DELETE FROM flyway_schema_history WHERE version = '5' AND success = 0;" || true
+          
+          # 停止临时的 MySQL，让完整部署接管
+          docker compose -f docker-compose.prod.yml down
+          sleep 5
+          
+          # ========== 5. 部署服务 ==========
           echo "拉取最新镜像..."
           docker compose -f docker-compose.prod.yml pull
           
@@ -230,7 +244,7 @@ jobs:
             exit 1
           }
           
-          # ========== 5. 验证部署 ==========
+          # ========== 6. 验证部署 ==========
           echo "等待服务启动..."
           # 给 JVM / Flyway / JPA 更多启动时间
           sleep 25
@@ -238,7 +252,7 @@ jobs:
           echo "检查容器状态..."
           docker ps --filter "name=jewelry" --filter "name=moje" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           
-          # ========== 5.1 验证 B2B 前端部署 ==========
+          # ========== 6.1 验证 B2B 前端部署 ==========
           echo "验证 B2B 前端服务..."
           b2b_ok=0
           for i in $(seq 1 12); do
@@ -261,7 +275,7 @@ jobs:
             docker ps --filter "name=moje-b2b" --format "table {{.Names}}\t{{.Status}}" || true
           fi
           
-          # ========== 5.2 验证后端服务健康 ==========
+          # ========== 6.2 验证后端服务健康 ==========
           echo "检查后端服务健康..."
           ok=0
           for i in $(seq 1 24); do
@@ -288,7 +302,7 @@ jobs:
             exit 1
           fi
           
-          # ========== 6. 清理 ==========
+          # ========== 7. 清理 ==========
           echo "清理未使用的镜像..."
           docker image prune -f
           
