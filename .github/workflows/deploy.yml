@@ -150,7 +150,6 @@ jobs:
                   condition: service_healthy
               ports:
                 - "80:80"
-                - "443:443"
               restart: unless-stopped
               networks:
                 - jewelry-network
