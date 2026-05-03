@@ -149,7 +149,7 @@ jobs:
                 backend:
                   condition: service_healthy
               ports:
-                - "8080:80"
+                - "3080:80"
               restart: unless-stopped
               networks:
                 - jewelry-network
@@ -225,6 +225,12 @@ jobs:
           # 停止临时的 MySQL，让完整部署接管
           docker compose -f docker-compose.prod.yml down
           sleep 5
+
+          # 清理可能残留的旧容器
+          docker stop moje-b2b-client jewelry-backend jewelry-mysql 2>/dev/null || true
+          docker rm moje-b2b-client jewelry-backend jewelry-mysql 2>/dev/null || true
+          docker network rm jewelry-network 2>/dev/null || true
+          sleep 3
           
           # ========== 5. 部署服务 ==========
           echo "拉取最新镜像..."
@@ -255,7 +261,7 @@ jobs:
           echo "验证 B2B 前端服务..."
           b2b_ok=0
           for i in $(seq 1 12); do
-            if curl -fsS "http://localhost:8080/" >/dev/null 2>&1; then
+            if curl -fsS "http://localhost:3080/" >/dev/null 2>&1; then
               b2b_ok=1
               echo "✅ B2B 前端服务健康检查通过"
               break
@@ -266,8 +272,8 @@ jobs:
           
           if [ "$b2b_ok" != "1" ]; then
             echo "️  B2B 前端服务健康检查失败，输出诊断信息..."
-            echo "--- curl http://localhost:8080/ ---"
-            curl -i "http://localhost:8080/" || true
+            echo "--- curl http://localhost:3080/ ---"
+            curl -i "http://localhost:3080/" || true
             echo "--- moje-b2b-client logs ---"
             docker logs moje-b2b-client --tail 200 || true
             echo "--- docker ps (b2b) ---"
