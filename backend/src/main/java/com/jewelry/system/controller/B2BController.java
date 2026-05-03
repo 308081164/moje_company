@@ -40,7 +40,7 @@ public class B2BController {
 
     @PostMapping("/client/login")
     @Operation(summary = "B端客户登录")
-    public ResponseEntity<B2BClientResponse> login(@RequestBody B2BClientLoginRequest req) {
+    public ResponseEntity<B2BClientLoginResponse> login(@RequestBody B2BClientLoginRequest req) {
         return ResponseEntity.ok(clientService.login(req));
     }
 
@@ -95,7 +95,11 @@ public class B2BController {
     @GetMapping("/modeler/status")
     @Operation(summary = "获取当前建模师工作状态")
     public ResponseEntity<ModelerWorkStatusDto> getModelerStatus() {
-        return ResponseEntity.ok(workStatusService.getCurrentModelerStatus());
+        ModelerWorkStatusDto status = workStatusService.getCurrentModelerStatus();
+        if (status == null) {
+            return ResponseEntity.ok(new ModelerWorkStatusDto());
+        }
+        return ResponseEntity.ok(status);
     }
 
     @PutMapping("/modeler/work-mode")

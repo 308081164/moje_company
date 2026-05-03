@@ -30,8 +30,11 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login", "/auth/refresh-token").permitAll()
-                        .requestMatchers("/actuator/health", "/error").permitAll()
+                        .requestMatchers("/actuator/health", "/health", "/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/b2b/client/register", "/b2b/client/login").permitAll()
+                        .requestMatchers("/b2b/order/{token}", "/b2b/order/{token}/files").permitAll()
+                        .requestMatchers("/b2b/modeler/status").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

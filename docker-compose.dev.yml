@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: jewelry-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: "@Group666"
+      MYSQL_DATABASE: moje_database
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p\"@Group666\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - jewelry-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jewelry-backend-dev
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=moje_database
+      - DB_USER=root
+      - DB_PASSWORD=@Group666
+      - OSS_ACCESS_KEY_ID=LTAI5tFTJEe9v9Vr7HRh4J9F
+      - OSS_ACCESS_KEY_SECRET=
+      - B2B_ACCESS_URL_PREFIX=http://localhost:8851/api/b2b/order/
+    ports:
+      - "8851:8851"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - jewelry-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8851/api/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mysql_data:
+
+networks:
+  jewelry-network:
+    driver: bridge

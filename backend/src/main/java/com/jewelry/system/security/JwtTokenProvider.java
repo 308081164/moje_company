@@ -68,6 +68,21 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    public String createB2BAccessToken(Long clientId, String contact) {
+        Date now = new Date();
+        Date exp = new Date(now.getTime() + accessExpirationMs);
+        return Jwts.builder()
+                .setSubject(String.valueOf(clientId))
+                .claim(CLAIM_TYP, TYP_ACCESS)
+                .claim("username", contact)
+                .claim(CLAIM_ROLE, "B2B_CLIENT")
+                .claim("isB2B", true)
+                .setIssuedAt(now)
+                .setExpiration(exp)
+                .signWith(key)
+                .compact();
+    }
+
     public String createRefreshToken(User user) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + refreshExpirationMs);

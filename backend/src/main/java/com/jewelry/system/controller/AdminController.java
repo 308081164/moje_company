@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/admin")
 @RequiredArgsConstructor
 @Tag(name = "管理员-系统管理", description = "管理员数据统计、任务分配、驳回流程等")
 public class AdminController {
@@ -43,9 +43,9 @@ public class AdminController {
     // ==============================================
     // 1. 数据统计 - C端/B端统筹
     // ==============================================
-    @GetMapping("/statistics/overview")
+    @GetMapping("/dashboard")
     @Operation(summary = "C端/B端整体数据统计")
-    public OrderStatisticsOverviewDto getOverviewStatistics() {
+    public java.util.Map<String, Object> getOverviewStatistics() {
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
 
@@ -71,25 +71,35 @@ public class AdminController {
         long todayNew = orderRepository.countByCreatedAtAfter(todayStart);
         long todayCompleted = orderRepository.countByStatusAndUpdatedAtAfter(OrderStatus.COMPLETED, todayStart);
 
-        return OrderStatisticsOverviewDto.builder()
-                .totalOrders(totalOrders)
-                .completedOrders(completedOrders)
-                .pendingOrders(pendingOrders)
-                .totalRevenue(totalRevenue != null ? totalRevenue.doubleValue() : 0)
-                
-                .c2cTotalOrders(c2cTotal)
-                .c2cCompletedOrders(c2cCompleted)
-                .c2cPendingOrders(c2cPending)
-                .c2cRevenue(c2cRevenue != null ? c2cRevenue.doubleValue() : 0)
-                
-                .b2bTotalOrders(b2bTotal)
-                .b2bCompletedOrders(b2bCompleted)
-                .b2bPendingOrders(b2bPending)
-                .b2bRevenue(b2bRevenue != null ? b2bRevenue.doubleValue() : 0)
-                
-                .todayNewOrders(todayNew)
-                .todayCompletedOrders(todayCompleted)
-                .build();
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("totalOrders", totalOrders);
+        result.put("completedOrders", completedOrders);
+        result.put("pendingOrders", pendingOrders);
+        result.put("totalRevenue", totalRevenue != null ? totalRevenue.doubleValue() : 0);
+        
+        result.put("c2cTotalOrders", c2cTotal);
+        result.put("c2cCompletedOrders", c2cCompleted);
+        result.put("c2cPendingOrders", c2cPending);
+        result.put("c2cRevenue", c2cRevenue != null ? c2cRevenue.doubleValue() : 0);
+        
+        result.put("b2bTotalOrders", b2bTotal);
+        result.put("b2bCompletedOrders", b2bCompleted);
+        result.put("b2bPendingOrders", b2bPending);
+        result.put("b2bRevenue", b2bRevenue != null ? b2bRevenue.doubleValue() : 0);
+        
+        result.put("todayNewOrders", todayNew);
+        result.put("todayCompletedOrders", todayCompleted);
+        
+        return result;
+    }
+
+    @GetMapping("/test")
+    @Operation(summary = "测试接口")
+    public java.util.Map<String, Object> test() {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("status", "success");
+        result.put("message", "Admin test API is working");
+        return result;
     }
 
     private long countCancelled(boolean isB2b) {

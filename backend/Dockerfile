@@ -1,6 +1,6 @@
 # 使用多阶段构建减少镜像大小
 # backend 构建上下文中没有 Maven Wrapper（mvnw/.mvn），因此这里直接使用 Maven 官方镜像构建
-FROM maven:3.9.9-eclipse-temurin-17 AS builder
+FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /app
 
 # 复制 Maven 配置文件

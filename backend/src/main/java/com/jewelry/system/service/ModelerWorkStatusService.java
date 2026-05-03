@@ -28,8 +28,9 @@ public class ModelerWorkStatusService {
 
     @Transactional(readOnly = true)
     public ModelerWorkStatusDto getCurrentModelerStatus() {
-        Long userId = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
-        return getOrCreateStatus(userId);
+        return SecurityUtils.currentUserId()
+                .map(this::getOrCreateStatus)
+                .orElse(null);
     }
 
     @Transactional

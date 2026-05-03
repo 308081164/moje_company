@@ -3,6 +3,7 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.b2b.*;
 import com.jewelry.system.entity.B2BClient;
 import com.jewelry.system.repository.B2BClientRepository;
+import com.jewelry.system.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +17,7 @@ public class B2BClientService {
 
     private final B2BClientRepository clientRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
     public B2BClientResponse register(B2BClientRegisterRequest req) {
@@ -34,7 +36,7 @@ public class B2BClientService {
         return toDto(client);
     }
 
-    public B2BClientResponse login(B2BClientLoginRequest req) {
+    public B2BClientLoginResponse login(B2BClientLoginRequest req) {
         B2BClient client = clientRepository.findByContact(req.getContact())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "联系方式或密码错误"));
         
@@ -46,7 +48,17 @@ public class B2BClientService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "账号已禁用");
         }
         
-        return toDto(client);
+        B2BClientLoginResponse response = new B2BClientLoginResponse();
+        response.setId(client.getId());
+        response.setContact(client.getContact());
+        response.setCompanyName(client.getCompanyName());
+        response.setContactPerson(client.getContactPerson());
+        response.setEmail(client.getEmail());
+        response.setCreatedAt(client.getCreatedAt());
+        response.setAccessToken(jwtTokenProvider.createB2BAccessToken(client.getId(), client.getContact()));
+        response.setExpiresIn(jwtTokenProvider.getAccessExpirationSeconds());
+        
+        return response;
     }
 
     public B2BClientResponse getByContact(String contact) {

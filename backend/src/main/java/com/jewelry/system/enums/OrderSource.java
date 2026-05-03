@@ -6,7 +6,9 @@ public enum OrderSource {
     XIAOHONGSHU("小红书"),
     TAOBAO("淘宝"),
     XIANYU("咸鱼"),
-    INFLUENCER("达人推荐");
+    INFLUENCER("达人推荐"),
+    C2C("C端客户"),
+    B2B("B端客户");
     
     private final String description;
     
