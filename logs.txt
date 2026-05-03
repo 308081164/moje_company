@@ -1,0 +1,65 @@
+Request URL:
+http://39.102.213.51:8851/api/orders
+Request Method:
+POST
+Status Code:
+400
+Remote Address:
+127.0.0.1:7890
+Referrer Policy:
+strict-origin-when-cross-origin
+Cache-Control:
+no-cache, no-store, max-age=0, must-revalidate
+Connection:
+keep-alive
+Content-Encoding:
+gzip
+Content-Type:
+application/json
+Date:
+Sun, 03 May 2026 06:23:22 GMT
+Expires:
+0
+Keep-Alive:
+timeout=4
+Pragma:
+no-cache
+Proxy-Connection:
+keep-alive
+Transfer-Encoding:
+chunked
+Vary:
+origin,access-control-request-method,access-control-request-headers,accept-encoding
+X-Content-Type-Options:
+nosniff
+X-Frame-Options:
+DENY
+X-Xss-Protection:
+0
+Accept:
+application/json, text/plain, */*
+Accept-Encoding:
+gzip, deflate
+Accept-Language:
+zh-CN
+Authorization:
+Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI0IiwidHlwIjoiYWNjZXNzIiwidXNlcm5hbWUiOiJ5YW5neGluZ2h1aSIsInJvbGUiOiJQUkVfU0FMRVMiLCJpYXQiOjE3Nzc3ODkzNDgsImV4cCI6MTc3Nzg3NTc0OH0.wKg2A0HEl6HzK1lonoDZCXqIhz2KC4Gq2KyD08yRyaTMt0ww7YVaTpPM9KHFh1-B
+Content-Length:
+205
+Content-Type:
+application/json
+Host:
+39.102.213.51:8851
+Proxy-Connection:
+keep-alive
+User-Agent:
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) jewelry-system-frontend/1.0.0 Chrome/114.0.5735.289 Electron/25.9.8 Safari/537.36
+
+{"source":"DOUYIN","depositAmount":100,"basicRequirements":"1","orderTime":"2026-05-03T06:22:33.012Z","style":"1","materialInfo":"1","customerContact":"17753158844","customerName":"1","customerWechat":"1"}
+
+{
+    "timestamp": "2026-05-03T06:23:22.286+00:00",
+    "status": 400,
+    "error": "Bad Request",
+    "path": "/api/orders"
+}
