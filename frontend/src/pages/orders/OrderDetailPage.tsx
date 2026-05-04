@@ -178,7 +178,7 @@ const OrderDetailPage: React.FC = () => {
       sourceDetail: v.sourceDetail,
       depositAmount: v.depositAmount,
       basicRequirements: v.basicRequirements,
-      orderTime: v.orderTime ? v.orderTime.toISOString() : undefined,
+      orderTime: v.orderTime ? v.orderTime.format('YYYY-MM-DD HH:mm:ss') : undefined,
       style: v.style,
       materialInfo: v.materialInfo,
     });

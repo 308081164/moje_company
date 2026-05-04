@@ -67,8 +67,6 @@ const ModelerStatusPanel: React.FC = () => {
   const getModeLabel = (mode: string) => {
     const labels: Record<string, string> = {
       AUTO: '自动接单',
-      B2B_ONLY: '仅B2B',
-      C2C_ONLY: '仅C2C',
     };
     return labels[mode] || mode;
   };
@@ -167,9 +165,7 @@ const ModelerStatusPanel: React.FC = () => {
             rules={[{ required: true }]}
           >
             <Select placeholder="请选择工作模式">
-              <Option value="AUTO">自动接单（B2B+C2C）</Option>
-              <Option value="B2B_ONLY">仅处理B2B订单</Option>
-              <Option value="C2C_ONLY">仅处理C2C订单</Option>
+              <Option value="AUTO">自动接单</Option>
             </Select>
           </Form.Item>
           <Form.Item>

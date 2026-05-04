@@ -32,7 +32,7 @@ const OrderCreatePage: React.FC = () => {
         sourceDetail: values.sourceDetail,
         depositAmount: Number(values.depositAmount),
         basicRequirements: values.basicRequirements,
-        orderTime: (values.orderTime || dayjs()).toISOString(),
+        orderTime: (values.orderTime || dayjs()).format('YYYY-MM-DD HH:mm:ss'),
         style: values.style,
         materialInfo: values.materialInfo,
         customerContact: values.customerContact,

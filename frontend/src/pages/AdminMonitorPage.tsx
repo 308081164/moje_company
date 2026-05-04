@@ -51,8 +51,6 @@ const AdminMonitorPage: React.FC = () => {
   const getModeLabel = (mode: string) => {
     const labels: Record<string, string> = {
       AUTO: '自动接单',
-      B2B_ONLY: '仅B2B',
-      C2C_ONLY: '仅C2C',
     };
     return labels[mode] || mode;
   };

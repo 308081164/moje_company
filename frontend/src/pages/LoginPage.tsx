@@ -206,20 +206,6 @@ const LoginPage: React.FC = () => {
 
                 <div className="gold-divider" />
 
-                <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <Button
-                    type="link"
-                    icon={<ShopOutlined />}
-                    onClick={() => navigate('/b2b')}
-                    style={{ color: '#C9A962' }}
-                  >
-                    B端客户门户
-                  </Button>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    &nbsp;|&nbsp;企业客户请访问此入口
-                  </Text>
-                </div>
-
                 <div className="login-footer">
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     <Row justify="space-between">
@@ -241,23 +227,6 @@ const LoginPage: React.FC = () => {
                 </div>
               </Form>
             </Card>
-
-            <div className="login-tips">
-              <Alert
-                message="登录提示"
-                description={
-                  <Space direction="vertical" size="small">
-                    <Text>• 默认管理员账号: kuangjun / moje666</Text>
-                    <Text>• 请妥善保管您的登录凭证</Text>
-                    <Text>• 建议定期修改密码</Text>
-                    <Text>• 如遇问题请联系管理员</Text>
-                  </Space>
-                }
-                type="info"
-                showIcon
-                className="tips-alert"
-              />
-            </div>
           </Col>
         </Row>
       </div>

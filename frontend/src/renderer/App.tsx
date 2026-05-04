@@ -13,7 +13,6 @@ import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
-import B2BClientPortal from '@/pages/B2BClientPortal';
 import AppLayout from '@/components/layout/AppLayout';
 import './App.css';
 
@@ -168,15 +167,13 @@ const App: React.FC = () => {
     );
   }
 
-  // 未认证用户重定向到登录页或B2B门户
+  // 未认证用户重定向到登录页
   if (!isAuthenticated) {
     console.log('[App] not authenticated -> login router');
     return (
       <Router>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/b2b" element={<B2BClientPortal />} />
-          <Route path="/b2b/*" element={<B2BClientPortal />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>

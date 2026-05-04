@@ -51,12 +51,21 @@ function setupAutoUpdater() {
 }
 
 function createWindow() {
+  // 动态查找图标路径
+  let iconPath: string;
+  if (isDev) {
+    iconPath = path.join(__dirname, '../../assets/icon.png');
+  } else {
+    iconPath = path.join(process.resourcesPath, 'assets/icon.png');
+  }
+  
   // 创建浏览器窗口
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 800,
+    icon: iconPath, // 设置窗口图标
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -117,8 +126,28 @@ function createWindow() {
 
 // 创建系统托盘
 function createTray() {
-  const iconPath = path.join(__dirname, '../../assets/icon.png');
-  const trayIcon = nativeImage.createFromPath(iconPath);
+  // 动态查找图标路径（支持开发和生产环境）
+  let iconPath: string;
+  if (isDev) {
+    // 开发环境：直接使用 assets 目录
+    iconPath = path.join(__dirname, '../../assets/icon.png');
+  } else {
+    // 生产环境：使用 app.asar 解压后的资源目录
+    iconPath = path.join(process.resourcesPath, 'assets/icon.png');
+  }
+  
+  // 尝试加载图标，如果失败则回退
+  let trayIcon;
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    if (trayIcon.isEmpty()) {
+      throw new Error('图标文件为空');
+    }
+  } catch (e) {
+    console.warn('[tray] 无法加载图标，使用默认图标', e);
+    // 创建一个简单的空白图标
+    trayIcon = nativeImage.createEmpty();
+  }
   
   tray = new Tray(trayIcon.resize({ width: 16, height: 16 }));
   
