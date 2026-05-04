@@ -17,8 +17,10 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(new WebSocketHandler(webSocketService), "/ws/modeler")
+                .addInterceptors(new WebSocketHandshakeInterceptor())
                 .setAllowedOrigins("*");
         registry.addHandler(new WebSocketHandler(webSocketService), "/ws/admin")
+                .addInterceptors(new WebSocketHandshakeInterceptor())
                 .setAllowedOrigins("*");
     }
 }

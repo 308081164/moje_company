@@ -58,4 +58,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByCreatedAtAfterAndIsB2b(LocalDateTime t, Boolean isB2b);
 
     List<Order> findByModelerIdAndStatusIn(Long modelerId, List<OrderStatus> statuses);
+
+    // 自动分配相关的统计方法
+    long countBySalesMidIdAndStatusIn(Long salesMidId, List<OrderStatus> statuses);
+    
+    long countByDesignerIdAndStatusIn(Long designerId, List<OrderStatus> statuses);
+    
+    long countByFollowUpIdAndStatusIn(Long followUpId, List<OrderStatus> statuses);
 }

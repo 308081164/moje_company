@@ -26,7 +26,7 @@ public class ModelerWorkStatusService {
     private final UserRepository userRepository;
     private final TaskAssignmentService taskAssignmentService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ModelerWorkStatusDto getCurrentModelerStatus() {
         return SecurityUtils.currentUserId()
                 .map(this::getOrCreateStatus)

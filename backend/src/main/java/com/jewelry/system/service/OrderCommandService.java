@@ -25,6 +25,7 @@ import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class OrderCommandService {
@@ -42,6 +43,7 @@ public class OrderCommandService {
     private final ObjectMapper objectMapper;
     private final OrderQueryService orderQueryService;
     private final AuditLogService auditLogService;
+    private final AutoAssignmentService autoAssignmentService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -72,6 +74,10 @@ public class OrderCommandService {
                 .ifPresent(uid -> o.setSalesPre(userRepository.getReferenceById(uid)));
 
         orderRepository.save(o);
+        
+        // 自动分配所有成员
+        autoAssignmentService.autoAssignAll(o.getId());
+        
         auditLogService.log("ORDER_CREATE", "ORDER", o.getId(), "创建订单: " + o.getOrderNumber());
         return orderQueryService.getOrder(o.getId());
     }
