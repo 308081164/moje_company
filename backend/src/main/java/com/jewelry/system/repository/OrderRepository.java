@@ -61,8 +61,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     // 自动分配相关的统计方法
     long countBySalesMidIdAndStatusIn(Long salesMidId, List<OrderStatus> statuses);
-    
+
     long countByDesignerIdAndStatusIn(Long designerId, List<OrderStatus> statuses);
-    
+
+    long countByModelerIdAndStatusIn(Long modelerId, List<OrderStatus> statuses);
+
     long countByFollowUpIdAndStatusIn(Long followUpId, List<OrderStatus> statuses);
 }
