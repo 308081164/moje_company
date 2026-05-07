@@ -10,7 +10,8 @@ const WS_ORIGIN = (() => {
     const url = window.env.API_URL.replace(/^http/, 'ws').replace(/\/api$/, '');
     return url;
   }
-  return 'ws://39.102.213.51:8851';
+  // 默认使用本地服务器
+  return 'ws://localhost:8851';
 })();
 
 class WebSocketService {
@@ -28,12 +29,12 @@ class WebSocketService {
 
     this.currentUserId = userId;
     this.currentRole = role;
-    
+
     const path = role === 'MODELER' ? '/ws/modeler' : '/ws/admin';
     const url = `${WS_ORIGIN}${path}?userId=${userId}&role=${role}`;
-    
+
     console.log('[WebSocket] Connecting to:', url);
-    
+
     try {
       this.socket = new WebSocket(url);
     } catch (error) {

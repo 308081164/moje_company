@@ -179,6 +179,9 @@ public class OrderCommandService {
         if (req.getStoneInfo() != null) {
             di.setStoneInfoJson(toJson(req.getStoneInfo()));
         }
+        if (req.getDesignImages() != null) {
+            di.setDesignImagesJson(toJson(req.getDesignImages()));
+        }
         designInfoRepository.save(di);
 
         if (req.getDesignerId() != null) {

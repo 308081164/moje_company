@@ -8,6 +8,9 @@ import {
   DatePicker,
   Form,
   Input,
+  InputNumber,
+  Modal,
+  Select,
   Space,
   Table,
   Tabs,
@@ -24,7 +27,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { orderService } from '@/services/orderService';
-import { OrderInfo, OrderStatus } from '@/types/order';
+import { OrderInfo, OrderSource, OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 
@@ -43,8 +46,46 @@ const OrderListPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [activeTab, setActiveTab] = useState<string>(() => searchParams.get('status') || 'ALL');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createFormLoading, setCreateFormLoading] = useState(false);
 
   const [searchForm] = Form.useForm();
+  const [createForm] = Form.useForm();
+
+  const loadStatistics = useCallback(async () => {
+    setStatisticsLoading(true);
+    try {
+      const stats = await orderService.getOrderStatistics();
+      const counts: Record<string, number> = {};
+      // 从statusDistribution中获取各状态数量
+      if (stats.statusDistribution && Array.isArray(stats.statusDistribution)) {
+        stats.statusDistribution.forEach((item: any) => {
+          counts[item.status] = item.count || 0;
+        });
+      }
+      // 也从统计数据中获取
+      counts['PENDING_DESIGN'] = stats.pendingDesignOrders || 0;
+      counts['DESIGNING'] = stats.designingOrders || 0;
+      counts['PENDING_MODEL'] = stats.pendingModelOrders || 0;
+      counts['MODELING'] = stats.modelingOrders || 0;
+      counts['PENDING_REVIEW'] = stats.pendingReviewOrders || 0;
+      counts['REVIEWING'] = stats.reviewingOrders || 0;
+      counts['PENDING_QUOTATION'] = stats.pendingQuotationOrders || 0;
+      counts['PENDING_PRODUCTION'] = stats.pendingProductionOrders || 0;
+      counts['PRODUCING'] = stats.producingOrders || 0;
+      counts['COMPLETED'] = stats.completedOrders || 0;
+      counts['CANCELLED'] = stats.cancelledOrders || 0;
+      // 总订单数
+      counts['ALL'] = stats.totalOrders || 0;
+      setStatusCounts(counts);
+    } catch (error) {
+      console.error('获取统计信息失败:', error);
+    } finally {
+      setStatisticsLoading(false);
+    }
+  }, []);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -75,6 +116,10 @@ const OrderListPage: React.FC = () => {
       setLoading(false);
     }
   }, [activeTab, currentPage, pageSize, searchForm]);
+
+  useEffect(() => {
+    loadStatistics();
+  }, [loadStatistics]);
 
   useEffect(() => {
     loadOrders();
@@ -178,6 +223,47 @@ const OrderListPage: React.FC = () => {
     [navigate]
   );
 
+  const handleOpenCreateModal = () => {
+    createForm.resetFields();
+    createForm.setFieldsValue({
+      orderTime: dayjs(),
+      depositAmount: 0,
+      source: OrderSource.DOUYIN,
+    });
+    setCreateModalVisible(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setCreateModalVisible(false);
+  };
+
+  const handleCreateOrder = async (values: any) => {
+    setCreateFormLoading(true);
+    try {
+      const payload = {
+        source: values.source,
+        sourceDetail: values.sourceDetail,
+        depositAmount: Number(values.depositAmount),
+        basicRequirements: values.basicRequirements,
+        orderTime: (values.orderTime || dayjs()).format('YYYY-MM-DD HH:mm:ss'),
+        style: values.style,
+        materialInfo: values.materialInfo,
+        customerContact: values.customerContact,
+        customerName: values.customerName,
+        customerWechat: values.customerWechat,
+      };
+      const created = await orderService.createOrder(payload);
+      message.success('创建成功');
+      setCreateModalVisible(false);
+      loadOrders(); // 刷新订单列表
+      navigate(`/orders/${created.baseInfo.id}`); // 跳转到新订单详情
+    } catch (e) {
+      message.error('创建失败');
+    } finally {
+      setCreateFormLoading(false);
+    }
+  };
+
   const exportCsv = async () => {
     const ids = (selectedRowKeys as number[]).filter(Boolean);
     if (!ids.length) {
@@ -213,7 +299,7 @@ const OrderListPage: React.FC = () => {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => navigate('/orders/new')}
+                onClick={handleOpenCreateModal}
               >
                 新建订单
               </Button>
@@ -268,7 +354,11 @@ const OrderListPage: React.FC = () => {
             label: (
               <Space>
                 {t.label}
-                <Badge count={0} style={{ backgroundColor: '#1890ff' }} showZero />
+                <Badge 
+                  count={statusCounts[t.key] || 0} 
+                  style={{ backgroundColor: '#1890ff' }} 
+                  showZero 
+                />
               </Space>
             ),
           }))}
@@ -293,9 +383,87 @@ const OrderListPage: React.FC = () => {
             onChange: handlePageChange,
             onShowSizeChange: handlePageChange,
           }}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
+
+      {/* 新建订单弹窗 */}
+      <Modal
+        title="新建订单"
+        open={createModalVisible}
+        onCancel={handleCloseCreateModal}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        <Form
+          form={createForm}
+          layout="vertical"
+          onFinish={handleCreateOrder}
+        >
+          <Form.Item name="customerName" label="客户姓名">
+            <Input placeholder="选填" />
+          </Form.Item>
+          <Form.Item
+            name="customerContact"
+            label="联系方式"
+            rules={[{ required: true, message: '请输入手机或微信' }]}
+          >
+            <Input placeholder="手机或微信号" />
+          </Form.Item>
+          <Form.Item name="customerWechat" label="客户微信（若与联系方式不同）">
+            <Input placeholder="选填" />
+          </Form.Item>
+          <Form.Item name="source" label="订单来源" rules={[{ required: true }]}>
+            <Select
+              options={Object.values(OrderSource).map((s) => ({
+                value: s,
+                label: orderSourceLabel(s),
+              }))}
+            />
+          </Form.Item>
+          {Form.useWatch('source', createForm) === OrderSource.RECOMMEND && (
+            <Form.Item name="sourceDetail" label="达人昵称">
+              <Input placeholder="达人推荐时填写" />
+            </Form.Item>
+          )}
+          <Form.Item
+            name="depositAmount"
+            label="定金（元）"
+            rules={[{ required: true, message: '请输入定金' }]}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="style" label="款式">
+            <Input placeholder="选填" />
+          </Form.Item>
+          <Form.Item name="materialInfo" label="材质信息">
+            <Input.TextArea rows={2} placeholder="选填" />
+          </Form.Item>
+          <Form.Item
+            name="basicRequirements"
+            label="基础需求"
+            rules={[{ required: true, message: '请填写基础需求' }]}
+          >
+            <Input.TextArea rows={4} placeholder="必填" />
+          </Form.Item>
+          <Form.Item
+            name="orderTime"
+            label="下单时间"
+            rules={[{ required: true, message: '请选择下单时间' }]}
+          >
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={createFormLoading}>
+                提交创建
+              </Button>
+              <Button onClick={handleCloseCreateModal}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

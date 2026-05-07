@@ -82,6 +82,7 @@ public class OrderDetailAssembler {
                 .processInfo(di != null ? parseJson(di.getProcessInfoJson()) : null)
                 .stoneInfo(di != null ? parseJson(di.getStoneInfoJson()) : null)
                 .designNotes(od != null ? od.getDesignNotes() : null)
+                .designImages(di != null ? parseStringList(di.getDesignImagesJson()) : null)
                 .designPassed(di != null ? di.getCustomerApproved() : null)
                 .designPassedTime(di != null && di.getApprovalTime() != null ? ISO.format(di.getApprovalTime()) : null)
                 .createdAt(created)

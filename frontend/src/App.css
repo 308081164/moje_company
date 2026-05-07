@@ -1,3 +1,17 @@
+/* 全局样式重置 */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 暗色主题样式 */
   .ant-empty {
     color: rgba(255, 255, 255, 0.65) !important;
   }

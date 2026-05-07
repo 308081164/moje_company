@@ -5,6 +5,7 @@ import com.jewelry.system.entity.ModelerWorkStatus;
 import com.jewelry.system.entity.ModelerWorkStatus.WorkMode;
 import com.jewelry.system.entity.ModelerWorkStatus.WorkStatus;
 import com.jewelry.system.entity.User;
+import com.jewelry.system.enums.UserRole;
 import com.jewelry.system.repository.ModelerWorkStatusRepository;
 import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.util.SecurityUtils;
@@ -100,7 +101,7 @@ public class ModelerWorkStatusService {
 
     @Transactional(readOnly = true)
     public List<ModelerWorkStatusDto> getAllModelerStatus() {
-        return userRepository.findByRole("MODELER").stream()
+        return userRepository.findByRole(UserRole.MODELER).stream()
                 .map(u -> {
                     ModelerWorkStatus status = statusRepository.findByUserId(u.getId()).orElseGet(() -> {
                         ModelerWorkStatus s = new ModelerWorkStatus();

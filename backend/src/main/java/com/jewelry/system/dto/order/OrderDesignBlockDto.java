@@ -3,6 +3,8 @@ package com.jewelry.system.dto.order;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class OrderDesignBlockDto {
@@ -17,6 +19,7 @@ public class OrderDesignBlockDto {
     private Object processInfo;
     private Object stoneInfo;
     private String designNotes;
+    private List<String> designImages;
     private Boolean designPassed;
     private String designPassedTime;
     private String createdAt;

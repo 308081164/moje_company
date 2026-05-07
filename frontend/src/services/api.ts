@@ -1,9 +1,9 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
 
-// API 基址：优先 Electron preload 注入的 window.env.API_URL（如 http://host:8851），否则使用默认服务器
+// API 基址：优先 Electron preload 注入的 window.env.API_URL（如 http://host:8851），否则使用默认本地服务器
 function normalizeApiOrigin(): string {
-  let raw = (typeof window !== 'undefined' && window.env?.API_URL?.trim()) || 'http://39.102.213.51:8851';
+  let raw = (typeof window !== 'undefined' && window.env?.API_URL?.trim()) || 'http://localhost:8851';
   raw = raw.replace(/\/+$/, '');
   if (raw.endsWith('/api')) {
     raw = raw.slice(0, -4);

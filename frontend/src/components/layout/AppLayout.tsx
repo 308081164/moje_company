@@ -65,7 +65,6 @@ const AppLayout: React.FC = () => {
             label: '订单管理',
             children: [
               { key: '/orders', label: '订单列表' },
-              { key: '/orders/new', label: '新建订单' },
             ],
           },
           {
@@ -93,7 +92,6 @@ const AppLayout: React.FC = () => {
             label: '订单管理',
             children: [
               { key: '/orders', label: '订单列表' },
-              { key: '/orders/new', label: '新建订单' },
             ],
           },
         ];
@@ -266,7 +264,7 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <Layout className="app-layout">
+    <Layout className="app-layout" style={{ minHeight: '100vh' }}>
       <Sider
         width={240}
         collapsedWidth={80}
@@ -278,13 +276,14 @@ const AppLayout: React.FC = () => {
         style={{
           background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
           borderRight: '1px solid #e8e8e8',
-          overflow: 'auto',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           height: '100vh',
-          position: 'fixed',
+          position: 'sticky',
           left: 0,
           top: 0,
-          bottom: 0,
           zIndex: 1000,
+          flexShrink: 0,
         }}
       >
         <div className="logo-container">
@@ -319,7 +318,7 @@ const AppLayout: React.FC = () => {
         />
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 80 : 240, transition: 'all 0.2s' }}>
+      <Layout style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header
           style={{
             padding: '0 24px',
@@ -331,6 +330,9 @@ const AppLayout: React.FC = () => {
             position: 'sticky',
             top: 0,
             zIndex: 999,
+            flexShrink: 0,
+            height: 'auto',
+            minHeight: 64,
           }}
         >
           <Space>
@@ -348,7 +350,7 @@ const AppLayout: React.FC = () => {
             </Text>
           </Space>
 
-          <Space size="large">
+          <Space size="middle">
             <Dropdown
               menu={{ items: notificationItems }}
               placement="bottomRight"
@@ -364,32 +366,33 @@ const AppLayout: React.FC = () => {
             </Dropdown>
 
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-              <Space className="user-info-trigger" style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: 8 }}>
-                <Avatar
-                  size="default"
-                  icon={<UserOutlined />}
-                  className="user-avatar"
-                />
-                {!collapsed && (
-                  <Space direction="vertical" size={0} className="user-info-text">
+              <div className="user-info-trigger">
+                <div className="user-info-content">
+                  <Avatar
+                    size="default"
+                    icon={<UserOutlined />}
+                    className="user-avatar"
+                  />
+                  <div className="user-info-text">
                     <Text strong className="user-info-name">
                       {user?.realName || user?.username}
                     </Text>
                     <Text type="secondary" className="user-info-role">
                       {user?.roleDescription}
                     </Text>
-                  </Space>
-                )}
-              </Space>
+                  </div>
+                </div>
+              </div>
             </Dropdown>
           </Space>
         </Header>
 
         <Content
           style={{
-            margin: '24px 16px',
-            padding: 24,
-            minHeight: 280,
+            margin: '16px',
+            padding: 0,
+            flex: 1,
+            minHeight: 0,
             background: 'transparent',
             borderRadius: borderRadiusLG,
             overflow: 'auto',

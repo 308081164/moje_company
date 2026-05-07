@@ -117,6 +117,7 @@ export interface OrderDesignInfo {
   handSize?: string;          // 手寸/链长
   processInfo?: ProcessInfo[]; // 工艺信息
   stoneInfo?: StoneInfo[];    // 石料信息
+  designImages?: string[];    // 设计图URL列表
   designFiles?: FileInfo[];   // 设计图文件
   designNotes?: string;       // 设计备注
   designPassed: boolean;      // 设计是否通过客户检验
@@ -232,6 +233,7 @@ export interface FileInfo {
   id: number;
   fileName: string;            // 文件名
   filePath: string;            // 文件路径
+  fileUrl?: string;            // 文件访问URL
   fileType: FileType;          // 文件类型
   fileSize: number;            // 文件大小（字节）
   uploaderId: number;          // 上传者ID
@@ -302,6 +304,7 @@ export interface OrderDesignUpdateRequest {
   designerId?: number;
   processInfo?: ProcessInfo[];
   stoneInfo?: StoneInfo[];
+  designImages?: string[];
   designNotes?: string;
 }
 

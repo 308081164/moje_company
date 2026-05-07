@@ -35,25 +35,25 @@ export const orderService = {
   },
 
   /** 设计师工作台 */
-  async workbenchDesignerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/designer/todo', { params: { page, size } });
+  async workbenchDesignerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/designer/todo', { params: { page, size, isB2b } });
   },
-  async workbenchDesignerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/designer/done', { params: { page, size } });
+  async workbenchDesignerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/designer/done', { params: { page, size, isB2b } });
   },
   /** 建模师工作台 */
-  async workbenchModelerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/modeler/todo', { params: { page, size } });
+  async workbenchModelerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/modeler/todo', { params: { page, size, isB2b } });
   },
-  async workbenchModelerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/modeler/done', { params: { page, size } });
+  async workbenchModelerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/modeler/done', { params: { page, size, isB2b } });
   },
   /** 跟单员工作台 */
-  async workbenchTrackerTodo(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/tracker/todo', { params: { page, size } });
+  async workbenchTrackerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/todo', { params: { page, size, isB2b } });
   },
-  async workbenchTrackerDone(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/tracker/done', { params: { page, size } });
+  async workbenchTrackerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/done', { params: { page, size, isB2b } });
   },
   
   // 获取订单详情

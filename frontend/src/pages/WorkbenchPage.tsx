@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Button, Card, Space, Table, Tabs, Tag, Typography, message } from 'antd';
+import { Badge, Button, Card, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
@@ -13,12 +13,19 @@ import ModelerStatusPanel from '@/components/ModelerStatusPanel';
 
 const { Title, Text } = Typography;
 
+const B2B_OPTIONS = [
+  { value: undefined, label: '全部订单' },
+  { value: false, label: 'C端订单' },
+  { value: true, label: 'B端订单' },
+];
+
 const WorkbenchPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const role = user?.role as UserRole | undefined;
 
   const [tab, setTab] = useState<'todo' | 'done'>('todo');
+  const [isB2b, setIsB2b] = useState<boolean | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<OrderInfo[]>([]);
   const [total, setTotal] = useState(0);
@@ -28,22 +35,22 @@ const WorkbenchPage: React.FC = () => {
   const loader = useMemo(() => {
     if (role === UserRole.DESIGNER) {
       return {
-        todo: (p: number, s: number) => orderService.workbenchDesignerTodo(p - 1, s),
-        done: (p: number, s: number) => orderService.workbenchDesignerDone(p - 1, s),
+        todo: (p: number, s: number, b?: boolean) => orderService.workbenchDesignerTodo(p - 1, s, b),
+        done: (p: number, s: number, b?: boolean) => orderService.workbenchDesignerDone(p - 1, s, b),
         title: '设计师工作台',
       };
     }
     if (role === UserRole.MODELER) {
       return {
-        todo: (p: number, s: number) => orderService.workbenchModelerTodo(p - 1, s),
-        done: (p: number, s: number) => orderService.workbenchModelerDone(p - 1, s),
+        todo: (p: number, s: number, b?: boolean) => orderService.workbenchModelerTodo(p - 1, s, b),
+        done: (p: number, s: number, b?: boolean) => orderService.workbenchModelerDone(p - 1, s, b),
         title: '建模师工作台',
       };
     }
     if (role === UserRole.TRACKER) {
       return {
-        todo: (p: number, s: number) => orderService.workbenchTrackerTodo(p - 1, s),
-        done: (p: number, s: number) => orderService.workbenchTrackerDone(p - 1, s),
+        todo: (p: number, s: number, b?: boolean) => orderService.workbenchTrackerTodo(p - 1, s, b),
+        done: (p: number, s: number, b?: boolean) => orderService.workbenchTrackerDone(p - 1, s, b),
         title: '跟单员工作台',
       };
     }
@@ -55,7 +62,7 @@ const WorkbenchPage: React.FC = () => {
     setLoading(true);
     try {
       const fn = tab === 'todo' ? loader.todo : loader.done;
-      const res: any = await fn(page, pageSize);
+      const res: any = await fn(page, pageSize, isB2b);
       setOrders(res?.content ?? []);
       setTotal(res?.totalElements ?? 0);
     } catch (e) {
@@ -65,11 +72,16 @@ const WorkbenchPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [loader, tab, page, pageSize]);
+  }, [loader, tab, page, pageSize, isB2b]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleB2bChange = (value: boolean | undefined) => {
+    setIsB2b(value);
+    setPage(1);
+  };
 
   const columns: ColumnsType<OrderInfo> = useMemo(
     () => [
@@ -138,9 +150,18 @@ const WorkbenchPage: React.FC = () => {
             </Title>
             <Text type="secondary">与后端 /orders/workbench/* 联调</Text>
           </div>
-          <Button icon={<ReloadOutlined />} onClick={load}>
-            刷新
-          </Button>
+          <Space>
+            <Select
+              value={isB2b}
+              onChange={handleB2bChange}
+              options={B2B_OPTIONS}
+              style={{ width: 120 }}
+              placeholder="选择订单类型"
+            />
+            <Button icon={<ReloadOutlined />} onClick={load}>
+              刷新
+            </Button>
+          </Space>
         </Space>
 
         <Tabs

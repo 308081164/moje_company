@@ -13,5 +13,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     Optional<User> findByUsername(String username);
     
-    List<User> findByRole(String role);
+    List<User> findByRole(com.jewelry.system.enums.UserRole role);
 }

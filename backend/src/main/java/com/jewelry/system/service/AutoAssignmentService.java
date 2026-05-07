@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.User;
+import com.jewelry.system.enums.UserRole;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.util.SecurityUtils;
@@ -63,7 +64,7 @@ public class AutoAssignmentService {
             return; // 已有分配，跳过
         }
         
-        List<User> salesUsers = userRepository.findByRole("SALES");
+        List<User> salesUsers = userRepository.findByRole(UserRole.SALES_MID);
         if (salesUsers.isEmpty()) {
             log.warn("没有可用的售中客服");
             return;
@@ -84,7 +85,7 @@ public class AutoAssignmentService {
             return; // 已有分配，跳过
         }
         
-        List<User> designers = userRepository.findByRole("DESIGNER");
+        List<User> designers = userRepository.findByRole(UserRole.DESIGNER);
         if (designers.isEmpty()) {
             log.warn("没有可用的设计师");
             return;
@@ -127,10 +128,10 @@ public class AutoAssignmentService {
             return; // 已有分配，跳过
         }
         
-        List<User> trackers = userRepository.findByRole("TRACKER");
+        List<User> trackers = userRepository.findByRole(UserRole.FOLLOW_UP);
         if (trackers.isEmpty()) {
             // 如果没有跟单员，尝试分配管理员
-            trackers = userRepository.findByRole("ADMIN");
+            trackers = userRepository.findByRole(UserRole.ADMIN);
         }
         
         if (trackers.isEmpty()) {

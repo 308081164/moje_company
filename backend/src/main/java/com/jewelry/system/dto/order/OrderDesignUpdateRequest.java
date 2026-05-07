@@ -3,6 +3,8 @@ package com.jewelry.system.dto.order;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderDesignUpdateRequest {
@@ -14,4 +16,5 @@ public class OrderDesignUpdateRequest {
     private Object processInfo;
     private Object stoneInfo;
     private String designNotes;
+    private List<String> designImages;
 }

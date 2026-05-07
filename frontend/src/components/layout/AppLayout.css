@@ -36,7 +36,7 @@
   background: linear-gradient(135deg, #C9A962 0%, #8B7355 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: text;
   animation: sparkle 3s infinite;
 }
 
@@ -60,7 +60,7 @@
   background: linear-gradient(135deg, #2C2C2C 0%, #6B6B6B 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: text;
 }
 
 .logo-subtitle {
@@ -81,23 +81,46 @@
 
 .user-info-trigger {
   transition: all 0.3s ease;
+  padding: 6px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  display: flex;
+  align-items: center;
 }
 
 .user-info-trigger:hover {
   background: rgba(201, 169, 98, 0.08);
 }
 
+.user-info-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .user-info-text {
-  margin-left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .user-info-name {
-  font-size: 14px;
+  font-size: 15px;
   color: #2C2C2C;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .user-info-role {
   font-size: 12px;
+  color: #8A8A8A;
+  line-height: 1.4;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .user-avatar {
@@ -122,6 +145,42 @@
   padding: 24px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   min-height: calc(100vh - 140px);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+/* 响应式样式 */
+@media (max-width: 768px) {
+  .logo-expanded {
+    padding: 0 8px;
+  }
+  
+  .logo-title {
+    font-size: 20px;
+  }
+  
+  .header-title {
+    font-size: 16px;
+  }
+  
+  .user-info-text {
+    display: none;
+  }
+  
+  .user-info-trigger {
+    padding: 8px 12px;
+  }
+  
+  .content-wrapper {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-wrapper {
+    padding: 12px;
+  }
 }
 
 .app-layout .ant-menu-item {

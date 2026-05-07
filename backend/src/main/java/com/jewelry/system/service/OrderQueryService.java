@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import jakarta.persistence.criteria.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -112,72 +113,102 @@ public class OrderQueryService {
     // ================= 工作台查询 =================
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageDesignerTodo(Pageable pageable, Long designerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("designer").get("id"), designerId),
-                root.get("status").in(OrderStatus.PENDING_DESIGN, OrderStatus.DESIGNING)
-        );
+    public Page<OrderInfoDto> pageDesignerTodo(Pageable pageable, Long designerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("designer").get("id"), designerId));
+            predicates.add(root.get("status").in(OrderStatus.PENDING_DESIGN, OrderStatus.DESIGNING));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageDesignerDone(Pageable pageable, Long designerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("designer").get("id"), designerId),
-                root.get("status").in(
-                        OrderStatus.PENDING_MODEL,
-                        OrderStatus.MODELING,
-                        OrderStatus.PENDING_REVIEW,
-                        OrderStatus.PENDING_PRODUCTION,
-                        OrderStatus.PRODUCING,
-                        OrderStatus.COMPLETED
-                )
-        );
+    public Page<OrderInfoDto> pageDesignerDone(Pageable pageable, Long designerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("designer").get("id"), designerId));
+            predicates.add(root.get("status").in(
+                    OrderStatus.PENDING_MODEL,
+                    OrderStatus.MODELING,
+                    OrderStatus.PENDING_REVIEW,
+                    OrderStatus.PENDING_PRODUCTION,
+                    OrderStatus.PRODUCING,
+                    OrderStatus.COMPLETED
+            ));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageModelerTodo(Pageable pageable, Long modelerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("modeler").get("id"), modelerId),
-                root.get("status").in(OrderStatus.PENDING_MODEL, OrderStatus.MODELING)
-        );
+    public Page<OrderInfoDto> pageModelerTodo(Pageable pageable, Long modelerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("modeler").get("id"), modelerId));
+            predicates.add(root.get("status").in(OrderStatus.PENDING_MODEL, OrderStatus.MODELING));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageModelerDone(Pageable pageable, Long modelerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("modeler").get("id"), modelerId),
-                root.get("status").in(
-                        OrderStatus.PENDING_REVIEW,
-                        OrderStatus.PENDING_PRODUCTION,
-                        OrderStatus.PRODUCING,
-                        OrderStatus.COMPLETED
-                )
-        );
+    public Page<OrderInfoDto> pageModelerDone(Pageable pageable, Long modelerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("modeler").get("id"), modelerId));
+            predicates.add(root.get("status").in(
+                    OrderStatus.PENDING_REVIEW,
+                    OrderStatus.PENDING_PRODUCTION,
+                    OrderStatus.PRODUCING,
+                    OrderStatus.COMPLETED
+            ));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageTrackerTodo(Pageable pageable, Long trackerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("followUp").get("id"), trackerId),
-                cb.equal(root.get("status"), OrderStatus.PENDING_REVIEW)
-        );
+    public Page<OrderInfoDto> pageTrackerTodo(Pageable pageable, Long trackerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
+            predicates.add(cb.equal(root.get("status"), OrderStatus.PENDING_REVIEW));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderInfoDto> pageTrackerDone(Pageable pageable, Long trackerId) {
-        Specification<Order> spec = (root, query, cb) -> cb.and(
-                cb.equal(root.get("followUp").get("id"), trackerId),
-                root.get("status").in(
-                        OrderStatus.PENDING_PRODUCTION,
-                        OrderStatus.PRODUCING,
-                        OrderStatus.COMPLETED
-                )
-        );
+    public Page<OrderInfoDto> pageTrackerDone(Pageable pageable, Long trackerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
+            predicates.add(root.get("status").in(
+                    OrderStatus.PENDING_PRODUCTION,
+                    OrderStatus.PRODUCING,
+                    OrderStatus.COMPLETED
+            ));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
         return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
     }
 }
