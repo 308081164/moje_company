@@ -10,10 +10,13 @@ import {
   Tabs,
   Typography,
   message,
+  Switch,
+  Divider,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
+import { integrationService } from '@/services/integrationService';
 import type { ProcessInfo } from '@/types/order';
 import { ProcessType } from '@/types/order';
 
@@ -28,6 +31,8 @@ const SystemConfigPage: React.FC = () => {
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [loadingMat, setLoadingMat] = useState(false);
   const [loadingProc, setLoadingProc] = useState(false);
+  const [integrationForm] = Form.useForm();
+  const [loadingIntegration, setLoadingIntegration] = useState(false);
 
   const loadPrice = useCallback(async () => {
     setLoadingPrice(true);
@@ -77,11 +82,59 @@ const SystemConfigPage: React.FC = () => {
     }
   };
 
+  const loadIntegration = useCallback(async () => {
+    setLoadingIntegration(true);
+    try {
+      const s = await integrationService.getSettings();
+      integrationForm.setFieldsValue({
+        dashscopeEnabled: s.dashscopeEnabled,
+        dashscopeImageModel: s.dashscopeImageModel || 'qwen-vl-plus',
+        dashscopeApiKey: '',
+        wecomEnabled: s.wecomEnabled,
+        wecomCorpId: s.wecomCorpId || '',
+        wecomCustomerSecret: '',
+        wecomTemplateChatIds: s.wecomTemplateChatIds || '',
+      });
+    } catch {
+      message.error('加载销售助手集成配置失败');
+    } finally {
+      setLoadingIntegration(false);
+    }
+  }, [integrationForm]);
+
+  const saveIntegration = async () => {
+    try {
+      const v = await integrationForm.validateFields();
+      setLoadingIntegration(true);
+      const body: Record<string, unknown> = {
+        dashscopeEnabled: v.dashscopeEnabled,
+        dashscopeImageModel: v.dashscopeImageModel,
+        wecomEnabled: v.wecomEnabled,
+        wecomCorpId: v.wecomCorpId,
+        wecomTemplateChatIds: v.wecomTemplateChatIds,
+      };
+      if (v.dashscopeApiKey && String(v.dashscopeApiKey).trim()) {
+        body.dashscopeApiKey = String(v.dashscopeApiKey).trim();
+      }
+      if (v.wecomCustomerSecret && String(v.wecomCustomerSecret).trim()) {
+        body.wecomCustomerSecret = String(v.wecomCustomerSecret).trim();
+      }
+      await integrationService.updateSettings(body);
+      message.success('销售助手集成已保存');
+      await loadIntegration();
+    } catch {
+      /* validated */
+    } finally {
+      setLoadingIntegration(false);
+    }
+  };
+
   useEffect(() => {
     loadPrice();
     loadMaterials();
     loadProcesses();
-  }, [loadPrice]);
+    loadIntegration();
+  }, [loadPrice, loadIntegration]);
 
   const savePrice = async () => {
     try {
@@ -370,6 +423,62 @@ const SystemConfigPage: React.FC = () => {
                   dataSource={processes}
                   pagination={false}
                 />
+              </Card>
+            ),
+          },
+          {
+            key: 'salesAssist',
+            label: '销售助手集成',
+            children: (
+              <Card bordered={false} loading={loadingIntegration}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+                  通义千问：DashScope OpenAI 兼容模式{' '}
+                  <code>POST /compatible-mode/v1/chat/completions</code>，消息体含 image_url（截图）与 text（指令）。
+                  企业微信：客户联系能力，<code>groupchat/add_join_way</code> 与 <code>groupchat/get_join_way</code>
+                  ；需至少一个已有客户群 chat_id 作为种子群。
+                </Text>
+                <Form form={integrationForm} layout="vertical" style={{ maxWidth: 640 }} onFinish={saveIntegration}>
+                  <Form.Item name="dashscopeEnabled" label="启用截图识图填单" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item
+                    name="dashscopeImageModel"
+                    label="视觉模型名"
+                    rules={[{ required: true, message: '请输入模型名' }]}
+                  >
+                    <Input placeholder="如 qwen-vl-plus" />
+                  </Form.Item>
+                  <Form.Item name="dashscopeApiKey" label="DashScope API Key（留空表示不修改）">
+                    <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
+                  </Form.Item>
+                  <Divider />
+                  <Form.Item name="wecomEnabled" label="启用下单后自动配置客户进群二维码" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item name="wecomCorpId" label="企业 ID (corpid)">
+                    <Input placeholder="企业微信管理后台「我的企业」" />
+                  </Form.Item>
+                  <Form.Item name="wecomCustomerSecret" label="客户联系 Secret（留空表示不修改）">
+                    <Input.Password placeholder="自建应用或客户联系专用 Secret" autoComplete="new-password" />
+                  </Form.Item>
+                  <Form.Item
+                    name="wecomTemplateChatIds"
+                    label="种子客户群 chat_id"
+                    extra="多个用英文逗号分隔，或 JSON 数组，如 [&quot;wrXXXX&quot;]。须为已存在的客户群 ID。"
+                  >
+                    <Input.TextArea rows={3} placeholder="wrXXXXXXXX" />
+                  </Form.Item>
+                  <Form.Item>
+                    <Space>
+                      <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+                        保存
+                      </Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadIntegration}>
+                        重新加载
+                      </Button>
+                    </Space>
+                  </Form.Item>
+                </Form>
               </Card>
             ),
           },

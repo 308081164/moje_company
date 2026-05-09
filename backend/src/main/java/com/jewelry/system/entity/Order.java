@@ -111,6 +111,18 @@ public class Order {
     
     @Column(name = "last_reminder_sent_at")
     private LocalDateTime lastReminderSentAt;
+
+    /** 企业微信「加入群聊」配置 ID（见官方 groupchat/add_join_way） */
+    @Column(name = "wecom_join_config_id", length = 128)
+    private String wecomJoinConfigId;
+
+    /** 进群二维码图片 Base64（不含 data: 前缀） */
+    @Column(name = "wecom_join_qr_base64", columnDefinition = "MEDIUMTEXT")
+    private String wecomJoinQrBase64;
+
+    /** 企微自动进群失败原因 */
+    @Column(name = "wecom_join_error", length = 1000)
+    private String wecomJoinError;
     
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

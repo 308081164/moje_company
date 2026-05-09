@@ -34,6 +34,7 @@ public class OrderController {
     private final EmployeeStatisticsService employeeStatisticsService;
     private final OrderFileService orderFileService;
     private final OrderExportService orderExportService;
+    private final DashScopeChatImageDraftService dashScopeChatImageDraftService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -110,6 +111,16 @@ public class OrderController {
     @Operation(summary = "创建订单")
     public OrderInfoDto create(@Valid @RequestBody OrderCreateRequestDto body) {
         return orderCommandService.create(body);
+    }
+
+    @PostMapping(value = "/draft-from-chat-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传聊天截图，通义千问识别并返回订单草稿字段（需管理员配置 API）")
+    public OrderDraftFromChatImageResponse draftFromChatImage(@RequestPart("file") MultipartFile file) throws IOException {
+        String role = SecurityUtils.currentRoleApi().orElse("");
+        if (!"ADMIN".equals(role) && !"PRE_SALES".equals(role)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员或售前客服可使用识图填单");
+        }
+        return dashScopeChatImageDraftService.draftFromImage(file);
     }
 
     @PutMapping("/{id:\\d+}")

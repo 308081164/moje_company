@@ -18,6 +18,7 @@ import {
   message,
   Divider,
   Image,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -602,6 +603,26 @@ const OrderDetailPage: React.FC = () => {
             </Descriptions.Item>
           </Descriptions>
         </Card>
+
+        {(order.wecomJoinQrBase64 || order.wecomJoinError) && (
+          <Card size="small" title="企业微信客户群" style={{ marginBottom: 16 }}>
+            {order.wecomJoinError && (
+              <Alert type="warning" showIcon message="自动配置进群方式未成功" description={order.wecomJoinError} />
+            )}
+            {order.wecomJoinQrBase64 && (
+              <div style={{ marginTop: order.wecomJoinError ? 12 : 0 }}>
+                <Text type="secondary">请客户使用微信扫描下方二维码加入客户群；若刚创建订单，可稍后刷新本页。</Text>
+                <div style={{ marginTop: 12 }}>
+                  <img
+                    alt="客户进群二维码"
+                    style={{ maxWidth: 280, display: 'block' }}
+                    src={`data:image/jpeg;base64,${order.wecomJoinQrBase64}`}
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         <Card size="small" title="分配信息" style={{ marginBottom: 16 }}>
           <Descriptions column={2} size="small" bordered>

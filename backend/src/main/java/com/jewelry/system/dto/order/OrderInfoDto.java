@@ -22,6 +22,13 @@ public class OrderInfoDto {
     private OrderReviewBlockDto reviewInfo;
     private OrderQuotationBlockDto quotationInfo;
 
+    /** 企业微信进群方式 config_id */
+    private String wecomJoinConfigId;
+    /** 进群二维码图片 Base64 */
+    private String wecomJoinQrBase64;
+    /** 企微自动进群失败说明 */
+    private String wecomJoinError;
+
     @Data
     @Builder
     public static class OrderBaseDto {

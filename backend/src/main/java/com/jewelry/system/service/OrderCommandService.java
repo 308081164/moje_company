@@ -44,6 +44,7 @@ public class OrderCommandService {
     private final OrderQueryService orderQueryService;
     private final AuditLogService auditLogService;
     private final AutoAssignmentService autoAssignmentService;
+    private final WeComCustomerGroupService weComCustomerGroupService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -79,6 +80,9 @@ public class OrderCommandService {
         autoAssignmentService.autoAssignAll(o.getId());
         
         auditLogService.log("ORDER_CREATE", "ORDER", o.getId(), "创建订单: " + o.getOrderNumber());
+
+        weComCustomerGroupService.scheduleAfterOrderCreated(o.getId());
+
         return orderQueryService.getOrder(o.getId());
     }
 

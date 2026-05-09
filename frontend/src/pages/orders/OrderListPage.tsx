@@ -30,6 +30,8 @@ import { orderService } from '@/services/orderService';
 import { OrderInfo, OrderSource, OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
+import ChatScreenshotImportButton from '@/components/ChatScreenshotImportButton';
+import { applyChatDraftToOrderForm } from '@/utils/applyChatDraftToOrderForm';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -401,6 +403,18 @@ const OrderListPage: React.FC = () => {
           layout="vertical"
           onFinish={handleCreateOrder}
         >
+          <Form.Item label="智能填单（通义千问）">
+            <ChatScreenshotImportButton
+              onDraft={(d) => {
+                applyChatDraftToOrderForm(createForm, d);
+                if (d.aiParseNote) {
+                  message.info(d.aiParseNote);
+                } else {
+                  message.success('已根据截图预填，请核对后再提交');
+                }
+              }}
+            />
+          </Form.Item>
           <Form.Item name="customerName" label="客户姓名">
             <Input placeholder="选填" />
           </Form.Item>

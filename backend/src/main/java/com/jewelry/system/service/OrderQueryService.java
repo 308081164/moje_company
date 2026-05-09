@@ -58,7 +58,7 @@ public class OrderQueryService {
             };
             spec = spec.and(dataScope);
         }
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -79,7 +79,7 @@ public class OrderQueryService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该订单");
             }
         }));
-        OrderInfoDto dto = OrderApiMapper.toOrderInfo(o);
+        OrderInfoDto dto = OrderApiMapper.toOrderInfo(o, true);
         OrderDetail od = orderDetailRepository.findByOrderId(id).orElse(null);
         DesignInfo di = designInfoRepository.findByOrderId(id).orElse(null);
         ModelingInfo mi = modelingInfoRepository.findByOrderId(id).orElse(null);
@@ -107,7 +107,7 @@ public class OrderQueryService {
             };
             spec = spec.and(dataScope);
         }
-        return orderRepository.findAll(spec, p).stream().map(OrderApiMapper::toOrderInfo).toList();
+        return orderRepository.findAll(spec, p).stream().map(o -> OrderApiMapper.toOrderInfo(o, false)).toList();
     }
 
     // ================= 工作台查询 =================
@@ -123,7 +123,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -144,7 +144,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -158,7 +158,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -177,7 +177,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -191,7 +191,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -209,6 +209,6 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(OrderApiMapper::toOrderInfo);
+        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 }

@@ -208,6 +208,10 @@ export interface OrderInfo {
   assignedSalesName?: string;  // 售中客服姓名
   createdAt: string;
   updatedAt: string;
+  /** 企微进群方式（仅订单详情接口返回） */
+  wecomJoinConfigId?: string;
+  wecomJoinQrBase64?: string;
+  wecomJoinError?: string;
 }
 
 // 工艺信息
@@ -263,6 +267,22 @@ export interface OrderQueryParams {
   startDate?: string;
   endDate?: string;
   keyword?: string;
+}
+
+/** 聊天截图识图草稿（与后端 OrderDraftFromChatImageResponse 一致） */
+export interface OrderDraftFromChatImageResponse {
+  customerName?: string;
+  customerContact?: string;
+  customerWechat?: string;
+  /** 后端返回字符串枚举名 */
+  source?: string;
+  sourceDetail?: string;
+  depositAmount?: number;
+  style?: string;
+  materialInfo?: string;
+  basicRequirements?: string;
+  orderTime?: string;
+  aiParseNote?: string;
 }
 
 // 订单创建请求

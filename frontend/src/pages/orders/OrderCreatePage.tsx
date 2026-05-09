@@ -6,6 +6,8 @@ import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
 import { OrderSource } from '@/types/order';
 import { orderSourceLabel } from '@/utils/orderLabels';
+import ChatScreenshotImportButton from '@/components/ChatScreenshotImportButton';
+import { applyChatDraftToOrderForm } from '@/utils/applyChatDraftToOrderForm';
 
 const { Title } = Typography;
 
@@ -74,6 +76,18 @@ const OrderCreatePage: React.FC = () => {
           onFinish={onFinish}
           style={{ maxWidth: 720 }}
         >
+          <Form.Item label="智能填单（通义千问）">
+            <ChatScreenshotImportButton
+              onDraft={(d) => {
+                applyChatDraftToOrderForm(form, d);
+                if (d.aiParseNote) {
+                  message.info(d.aiParseNote);
+                } else {
+                  message.success('已根据截图预填，请核对后再提交');
+                }
+              }}
+            />
+          </Form.Item>
           <Form.Item name="customerName" label="客户姓名">
             <Input placeholder="选填" />
           </Form.Item>

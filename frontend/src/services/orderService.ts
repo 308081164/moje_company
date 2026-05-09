@@ -19,6 +19,7 @@ import {
   FileInfo,
   ProcessInfo,
   StoneInfo,
+  OrderDraftFromChatImageResponse,
 } from '@/types/order';
 
 // 订单服务
@@ -76,6 +77,13 @@ export const orderService = {
       console.error('创建订单失败:', error);
       throw error;
     }
+  },
+
+  /** 上传聊天截图，通义千问识别并返回草稿字段（需管理员配置） */
+  async draftFromChatImage(file: File): Promise<OrderDraftFromChatImageResponse> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<OrderDraftFromChatImageResponse>('/orders/draft-from-chat-image', fd);
   },
   
   // 更新订单基本信息

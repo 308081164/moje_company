@@ -15,6 +15,13 @@ public final class OrderApiMapper {
     }
 
     public static OrderInfoDto toOrderInfo(Order o) {
+        return toOrderInfo(o, false);
+    }
+
+    /**
+     * @param includeWecomAssist 为 true 时带出企微进群二维码等大字段（仅订单详情等场景使用，列表请传 false）
+     */
+    public static OrderInfoDto toOrderInfo(Order o, boolean includeWecomAssist) {
         String sourceApi = mapSourceToApiPublic(o.getSource());
         String contact = firstNonBlank(o.getCustomerPhone(), o.getCustomerWechat(), "");
         OrderInfoDto.OrderBaseDto base = OrderInfoDto.OrderBaseDto.builder()
@@ -39,7 +46,7 @@ public final class OrderApiMapper {
                     ? salesMid.getRealName()
                     : salesMid.getUsername();
         }
-        return OrderInfoDto.builder()
+        OrderInfoDto.OrderInfoDtoBuilder b = OrderInfoDto.builder()
                 .baseInfo(base)
                 .currentStatus(o.getStatus() != null ? o.getStatus().name() : null)
                 .assignedSalesId(salesMid != null ? salesMid.getId() : null)
@@ -49,8 +56,13 @@ public final class OrderApiMapper {
                 .designInfo(null)
                 .modelInfo(null)
                 .reviewInfo(null)
-                .quotationInfo(null)
-                .build();
+                .quotationInfo(null);
+        if (includeWecomAssist) {
+            b.wecomJoinConfigId(o.getWecomJoinConfigId())
+                    .wecomJoinQrBase64(o.getWecomJoinQrBase64())
+                    .wecomJoinError(o.getWecomJoinError());
+        }
+        return b.build();
     }
 
     /** 供订单列表/统计等复用，将数据库来源枚举转为前端枚举名。 */
