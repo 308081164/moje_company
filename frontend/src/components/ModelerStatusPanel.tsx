@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Select, message, Modal, Form, Input } from 'antd';
+import { Card, Button, Select, message, Modal, Form, Input, Typography } from 'antd';
 import { b2bService, ModelerWorkStatusDto } from '../services/b2bService';
 import { webSocketService } from '../services/webSocketService';
 import { useAuthStore } from '../stores/authStore';
+import { MODELER_WORK_MODE_OPTIONS, modelerWorkModeLabel } from '@/utils/modelerWorkMode';
 
 const { Option } = Select;
+const { Text } = Typography;
 
 const ModelerStatusPanel: React.FC = () => {
   const [status, setStatus] = useState<ModelerWorkStatusDto | null>(null);
@@ -42,7 +44,7 @@ const ModelerStatusPanel: React.FC = () => {
     try {
       const values = modeForm.getFieldsValue();
       await b2bService.updateWorkMode(values.mode);
-      message.success('工作模式更新成功');
+      message.success('接单模式已更新');
       setShowModeModal(false);
       modeForm.resetFields();
       fetchStatus();
@@ -62,13 +64,6 @@ const ModelerStatusPanel: React.FC = () => {
     } catch (error) {
       console.error('更新工作状态失败:', error);
     }
-  };
-
-  const getModeLabel = (mode: string) => {
-    const labels: Record<string, string> = {
-      AUTO: '自动接单',
-    };
-    return labels[mode] || mode;
   };
 
   const getStatusLabel = (status: string) => {
@@ -101,13 +96,16 @@ const ModelerStatusPanel: React.FC = () => {
     <Card title="工作状态管理" style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <span style={{ marginRight: 10 }}>工作模式：</span>
+          <span style={{ marginRight: 10 }}>接单模式：</span>
           <span className="ant-tag" style={{ padding: '4px 12px' }}>
-            {getModeLabel(status.workMode)}
+            {modelerWorkModeLabel(status.workMode)}
           </span>
           <Button
             type="link"
-            onClick={() => setShowModeModal(true)}
+            onClick={() => {
+              modeForm.setFieldsValue({ mode: status.workMode || 'AUTO' });
+              setShowModeModal(true);
+            }}
             style={{ marginLeft: 10 }}
           >
             切换
@@ -153,7 +151,7 @@ const ModelerStatusPanel: React.FC = () => {
       )}
 
       <Modal
-        title="切换工作模式"
+        title="切换接单模式"
         visible={showModeModal}
         footer={null}
         onCancel={() => setShowModeModal(false)}
@@ -161,11 +159,20 @@ const ModelerStatusPanel: React.FC = () => {
         <Form form={modeForm} layout="vertical" onFinish={handleUpdateMode}>
           <Form.Item
             name="mode"
-            label="工作模式"
-            rules={[{ required: true }]}
+            label="接单模式"
+            rules={[{ required: true, message: '请选择接单模式' }]}
           >
-            <Select placeholder="请选择工作模式">
-              <Option value="AUTO">自动接单</Option>
+            <Select placeholder="请选择接单模式" optionLabelProp="label">
+              {MODELER_WORK_MODE_OPTIONS.map((opt) => (
+                <Option key={opt.value} value={opt.value} label={opt.label}>
+                  <div>
+                    <div>{opt.label}</div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {opt.description}
+                    </Text>
+                  </div>
+                </Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item>

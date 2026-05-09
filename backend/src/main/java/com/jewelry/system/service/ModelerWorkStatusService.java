@@ -38,8 +38,15 @@ public class ModelerWorkStatusService {
     public ModelerWorkStatusDto updateWorkMode(String workMode) {
         Long userId = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
-        
-        status.setWorkMode(WorkMode.valueOf(workMode));
+
+        WorkMode mode;
+        try {
+            mode = WorkMode.valueOf(workMode.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "无效的工作模式，可选：AUTO（C/B 均可）、C2C_ONLY（仅 C 端）、B2B_ONLY（仅 B 端）");
+        }
+        status.setWorkMode(mode);
         status.setLastPriorityBonusTime(LocalDateTime.now()); // 切换模式给24小时优先派单奖励
         statusRepository.save(status);
         return toDto(status);

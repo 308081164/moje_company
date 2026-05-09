@@ -3,6 +3,7 @@ import { Card, Table, Tag, Button, Modal, Form, Input, message, Space } from 'an
 import { b2bService, ModelerWorkStatusDto } from '../services/b2bService';
 import { webSocketService } from '../services/webSocketService';
 import { useAuthStore } from '../stores/authStore';
+import { modelerWorkModeLabel } from '@/utils/modelerWorkMode';
 
 const { Column } = Table;
 
@@ -46,13 +47,6 @@ const AdminMonitorPage: React.FC = () => {
     } catch (error) {
       console.error('保存邮箱失败:', error);
     }
-  };
-
-  const getModeLabel = (mode: string) => {
-    const labels: Record<string, string> = {
-      AUTO: '自动接单',
-    };
-    return labels[mode] || mode;
   };
 
   const getStatusLabel = (status: string) => {
@@ -100,9 +94,9 @@ const AdminMonitorPage: React.FC = () => {
           <Column title="用户名" dataIndex="username" />
           <Column title="真实姓名" dataIndex="realName" />
           <Column 
-            title="工作模式" 
+            title="接单模式" 
             dataIndex="workMode" 
-            render={(mode: string) => <Tag>{getModeLabel(mode)}</Tag>}
+            render={(mode: string) => <Tag>{modelerWorkModeLabel(mode)}</Tag>}
           />
           <Column 
             title="工作状态" 
