@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package*.json ./
+
+# 安装依赖时跳过 Electron 二进制下载（在 Docker 中不需要 Electron）
+RUN npm install --ignore-scripts
+
+# 复制源码
+COPY . .
+
+# 暴露 webpack-dev-server 端口
+EXPOSE 3000
+
+# 以开发模式启动 webpack-dev-server（仅渲染进程）
+CMD ["npx", "webpack", "serve", "--config", "webpack.renderer.config.js", "--mode", "development", "--host", "0.0.0.0", "--port", "3000"]

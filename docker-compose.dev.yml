@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
@@ -48,6 +46,37 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+
+  b2b-client:
+    build:
+      context: ./b2b-client
+      dockerfile: Dockerfile
+    container_name: moje-b2b-client
+    ports:
+      - "8852:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jewelry-network
+    restart: unless-stopped
+
+  # 珠宝定制管理系统前端（Web 开发模式）
+  frontend-admin:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: moje-frontend-admin
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:8851/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jewelry-network
+    restart: unless-stopped
 
 volumes:
   mysql_data:

@@ -202,6 +202,8 @@ export interface OrderInfo {
   quotationInfo?: OrderQuotationInfo;
   productionInfo?: OrderProductionInfo;
   currentStatus: OrderStatus;
+  assignedPreSalesId?: number; // 售前客服ID
+  assignedPreSalesName?: string; // 售前客服姓名
   assignedSalesId?: number;    // 售中客服ID
   assignedSalesName?: string;  // 售中客服姓名
   createdAt: string;

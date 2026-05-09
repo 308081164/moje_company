@@ -29,7 +29,7 @@ import {
 import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
 import { userService } from '@/services/userService';
-import type { FileInfo, OrderInfo } from '@/types/order';
+import type { FileInfo, OrderInfo, ProcessInfo } from '@/types/order';
 import { OrderSource, OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
