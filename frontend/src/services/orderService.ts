@@ -21,6 +21,7 @@ import {
   ProcessInfo,
   StoneInfo,
   OrderDraftFromChatImageResponse,
+  CustomerProgressLinkResponse,
 } from '@/types/order';
 
 // 订单服务
@@ -588,7 +589,22 @@ export const orderService = {
       throw error;
     }
   },
-  
+
+  /** C 端客户进度：生成/刷新令牌与公开页 URL（设计师/管理员） */
+  async createCustomerProgressLink(orderId: number): Promise<CustomerProgressLinkResponse> {
+    return api.post(`/orders/${orderId}/customer-progress-link`, {});
+  },
+
+  /** 下载服务端合成的「小名片」PNG */
+  async fetchCustomerProgressCardBlob(orderId: number): Promise<Blob> {
+    const response = (await api.post(
+      `/orders/${orderId}/customer-progress/card`,
+      {},
+      { responseType: 'blob' }
+    )) as unknown as { data: Blob };
+    return response.data;
+  },
+
   // 合并订单
   async mergeOrders(orderIds: number[]): Promise<OrderInfo> {
     try {

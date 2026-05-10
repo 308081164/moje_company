@@ -1,5 +1,6 @@
 package com.jewelry.system.controller;
 
+import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.service.*;
 import com.jewelry.system.util.SecurityUtils;
@@ -35,6 +36,7 @@ public class OrderController {
     private final OrderFileService orderFileService;
     private final OrderExportService orderExportService;
     private final DashScopeChatImageDraftService dashScopeChatImageDraftService;
+    private final CustomerOrderViewService customerOrderViewService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -105,6 +107,23 @@ public class OrderController {
     @Operation(summary = "订单详情")
     public OrderInfoDto getOrder(@PathVariable long id) {
         return orderQueryService.getOrder(id);
+    }
+
+    @PostMapping("/{id:\\d+}/customer-progress-link")
+    @Operation(summary = "生成或刷新 C 端客户进度查看链接（设计师/管理员）")
+    public CustomerProgressLinkResponseDto createCustomerProgressLink(@PathVariable long id) {
+        return customerOrderViewService.createOrRefreshLink(id);
+    }
+
+    @PostMapping(value = "/{id:\\d+}/customer-progress/card", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "下载 C 端客户进度「小名片」PNG（设计师/管理员）")
+    public ResponseEntity<byte[]> downloadCustomerProgressCard(@PathVariable long id) throws IOException {
+        byte[] png = customerOrderViewService.renderShareCardPng(id);
+        String filename = "order-" + id + "-customer-card.png";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
     }
 
     @PostMapping

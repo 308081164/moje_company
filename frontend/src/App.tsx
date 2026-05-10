@@ -13,6 +13,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import SystemConfigPage from './pages/SystemConfigPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminMonitorPage from './pages/AdminMonitorPage';
+import CustomerOrderStatusPage from './pages/CustomerOrderStatusPage';
 
 // 布局组件
 import AppLayout from './components/layout/AppLayout';
@@ -120,6 +121,7 @@ const App: React.FC = () => {
           <Routes>
             {/* 公开路由 */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/order-status/:token" element={<CustomerOrderStatusPage />} />
             
             {/* 受保护的路由 */}
             <Route

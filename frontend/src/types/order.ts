@@ -467,3 +467,28 @@ export interface OrderOperationLog {
   userAgent: string;
   createdAt: string;
 }
+
+/** C 端公开订单进度（/public/customer-order/:token） */
+export interface CustomerOrderPublicMilestone {
+  code: string;
+  label: string;
+  at: string;
+}
+
+export interface CustomerOrderPublic {
+  orderNumber: string;
+  displayTitle: string;
+  customerNameMasked?: string | null;
+  createdAt?: string | null;
+  currentStatus: string;
+  currentStatusLabel: string;
+  firstDesignImageUrl?: string | null;
+  milestones: CustomerOrderPublicMilestone[];
+}
+
+/** 设计师生成客户进度链接响应 */
+export interface CustomerProgressLinkResponse {
+  token: string;
+  publicPageUrl: string;
+  expiresAt?: string | null;
+}

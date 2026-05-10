@@ -1,5 +1,6 @@
 package com.jewelry.system.service;
 
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
@@ -229,10 +230,12 @@ public class OrderDetailAssembler {
             return Collections.emptyList();
         }
         try {
-            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class))
-                    .stream()
-                    .filter(Objects::nonNull)
-                    .toList();
+            JavaType listOfLong = objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class);
+            List<Long> ids = objectMapper.readValue(json, listOfLong);
+            if (ids == null) {
+                return Collections.emptyList();
+            }
+            return ids.stream().filter(Objects::nonNull).toList();
         } catch (Exception e) {
             return Collections.emptyList();
         }

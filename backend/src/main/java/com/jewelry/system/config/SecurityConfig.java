@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/b2b/client/register", "/b2b/client/login").permitAll()
                         .requestMatchers("/b2b/order/{token}", "/b2b/order/{token}/files").permitAll()
+                        .requestMatchers("/public/customer-order/**").permitAll()
                         .requestMatchers("/b2b/modeler/status").permitAll()
                         // WebSocket 握手无法带 Authorization；路径为 context-path 下的 /ws/**
                         .requestMatchers("/ws/**").permitAll()

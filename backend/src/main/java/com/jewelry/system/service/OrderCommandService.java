@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -269,10 +270,10 @@ public class OrderCommandService {
         if (!SecurityUtils.currentRoleApi().filter("MODELER"::equals).isPresent()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师可操作驳回给设计师");
         }
-        long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         Order order = loadOrder(orderId);
-        if (order.getModeler() == null || !uid.equals(order.getModeler().getId())) {
+        if (order.getModeler() == null || !Objects.equals(order.getModeler().getId(), uid)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派建模师可驳回给设计师");
         }
         OrderStatus st = order.getStatus();

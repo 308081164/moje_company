@@ -15,7 +15,6 @@ import {
   Tabs,
   Tag,
   Typography,
-  Upload,
   message,
   Divider,
   Image,
@@ -31,8 +30,15 @@ import {
 import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
 import { userService } from '@/services/userService';
+import UploadWithImagePreview from '@/components/UploadWithImagePreview';
+import {
+  collectDoneImageUrlsFromFileList,
+  normalizeDoneImageUploadFileList,
+  normalizeModelSourceUploadFileList,
+  savedImageUrlsToUploadFileList,
+} from '@/utils/orderUploadFileList';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
-import type { FileInfo, OrderInfo, ProcessInfo } from '@/types/order';
+import type { CustomerProgressLinkResponse, FileInfo, OrderInfo, ProcessInfo } from '@/types/order';
 import { OrderSource, OrderStatus, ProcessType } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
@@ -41,64 +47,23 @@ import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, us
 
 const { Title, Text, Paragraph } = Typography;
 
-function normalizeDesignUploadFileList(fileList: UploadFile[]): UploadFile[] {
-  const mapped = fileList.map((f) => {
-    if (f.status === 'done') {
-      const res = f.response as (FileInfo & { url?: string }) | undefined;
-      const url = (f.url || res?.url || res?.fileUrl || '').trim();
-      if (url) {
-        return { ...f, url, thumbUrl: f.thumbUrl || url };
-      }
-    }
-    return f;
-  });
-  const seen = new Set<string>();
-  return mapped.filter((f) => {
-    if (f.status !== 'done') return true;
-    const u = (f.url || '').trim();
-    if (!u) return true;
-    if (seen.has(u)) return false;
-    seen.add(u);
-    return true;
-  });
-}
-
-function designFileListFromSavedUrls(urls: string[]): UploadFile[] {
-  return urls
-    .map((u) => u.trim())
-    .filter(Boolean)
-    .map((url, i) => ({
-    uid: `design-loaded-${i}`,
-    name: `设计图${i + 1}`,
-    status: 'done' as const,
-    url,
-    thumbUrl: url,
-  }));
-}
-
-function designImageUrlsForSave(fileList: UploadFile[]): string[] {
-  const urls = fileList
-    .filter((f) => f.status === 'done')
-    .map((f) => {
-      const res = f.response as (FileInfo & { url?: string }) | undefined;
-      return (f.url || res?.url || res?.fileUrl || '').trim();
-    })
-    .filter(Boolean);
-  return [...new Set(urls)];
-}
-
 function modelSourceUploadListFromSaved(modelFiles: unknown): UploadFile[] {
   if (!modelFiles || !Array.isArray(modelFiles)) return [];
   const rows = modelFiles as { fileId?: number; fileName?: string; fileUrl?: string }[];
   return rows
     .filter((x) => x.fileId != null && x.fileUrl)
-    .map((x, i) => ({
-      uid: `src-${x.fileId}-${i}`,
-      name: x.fileName || `file-${x.fileId}`,
-      status: 'done' as const,
-      url: x.fileUrl,
-      response: { id: x.fileId } as FileInfo,
-    }));
+    .map((x, i) => {
+      const name = x.fileName || '';
+      const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(name);
+      return {
+        uid: `src-${x.fileId}-${i}`,
+        name: name || `file-${x.fileId}`,
+        status: 'done' as const,
+        url: x.fileUrl,
+        thumbUrl: isImg ? x.fileUrl : undefined,
+        response: { id: x.fileId } as FileInfo,
+      };
+    });
 }
 
 async function loadUsersByRole(role: UserRole): Promise<UserInfo[]> {
@@ -166,6 +131,9 @@ const OrderDetailPage: React.FC = () => {
   const [designers, setDesigners] = useState<UserInfo[]>([]);
   const [modelers, setModelers] = useState<UserInfo[]>([]);
   const [trackers, setTrackers] = useState<UserInfo[]>([]);
+  const [customerProgressLink, setCustomerProgressLink] = useState<CustomerProgressLinkResponse | null>(null);
+  const [customerCardPreviewUrl, setCustomerCardPreviewUrl] = useState<string | null>(null);
+  const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
 
   const [designForm] = Form.useForm();
   const [modelForm] = Form.useForm();
@@ -240,8 +208,8 @@ const OrderDetailPage: React.FC = () => {
     try {
       const o = await orderService.getOrderById(orderId);
       setOrder(o);
-      setDesignImageFileList(designFileListFromSavedUrls(o.designInfo?.designImages || []));
-      setModelEffectImageFileList(designFileListFromSavedUrls(o.modelInfo?.modelEffectImages || []));
+      setDesignImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.designImages || [], '设计图'));
+      setModelEffectImageFileList(savedImageUrlsToUploadFileList(o.modelInfo?.modelEffectImages || [], '效果图'));
       setModelSourceFileList(modelSourceUploadListFromSaved(o.modelInfo?.modelFiles));
 
       if (o.designInfo) {
@@ -358,7 +326,7 @@ const OrderDetailPage: React.FC = () => {
   }, []);
 
   const handleDesignUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
-    setDesignImageFileList(normalizeDesignUploadFileList(fileList));
+    setDesignImageFileList(normalizeDoneImageUploadFileList(fileList));
   }, []);
 
   const handleDesignCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
@@ -384,7 +352,7 @@ const OrderDetailPage: React.FC = () => {
   );
 
   const handleModelEffectUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
-    setModelEffectImageFileList(normalizeDesignUploadFileList(fileList));
+    setModelEffectImageFileList(normalizeDoneImageUploadFileList(fileList));
   }, []);
 
   const handleModelEffectCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
@@ -410,7 +378,7 @@ const OrderDetailPage: React.FC = () => {
   );
 
   const handleModelSourceUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
-    setModelSourceFileList(fileList);
+    setModelSourceFileList(normalizeModelSourceUploadFileList(fileList));
   }, []);
 
   const handleModelSourceCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
@@ -418,7 +386,11 @@ const OrderDetailPage: React.FC = () => {
       const { file, onError, onSuccess } = options;
       try {
         const res = await orderService.uploadModelFile(orderId, file as File);
-        onSuccess?.(res);
+        let url = res.fileUrl?.trim();
+        if (!url) {
+          url = (await orderService.previewFile(res.id))?.trim();
+        }
+        onSuccess?.(url ? { ...res, url } : res);
         message.success('源文件上传成功');
       } catch {
         message.error('源文件上传失败');
@@ -429,7 +401,7 @@ const OrderDetailPage: React.FC = () => {
   );
 
   const handleRejectDesignerAttachChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
-    setRejectDesignerAttachList(normalizeDesignUploadFileList(fileList));
+    setRejectDesignerAttachList(normalizeDoneImageUploadFileList(fileList));
   }, []);
 
   const handleRejectDesignerAttachRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
@@ -485,11 +457,66 @@ const OrderDetailPage: React.FC = () => {
       materialType: v.materialType,
       handSize: v.handSize,
       designNotes: v.designNotes,
-      designImages: designImageUrlsForSave(designImageFileList),
+      designImages: collectDoneImageUrlsFromFileList(designImageFileList),
       processInfo,
     });
     message.success('设计信息已保存');
     refresh();
+  };
+
+  const canShareCustomerProgress = useMemo(() => {
+    if (!order || (!isDesigner && !isAdmin)) return false;
+    const hasDesignImgs = (order.designInfo?.designImages?.length ?? 0) > 0;
+    const st = order.currentStatus as OrderStatus;
+    const lateEnough =
+      st === OrderStatus.PENDING_MODEL ||
+      st === OrderStatus.MODELING ||
+      st === OrderStatus.PENDING_REVIEW ||
+      st === OrderStatus.PENDING_PRODUCTION ||
+      st === OrderStatus.PRODUCING ||
+      st === OrderStatus.COMPLETED;
+    return hasDesignImgs || lateEnough;
+  }, [order, isDesigner, isAdmin]);
+
+  useEffect(() => {
+    return () => {
+      if (customerCardPreviewUrl) URL.revokeObjectURL(customerCardPreviewUrl);
+    };
+  }, [customerCardPreviewUrl]);
+
+  const onGenerateCustomerProgress = async () => {
+    setCustomerProgressBusy(true);
+    try {
+      const link = await orderService.createCustomerProgressLink(orderId);
+      setCustomerProgressLink(link);
+      const blob = await orderService.fetchCustomerProgressCardBlob(orderId);
+      setCustomerCardPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      message.success('已生成客户进度链接与名片预览');
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setCustomerProgressBusy(false);
+    }
+  };
+
+  const onDownloadCustomerCard = async () => {
+    setCustomerProgressBusy(true);
+    try {
+      const blob = await orderService.fetchCustomerProgressCardBlob(orderId);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `order-${orderId}-customer-card.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      message.success('已开始下载');
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setCustomerProgressBusy(false);
+    }
   };
 
   const saveModel = async () => {
@@ -505,7 +532,7 @@ const OrderDetailPage: React.FC = () => {
       modelerId: v.modelerId,
       weight: v.weight,
       modelNotes: v.modelNotes,
-      modelEffectImageUrls: designImageUrlsForSave(modelEffectImageFileList),
+      modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
       modelSourceFileIds: sourceIds,
     });
     message.success('建模信息已保存');
@@ -649,7 +676,7 @@ const OrderDetailPage: React.FC = () => {
             label="设计图片"
             extra="支持多张图片；上传成功即可预览缩略图，点击「保存设计信息」写入订单。"
           >
-            <Upload
+            <UploadWithImagePreview
               listType="picture-card"
               accept="image/*"
               multiple
@@ -661,12 +688,57 @@ const OrderDetailPage: React.FC = () => {
                 <PlusOutlined />
                 <div style={{ marginTop: 8 }}>上传</div>
               </div>
-            </Upload>
+            </UploadWithImagePreview>
           </Form.Item>
           
           <Button type="primary" onClick={saveDesign}>
             保存设计信息
           </Button>
+
+          {canShareCustomerProgress && (
+            <Card size="small" title="客户进度分享" style={{ marginTop: 16 }}>
+              <Paragraph type="secondary" style={{ marginTop: 0 }}>
+                生成安全链接后，客户无需登录即可在手机查看进度。可下载带二维码的小名片图发给客户。
+              </Paragraph>
+              <Space wrap>
+                <Button type="primary" loading={customerProgressBusy} onClick={() => void onGenerateCustomerProgress()}>
+                  生成客户进度二维码
+                </Button>
+                <Button
+                  disabled={!customerProgressLink}
+                  loading={customerProgressBusy}
+                  onClick={() => void onDownloadCustomerCard()}
+                >
+                  下载名片 PNG
+                </Button>
+              </Space>
+              {customerProgressLink && (
+                <div style={{ marginTop: 12 }}>
+                  <Text type="secondary">客户打开链接（已写入二维码）：</Text>
+                  <Paragraph copyable style={{ marginBottom: 8 }}>
+                    {customerProgressLink.publicPageUrl}
+                  </Paragraph>
+                  {customerProgressLink.expiresAt && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      有效期至 {dayjs(customerProgressLink.expiresAt).format('YYYY-MM-DD HH:mm')}
+                    </Text>
+                  )}
+                </div>
+              )}
+              {customerCardPreviewUrl && (
+                <div style={{ marginTop: 16 }}>
+                  <Text type="secondary">名片预览</Text>
+                  <div>
+                    <img
+                      alt="客户进度名片"
+                      src={customerCardPreviewUrl}
+                      style={{ maxWidth: 360, width: '100%', borderRadius: 8, border: '1px solid #eee' }}
+                    />
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
         </Form>
       );
     }
@@ -696,7 +768,7 @@ const OrderDetailPage: React.FC = () => {
                             <Input.TextArea rows={4} placeholder="说明需补充的设计细节、参考等" />
                           </Form.Item>
                           <Form.Item label="参考图（可选）" extra="上传的图片将作为附件 ID 一并提交。">
-                            <Upload
+                            <UploadWithImagePreview
                               listType="picture-card"
                               accept="image/*"
                               multiple
@@ -708,7 +780,7 @@ const OrderDetailPage: React.FC = () => {
                                 <PlusOutlined />
                                 <div style={{ marginTop: 8 }}>上传</div>
                               </div>
-                            </Upload>
+                            </UploadWithImagePreview>
                           </Form.Item>
                           <Button danger type="primary" onClick={() => void submitRejectToDesigner()}>
                             提交：驳回给设计师
@@ -747,7 +819,7 @@ const OrderDetailPage: React.FC = () => {
               label="效果图"
               extra="支持多张图片；上传后点「保存建模信息」写入订单（与设计师设计图存法一致）。"
             >
-              <Upload
+              <UploadWithImagePreview
                 listType="picture-card"
                 accept="image/*"
                 multiple
@@ -759,20 +831,21 @@ const OrderDetailPage: React.FC = () => {
                   <PlusOutlined />
                   <div style={{ marginTop: 8 }}>上传</div>
                 </div>
-              </Upload>
+              </UploadWithImagePreview>
             </Form.Item>
             <Form.Item
               label="建模源文件（STL / ZIP 等）"
               extra="先上传文件，再保存建模信息；保存时会写入本单的 MODEL 类型文件引用。"
             >
-              <Upload
+              <UploadWithImagePreview
                 multiple
+                imageOnlyRasterPreview
                 fileList={modelSourceFileList}
                 onChange={handleModelSourceUploadChange}
                 customRequest={handleModelSourceCustomRequest}
               >
                 <Button icon={<PlusOutlined />}>上传源文件</Button>
-              </Upload>
+              </UploadWithImagePreview>
             </Form.Item>
             <Button type="primary" onClick={saveModel}>
               保存建模信息
@@ -1165,23 +1238,29 @@ const OrderDetailPage: React.FC = () => {
           </Space>
         </Space>
 
-        <Tabs
-          styles={{
-            content: { overflowY: 'auto', minHeight: 0 },
+        {/* 不用 Tabs.styles：部分 antd/@types 组合下 ts-loader 会报 TS2322；外层滚动与 flex minHeight:0 等效 */}
+        <div
+          style={{
+            maxHeight: 'calc(100vh - 200px)',
+            overflowY: 'auto',
+            minHeight: 0,
           }}
-          items={[
-            {
-              key: 'info',
-              label: '📋 订单信息',
-              children: getOrderInfoTab(),
-            },
-            {
-              key: 'task',
-              label: '✏️ 我的任务',
-              children: getTaskForm(),
-            },
-          ]}
-        />
+        >
+          <Tabs
+            items={[
+              {
+                key: 'info',
+                label: '📋 订单信息',
+                children: getOrderInfoTab(),
+              },
+              {
+                key: 'task',
+                label: '✏️ 我的任务',
+                children: getTaskForm(),
+              },
+            ]}
+          />
+        </div>
       </Card>
 
       <div
