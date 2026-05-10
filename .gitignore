@@ -3,6 +3,12 @@
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+
+# Cursor / 本地工具（若误放在仓库根目录）
+.cursor/
 
 # Logs
 *.log
@@ -12,19 +18,59 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment files
+# 环境变量（保留示例文件）
 .env
 .env.*
 !.env.example
+!.env.*.example
 
-# Frontend dependencies and build outputs
+# ========== Node / 前端 ==========
+node_modules/
+**/node_modules/
+
+# 构建产物（Vite/Webpack/Electron）
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+*.local
+
+# Electron 安装包输出
+**/release/
+coverage/
+.nyc_output/
+
+# TypeScript 缓存
+*.tsbuildinfo
+
+# ========== 本仓库各子项目（显式列出，便于阅读）==========
 frontend/node_modules/
 frontend/dist/
 frontend/release/
 
-# Backend build outputs
+b2b-client/node_modules/
+b2b-client/dist/
+
+# ========== Java / Maven ==========
 backend/target/
+**/target/
 
-# Third-party clone (nested .git); use `git submodule` instead if you want it tracked
+# ========== Python（脚本、第三方子项目本地环境）==========
+.venv/
+venv/
+**/.venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.spec.bak
+
+# ========== 第三方克隆 ==========
+# 嵌套仓库体积大且独立演进；若需纳入版本控制请改用 git submodule 并删除本行
 third_party/xianyu-super-butler/
-

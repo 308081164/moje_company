@@ -437,6 +437,13 @@ const showResult = ref(false)
 const orderResult = ref<B2BOrderAccessDto | null>(null)
 const fileList = ref<UploadFile[]>([])
 
+/** originFileObj 在类型上含 RcFile 扩展字段，不能写 `filter((f): f is File => …)`（TS2677）。 */
+function toFormFile(raw: UploadFile['originFileObj']): File | null {
+  if (raw == null) return null
+  if (raw instanceof File) return raw
+  return raw as unknown as File
+}
+
 const orderForm = ref<B2BOrderCreateRequest>({
   contact: '',
   password: '',
@@ -495,8 +502,8 @@ const handleCreateOrder = async () => {
   try {
     loading.value = true
     const attachmentFiles = fileList.value
-      .map((uf) => uf.originFileObj)
-      .filter((f): f is File => f instanceof File)
+      .map((uf) => toFormFile(uf.originFileObj))
+      .filter((f): f is File => f !== null)
     const result =
       attachmentFiles.length > 0
         ? await createOrderWithFiles(orderForm.value, attachmentFiles)
