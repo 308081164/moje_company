@@ -1,5 +1,7 @@
 package com.jewelry.system.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.jewelry.system.dto.order.FileInfoDto;
 import com.jewelry.system.dto.order.OrderInfoDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -7,12 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class OrderExportService {
 
     private final OrderQueryService orderQueryService;
+    private final OrderFileService orderFileService;
 
     @Transactional(readOnly = true)
     public byte[] exportOrderMarkdown(long orderId) {
@@ -24,11 +28,12 @@ public class OrderExportService {
     @Transactional(readOnly = true)
     public byte[] exportOrderHtml(long orderId) {
         OrderInfoDto dto = orderQueryService.getOrder(orderId);
-        String html = renderHtml(dto);
+        List<FileInfoDto> files = orderFileService.listForOrder(orderId);
+        String html = renderHtml(dto, files);
         return html.getBytes(StandardCharsets.UTF_8);
     }
 
-    private static String renderHtml(OrderInfoDto o) {
+    private static String renderHtml(OrderInfoDto o, List<FileInfoDto> files) {
         String title = "订单详情";
         if (o.getBaseInfo() != null && o.getBaseInfo().getOrderNumber() != null && !o.getBaseInfo().getOrderNumber().isBlank()) {
             title = e(o.getBaseInfo().getOrderNumber());
@@ -49,12 +54,22 @@ public class OrderExportService {
         sb.append("pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:12px;");
         sb.append("white-space:pre-wrap;word-break:break-word;font-size:0.9rem;}\n");
         sb.append(".muted{color:#666;}\n");
+        sb.append(".figure-grid{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0;align-items:flex-start;}\n");
+        sb.append(".figure-grid figure{margin:0;max-width:min(100%,320px);border:1px solid #e1e4e8;border-radius:8px;");
+        sb.append("padding:10px;background:#fafbfc;}\n");
+        sb.append(".figure-grid img{max-width:100%;height:auto;display:block;border-radius:4px;}\n");
+        sb.append(".figure-grid figcaption{font-size:0.82rem;color:#555;margin-top:8px;word-break:break-all;line-height:1.35;}\n");
+        sb.append(".attach-list{list-style:none;padding:0;margin:0;}\n");
+        sb.append(".attach-list li{margin:8px 0;padding:10px 12px;background:#f6f8fa;border:1px solid #e1e4e8;border-radius:8px;}\n");
+        sb.append(".attach-list a{color:#0969da;text-decoration:none;word-break:break-all;}\n");
+        sb.append(".attach-list a:hover{text-decoration:underline;}\n");
         sb.append("</style>\n</head>\n<body>\n");
         sb.append("<h1>订单详情</h1>\n");
 
         if (o.getBaseInfo() != null) {
             sb.append("<h2>基本信息</h2>\n<dl>\n");
             rowHtml(sb, "订单编号", o.getBaseInfo().getOrderNumber());
+            rowHtml(sb, "指派销售", o.getAssignedSalesName());
             rowHtml(sb, "客户", o.getBaseInfo().getCustomerName());
             rowHtml(sb, "联系方式", o.getBaseInfo().getCustomerContact());
             rowHtml(sb, "来源", o.getBaseInfo().getSource());
@@ -65,6 +80,18 @@ public class OrderExportService {
             rowHtml(sb, "材质信息", o.getBaseInfo().getMaterialInfo());
             sb.append("</dl>\n");
             sb.append("<p><strong>基础需求</strong></p>\n").append(blockHtml(o.getBaseInfo().getBasicRequirements()));
+        }
+
+        if (o.getWecomJoinQrBase64() != null && !o.getWecomJoinQrBase64().isBlank()) {
+            sb.append("<h2>企业微信进群</h2>\n");
+            if (o.getWecomJoinError() != null && !o.getWecomJoinError().isBlank()) {
+                sb.append("<p class=\"muted\">").append(e(o.getWecomJoinError())).append("</p>\n");
+            }
+            sb.append("<figure style=\"max-width:280px;margin:0;\"><img src=\"data:image/jpeg;base64,")
+                    .append(o.getWecomJoinQrBase64())
+                    .append("\" alt=\"企微进群二维码\" style=\"max-width:100%;height:auto;border-radius:8px;border:1px solid #e1e4e8;\"/></figure>\n");
+        } else if (o.getWecomJoinError() != null && !o.getWecomJoinError().isBlank()) {
+            sb.append("<h2>企业微信进群</h2>\n<p class=\"muted\">").append(e(o.getWecomJoinError())).append("</p>\n");
         }
 
         sb.append("<h2>状态</h2>\n<dl>\n");
@@ -81,6 +108,13 @@ public class OrderExportService {
             rowHtml(sb, "手寸/链长", o.getDesignInfo().getHandSize());
             sb.append("</dl>\n");
             sb.append("<p><strong>设计备注</strong></p>\n").append(blockHtml(o.getDesignInfo().getDesignNotes()));
+            if (o.getDesignInfo().getProcessInfo() != null) {
+                sb.append("<p><strong>工艺信息（JSON）</strong></p>\n").append(jsonBlockHtml(o.getDesignInfo().getProcessInfo()));
+            }
+            if (o.getDesignInfo().getStoneInfo() != null) {
+                sb.append("<p><strong>石头信息（JSON）</strong></p>\n").append(jsonBlockHtml(o.getDesignInfo().getStoneInfo()));
+            }
+            appendImageGallery(sb, "设计参考图", o.getDesignInfo().getDesignImages());
         }
         if (o.getModelInfo() != null) {
             sb.append("<h2>建模信息</h2>\n<dl>\n");
@@ -88,6 +122,9 @@ public class OrderExportService {
             rowHtml(sb, "克重", o.getModelInfo().getWeight() != null ? String.valueOf(o.getModelInfo().getWeight()) : "");
             sb.append("</dl>\n");
             sb.append("<p><strong>建模备注</strong></p>\n").append(blockHtml(o.getModelInfo().getModelNotes()));
+            if (o.getModelInfo().getModelFiles() != null) {
+                sb.append("<p><strong>建模文件（JSON）</strong></p>\n").append(jsonBlockHtml(o.getModelInfo().getModelFiles()));
+            }
         }
         if (o.getReviewInfo() != null) {
             sb.append("<h2>工艺评审</h2>\n<dl>\n");
@@ -108,8 +145,135 @@ public class OrderExportService {
             sb.append("<p><strong>报价备注</strong></p>\n").append(blockHtml(o.getQuotationInfo().getQuotationNotes()));
         }
 
+        appendOrderAttachmentsHtml(sb, files);
+
         sb.append("</body>\n</html>\n");
         return sb.toString();
+    }
+
+    private static void appendImageGallery(StringBuilder sb, String title, List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+        sb.append("<h3>").append(e(title)).append("</h3>\n");
+        StringBuilder grid = new StringBuilder();
+        int shown = 0;
+        for (String raw : urls) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            String src = safeImgSrc(trimmed);
+            if (src == null) {
+                continue;
+            }
+            shown++;
+            grid.append("<figure><img src=\"").append(src).append("\" alt=\"设计图").append(shown).append("\" loading=\"lazy\"/>");
+            grid.append("<figcaption>").append(e(shortenUrlCaption(trimmed))).append("</figcaption></figure>\n");
+        }
+        if (shown == 0) {
+            sb.append("<p class=\"muted\">（所列地址无法在导出中作为安全图片嵌入，可在系统中查看原图）</p>\n");
+            return;
+        }
+        sb.append("<div class=\"figure-grid\">\n").append(grid).append("</div>\n");
+    }
+
+    /** 仅允许 http(s)、//、受限的 data:image/* base64（排除 svg 等可执行载体） */
+    private static String safeImgSrc(String url) {
+        String u = url.trim();
+        if (u.startsWith("data:image/") && u.contains(";base64,") && isAllowedDataImagePrefix(u)) {
+            return HtmlUtils.htmlEscape(u, "UTF-8");
+        }
+        if (u.startsWith("https://") || u.startsWith("http://") || u.startsWith("//")) {
+            return HtmlUtils.htmlEscape(u, "UTF-8");
+        }
+        return null;
+    }
+
+    private static boolean isAllowedDataImagePrefix(String u) {
+        String head = u.length() > 64 ? u.substring(0, 64) : u;
+        head = head.toLowerCase();
+        return head.startsWith("data:image/jpeg;base64,")
+                || head.startsWith("data:image/jpg;base64,")
+                || head.startsWith("data:image/png;base64,")
+                || head.startsWith("data:image/gif;base64,")
+                || head.startsWith("data:image/webp;base64,");
+    }
+
+    private static String shortenUrlCaption(String url) {
+        if (url.length() <= 96) {
+            return url;
+        }
+        return url.substring(0, 40) + "…" + url.substring(url.length() - 40);
+    }
+
+    private static void appendOrderAttachmentsHtml(StringBuilder sb, List<FileInfoDto> files) {
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        sb.append("<h2>订单附件</h2>\n<ul class=\"attach-list\">\n");
+        for (FileInfoDto f : files) {
+            if (f == null) {
+                continue;
+            }
+            String name = f.getFileName() != null ? f.getFileName() : "附件";
+            String href = f.getFileUrl();
+            if (href == null || href.isBlank()) {
+                href = f.getFilePath();
+            }
+            sb.append("<li>");
+            if (href != null && !href.isBlank() && isLikelyImage(name, href) && safeImgSrc(href) != null) {
+                sb.append("<div class=\"figure-grid\" style=\"margin:0 0 8px 0;\"><figure style=\"max-width:320px;\">");
+                sb.append("<img src=\"").append(safeImgSrc(href)).append("\" alt=\"").append(e(name)).append("\" loading=\"lazy\"/>");
+                sb.append("<figcaption>");
+                sb.append("<strong>").append(e(name)).append("</strong>");
+                if (f.getFileType() != null && !f.getFileType().isBlank()) {
+                    sb.append(" <span class=\"muted\">(").append(e(f.getFileType())).append(")</span>");
+                }
+                sb.append("</figcaption></figure></div>");
+                sb.append("<a href=\"").append(e(href)).append("\" target=\"_blank\" rel=\"noopener noreferrer\">打开原图链接</a>");
+            } else if (href != null && !href.isBlank()) {
+                String safeHref = href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")
+                        ? href
+                        : null;
+                if (safeHref != null) {
+                    sb.append("<a href=\"").append(e(safeHref)).append("\" target=\"_blank\" rel=\"noopener noreferrer\">")
+                            .append(e(name)).append("</a>");
+                } else {
+                    sb.append("<span>").append(e(name)).append("</span> <span class=\"muted\">（无可用外链）</span>");
+                }
+                if (f.getFileType() != null && !f.getFileType().isBlank()) {
+                    sb.append(" <span class=\"muted\">").append(e(f.getFileType())).append("</span>");
+                }
+            } else {
+                sb.append("<span>").append(e(name)).append("</span> <span class=\"muted\">（无 URL）</span>");
+            }
+            if (f.getUploadTime() != null && !f.getUploadTime().isBlank()) {
+                sb.append(" <span class=\"muted\">").append(e(f.getUploadTime())).append("</span>");
+            }
+            sb.append("</li>\n");
+        }
+        sb.append("</ul>\n");
+    }
+
+    private static boolean isLikelyImage(String fileName, String url) {
+        String probe = ((fileName != null ? fileName : "") + " " + (url != null ? url : "")).toLowerCase();
+        return probe.contains(".jpg") || probe.contains(".jpeg") || probe.contains(".png") || probe.contains(".gif")
+                || probe.contains(".webp") || probe.contains(".bmp") || probe.contains(".svg")
+                || probe.contains(".heic") || probe.contains(".avif");
+    }
+
+    private static String jsonBlockHtml(Object node) {
+        if (node == null) {
+            return "<p class=\"muted\">无</p>\n";
+        }
+        String text;
+        if (node instanceof JsonNode jn) {
+            text = jn.toPrettyString();
+        } else {
+            text = String.valueOf(node);
+        }
+        return "<pre>" + e(text) + "</pre>\n";
     }
 
     private static void rowHtml(StringBuilder sb, String label, Object value) {

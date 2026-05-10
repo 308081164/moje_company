@@ -17,6 +17,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,8 +37,15 @@ public class OrderAccessLinkService {
     private final OrderAccessLinkRepository linkRepository;
     private final OrderRepository orderRepository;
 
-    @Value("${app.b2b.access-url-prefix:http://localhost:8851/api/b2b/order/}")
+    /** 完整前缀；非空时覆盖 {@link #publicBaseUrl} 拼接逻辑 */
+    @Value("${app.b2b.access-url-prefix:}")
     private String accessUrlPrefix;
+
+    /** 公网基址，无路径；与 server.servlet.context-path 及 B2B 路由组合为访问链接 */
+    @Value("${app.b2b.public-base-url:http://39.102.213.51:8852}")
+    private String publicBaseUrl;
+
+    private static final String B2B_ORDER_ACCESS_PATH = "/api/b2b/order/";
 
     @Transactional
     public B2BOrderAccessDto createLink(Long orderId, Long clientId) {
@@ -53,7 +61,7 @@ public class OrderAccessLinkService {
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");
-        String accessUrl = accessUrlPrefix + token;
+        String accessUrl = resolveAccessUrlPrefix() + token;
 
         OrderAccessLink link = new OrderAccessLink();
         link.setOrderId(orderId);
@@ -113,6 +121,22 @@ public class OrderAccessLinkService {
         });
     }
 
+    /**
+     * 返回以 / 结尾的完整前缀。若配置了 {@code app.b2b.access-url-prefix} 则直接使用；
+     * 否则为 {@code publicBaseUrl} + {@code /api/b2b/order/}（与 context-path /api 及 {@code /b2b/order/{token}} 一致）。
+     */
+    private String resolveAccessUrlPrefix() {
+        if (StringUtils.hasText(accessUrlPrefix)) {
+            String p = accessUrlPrefix.trim();
+            return p.endsWith("/") ? p : p + "/";
+        }
+        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + B2B_ORDER_ACCESS_PATH;
+    }
+
     private String generateQrcodeBase64(String content) {
         try {
             Map<EncodeHintType, Object> hints = new HashMap<>();
@@ -138,7 +162,7 @@ public class OrderAccessLinkService {
         B2BOrderAccessDto dto = new B2BOrderAccessDto();
         dto.setOrderId(link.getOrderId());
         dto.setOrderNumber(order != null ? order.getOrderNumber() : null);
-        dto.setAccessUrl(accessUrlPrefix + link.getAccessToken());
+        dto.setAccessUrl(resolveAccessUrlPrefix() + link.getAccessToken());
         dto.setQrcodeBase64(link.getQrcodeData());
         dto.setExpireTime(link.getExpireTime());
         return dto;

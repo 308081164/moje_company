@@ -2,7 +2,6 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.dto.order.FileInfoDto;
 import com.jewelry.system.entity.FileEntity;
-import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.repository.FileEntityRepository;
 import com.jewelry.system.repository.UserRepository;
@@ -39,20 +38,38 @@ public class OrderFileService {
 
     @Transactional
     public FileInfoDto uploadDesignFile(long orderId, MultipartFile file, String notes) throws IOException {
-        return save(orderId, file, "design", "DESIGN", notes);
+        long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return save(orderId, file, "design", "DESIGN", notes, uid);
+    }
+
+    /**
+     * B2B 门户匿名创建订单时上传附件，无 JWT 登录态，{@code uploaderId} 存空。
+     */
+    @Transactional
+    public FileInfoDto uploadDesignFileForGuest(long orderId, MultipartFile file, String notes) throws IOException {
+        return save(orderId, file, "design", "DESIGN", notes, null);
     }
 
     @Transactional
     public FileInfoDto uploadModelFile(long orderId, MultipartFile file, String notes) throws IOException {
-        return save(orderId, file, "model", "MODEL", notes);
+        long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return save(orderId, file, "model", "MODEL", notes, uid);
     }
 
-    private FileInfoDto save(long orderId, MultipartFile file, String subDir, String fileType, String notes) throws IOException {
+    /** 建模效果图（图片），与源文件 {@link #uploadModelFile} 区分 fileType=MODEL_EFFECT */
+    @Transactional
+    public FileInfoDto uploadModelEffectImage(long orderId, MultipartFile file, String notes) throws IOException {
+        long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);
+    }
+
+    private FileInfoDto save(long orderId, MultipartFile file, String subDir, String fileType, String notes, Long uploaderId) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
-        long uid = SecurityUtils.currentUserId()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         if (!aliyunOssService.isEnabled()) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "OSS 未配置，无法上传文件");
         }
@@ -85,7 +102,7 @@ public class OrderFileService {
         }
         e.setRelatedType(FileRelatedType.ORDER);
         e.setRelatedId(orderId);
-        e.setUploaderId(uid);
+        e.setUploaderId(uploaderId);
         fileEntityRepository.save(e);
         return toDto(e);
     }
@@ -106,6 +123,7 @@ public class OrderFileService {
                 .id(e.getId())
                 .fileName(e.getFileName())
                 .filePath(e.getFilePath())
+                .fileUrl(e.getFileUrl())
                 .fileType(e.getFileType())
                 .fileSize(e.getFileSize())
                 .uploaderId(e.getUploaderId() != null ? e.getUploaderId() : 0L)

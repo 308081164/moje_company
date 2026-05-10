@@ -114,4 +114,7 @@ app:
     appraisal-certificate-fee: 300 # 鉴定证书费用
   # B2B configuration
   b2b:
-    access-url-prefix: ${B2B_ACCESS_URL_PREFIX:http://localhost:8851/api/b2b/order/}
+    # 非空时作为完整访问链接前缀（须含 /api/b2b/order/ 与末尾 /），优先生效
+    access-url-prefix: ${B2B_ACCESS_URL_PREFIX:}
+    # 公网 scheme://host:port，无路径；在 access-url-prefix 为空时拼出 {base}/api/b2b/order/{token}
+    public-base-url: ${JEWELRY_PUBLIC_BASE_URL:${B2B_PUBLIC_BASE_URL:http://39.102.213.51:8852}}

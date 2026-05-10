@@ -5,11 +5,23 @@ interface WebSocketMessage {
   data: Record<string, unknown>;
 }
 
-function resolveWsOrigin(): string {
-  if (typeof window !== 'undefined' && window.env?.API_URL) {
-    return window.env.API_URL.replace(/^http/, 'ws').replace(/\/api$/, '');
+/**
+ * WebSocket 与 HTTP 共用 servlet context-path（默认 /api），须连到 /api/ws/...。
+ * 反向代理需转发 Upgrade / Connection 头，否则握手失败。
+ */
+function resolveWsBaseUrl(): string {
+  let raw = (typeof window !== 'undefined' && window.env?.API_URL?.trim()) || '';
+  if (!raw) {
+    return 'ws://localhost:8851/api';
   }
-  return 'ws://localhost:8851';
+  raw = raw.replace(/\/+$/, '');
+  let ws: string;
+  if (/^https:/i.test(raw)) {
+    ws = 'wss:' + raw.slice('https:'.length);
+  } else {
+    ws = raw.replace(/^http:/i, 'ws:');
+  }
+  return ws.endsWith('/api') ? ws : `${ws}/api`;
 }
 
 class WebSocketService {
@@ -34,7 +46,7 @@ class WebSocketService {
     this.currentRole = role;
 
     const path = role === 'MODELER' ? '/ws/modeler' : '/ws/admin';
-    const url = `${resolveWsOrigin()}${path}?userId=${userId}&role=${role}`;
+    const url = `${resolveWsBaseUrl()}${path}?userId=${userId}&role=${role}`;
 
     console.log('[WebSocket] Connecting to:', url);
 

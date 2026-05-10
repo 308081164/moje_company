@@ -63,7 +63,7 @@ public class B2BController {
             Long orderId = linkService.getOrderEntityByToken(result.getToken()).getId();
             for (MultipartFile file : files) {
                 try {
-                    orderFileService.uploadDesignFile(orderId, file, "B端客户上传");
+                    orderFileService.uploadDesignFileForGuest(orderId, file, "B端客户上传");
                 } catch (IOException e) {
                     throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件上传失败");
                 }

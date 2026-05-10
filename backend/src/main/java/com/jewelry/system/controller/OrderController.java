@@ -337,6 +337,31 @@ public class OrderController {
         return orderFileService.uploadModelFile(id, file, notes);
     }
 
+    @PostMapping(value = "/{id:\\d+}/model/effect-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传建模效果图（图片）")
+    public FileInfoDto uploadModelEffectFile(
+            @PathVariable long id,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(required = false) String notes
+    ) throws IOException {
+        return orderFileService.uploadModelEffectImage(id, file, notes);
+    }
+
+    @PostMapping("/{id:\\d+}/modeler/reject-to-designer")
+    @Operation(summary = "建模师驳回给设计师（说明 + 可选附件文件 ID），订单进入设计中")
+    public OrderInfoDto modelerRejectToDesigner(
+            @PathVariable long id,
+            @Valid @RequestBody ModelerRejectToDesignerRequest body
+    ) {
+        return orderCommandService.modelerRejectToDesigner(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/modeler/reject-to-customer")
+    @Operation(summary = "建模师驳回给客户（占位，未实现）")
+    public void modelerRejectToCustomer(@PathVariable long id) {
+        orderCommandService.modelerRejectToCustomerStub(id);
+    }
+
     @GetMapping("/system-config")
     @Operation(summary = "系统价格配置（设计买断、证书、金银加价）")
     public OrderSystemConfigDto getSystemConfig() {

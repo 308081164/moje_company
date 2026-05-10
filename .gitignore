@@ -25,3 +25,6 @@ frontend/release/
 # Backend build outputs
 backend/target/
 
+# Third-party clone (nested .git); use `git submodule` instead if you want it tracked
+third_party/xianyu-super-butler/
+

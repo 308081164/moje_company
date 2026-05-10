@@ -9,6 +9,8 @@ public class FileInfoDto {
     private Long id;
     private String fileName;
     private String filePath;
+    /** 可直接用于预览/下载的访问地址（如 OSS URL） */
+    private String fileUrl;
     private String fileType;
     private Long fileSize;
     private Long uploaderId;

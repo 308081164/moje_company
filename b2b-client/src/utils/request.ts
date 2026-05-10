@@ -11,6 +11,9 @@ const instance: AxiosInstance = axios.create({
 
 instance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    if (config.data instanceof FormData) {
+      delete (config.headers as Record<string, unknown>)['Content-Type']
+    }
     return config
   },
   (error) => {

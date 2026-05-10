@@ -30,6 +30,15 @@ public class ModelingInfo {
     @Column(name = "model_notes", columnDefinition = "TEXT")
     private String modelNotes;
 
+    @Column(name = "model_effect_images", columnDefinition = "json")
+    private String modelEffectImagesJson;
+
+    @Column(name = "modeler_reject_to_designer_message", columnDefinition = "TEXT")
+    private String modelerRejectToDesignerMessage;
+
+    @Column(name = "modeler_reject_to_designer_file_ids", columnDefinition = "json")
+    private String modelerRejectToDesignerFileIdsJson;
+
     @Column(name = "is_customer_approved")
     private Boolean customerApproved;
 

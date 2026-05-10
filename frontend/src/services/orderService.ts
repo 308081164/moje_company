@@ -6,6 +6,7 @@ import {
   OrderUpdateRequest,
   OrderDesignUpdateRequest,
   OrderModelUpdateRequest,
+  ModelerRejectToDesignerRequest,
   OrderReviewUpdateRequest,
   OrderQuotationUpdateRequest,
   OrderStatusChangeRequest,
@@ -208,6 +209,27 @@ export const orderService = {
     }
   },
   
+  /** 上传建模效果图（图片） */
+  async uploadModelEffectFile(orderId: number, file: File, notes?: string): Promise<FileInfo> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (notes) {
+      formData.append('notes', notes);
+    }
+    return api.post<FileInfo>(`/orders/${orderId}/model/effect-files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  async modelerRejectToDesigner(orderId: number, body: ModelerRejectToDesignerRequest): Promise<OrderInfo> {
+    return api.post<OrderInfo>(`/orders/${orderId}/modeler/reject-to-designer`, body);
+  },
+
+  /** 占位接口：后端返回 501 直至工作流对齐 */
+  async modelerRejectToCustomer(orderId: number): Promise<void> {
+    await api.post(`/orders/${orderId}/modeler/reject-to-customer`);
+  },
+
   // 上传建模文件
   async uploadModelFile(orderId: number, file: File, notes?: string): Promise<FileInfo> {
     try {
@@ -317,9 +339,13 @@ export const orderService = {
     await downloadWithAuth(`/orders/${orderId}/export`, `order-${orderId}.md`);
   },
 
-  /** 浏览器下载：单订单 HTML */
+  /** 浏览器下载：单订单 HTML（自包含样式 + 外链/嵌入图片） */
   async downloadOrderHtml(orderId: number): Promise<void> {
-    await downloadWithAuth(`/orders/${orderId}/export-html`, `order-${orderId}.html`);
+    await downloadWithAuth(
+      `/orders/${orderId}/export-html`,
+      `order-${orderId}.html`,
+      'text/html;charset=UTF-8'
+    );
   },
   
   // 批量导出订单文件

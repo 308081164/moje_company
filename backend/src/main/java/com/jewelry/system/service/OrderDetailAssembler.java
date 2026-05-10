@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -104,6 +105,7 @@ public class OrderDetailAssembler {
                     .orderId(order.getId())
                     .modelerId(modelerId)
                     .modelerName(modelerName)
+                    .modelEffectImages(Collections.emptyList())
                     .build();
         }
         return OrderModelBlockDto.builder()
@@ -113,11 +115,14 @@ public class OrderDetailAssembler {
                 .modelerName(modelerName)
                 .weight(mi.getWeight() != null ? mi.getWeight().doubleValue() : null)
                 .modelFiles(parseJson(mi.getModelFilesJson()))
+                .modelEffectImages(parseStringList(mi.getModelEffectImagesJson()))
                 .modelNotes(mi.getModelNotes())
                 .modelPassed(mi.getCustomerApproved())
                 .modelPassedTime(mi.getApprovalTime() != null ? ISO.format(mi.getApprovalTime()) : null)
                 .createdAt(mi.getCreatedAt() != null ? ISO.format(mi.getCreatedAt()) : null)
                 .updatedAt(mi.getUpdatedAt() != null ? ISO.format(mi.getUpdatedAt()) : null)
+                .lastRejectToDesignerMessage(mi.getModelerRejectToDesignerMessage())
+                .lastRejectToDesignerAttachmentFileIds(parseLongIdList(mi.getModelerRejectToDesignerFileIdsJson()))
                 .build();
     }
 
@@ -214,6 +219,20 @@ public class OrderDetailAssembler {
         }
         try {
             return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<Long> parseLongIdList(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, Long.class))
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .toList();
         } catch (Exception e) {
             return Collections.emptyList();
         }

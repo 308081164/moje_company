@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -8,6 +9,7 @@ import {
   Space,
   Table,
   Tabs,
+  Tag,
   Typography,
   message,
   Switch,
@@ -33,6 +35,17 @@ const SystemConfigPage: React.FC = () => {
   const [loadingProc, setLoadingProc] = useState(false);
   const [integrationForm] = Form.useForm();
   const [loadingIntegration, setLoadingIntegration] = useState(false);
+  /** 与 getSettings 返回的 *_Configured 对齐；hydrated 避免首屏误显未配置 */
+  const [integrationUi, setIntegrationUi] = useState<{
+    hydrated: boolean;
+    dashscopeApiKeyConfigured: boolean;
+    wecomCustomerSecretConfigured: boolean;
+  }>({
+    hydrated: false,
+    dashscopeApiKeyConfigured: false,
+    wecomCustomerSecretConfigured: false,
+  });
+  const [integrationLastSavedAt, setIntegrationLastSavedAt] = useState<number | null>(null);
 
   const loadPrice = useCallback(async () => {
     setLoadingPrice(true);
@@ -86,6 +99,11 @@ const SystemConfigPage: React.FC = () => {
     setLoadingIntegration(true);
     try {
       const s = await integrationService.getSettings();
+      setIntegrationUi({
+        hydrated: true,
+        dashscopeApiKeyConfigured: Boolean(s.dashscopeApiKeyConfigured),
+        wecomCustomerSecretConfigured: Boolean(s.wecomCustomerSecretConfigured),
+      });
       integrationForm.setFieldsValue({
         dashscopeEnabled: s.dashscopeEnabled,
         dashscopeImageModel: s.dashscopeImageModel || 'qwen-vl-plus',
@@ -121,6 +139,7 @@ const SystemConfigPage: React.FC = () => {
       }
       await integrationService.updateSettings(body);
       message.success('销售助手集成已保存');
+      setIntegrationLastSavedAt(Date.now());
       await loadIntegration();
     } catch {
       /* validated */
@@ -300,9 +319,7 @@ const SystemConfigPage: React.FC = () => {
         与《功能设计文档》4.1 管理员配置、材质与工艺库一致：维护报价加价规则、可选材质及常见工艺默认工费。
       </Text>
 
-      <Tabs
-        style={{ marginTop: 16 }}
-        items={[
+      <Tabs style={{ marginTop: 16 }} items={[
           {
             key: 'price',
             label: '价格与证书',
@@ -430,56 +447,143 @@ const SystemConfigPage: React.FC = () => {
             key: 'salesAssist',
             label: '销售助手集成',
             children: (
-              <Card bordered={false} loading={loadingIntegration}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-                  通义千问：DashScope OpenAI 兼容模式{' '}
-                  <code>POST /compatible-mode/v1/chat/completions</code>，消息体含 image_url（截图）与 text（指令）。
-                  企业微信：客户联系能力，<code>groupchat/add_join_way</code> 与 <code>groupchat/get_join_way</code>
-                  ；需至少一个已有客户群 chat_id 作为种子群。
-                </Text>
-                <Form form={integrationForm} layout="vertical" style={{ maxWidth: 640 }} onFinish={saveIntegration}>
-                  <Form.Item name="dashscopeEnabled" label="启用截图识图填单" valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item
-                    name="dashscopeImageModel"
-                    label="视觉模型名"
-                    rules={[{ required: true, message: '请输入模型名' }]}
-                  >
-                    <Input placeholder="如 qwen-vl-plus" />
-                  </Form.Item>
-                  <Form.Item name="dashscopeApiKey" label="DashScope API Key（留空表示不修改）">
-                    <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
-                  </Form.Item>
-                  <Divider />
-                  <Form.Item name="wecomEnabled" label="启用下单后自动配置客户进群二维码" valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item name="wecomCorpId" label="企业 ID (corpid)">
-                    <Input placeholder="企业微信管理后台「我的企业」" />
-                  </Form.Item>
-                  <Form.Item name="wecomCustomerSecret" label="客户联系 Secret（留空表示不修改）">
-                    <Input.Password placeholder="自建应用或客户联系专用 Secret" autoComplete="new-password" />
-                  </Form.Item>
-                  <Form.Item
-                    name="wecomTemplateChatIds"
-                    label="种子客户群 chat_id"
-                    extra="多个用英文逗号分隔，或 JSON 数组，如 [&quot;wrXXXX&quot;]。须为已存在的客户群 ID。"
-                  >
-                    <Input.TextArea rows={3} placeholder="wrXXXXXXXX" />
-                  </Form.Item>
-                  <Form.Item>
-                    <Space>
-                      <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
-                        保存
-                      </Button>
-                      <Button icon={<ReloadOutlined />} onClick={loadIntegration}>
-                        重新加载
-                      </Button>
-                    </Space>
-                  </Form.Item>
-                </Form>
-              </Card>
+              <div
+                style={{
+                  maxHeight: 'calc(100vh - 220px)',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  paddingRight: 2,
+                }}
+              >
+                <Card bordered={false} loading={loadingIntegration}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                    配置通义千问（DashScope）截图识图与企业微信客户联系进群能力。密钥与 Secret 不会在加载后回显，下方状态来自服务端是否已保存过敏感配置。
+                  </Text>
+                  {integrationUi.hydrated ? (
+                    <Alert
+                      style={{ marginBottom: 16 }}
+                      type="info"
+                      showIcon
+                      message={
+                        <Space size={[8, 8]} wrap>
+                          <Tag color={integrationUi.dashscopeApiKeyConfigured ? 'success' : 'default'}>
+                            DashScope API Key：{integrationUi.dashscopeApiKeyConfigured ? '已配置' : '未配置'}
+                          </Tag>
+                          <Tag color={integrationUi.wecomCustomerSecretConfigured ? 'success' : 'default'}>
+                            企微客户联系 Secret：{integrationUi.wecomCustomerSecretConfigured ? '已配置' : '未配置'}
+                          </Tag>
+                        </Space>
+                      }
+                      description={
+                        integrationLastSavedAt != null ? (
+                          <Text type="secondary">
+                            本页上次保存时间（本地）：{new Date(integrationLastSavedAt).toLocaleString('zh-CN')}
+                          </Text>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                  <Form form={integrationForm} layout="vertical" style={{ maxWidth: 640 }} onFinish={saveIntegration}>
+                    <Form.Item
+                      name="dashscopeEnabled"
+                      label="启用截图识图填单"
+                      valuePropName="checked"
+                      extra={
+                        <Text type="secondary">
+                          开启后，订单截图通过 DashScope OpenAI 兼容接口（含 image_url 与文本指令）解析并辅助填单。
+                        </Text>
+                      }
+                    >
+                      <Switch />
+                    </Form.Item>
+                    <Form.Item
+                      name="dashscopeImageModel"
+                      label="视觉模型名"
+                      rules={[{ required: true, message: '请输入模型名' }]}
+                      extra={
+                        <Text type="secondary">
+                          与百炼控制台中开通的多模态模型名一致，例如 qwen-vl-plus；修改后保存生效。
+                        </Text>
+                      }
+                    >
+                      <Input placeholder="如 qwen-vl-plus" />
+                    </Form.Item>
+                    <Form.Item
+                      name="dashscopeApiKey"
+                      label="DashScope API Key（留空表示不修改）"
+                      extra={
+                        <Text type="secondary">
+                          在阿里云百炼（Model Studio）创建 API Key 可参考：
+                          https://help.aliyun.com/zh/model-studio/get-api-key
+                          。上传截图请勿超过约 8MB（与服务端图片大小限制一致）。留空提交不会覆盖已保存的 Key。
+                        </Text>
+                      }
+                    >
+                      <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
+                    </Form.Item>
+                    <Divider />
+                    <Form.Item
+                      name="wecomEnabled"
+                      label="启用下单后自动配置客户进群二维码"
+                      valuePropName="checked"
+                      extra={
+                        <Text type="secondary">
+                          依赖企业微信「客户联系」与群聊接口（如 add_join_way / get_join_way）；需正确配置 corpid、客户联系
+                          Secret 与种子群 chat_id。
+                        </Text>
+                      }
+                    >
+                      <Switch />
+                    </Form.Item>
+                    <Form.Item
+                      name="wecomCorpId"
+                      label="企业 ID (corpid)"
+                      extra={
+                        <Text type="secondary">
+                          登录企业微信管理后台，在「我的企业」页面底部可查看企业 ID（corpid），复制到此处。
+                        </Text>
+                      }
+                    >
+                      <Input placeholder="企业微信管理后台「我的企业」" />
+                    </Form.Item>
+                    <Form.Item
+                      name="wecomCustomerSecret"
+                      label="客户联系 Secret（留空表示不修改）"
+                      extra={
+                        <Text type="secondary">
+                          使用「客户联系」能力对应应用的 Secret（非任意自建应用 Secret，需与接口权限一致）。留空提交不会覆盖已保存的
+                          Secret。
+                        </Text>
+                      }
+                    >
+                      <Input.Password placeholder="自建应用或客户联系专用 Secret" autoComplete="new-password" />
+                    </Form.Item>
+                    <Form.Item
+                      name="wecomTemplateChatIds"
+                      label="种子客户群 chat_id"
+                      extra={
+                        <Text type="secondary">
+                          须填写<strong>已存在</strong>的客户群 chat_id（非模板名）；多个可用英文逗号分隔，或 JSON 数组如
+                          [&quot;wrXXXX&quot;]。企业微信群聊相关接口说明见：
+                          https://developer.work.weixin.qq.com/document/path/92229
+                        </Text>
+                      }
+                    >
+                      <Input.TextArea rows={3} placeholder="wrXXXXXXXX" />
+                    </Form.Item>
+                    <Form.Item>
+                      <Space>
+                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+                          保存
+                        </Button>
+                        <Button icon={<ReloadOutlined />} onClick={loadIntegration}>
+                          重新加载
+                        </Button>
+                      </Space>
+                    </Form.Item>
+                  </Form>
+                </Card>
+              </div>
             ),
           },
         ]}

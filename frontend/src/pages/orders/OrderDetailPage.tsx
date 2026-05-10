@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Button,
   Card,
+  Collapse,
   Descriptions,
   Form,
   Input,
@@ -24,14 +25,15 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
-  DeleteOutlined,
   DownloadOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
 import { userService } from '@/services/userService';
+import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import type { FileInfo, OrderInfo, ProcessInfo } from '@/types/order';
-import { OrderSource, OrderStatus } from '@/types/order';
+import { OrderSource, OrderStatus, ProcessType } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
@@ -39,9 +41,100 @@ import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, us
 
 const { Title, Text, Paragraph } = Typography;
 
+function normalizeDesignUploadFileList(fileList: UploadFile[]): UploadFile[] {
+  const mapped = fileList.map((f) => {
+    if (f.status === 'done') {
+      const res = f.response as (FileInfo & { url?: string }) | undefined;
+      const url = (f.url || res?.url || res?.fileUrl || '').trim();
+      if (url) {
+        return { ...f, url, thumbUrl: f.thumbUrl || url };
+      }
+    }
+    return f;
+  });
+  const seen = new Set<string>();
+  return mapped.filter((f) => {
+    if (f.status !== 'done') return true;
+    const u = (f.url || '').trim();
+    if (!u) return true;
+    if (seen.has(u)) return false;
+    seen.add(u);
+    return true;
+  });
+}
+
+function designFileListFromSavedUrls(urls: string[]): UploadFile[] {
+  return urls
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .map((url, i) => ({
+    uid: `design-loaded-${i}`,
+    name: `设计图${i + 1}`,
+    status: 'done' as const,
+    url,
+    thumbUrl: url,
+  }));
+}
+
+function designImageUrlsForSave(fileList: UploadFile[]): string[] {
+  const urls = fileList
+    .filter((f) => f.status === 'done')
+    .map((f) => {
+      const res = f.response as (FileInfo & { url?: string }) | undefined;
+      return (f.url || res?.url || res?.fileUrl || '').trim();
+    })
+    .filter(Boolean);
+  return [...new Set(urls)];
+}
+
+function modelSourceUploadListFromSaved(modelFiles: unknown): UploadFile[] {
+  if (!modelFiles || !Array.isArray(modelFiles)) return [];
+  const rows = modelFiles as { fileId?: number; fileName?: string; fileUrl?: string }[];
+  return rows
+    .filter((x) => x.fileId != null && x.fileUrl)
+    .map((x, i) => ({
+      uid: `src-${x.fileId}-${i}`,
+      name: x.fileName || `file-${x.fileId}`,
+      status: 'done' as const,
+      url: x.fileUrl,
+      response: { id: x.fileId } as FileInfo,
+    }));
+}
+
 async function loadUsersByRole(role: UserRole): Promise<UserInfo[]> {
   const res = await userService.getUsers({ page: 0, size: 500, role });
   return res.content || [];
+}
+
+const LEGACY_PROCESS_LABEL: Partial<Record<ProcessType, string>> = {
+  [ProcessType.ENAMEL]: '珐琅',
+  [ProcessType.WIRE_DRAWING]: '拉丝',
+  [ProcessType.SAND_BLASTING]: '喷砂',
+  [ProcessType.NAIL_SAND]: '钉砂',
+  [ProcessType.OTHER]: '其他',
+};
+
+const OTHER_VALUE_PREFIX = 'other:';
+
+/** 与工艺库接口一致：库内项用行 id；历史 OTHER+名称 在配置中无匹配时用 other:名称；旧枚举仍用枚举值。 */
+function savedProcessToSelectValue(p: ProcessInfo, config: ProcessInfo[]): string {
+  const name = (p.customProcess || '').trim();
+  if (name) {
+    const hit = config.find(
+      (c) =>
+        (c.customProcess || '').trim() === name && String(c.processType) === ProcessType.OTHER
+    );
+    if (hit?.id != null) return String(hit.id);
+    return `${OTHER_VALUE_PREFIX}${name}`;
+  }
+  return String(p.processType);
+}
+
+function formatSavedProcessLine(p: ProcessInfo): string {
+  const name = (p.customProcess || '').trim();
+  if (name) return name;
+  const pt = p.processType as ProcessType;
+  return LEGACY_PROCESS_LABEL[pt] || String(p.processType);
 }
 
 const OrderDetailPage: React.FC = () => {
@@ -59,7 +152,10 @@ const OrderDetailPage: React.FC = () => {
   const [order, setOrder] = useState<OrderInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<FileInfo[]>([]);
-  const [designImages, setDesignImages] = useState<string[]>([]);
+  const [designImageFileList, setDesignImageFileList] = useState<UploadFile[]>([]);
+  const [modelEffectImageFileList, setModelEffectImageFileList] = useState<UploadFile[]>([]);
+  const [modelSourceFileList, setModelSourceFileList] = useState<UploadFile[]>([]);
+  const [rejectDesignerAttachList, setRejectDesignerAttachList] = useState<UploadFile[]>([]);
   const [relatedOrders, setRelatedOrders] = useState<OrderInfo[]>([]);
   const [currentOrderIndex, setCurrentOrderIndex] = useState(0);
   const [materialConfig, setMaterialConfig] = useState<{ type: string; name: string; priceFormula: string }[]>([]);
@@ -73,6 +169,7 @@ const OrderDetailPage: React.FC = () => {
 
   const [designForm] = Form.useForm();
   const [modelForm] = Form.useForm();
+  const [rejectDesignerForm] = Form.useForm();
   const [reviewForm] = Form.useForm();
   const [quoteForm] = Form.useForm();
 
@@ -143,11 +240,10 @@ const OrderDetailPage: React.FC = () => {
     try {
       const o = await orderService.getOrderById(orderId);
       setOrder(o);
-      setDesignImages(o.designInfo?.designImages || []);
-      setSelectedProcesses(
-        o.designInfo?.processInfo?.map(p => String(p.processType)) || []
-      );
-      
+      setDesignImageFileList(designFileListFromSavedUrls(o.designInfo?.designImages || []));
+      setModelEffectImageFileList(designFileListFromSavedUrls(o.modelInfo?.modelEffectImages || []));
+      setModelSourceFileList(modelSourceUploadListFromSaved(o.modelInfo?.modelFiles));
+
       if (o.designInfo) {
         designForm.setFieldsValue({
           designerId: o.designInfo.designerId,
@@ -211,6 +307,38 @@ const OrderDetailPage: React.FC = () => {
   }, [refresh, loadRelatedOrders, loadConfigs]);
 
   useEffect(() => {
+    const raw = order?.designInfo?.processInfo;
+    if (!raw?.length) {
+      setSelectedProcesses([]);
+      return;
+    }
+    setSelectedProcesses(raw.map((p) => savedProcessToSelectValue(p as ProcessInfo, processConfig)));
+  }, [order, processConfig]);
+
+  const craftSelectOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    for (const p of processConfig) {
+      if (p.id == null) continue;
+      const value = String(p.id);
+      const name = (p.customProcess || '').trim();
+      const label = name ? `${name} (${value})` : `${String(p.processType)} (${value})`;
+      opts.push({ value, label });
+      seen.add(value);
+    }
+    const saved = order?.designInfo?.processInfo || [];
+    for (const row of saved) {
+      const p = row as ProcessInfo;
+      const v = savedProcessToSelectValue(p, processConfig);
+      if (!seen.has(v)) {
+        seen.add(v);
+        opts.push({ value: v, label: formatSavedProcessLine(p) });
+      }
+    }
+    return opts;
+  }, [processConfig, order?.designInfo?.processInfo]);
+
+  useEffect(() => {
     (async () => {
       try {
         const [s, d, m, t] = await Promise.all([
@@ -229,38 +357,135 @@ const OrderDetailPage: React.FC = () => {
     })();
   }, []);
 
-  const handleDesignImageUpload = async (file: File) => {
-    try {
-      const result = await orderService.uploadDesignFile(orderId, file);
-      if (result.fileUrl) {
-        setDesignImages([...designImages, result.fileUrl]);
-        message.success('设计图片上传成功');
-      }
-    } catch (error) {
-      message.error('设计图片上传失败');
-    }
-    return false;
-  };
+  const handleDesignUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
+    setDesignImageFileList(normalizeDesignUploadFileList(fileList));
+  }, []);
 
-  const removeDesignImage = (index: number) => {
-    const newImages = [...designImages];
-    newImages.splice(index, 1);
-    setDesignImages(newImages);
-  };
+  const handleDesignCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
+    async (options) => {
+      const { file, onError, onSuccess } = options;
+      try {
+        const res = await orderService.uploadDesignFile(orderId, file as File);
+        let url = res.fileUrl?.trim();
+        if (!url) {
+          url = (await orderService.previewFile(res.id))?.trim();
+        }
+        if (!url) {
+          throw new Error('未返回图片地址');
+        }
+        onSuccess?.({ ...res, url });
+        message.success('设计图片上传成功');
+      } catch {
+        message.error('设计图片上传失败');
+        onError?.(new Error('上传失败'));
+      }
+    },
+    [orderId]
+  );
+
+  const handleModelEffectUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
+    setModelEffectImageFileList(normalizeDesignUploadFileList(fileList));
+  }, []);
+
+  const handleModelEffectCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
+    async (options) => {
+      const { file, onError, onSuccess } = options;
+      try {
+        const res = await orderService.uploadModelEffectFile(orderId, file as File);
+        let url = res.fileUrl?.trim();
+        if (!url) {
+          url = (await orderService.previewFile(res.id))?.trim();
+        }
+        if (!url) {
+          throw new Error('未返回图片地址');
+        }
+        onSuccess?.({ ...res, url });
+        message.success('效果图上传成功');
+      } catch {
+        message.error('效果图上传失败');
+        onError?.(new Error('上传失败'));
+      }
+    },
+    [orderId]
+  );
+
+  const handleModelSourceUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
+    setModelSourceFileList(fileList);
+  }, []);
+
+  const handleModelSourceCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
+    async (options) => {
+      const { file, onError, onSuccess } = options;
+      try {
+        const res = await orderService.uploadModelFile(orderId, file as File);
+        onSuccess?.(res);
+        message.success('源文件上传成功');
+      } catch {
+        message.error('源文件上传失败');
+        onError?.(new Error('上传失败'));
+      }
+    },
+    [orderId]
+  );
+
+  const handleRejectDesignerAttachChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
+    setRejectDesignerAttachList(normalizeDesignUploadFileList(fileList));
+  }, []);
+
+  const handleRejectDesignerAttachRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
+    async (options) => {
+      const { file, onError, onSuccess } = options;
+      try {
+        const res = await orderService.uploadModelEffectFile(orderId, file as File);
+        let url = res.fileUrl?.trim();
+        if (!url) {
+          url = (await orderService.previewFile(res.id))?.trim();
+        }
+        if (!url) {
+          throw new Error('未返回图片地址');
+        }
+        onSuccess?.({ ...res, url });
+        message.success('附件已上传');
+      } catch {
+        message.error('附件上传失败');
+        onError?.(new Error('上传失败'));
+      }
+    },
+    [orderId]
+  );
 
   const saveDesign = async () => {
     const v = await designForm.validateFields();
-    const processInfo = selectedProcesses.map((processType) => ({
-      processType: processType as any,
-      additionalCost: 0,
-    }));
+    const processInfo = selectedProcesses.map((key) => {
+      const cfg = processConfig.find((p) => p.id != null && String(p.id) === key);
+      if (cfg) {
+        return {
+          id: cfg.id,
+          processType: cfg.processType,
+          customProcess: cfg.customProcess,
+          additionalCost: cfg.additionalCost ?? 0,
+          notes: cfg.notes,
+        };
+      }
+      if (key.startsWith(OTHER_VALUE_PREFIX)) {
+        return {
+          processType: ProcessType.OTHER,
+          customProcess: key.slice(OTHER_VALUE_PREFIX.length),
+          additionalCost: 0,
+        };
+      }
+      return {
+        processType: key as ProcessType,
+        additionalCost: 0,
+      };
+    });
     await orderService.updateOrderDesign(orderId, {
       designerId: v.designerId,
       engravingText: v.engravingText,
       materialType: v.materialType,
       handSize: v.handSize,
       designNotes: v.designNotes,
-      designImages: designImages,
+      designImages: designImageUrlsForSave(designImageFileList),
       processInfo,
     });
     message.success('设计信息已保存');
@@ -269,13 +494,48 @@ const OrderDetailPage: React.FC = () => {
 
   const saveModel = async () => {
     const v = await modelForm.validateFields();
+    const sourceIds = modelSourceFileList
+      .filter((f) => f.status === 'done')
+      .map((f) => {
+        const res = f.response as FileInfo | undefined;
+        return res?.id;
+      })
+      .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
     await orderService.updateOrderModel(orderId, {
       modelerId: v.modelerId,
       weight: v.weight,
       modelNotes: v.modelNotes,
+      modelEffectImageUrls: designImageUrlsForSave(modelEffectImageFileList),
+      modelSourceFileIds: sourceIds,
     });
     message.success('建模信息已保存');
     refresh();
+  };
+
+  const submitRejectToDesigner = async () => {
+    const v = await rejectDesignerForm.validateFields();
+    const attachmentFileIds = rejectDesignerAttachList
+      .filter((f) => f.status === 'done')
+      .map((f) => (f.response as FileInfo | undefined)?.id)
+      .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
+    try {
+      await orderService.modelerRejectToDesigner(orderId, {
+        message: v.rejectMessage as string,
+        attachmentFileIds: attachmentFileIds.length ? attachmentFileIds : undefined,
+      });
+      message.success('已驳回给设计师，订单已回到「设计中」');
+      rejectDesignerForm.resetFields();
+      setRejectDesignerAttachList([]);
+      refresh();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    }
+  };
+
+  const onRejectToCustomerClick = () => {
+    void orderService.modelerRejectToCustomer(orderId).catch(() => {
+      /* 501 等错误由 api 拦截器统一提示 */
+    });
   };
 
   const saveReview = async () => {
@@ -378,75 +638,30 @@ const OrderDetailPage: React.FC = () => {
               placeholder="请选择工艺（可多选）"
               value={selectedProcesses}
               onChange={setSelectedProcesses}
-              options={processConfig.map((p) => ({
-                value: String(p.processType),
-                label: String(p.processType),
-              }))}
+              options={craftSelectOptions}
             />
           </Form.Item>
           <Form.Item name="designNotes" label="设计备注">
             <Input.TextArea rows={4} />
           </Form.Item>
           
-          <Form.Item label="设计图片">
-            <div style={{ marginBottom: 16 }}>
-              <Upload
-                beforeUpload={handleDesignImageUpload}
-                showUploadList={false}
-                accept="image/*"
-                multiple
-              >
-                <Button type="dashed">上传设计图片</Button>
-              </Upload>
-            </div>
-            
-            {designImages.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                {designImages.map((url, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      position: 'relative',
-                      width: 120,
-                      height: 120,
-                      border: '1px solid #d9d9d9',
-                      borderRadius: 4,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <img
-                      src={url}
-                      alt={`设计图 ${index + 1}`}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                      }}
-                    />
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      size="small"
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        background: 'rgba(255,255,255,0.9)',
-                        borderRadius: '50%',
-                        width: 24,
-                        height: 24,
-                        padding: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onClick={() => removeDesignImage(index)}
-                    />
-                  </div>
-                ))}
+          <Form.Item
+            label="设计图片"
+            extra="支持多张图片；上传成功即可预览缩略图，点击「保存设计信息」写入订单。"
+          >
+            <Upload
+              listType="picture-card"
+              accept="image/*"
+              multiple
+              fileList={designImageFileList}
+              onChange={handleDesignUploadChange}
+              customRequest={handleDesignCustomRequest}
+            >
+              <div>
+                <PlusOutlined />
+                <div style={{ marginTop: 8 }}>上传</div>
               </div>
-            )}
+            </Upload>
           </Form.Item>
           
           <Button type="primary" onClick={saveDesign}>
@@ -457,27 +672,113 @@ const OrderDetailPage: React.FC = () => {
     }
 
     if (isModeler) {
+      const canReject =
+        order.currentStatus === OrderStatus.PENDING_MODEL || order.currentStatus === OrderStatus.MODELING;
       return (
-        <Form form={modelForm} layout="vertical" style={{ maxWidth: 520 }}>
-          <Form.Item name="modelerId" label="建模师">
-            <Select
-              allowClear
-              options={modelers.map((u) => ({
-                value: u.id,
-                label: `${u.realName || u.username}`,
-              }))}
+        <div style={{ maxWidth: 720 }}>
+          {canReject && (
+            <Collapse
+              style={{ marginBottom: 16 }}
+              defaultActiveKey={[]}
+              items={[
+                {
+                  key: 'actions',
+                  label: '执行操作（驳回等，默认折叠）',
+                  children: (
+                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      <Card size="small" title="驳回给设计师">
+                        <Form form={rejectDesignerForm} layout="vertical">
+                          <Form.Item
+                            name="rejectMessage"
+                            label="说明"
+                            rules={[{ required: true, message: '请填写需要设计师补充的内容' }]}
+                          >
+                            <Input.TextArea rows={4} placeholder="说明需补充的设计细节、参考等" />
+                          </Form.Item>
+                          <Form.Item label="参考图（可选）" extra="上传的图片将作为附件 ID 一并提交。">
+                            <Upload
+                              listType="picture-card"
+                              accept="image/*"
+                              multiple
+                              fileList={rejectDesignerAttachList}
+                              onChange={handleRejectDesignerAttachChange}
+                              customRequest={handleRejectDesignerAttachRequest}
+                            >
+                              <div>
+                                <PlusOutlined />
+                                <div style={{ marginTop: 8 }}>上传</div>
+                              </div>
+                            </Upload>
+                          </Form.Item>
+                          <Button danger type="primary" onClick={() => void submitRejectToDesigner()}>
+                            提交：驳回给设计师
+                          </Button>
+                        </Form>
+                      </Card>
+                      <Card size="small" title="驳回给客户 / 上游">
+                        <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                          占位：需约定订单是否进入「待客户补充」等状态，并与 B2B / 企微通知打通后再实现后端与按钮逻辑。
+                        </Paragraph>
+                        <Button onClick={() => void onRejectToCustomerClick()}>尝试驳回给客户（将提示未开放）</Button>
+                      </Card>
+                    </Space>
+                  ),
+                },
+              ]}
             />
-          </Form.Item>
-          <Form.Item name="weight" label="克重">
-            <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="modelNotes" label="建模备注">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Button type="primary" onClick={saveModel}>
-            保存建模信息
-          </Button>
-        </Form>
+          )}
+          <Form form={modelForm} layout="vertical" style={{ maxWidth: 520 }}>
+            <Form.Item name="modelerId" label="建模师">
+              <Select
+                allowClear
+                options={modelers.map((u) => ({
+                  value: u.id,
+                  label: `${u.realName || u.username}`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="weight" label="克重">
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="modelNotes" label="建模备注">
+              <Input.TextArea rows={4} />
+            </Form.Item>
+            <Form.Item
+              label="效果图"
+              extra="支持多张图片；上传后点「保存建模信息」写入订单（与设计师设计图存法一致）。"
+            >
+              <Upload
+                listType="picture-card"
+                accept="image/*"
+                multiple
+                fileList={modelEffectImageFileList}
+                onChange={handleModelEffectUploadChange}
+                customRequest={handleModelEffectCustomRequest}
+              >
+                <div>
+                  <PlusOutlined />
+                  <div style={{ marginTop: 8 }}>上传</div>
+                </div>
+              </Upload>
+            </Form.Item>
+            <Form.Item
+              label="建模源文件（STL / ZIP 等）"
+              extra="先上传文件，再保存建模信息；保存时会写入本单的 MODEL 类型文件引用。"
+            >
+              <Upload
+                multiple
+                fileList={modelSourceFileList}
+                onChange={handleModelSourceUploadChange}
+                customRequest={handleModelSourceCustomRequest}
+              >
+                <Button icon={<PlusOutlined />}>上传源文件</Button>
+              </Upload>
+            </Form.Item>
+            <Button type="primary" onClick={saveModel}>
+              保存建模信息
+            </Button>
+          </Form>
+        </div>
       );
     }
 
@@ -694,14 +995,38 @@ const OrderDetailPage: React.FC = () => {
 
         <Card size="small" title="建模信息" style={{ marginBottom: 16 }}>
           {order.modelInfo ? (
-            <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="克重">
-                {order.modelInfo.weight ? `${order.modelInfo.weight}g` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="建模备注" span={2}>
-                {order.modelInfo.modelNotes || '-'}
-              </Descriptions.Item>
-            </Descriptions>
+            <>
+              <Descriptions column={2} size="small" bordered>
+                <Descriptions.Item label="克重">
+                  {order.modelInfo.weight ? `${order.modelInfo.weight}g` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="建模备注" span={2}>
+                  {order.modelInfo.modelNotes || '-'}
+                </Descriptions.Item>
+                {order.modelInfo.lastRejectToDesignerMessage && (
+                  <Descriptions.Item label="建模师驳回说明" span={2}>
+                    <Text type="warning">{order.modelInfo.lastRejectToDesignerMessage}</Text>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+              {order.modelInfo.modelEffectImages && order.modelInfo.modelEffectImages.length > 0 && (
+                <>
+                  <Divider style={{ margin: '16px 0 8px 0' }}>建模效果图</Divider>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {order.modelInfo.modelEffectImages.map((url, index) => (
+                      <Image
+                        key={index}
+                        width={120}
+                        height={120}
+                        style={{ objectFit: 'cover', borderRadius: 4 }}
+                        src={url}
+                        alt={`效果图 ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           ) : (
             <Text type="secondary">暂无建模信息</Text>
           )}
@@ -820,12 +1145,30 @@ const OrderDetailPage: React.FC = () => {
               {orderStatusLabel(order.currentStatus)}
             </Tag>
           )}
-          <Button icon={<DownloadOutlined />} onClick={() => orderService.downloadOrderMarkdown(orderId)}>
-            导出 Markdown
-          </Button>
+          <Space size={4} align="center">
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
+              onClick={() => void orderService.downloadOrderHtml(orderId).catch((err) => message.error(String(err?.message || err)))}
+            >
+              导出 HTML 工单
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              onClick={() =>
+                void orderService.downloadOrderMarkdown(orderId).catch((err) => message.error(String(err?.message || err)))
+              }
+            >
+              Markdown
+            </Button>
+          </Space>
         </Space>
 
         <Tabs
+          styles={{
+            content: { overflowY: 'auto', minHeight: 0 },
+          }}
           items={[
             {
               key: 'info',

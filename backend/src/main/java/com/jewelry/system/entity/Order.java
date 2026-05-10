@@ -150,6 +150,7 @@ public class Order {
         switch (targetStatus) {
             case DESIGNING:
                 this.designCompletedTime = null;
+                this.modelCompletedTime = null;
                 break;
             case PENDING_MODEL:
                 this.designCompletedTime = LocalDateTime.now();

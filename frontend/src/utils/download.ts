@@ -3,7 +3,9 @@ import { API_ORIGIN } from '@/services/api';
 /** 带 Bearer 下载接口返回的文件流（适用于 GET 导出等） */
 export async function downloadWithAuth(
   path: string,
-  fallbackFileName: string
+  fallbackFileName: string,
+  /** 例如 text/html;charset=UTF-8，便于本地打开时浏览器识别编码 */
+  blobMimeType?: string
 ): Promise<void> {
   const token = localStorage.getItem('access_token');
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -15,7 +17,10 @@ export async function downloadWithAuth(
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
-  const blob = await res.blob();
+  const buf = await res.arrayBuffer();
+  const fromHeader = res.headers.get('Content-Type');
+  const type = blobMimeType?.trim() || (fromHeader && fromHeader.trim()) || undefined;
+  const blob = new Blob([buf], type ? { type } : undefined);
   const cd = res.headers.get('Content-Disposition');
   let filename = fallbackFileName;
   if (cd) {

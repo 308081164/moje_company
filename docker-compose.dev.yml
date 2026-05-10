@@ -31,7 +31,7 @@ services:
       - DB_PASSWORD=@Group666
       - OSS_ACCESS_KEY_ID=LTAI5tFTJEe9v9Vr7HRh4J9F
       - OSS_ACCESS_KEY_SECRET=
-      - B2B_ACCESS_URL_PREFIX=http://localhost:8851/api/b2b/order/
+      - JEWELRY_PUBLIC_BASE_URL=http://localhost:8851
     ports:
       - "8851:8851"
     depends_on:

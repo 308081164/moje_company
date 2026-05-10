@@ -14,6 +14,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final WebSocketService webSocketService;
 
+    // 生产在 server.servlet.context-path 下注册，客户端 URL 形如 wss://host/api/ws/modeler；Nginx 需 proxy_set_header Upgrade $http_upgrade; Connection "upgrade";
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(new WebSocketHandler(webSocketService), "/ws/modeler")

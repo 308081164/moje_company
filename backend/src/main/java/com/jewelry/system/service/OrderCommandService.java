@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
+import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ReviewResult;
 import com.jewelry.system.repository.*;
@@ -24,7 +25,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +37,7 @@ public class OrderCommandService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final OrderRepository orderRepository;
+    private final FileEntityRepository fileEntityRepository;
     private final UserRepository userRepository;
     private final OrderDetailRepository orderDetailRepository;
     private final DesignInfoRepository designInfoRepository;
@@ -191,9 +196,40 @@ public class OrderCommandService {
         if (req.getDesignerId() != null) {
             order.setDesigner(userRepository.getReferenceById(req.getDesignerId()));
         }
+
+        boolean advanced = tryAdvanceOrderAfterDesignerDesignSave(order);
         orderRepository.save(order);
         auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息");
+        if (advanced) {
+            auditLogService.log("ORDER_DESIGN_SUBMITTED", "ORDER", orderId,
+                    "设计师提交设计，订单状态已变更为 " + order.getStatus().name());
+        }
         return orderQueryService.getOrder(orderId);
+    }
+
+    /**
+     * 指派设计师本人保存设计信息时，若订单仍处于设计师阶段，则自动推进至「待建模师设计」。
+     * 其他角色（如管理员、客服）编辑设计信息不会触发自动流转。
+     */
+    private boolean tryAdvanceOrderAfterDesignerDesignSave(Order order) {
+        if (!SecurityUtils.currentRoleApi().filter("DESIGNER"::equals).isPresent()) {
+            return false;
+        }
+        Long uid = SecurityUtils.currentUserId().orElse(null);
+        if (uid == null || order.getDesigner() == null || !uid.equals(order.getDesigner().getId())) {
+            return false;
+        }
+        OrderStatus st = order.getStatus();
+        if (st == OrderStatus.PENDING_DESIGN) {
+            order.transitionTo(OrderStatus.DESIGNING);
+            order.transitionTo(OrderStatus.PENDING_MODEL);
+            return true;
+        }
+        if (st == OrderStatus.DESIGNING) {
+            order.transitionTo(OrderStatus.PENDING_MODEL);
+            return true;
+        }
+        return false;
     }
 
     @Transactional
@@ -210,6 +246,12 @@ public class OrderCommandService {
         if (req.getModelNotes() != null) {
             mi.setModelNotes(req.getModelNotes());
         }
+        if (req.getModelEffectImageUrls() != null) {
+            mi.setModelEffectImagesJson(toJson(req.getModelEffectImageUrls()));
+        }
+        if (req.getModelSourceFileIds() != null) {
+            mi.setModelFilesJson(toJson(buildModelSourceFileRefs(orderId, req.getModelSourceFileIds())));
+        }
         modelingInfoRepository.save(mi);
         if (req.getModelerId() != null) {
             order.setModeler(userRepository.getReferenceById(req.getModelerId()));
@@ -217,6 +259,104 @@ public class OrderCommandService {
         orderRepository.save(order);
         auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息");
         return orderQueryService.getOrder(orderId);
+    }
+
+    /**
+     * 建模师将订单退回设计师补充资料；订单状态变为 {@link OrderStatus#DESIGNING}。
+     */
+    @Transactional
+    public OrderInfoDto modelerRejectToDesigner(long orderId, ModelerRejectToDesignerRequest req) {
+        if (!SecurityUtils.currentRoleApi().filter("MODELER"::equals).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师可操作驳回给设计师");
+        }
+        long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Order order = loadOrder(orderId);
+        if (order.getModeler() == null || !uid.equals(order.getModeler().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派建模师可驳回给设计师");
+        }
+        OrderStatus st = order.getStatus();
+        if (st != OrderStatus.PENDING_MODEL && st != OrderStatus.MODELING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前订单状态不可驳回给设计师");
+        }
+        String msg = req.getMessage() != null ? req.getMessage().trim() : "";
+        if (msg.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "驳回说明不能为空");
+        }
+        verifyOrderAttachmentFileIds(orderId, req.getAttachmentFileIds());
+
+        order.transitionTo(OrderStatus.DESIGNING);
+        orderRepository.save(order);
+
+        ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElseGet(() -> {
+            ModelingInfo m = new ModelingInfo();
+            m.setOrderId(orderId);
+            return m;
+        });
+        mi.setModelerRejectToDesignerMessage(msg);
+        if (req.getAttachmentFileIds() != null && !req.getAttachmentFileIds().isEmpty()) {
+            mi.setModelerRejectToDesignerFileIdsJson(toJson(req.getAttachmentFileIds()));
+        } else {
+            mi.setModelerRejectToDesignerFileIdsJson(null);
+        }
+        modelingInfoRepository.save(mi);
+
+        auditLogService.log("ORDER_MODELER_REJECT_TO_DESIGNER", "ORDER", orderId,
+                "建模师驳回给设计师，状态=DESIGNING");
+        return orderQueryService.getOrder(orderId);
+    }
+
+    /**
+     * TODO：驳回给客户 / 上游 — 需产品定义目标状态（例如「待客户补充」）、与 B2B/企微通知衔接后再实现对称接口。
+     */
+    public void modelerRejectToCustomerStub(long orderId) {
+        loadOrder(orderId);
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "驳回给客户功能尚未实现，请联系产品对齐工作流。");
+    }
+
+    private void verifyOrderAttachmentFileIds(long orderId, List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return;
+        }
+        for (Long fid : fileIds) {
+            if (fid == null) {
+                continue;
+            }
+            FileEntity fe = fileEntityRepository.findById(fid)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "附件不存在: " + fid));
+            if (fe.getRelatedType() != FileRelatedType.ORDER || !Long.valueOf(orderId).equals(fe.getRelatedId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "附件不属于该订单");
+            }
+        }
+    }
+
+    private List<Map<String, Object>> buildModelSourceFileRefs(long orderId, List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Long fid : fileIds) {
+            if (fid == null) {
+                continue;
+            }
+            FileEntity fe = fileEntityRepository.findById(fid)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "源文件不存在: " + fid));
+            if (fe.getRelatedType() != FileRelatedType.ORDER || !Long.valueOf(orderId).equals(fe.getRelatedId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不属于该订单");
+            }
+            String ft = fe.getFileType() != null ? fe.getFileType() : "";
+            if (!"MODEL".equals(ft)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "建模源文件引用仅支持 fileType=MODEL 的上传项（如 STL/ZIP），fileId=" + fid);
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("fileId", fe.getId());
+            row.put("fileName", fe.getFileName());
+            row.put("fileUrl", fe.getFileUrl());
+            row.put("kind", "SOURCE");
+            out.add(row);
+        }
+        return out;
     }
 
     @Transactional
@@ -374,6 +514,9 @@ public class OrderCommandService {
             n.setWeight(mi.getWeight());
             n.setModelFilesJson(mi.getModelFilesJson());
             n.setModelNotes(mi.getModelNotes());
+            n.setModelEffectImagesJson(mi.getModelEffectImagesJson());
+            n.setModelerRejectToDesignerMessage(mi.getModelerRejectToDesignerMessage());
+            n.setModelerRejectToDesignerFileIdsJson(mi.getModelerRejectToDesignerFileIdsJson());
             n.setCustomerApproved(mi.getCustomerApproved());
             n.setApprovalTime(mi.getApprovalTime());
             n.setApprovalNotes(mi.getApprovalNotes());

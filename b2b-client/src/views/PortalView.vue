@@ -422,7 +422,7 @@ import {
   HomeOutlined,
   UploadOutlined
 } from '@ant-design/icons-vue'
-import { createOrder, loginClient, registerClient } from '@/api'
+import { createOrder, createOrderWithFiles, loginClient, registerClient } from '@/api'
 import type {
   B2BOrderCreateRequest,
   B2BClientLoginRequest,
@@ -494,8 +494,13 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 const handleCreateOrder = async () => {
   try {
     loading.value = true
-    // TODO: 在实际部署中需要先上传文件然后附加到订单
-    const result = await createOrder(orderForm.value)
+    const attachmentFiles = fileList.value
+      .map((uf) => uf.originFileObj)
+      .filter((f): f is File => f instanceof File)
+    const result =
+      attachmentFiles.length > 0
+        ? await createOrderWithFiles(orderForm.value, attachmentFiles)
+        : await createOrder(orderForm.value)
     orderResult.value = result
     showResult.value = true
     message.success('订单创建成功')

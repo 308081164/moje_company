@@ -82,6 +82,7 @@ export enum CertificateType {
 export enum FileType {
   DESIGN = 'DESIGN',           // 设计图
   MODEL = 'MODEL',             // 建模文件
+  MODEL_EFFECT = 'MODEL_EFFECT',
   QUOTATION = 'QUOTATION',     // 报价单
   CONTRACT = 'CONTRACT',       // 合同
   OTHER = 'OTHER',             // 其他
@@ -134,11 +135,16 @@ export interface OrderModelInfo {
   modelerName?: string;       // 建模师姓名
   weight?: number;            // 克重（克）
   modelFiles?: FileInfo[];    // 建模文件
+  /** 效果图 URL 列表（与后端 modelEffectImages 一致） */
+  modelEffectImages?: string[];
   modelNotes?: string;        // 建模备注
   modelPassed: boolean;       // 建模是否通过客户检验
   modelPassedTime?: string;   // 建模通过时间
   createdAt: string;
   updatedAt: string;
+  /** 建模师最近一次驳回给设计师的说明 */
+  lastRejectToDesignerMessage?: string;
+  lastRejectToDesignerAttachmentFileIds?: number[];
 }
 
 // 订单工艺评审信息
@@ -335,6 +341,14 @@ export interface OrderModelUpdateRequest {
   weight?: number;
   modelerId?: number;
   modelNotes?: string;
+  modelEffectImageUrls?: string[];
+  modelSourceFileIds?: number[];
+}
+
+/** 建模师驳回给设计师 */
+export interface ModelerRejectToDesignerRequest {
+  message: string;
+  attachmentFileIds?: number[];
 }
 
 // 订单评审更新请求
