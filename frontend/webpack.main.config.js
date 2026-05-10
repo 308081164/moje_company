@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
   entry: {
@@ -27,6 +28,12 @@ module.exports = {
       '@shared': path.resolve(__dirname, 'src/shared')
     }
   },
+  plugins: [
+    // 打包时可通过环境变量注入默认后端基址（不含 /api），例如: set JEWELRY_API_ORIGIN=http://8.8.8.8:8851 && npm run package:win
+    new webpack.DefinePlugin({
+      __JEWELRY_API_ORIGIN_BAKED__: JSON.stringify(process.env.JEWELRY_API_ORIGIN || ''),
+    }),
+  ],
   externals: {
     'electron': 'commonjs electron'
   }

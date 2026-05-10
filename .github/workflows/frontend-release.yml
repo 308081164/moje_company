@@ -44,6 +44,9 @@ jobs:
         run: npm ci
 
       - name: Build windows release files
+        env:
+          # 在仓库 Settings → Secrets 中配置，值为后端基址（不含 /api），例如 http://your-server:8851
+          JEWELRY_API_ORIGIN: ${{ secrets.JEWELRY_API_ORIGIN }}
         run: npm run package:win
 
       - name: Upload release artifacts for OSS

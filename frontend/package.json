@@ -75,6 +75,10 @@
       {
         "from": "assets",
         "to": "assets"
+      },
+      {
+        "from": "api-config.example.json",
+        "to": "api-config.example.json"
       }
     ],
     "win": {

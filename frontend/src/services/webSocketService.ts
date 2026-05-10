@@ -5,14 +5,12 @@ interface WebSocketMessage {
   data: Record<string, unknown>;
 }
 
-const WS_ORIGIN = (() => {
+function resolveWsOrigin(): string {
   if (typeof window !== 'undefined' && window.env?.API_URL) {
-    const url = window.env.API_URL.replace(/^http/, 'ws').replace(/\/api$/, '');
-    return url;
+    return window.env.API_URL.replace(/^http/, 'ws').replace(/\/api$/, '');
   }
-  // 默认使用本地服务器
   return 'ws://localhost:8851';
-})();
+}
 
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -23,6 +21,11 @@ class WebSocketService {
   private currentRole: string | null = null;
 
   connect(userId: number, role: string) {
+    if (userId == null || role == null || role === '') {
+      console.warn('[WebSocket] 跳过连接：缺少 userId 或 role');
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.close();
     }
@@ -31,7 +34,7 @@ class WebSocketService {
     this.currentRole = role;
 
     const path = role === 'MODELER' ? '/ws/modeler' : '/ws/admin';
-    const url = `${WS_ORIGIN}${path}?userId=${userId}&role=${role}`;
+    const url = `${resolveWsOrigin()}${path}?userId=${userId}&role=${role}`;
 
     console.log('[WebSocket] Connecting to:', url);
 

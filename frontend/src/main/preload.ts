@@ -1,7 +1,37 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+/** 主进程通过 BrowserWindow.webPreferences.additionalArguments 传入 */
+function readJewelryApiOriginFromArgv(): string | undefined {
+  const prefix = '--jewelry-api-origin=';
+  const hit = process.argv.find((a) => typeof a === 'string' && a.startsWith(prefix));
+  if (!hit) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(hit.slice(prefix.length)).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function toApiUrlWithApiSuffix(origin: string): string {
+  const base = origin.replace(/\/+$/, '');
+  if (base.endsWith('/api')) {
+    return base;
+  }
+  return `${base}/api`;
+}
+
+const argvOrigin = readJewelryApiOriginFromArgv();
+const envOrigin =
+  process.env.JEWELRY_API_ORIGIN?.trim() ||
+  process.env.API_URL?.trim();
+
+const resolvedOrigin = argvOrigin || (envOrigin ? envOrigin.replace(/\/+$/, '').replace(/\/api$/, '') : undefined);
+
 const env = {
-  API_URL: process.env.API_URL,
+  /** 供 axios 使用：带 /api 后缀的基址（与现有 api.ts 归一化逻辑兼容） */
+  API_URL: resolvedOrigin ? toApiUrlWithApiSuffix(resolvedOrigin) : process.env.API_URL,
 };
 
 const electronAPI = {

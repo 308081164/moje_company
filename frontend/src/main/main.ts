@@ -1,13 +1,86 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { autoUpdater } from 'electron-updater';
 
 // 保持窗口对象的全局引用，避免被垃圾回收
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
+/** 解析后的 HTTP(S) 基址，不含 /api，例如 http://192.168.1.10:8851 */
+let cachedJewelryApiOrigin: string | undefined;
+
 // 开发环境判断
 const isDev = process.env.NODE_ENV === 'development';
+
+function normalizeApiOriginString(raw: string): string {
+  let u = raw.trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+  if (u.endsWith('/api')) {
+    u = u.slice(0, -4).replace(/\/+$/, '');
+  }
+  return u;
+}
+
+function readApiOriginFromJsonFile(filePath: string): string | undefined {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return undefined;
+    }
+    const text = fs.readFileSync(filePath, 'utf-8');
+    const j = JSON.parse(text) as { API_ORIGIN?: string; apiOrigin?: string; API_URL?: string };
+    const v = j.API_ORIGIN || j.apiOrigin || j.API_URL;
+    if (typeof v === 'string' && v.trim()) {
+      return normalizeApiOriginString(v);
+    }
+  } catch (e) {
+    console.warn('[jewelry] 读取 api 配置文件失败:', filePath, e);
+  }
+  return undefined;
+}
+
+/**
+ * 解析桌面端应连接的后端基址（不含 /api）。
+ * 优先级：环境变量 JEWELRY_API_ORIGIN / API_URL → 构建期 JEWELRY_API_ORIGIN（webpack 注入）
+ * → userData/api-config.json → resources/api-config.json → 安装目录旁 api-config.json
+ */
+function resolveJewelryApiOrigin(): string | undefined {
+  const fromEnv =
+    process.env.JEWELRY_API_ORIGIN?.trim() ||
+    process.env.API_URL?.trim();
+  if (fromEnv) {
+    return normalizeApiOriginString(fromEnv);
+  }
+
+  const baked = typeof __JEWELRY_API_ORIGIN_BAKED__ !== 'undefined' ? String(__JEWELRY_API_ORIGIN_BAKED__).trim() : '';
+  if (baked) {
+    return normalizeApiOriginString(baked);
+  }
+
+  const candidates: string[] = [];
+  try {
+    candidates.push(path.join(app.getPath('userData'), 'api-config.json'));
+  } catch {
+    /* ignore */
+  }
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'api-config.json'));
+  }
+  try {
+    candidates.push(path.join(path.dirname(app.getPath('exe')), 'api-config.json'));
+  } catch {
+    /* ignore */
+  }
+
+  for (const p of candidates) {
+    const v = readApiOriginFromJsonFile(p);
+    if (v) {
+      console.log('[jewelry] 已从配置文件加载 API 基址:', p, '→', v);
+      return v;
+    }
+  }
+
+  return undefined;
+}
 
 function setupAutoUpdater() {
   if (isDev) {
@@ -58,7 +131,12 @@ function createWindow() {
   } else {
     iconPath = path.join(process.resourcesPath, 'assets/icon.png');
   }
-  
+
+  const extraArgs: string[] = [];
+  if (cachedJewelryApiOrigin) {
+    extraArgs.push(`--jewelry-api-origin=${encodeURIComponent(cachedJewelryApiOrigin)}`);
+  }
+
   // 创建浏览器窗口
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -72,7 +150,8 @@ function createWindow() {
       // 开发期：允许跨域请求（后端若未配置 CORS，会在 renderer 里表现为 Axios Network Error）
       // 打包/生产环境请保持 webSecurity=true
       webSecurity: !isDev,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: extraArgs,
     },
     show: false, // 先隐藏，等加载完成再显示
     frame: true,
@@ -183,6 +262,18 @@ function createTray() {
 
 // 应用准备就绪
 app.whenReady().then(() => {
+  cachedJewelryApiOrigin = resolveJewelryApiOrigin();
+  if (!cachedJewelryApiOrigin && app.isPackaged) {
+    console.error(
+      '[jewelry] 未配置后端 API 基址，桌面端将仍回退 localhost（仅本机联调可用）。' +
+        ' 请任选其一：1) 启动前设置环境变量 JEWELRY_API_ORIGIN=http://服务器:8851  ' +
+        '2) 在 GitHub Actions 构建时设置同名 Secret 并写入 JEWELRY_API_ORIGIN  ' +
+        `3) 创建配置文件: ${path.join(app.getPath('userData'), 'api-config.json')} 内容示例: {"API_ORIGIN":"http://x.x.x.x:8851"}`
+    );
+  } else if (cachedJewelryApiOrigin) {
+    console.log('[jewelry] 使用 API 基址:', cachedJewelryApiOrigin);
+  }
+
   createWindow();
   setupAutoUpdater();
   
