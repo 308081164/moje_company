@@ -11,9 +11,17 @@ module.exports = {
     rules: [
       {
         test: /\.ts$/,
-        include: /src/,
-        use: [{ loader: 'ts-loader' }]
-      }
+        include: path.join(__dirname, 'src', 'main'),
+        use: [
+          {
+            loader: 'ts-loader',
+            options: {
+              // 主进程入口不应触发对 renderer/pages 的全项目类型检查（根 tsconfig include 过宽）
+              onlyCompileBundledFiles: true,
+            },
+          },
+        ],
+      },
     ]
   },
   output: {
