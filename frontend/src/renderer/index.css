@@ -8,3 +8,52 @@ html, body {
   height: 100%;
 }
 
+/* ========== 浏览器 / PWA 移动体验（Electron 不受影响：主要为 WebView 与手机 Safari/Chrome） ========== */
+@media (max-width: 767px) {
+  html,
+  body {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root,
+  #app {
+    min-height: 100%;
+    height: auto !important;
+  }
+
+  .ant-btn {
+    min-height: 40px;
+  }
+
+  .ant-input,
+  .ant-select-selector,
+  .ant-picker {
+    min-height: 40px;
+  }
+
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+  }
+
+  .ant-tabs-tab {
+    padding: 10px 12px !important;
+  }
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+

@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 
 module.exports = {
@@ -51,6 +52,9 @@ module.exports = {
     }
   },
   plugins: [
+    new CopyWebpackPlugin({
+      patterns: [{ from: path.join(__dirname, 'public'), to: path.join(__dirname, 'dist') }],
+    }),
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',
       filename: 'index.html',
@@ -66,9 +70,10 @@ module.exports = {
     }),
   ],
   devServer: {
-    static: {
-      directory: path.join(__dirname, 'dist')
-    },
+    static: [
+      { directory: path.join(__dirname, 'dist') },
+      { directory: path.join(__dirname, 'public'), publicPath: '/' },
+    ],
     port: 3000,
     // Electron 渲染进程在 nodeIntegration=false 时没有 require，
     // webpack HMR 客户端会间接依赖 node polyfill，容易触发 "require is not defined"。

@@ -1,0 +1,20 @@
+name: moje_webview_shell
+description: MOJE 珠宝定制管理端 — WebView 壳，加载现有 Web 应用（与 PWA 同一套前端）。
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

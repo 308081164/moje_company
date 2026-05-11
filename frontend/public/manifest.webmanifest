@@ -1,0 +1,26 @@
+{
+  "name": "MOJE 珠宝定制管理系统",
+  "short_name": "MOJE",
+  "description": "珠宝定制业务管理：订单、工作台、识图填单等",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0f2f5",
+  "theme_color": "#C9A962",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -179,6 +179,22 @@ if (module?.hot) {
   module.hot.accept();
 }
 
+/** 浏览器 / PWA：注册 Service Worker（Electron 不注册） */
+function registerPwaServiceWorker() {
+  if (typeof window === 'undefined') return;
+  if ((window as unknown as { electronAPI?: unknown }).electronAPI) return;
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    const url = new URL('/sw.js', window.location.origin).href;
+    navigator.serviceWorker
+      .register(url, { scope: '/' })
+      .then((reg) => console.log('[pwa] service worker', reg.scope))
+      .catch((e) => console.warn('[pwa] service worker register failed', e));
+  });
+}
+
+registerPwaServiceWorker();
+
 // 全局错误处理
 window.addEventListener('unhandledrejection', (event) => {
   console.error('未处理的Promise拒绝:', event.reason);
