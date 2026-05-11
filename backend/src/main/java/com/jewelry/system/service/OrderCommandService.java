@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -87,7 +89,17 @@ public class OrderCommandService {
         
         auditLogService.log("ORDER_CREATE", "ORDER", o.getId(), "创建订单: " + o.getOrderNumber());
 
-        weComCustomerGroupService.scheduleAfterOrderCreated(o.getId());
+        Long newOrderId = o.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    weComCustomerGroupService.scheduleAfterOrderCreated(newOrderId);
+                }
+            });
+        } else {
+            weComCustomerGroupService.scheduleAfterOrderCreated(newOrderId);
+        }
 
         return orderQueryService.getOrder(o.getId());
     }

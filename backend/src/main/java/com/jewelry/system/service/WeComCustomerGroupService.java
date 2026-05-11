@@ -21,7 +21,8 @@ import java.util.Optional;
 
 /**
  * 企业微信客户群「加入群聊」：调用官方 add_join_way / get_join_way。
- * 需管理员配置种子客户群 chat_id（见 integration.wecom.templateChatIds）。
+ * 每个订单在事务提交后异步创建<strong>独立</strong>的进群配置（config_id + 二维码）；种子群 chat_id 仅作模板，
+ * 新客入群由企微按 {@code auto_create_room} 与 {@code room_base_name}/{@code room_base_id} 自动建新群链。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,6 +47,7 @@ public class WeComCustomerGroupService {
     public void scheduleAfterOrderCreated(Long orderId) {
         Optional<IntegrationSettingsService.WeComContext> ctxOpt = integrationSettingsService.getWeComContext();
         if (ctxOpt.isEmpty()) {
+            log.info("企微进群未执行 orderId={}：integration 未就绪（需开启开关并配置 corpId、客户联系 Secret、至少一个种子客户群 chat_id）", orderId);
             return;
         }
         IntegrationSettingsService.WeComContext ctx = ctxOpt.get();
@@ -97,11 +99,17 @@ public class WeComCustomerGroupService {
         body.put("remark", "订单 " + order.getOrderNumber());
         body.put("auto_create_room", 1);
         body.put("room_base_name", "客户-" + order.getOrderNumber());
+        long oid = order.getId() != null ? order.getId() : 0L;
+        int roomBaseId = (int) (Math.abs(oid) % 1_000_000);
+        body.put("room_base_id", roomBaseId == 0 ? 1 : roomBaseId);
         body.put("state", "order:" + order.getId());
         ArrayNode arr = body.putArray("chat_id_list");
-        for (String id : chatIds) {
-            arr.add(id);
+        // 多个 chat_id 时客户会分散进多个已有群；每单独立进群链只挂一个种子群，由 auto_create_room + room_base_* 自动建新群
+        String primary = chatIds.get(0);
+        if (chatIds.size() > 1) {
+            log.info("企微 add_join_way：订单 {} 配置了 {} 个种子群，仅使用第一个 chat_id 作为模板", order.getOrderNumber(), chatIds.size());
         }
+        arr.add(primary);
         String url = QYAPI + "/cgi-bin/externalcontact/groupchat/add_join_way?access_token=" + urlEnc(accessToken);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
