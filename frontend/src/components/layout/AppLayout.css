@@ -177,10 +177,30 @@
   }
 }
 
-@media (max-width: 480px) {
-  .content-wrapper {
-    padding: 12px;
-  }
+.app-layout--mobile .content-wrapper {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1002;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-bottom-nav .ant-btn {
+  font-size: 13px;
+  flex: 1;
+  min-height: 44px;
 }
 
 .app-layout .ant-menu-item {

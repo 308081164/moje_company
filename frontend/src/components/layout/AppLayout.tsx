@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layout,
@@ -12,6 +12,7 @@ import {
   Tooltip,
   theme,
   message,
+  Drawer,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -25,6 +26,7 @@ import {
   TeamOutlined,
   FileTextOutlined,
   ShopOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -39,6 +41,17 @@ const AppLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
   const { sidebarCollapsed, toggleSidebar, notifications, unreadNotifications } = useAppStore();
   const [collapsed, setCollapsed] = useState(sidebarCollapsed);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -172,9 +185,20 @@ const AppLayout: React.FC = () => {
     }
   };
 
-  const handleMenuClick = ({ key }: { key: string }) => {
+  const menuItems = getMenuItems();
+
+  const navigateAndCloseMobile = (key: string) => {
     navigate(key);
+    setMobileMenuOpen(false);
   };
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigateAndCloseMobile(key);
+  };
+
+  useEffect(() => {
+    if (!isMobile) setMobileMenuOpen(false);
+  }, [isMobile]);
 
   const handleLogout = async () => {
     try {
@@ -231,7 +255,7 @@ const AppLayout: React.FC = () => {
 
   const getSelectedKeys = (): string[] => {
     const path = location.pathname;
-    const items = getMenuItems();
+    const items = menuItems;
 
     if (path.startsWith('/users')) {
       return ['/users'];
@@ -264,64 +288,103 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <Layout className="app-layout" style={{ minHeight: '100vh' }}>
-      <Sider
-        width={240}
-        collapsedWidth={80}
-        collapsed={collapsed}
-        onCollapse={(value) => {
-          setCollapsed(value);
-          toggleSidebar();
-        }}
-        style={{
-          background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
-          borderRight: '1px solid #e8e8e8',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          height: '100vh',
-          position: 'sticky',
-          left: 0,
-          top: 0,
-          zIndex: 1000,
-          flexShrink: 0,
-        }}
-      >
-        <div className="logo-container">
-          {collapsed ? (
-            <div className="logo-collapsed">
-              <ShopOutlined style={{ fontSize: 28, color: '#C9A962' }} />
-            </div>
-          ) : (
-            <div className="logo-expanded">
-              <div className="logo-main">
-                <ShopOutlined className="logo-icon" />
-                <div className="logo-text-container">
-                  <Text className="logo-title">MOJE</Text>
-                  <Text className="logo-subtitle">珠宝定制系统</Text>
-                </div>
+    <Layout className={`app-layout${isMobile ? ' app-layout--mobile' : ''}`} style={{ minHeight: '100vh' }}>
+      {!isMobile && (
+        <Sider
+          width={240}
+          collapsedWidth={80}
+          collapsed={collapsed}
+          onCollapse={(value) => {
+            setCollapsed(value);
+            toggleSidebar();
+          }}
+          style={{
+            background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
+            borderRight: '1px solid #e8e8e8',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            height: '100vh',
+            position: 'sticky',
+            left: 0,
+            top: 0,
+            zIndex: 1000,
+            flexShrink: 0,
+          }}
+        >
+          <div className="logo-container">
+            {collapsed ? (
+              <div className="logo-collapsed">
+                <ShopOutlined style={{ fontSize: 28, color: '#C9A962' }} />
               </div>
-              <Text className="logo-role">{user?.roleDescription || '企业管理系统'}</Text>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="logo-expanded">
+                <div className="logo-main">
+                  <ShopOutlined className="logo-icon" />
+                  <div className="logo-text-container">
+                    <Text className="logo-title">MOJE</Text>
+                    <Text className="logo-subtitle">珠宝定制系统</Text>
+                  </div>
+                </div>
+                <Text className="logo-role">{user?.roleDescription || '企业管理系统'}</Text>
+              </div>
+            )}
+          </div>
 
+          <Menu
+            mode="inline"
+            selectedKeys={getSelectedKeys()}
+            defaultOpenKeys={['/orders']}
+            items={menuItems}
+            onClick={handleMenuClick}
+            style={{
+              borderRight: 0,
+              padding: '8px 0',
+            }}
+          />
+        </Sider>
+      )}
+
+      {isMobile && (
+        <Drawer
+          placement="left"
+          closable
+          onClose={() => setMobileMenuOpen(false)}
+          open={mobileMenuOpen}
+          width={280}
+          styles={{ body: { padding: 0 } }}
+          title={null}
+        >
+        <div className="logo-container">
+          <div className="logo-expanded">
+            <div className="logo-main">
+              <ShopOutlined className="logo-icon" />
+              <div className="logo-text-container">
+                <Text className="logo-title">MOJE</Text>
+                <Text className="logo-subtitle">珠宝定制系统</Text>
+              </div>
+            </div>
+            <Text className="logo-role">{user?.roleDescription || '企业管理系统'}</Text>
+          </div>
+        </div>
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
           defaultOpenKeys={['/orders']}
-          items={getMenuItems()}
+          items={menuItems}
           onClick={handleMenuClick}
           style={{
             borderRight: 0,
             padding: '8px 0',
           }}
         />
-      </Sider>
+      </Drawer>
+      )}
 
       <Layout style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Header
           style={{
-            padding: '0 24px',
+            padding: '0 16px',
+            paddingTop: 'env(safe-area-inset-top, 0px)',
             background: 'linear-gradient(180deg, #fff 0%, #f5f5f5 100%)',
             borderBottom: '1px solid #e8e8e8',
             display: 'flex',
@@ -336,17 +399,21 @@ const AppLayout: React.FC = () => {
           }}
         >
           <Space>
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => {
-                setCollapsed(!collapsed);
-                toggleSidebar();
-              }}
-              style={{ fontSize: 16 }}
-            />
+            {isMobile ? (
+              <Button type="text" icon={<MenuOutlined />} onClick={() => setMobileMenuOpen(true)} style={{ fontSize: 18 }} />
+            ) : (
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => {
+                  setCollapsed(!collapsed);
+                  toggleSidebar();
+                }}
+                style={{ fontSize: 16 }}
+              />
+            )}
             <Text strong className="header-title">
-              {getMenuItems().find(item => item.key === getSelectedKeys()[0])?.label || '仪表盘'}
+              {menuItems.find((item) => item.key === getSelectedKeys()[0])?.label || '仪表盘'}
             </Text>
           </Space>
 
@@ -357,22 +424,14 @@ const AppLayout: React.FC = () => {
               trigger={['click']}
             >
               <Badge count={unreadNotifications} size="small" className="notification-badge">
-                <Button
-                  type="text"
-                  icon={<BellOutlined />}
-                  style={{ fontSize: 16 }}
-                />
+                <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16 }} />
               </Badge>
             </Dropdown>
 
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <div className="user-info-trigger">
                 <div className="user-info-content">
-                  <Avatar
-                    size="default"
-                    icon={<UserOutlined />}
-                    className="user-avatar"
-                  />
+                  <Avatar size="default" icon={<UserOutlined />} className="user-avatar" />
                   <div className="user-info-text">
                     <Text strong className="user-info-name">
                       {user?.realName || user?.username}
@@ -389,7 +448,8 @@ const AppLayout: React.FC = () => {
 
         <Content
           style={{
-            margin: '16px',
+            margin: isMobile ? '8px' : '16px',
+            marginBottom: isMobile ? 72 : undefined,
             padding: 0,
             flex: 1,
             minHeight: 0,
@@ -403,6 +463,25 @@ const AppLayout: React.FC = () => {
           </div>
         </Content>
       </Layout>
+
+      {isMobile && (
+        <div className="mobile-bottom-nav" role="navigation" aria-label="主导航">
+          <Button type="text" onClick={() => navigateAndCloseMobile('/dashboard')}>
+            首页
+          </Button>
+          <Button type="text" onClick={() => navigateAndCloseMobile('/orders')}>
+            订单
+          </Button>
+          {['DESIGNER', 'MODELER', 'TRACKER'].includes(user?.role || '') && (
+            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench')}>
+              工作台
+            </Button>
+          )}
+          <Button type="text" onClick={() => setMobileMenuOpen(true)}>
+            菜单
+          </Button>
+        </div>
+      )}
     </Layout>
   );
 };

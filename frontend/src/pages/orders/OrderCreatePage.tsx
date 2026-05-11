@@ -79,7 +79,7 @@ const OrderCreatePage: React.FC = () => {
           <Form.Item label="智能填单（通义千问）">
             <ChatScreenshotImportButton
               onDraft={(d) => {
-                applyChatDraftToOrderForm(form, d);
+                applyChatDraftToOrderForm(form, d, { merge: true });
                 if (d.aiParseNote) {
                   message.info(d.aiParseNote);
                 } else {
