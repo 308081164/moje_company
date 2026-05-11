@@ -72,16 +72,27 @@ jobs:
 
       - name: Install ossutil
         run: |
-          set -e
-          if ! curl -fL -o ossutil.tar.gz https://github.com/aliyun/ossutil/releases/download/v1.7.18/ossutil64-linux.tar.gz; then
-            echo "Failed to download ossutil, skipping OSS upload"
-            exit 0
+          set -euo pipefail
+          # 官方 Release 仅提供 zip（如 ossutil-v1.7.18-linux-amd64.zip），不存在旧的 ossutil64-linux.tar.gz；
+          # 若下载失败仍 exit 0，下一步会报 127，因此此处必须成功或显式失败。
+          VER="1.7.18"
+          case "$(uname -m)" in
+            x86_64) SUFFIX="amd64" ;;
+            aarch64) SUFFIX="arm64" ;;
+            *) echo "Unsupported runner architecture: $(uname -m)"; exit 1 ;;
+          esac
+          URL="https://github.com/aliyun/ossutil/releases/download/v${VER}/ossutil-v${VER}-linux-${SUFFIX}.zip"
+          curl -fSL -o "${RUNNER_TEMP}/ossutil.zip" "${URL}"
+          mkdir -p "${RUNNER_TEMP}/ossutil-extract"
+          unzip -q -o "${RUNNER_TEMP}/ossutil.zip" -d "${RUNNER_TEMP}/ossutil-extract"
+          BIN="$(find "${RUNNER_TEMP}/ossutil-extract" -maxdepth 4 -name ossutil64 -type f | head -n 1)"
+          if [ -z "${BIN}" ] || [ ! -f "${BIN}" ]; then
+            echo "Could not locate ossutil64 inside release archive"
+            find "${RUNNER_TEMP}/ossutil-extract" -type f || true
+            exit 1
           fi
-          if ! tar -zxf ossutil.tar.gz; then
-            echo "Invalid tar.gz file, skipping OSS upload"
-            exit 0
-          fi
-          chmod +x ossutil64
+          install -m 0755 "${BIN}" "${GITHUB_WORKSPACE}/ossutil64"
+          "${GITHUB_WORKSPACE}/ossutil64" --version
 
       - name: Upload update files to OSS
         env:
@@ -99,12 +110,18 @@ jobs:
             exit 0
           fi
 
+          OSSUTIL="${GITHUB_WORKSPACE}/ossutil64"
+          if [ ! -x "${OSSUTIL}" ]; then
+            echo "ossutil not installed at ${OSSUTIL}"
+            exit 1
+          fi
+
           TARGET_PREFIX="${OSS_UPDATE_PREFIX#/}"
           TARGET_PREFIX="${TARGET_PREFIX%/}"
 
-          ./ossutil64 config -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" -L CH
-          ./ossutil64 cp -rf ./release/ "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
-          ./ossutil64 ls "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
+          "${OSSUTIL}" config -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" -L CH
+          "${OSSUTIL}" cp -rf ./release/ "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
+          "${OSSUTIL}" ls "oss://${OSS_BUCKET}/${TARGET_PREFIX}/"
 
   create-github-release:
     needs: [detect-frontend-changes, build-and-release]
