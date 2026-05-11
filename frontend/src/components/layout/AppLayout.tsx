@@ -125,8 +125,8 @@ const AppLayout: React.FC = () => {
             label: '订单列表',
             children: [
               { key: '/orders', label: '全部订单' },
-              { key: '/orders?status=PENDING_DESIGN', label: '待设计师设计' },
-              { key: '/orders?status=DESIGNING', label: '设计中' },
+              { key: '/orders?status=PENDING_DESIGN', label: '设计中' },
+              { key: '/orders?status=DESIGNING', label: '设计复审中' },
             ],
           },
         ];

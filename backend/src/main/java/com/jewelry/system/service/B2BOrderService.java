@@ -5,8 +5,6 @@ import com.jewelry.system.dto.b2b.B2BOrderCreateRequest;
 import com.jewelry.system.dto.order.OrderInfoDto;
 import com.jewelry.system.entity.B2BClient;
 import com.jewelry.system.entity.Order;
-import com.jewelry.system.entity.OrderDetail;
-import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
@@ -21,7 +19,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -34,12 +31,10 @@ public class B2BOrderService {
     private final OrderDetailRepository orderDetailRepository;
     private final UserRepository userRepository;
     private final OrderAccessLinkService linkService;
-    private final ModelerWorkStatusService modelerWorkStatusService;
-    private final WebSocketService webSocketService;
     private final EmailNotificationService emailNotificationService;
     private final OrderQueryService orderQueryService;
     private final PasswordEncoder passwordEncoder;
-    private final TaskAssignmentService taskAssignmentService;
+    private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
@@ -65,8 +60,9 @@ public class B2BOrderService {
 
         Order order = new Order();
         order.setIsB2b(true); // 标记为B端订单
-        order.setSource(OrderSource.INFLUENCER);
-        order.setInfluencerName(req.getSourceDetail());
+        order.setSource(OrderSource.B2B);
+        String sourceDetail = req.getSourceDetail();
+        order.setInfluencerName(sourceDetail != null && !sourceDetail.isBlank() ? sourceDetail : null);
         order.setDeposit(req.getDepositAmount() != null ? BigDecimal.valueOf(req.getDepositAmount()) : BigDecimal.ZERO);
         order.setBasicRequirements(req.getBasicRequirements());
         order.setStyleInfo(req.getStyleInfo());
@@ -75,22 +71,10 @@ public class B2BOrderService {
         order.setCustomerPhone(client != null ? client.getContact() : req.getContact());
         order.setCustomerWechat(client != null ? client.getContact() : req.getContact());
         order.setOrderNumber(generateOrderNumber());
-        order.setStatus(OrderStatus.PENDING_MODEL);
+        order.setStatus(OrderStatus.PENDING_DESIGN);
 
         orderRepository.save(order);
-
-        // 使用智能任务分配寻找建模师
-        Long modelerId = taskAssignmentService.findSuitableModelerForB2B();
-        if (modelerId != null) {
-            User modeler = userRepository.getReferenceById(modelerId);
-            order.setModeler(modeler);
-            order.setStatus(OrderStatus.MODELING);
-            order.setAssignedToModelerAt(LocalDateTime.now());
-            taskAssignmentService.incrementModelerTodo(modelerId, true);
-            webSocketService.notifyNewOrder(modelerId, order.getId(), order.getOrderNumber());
-        }
-
-        orderRepository.save(order);
+        autoAssignmentService.autoAssignAll(order.getId());
 
         B2BOrderAccessDto accessDto = linkService.createLink(order.getId(), client != null ? client.getId() : null);
         

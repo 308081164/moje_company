@@ -5,7 +5,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
 import { OrderSource } from '@/types/order';
-import { orderSourceLabel } from '@/utils/orderLabels';
+import { orderSourceLabel, INTERNAL_ORDER_CREATE_SOURCES } from '@/utils/orderLabels';
 import ChatScreenshotImportButton from '@/components/ChatScreenshotImportButton';
 import { applyChatDraftToOrderForm } from '@/utils/applyChatDraftToOrderForm';
 
@@ -103,7 +103,7 @@ const OrderCreatePage: React.FC = () => {
           </Form.Item>
           <Form.Item name="source" label="订单来源" rules={[{ required: true }]}>
             <Select
-              options={Object.values(OrderSource).map((s) => ({
+              options={INTERNAL_ORDER_CREATE_SOURCES.map((s) => ({
                 value: s,
                 label: orderSourceLabel(s),
               }))}

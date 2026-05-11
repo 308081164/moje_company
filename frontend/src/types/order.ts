@@ -5,7 +5,9 @@ export enum OrderSource {
   XIAOHONGSHU = 'XIAOHONGSHU', // 小红书
   TAOBAO = 'TAOBAO',           // 淘宝
   XIANYU = 'XIANYU',           // 闲鱼
-  RECOMMEND = 'RECOMMEND',     // 达人推荐
+  RECOMMEND = 'RECOMMEND',     // 达人推荐（API 与后端 INFLUENCER 映射）
+  C2C = 'C2C',                 // C端客户
+  B2B = 'B2B',                 // B端客户
   OTHER = 'OTHER',             // 其他
 }
 

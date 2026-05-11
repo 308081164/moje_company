@@ -1,8 +1,8 @@
 package com.jewelry.system.enums;
 
 public enum OrderStatus {
-    PENDING_DESIGN("待设计师设计"),
-    DESIGNING("设计中"),
+    PENDING_DESIGN("设计中"),
+    DESIGNING("设计复审中"),
     PENDING_MODEL("待建模师设计"),
     MODELING("建模中"),
     PENDING_REVIEW("待工艺验证"),

@@ -115,7 +115,7 @@ const DashboardPage: React.FC = () => {
           <Card title="待处理拆分" loading={loading} bordered={false}>
             <Row gutter={16}>
               <Col span={12}>
-                <Statistic title="待设计相关" value={pending?.pendingDesign ?? 0} />
+                <Statistic title="设计环节（初稿+复审）" value={pending?.pendingDesign ?? 0} />
               </Col>
               <Col span={12}>
                 <Statistic title="待建模相关" value={pending?.pendingModel ?? 0} />

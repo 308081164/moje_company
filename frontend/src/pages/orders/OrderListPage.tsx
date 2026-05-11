@@ -29,7 +29,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { orderService } from '@/services/orderService';
 import { OrderInfo, OrderSource, OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
-import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
+import { orderSourceLabel, orderStatusColor, orderStatusLabel, INTERNAL_ORDER_CREATE_SOURCES } from '@/utils/orderLabels';
 import ChatScreenshotImportButton from '@/components/ChatScreenshotImportButton';
 import { applyChatDraftToOrderForm } from '@/utils/applyChatDraftToOrderForm';
 
@@ -430,7 +430,7 @@ const OrderListPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="source" label="订单来源" rules={[{ required: true }]}>
             <Select
-              options={Object.values(OrderSource).map((s) => ({
+              options={INTERNAL_ORDER_CREATE_SOURCES.map((s) => ({
                 value: s,
                 label: orderSourceLabel(s),
               }))}

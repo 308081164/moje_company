@@ -367,7 +367,7 @@ public class OrderController {
     }
 
     @PostMapping("/{id:\\d+}/modeler/reject-to-designer")
-    @Operation(summary = "建模师驳回给设计师（说明 + 可选附件文件 ID），订单进入设计中")
+    @Operation(summary = "建模师驳回给设计师（说明 + 可选附件文件 ID），订单进入设计复审中（DESIGNING）")
     public OrderInfoDto modelerRejectToDesigner(
             @PathVariable long id,
             @Valid @RequestBody ModelerRejectToDesignerRequest body

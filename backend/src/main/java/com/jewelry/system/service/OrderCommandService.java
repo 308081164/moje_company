@@ -279,7 +279,7 @@ public class OrderCommandService {
     }
 
     /**
-     * 建模师将订单退回设计师补充资料；订单状态变为 {@link OrderStatus#DESIGNING}。
+     * 建模师将订单退回设计师补充资料；订单状态变为 {@link OrderStatus#DESIGNING}（展示名：设计复审中）。
      */
     @Transactional
     public OrderInfoDto modelerRejectToDesigner(long orderId, ModelerRejectToDesignerRequest req) {

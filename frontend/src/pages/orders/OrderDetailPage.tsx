@@ -639,7 +639,7 @@ const OrderDetailPage: React.FC = () => {
         message: v.rejectMessage as string,
         attachmentFileIds: attachmentFileIds.length ? attachmentFileIds : undefined,
       });
-      message.success('已驳回给设计师，订单已回到「设计中」');
+      message.success('已驳回给设计师，订单已进入「设计复审中」');
       rejectDesignerForm.resetFields();
       setRejectDesignerAttachList([]);
       refresh();
