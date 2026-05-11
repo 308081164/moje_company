@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Button,
@@ -159,6 +159,9 @@ const OrderDetailPage: React.FC = () => {
   const [reviewForm] = Form.useForm();
   const [quoteForm] = Form.useForm();
 
+  /** 供 loadRelatedOrders 合并进翻页列表；勿把 order 放进 loadRelatedOrders 的 deps，否则会与 refresh 形成死循环请求 */
+  const latestOrderRef = useRef<OrderInfo | null>(null);
+
   const loadRelatedOrders = useCallback(async () => {
     if (!currentUser) return;
     try {
@@ -183,8 +186,9 @@ const OrderDetailPage: React.FC = () => {
         orders = [...(res.content || [])];
       }
 
-      if (order && !orders.some((o) => o.baseInfo.id === orderId)) {
-        orders = [...orders, order];
+      const orderSnap = latestOrderRef.current;
+      if (orderSnap && !orders.some((o) => o.baseInfo.id === orderId)) {
+        orders = [...orders, orderSnap];
       }
       orders.sort((a, b) => {
         const ta = a.baseInfo.orderTime || '';
@@ -198,7 +202,10 @@ const OrderDetailPage: React.FC = () => {
     } catch (error) {
       console.error('加载相关订单失败:', error);
     }
-  }, [currentUser, orderId, flipTodoOnly, order, isDesigner, isModeler, isTracker]);
+  }, [currentUser, orderId, flipTodoOnly, isDesigner, isModeler, isTracker]);
+
+  const loadRelatedOrdersRef = useRef(loadRelatedOrders);
+  loadRelatedOrdersRef.current = loadRelatedOrders;
 
   const navigateToOrder = useCallback((newOrderId: number) => {
     navigate(`/orders/${newOrderId}`, { replace: true });
@@ -236,6 +243,7 @@ const OrderDetailPage: React.FC = () => {
     setLoading(true);
     try {
       const o = await orderService.getOrderById(orderId);
+      latestOrderRef.current = o;
       setOrder(o);
       setDesignImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.designImages || [], '设计图'));
       setModelEffectImageFileList(savedImageUrlsToUploadFileList(o.modelInfo?.modelEffectImages || [], '效果图'));
@@ -291,6 +299,7 @@ const OrderDetailPage: React.FC = () => {
       const fl = await orderService.getOrderFiles(orderId);
       setFiles(fl);
     } catch (error) {
+      latestOrderRef.current = null;
       message.error('加载订单失败');
     } finally {
       setLoading(false);
@@ -298,10 +307,29 @@ const OrderDetailPage: React.FC = () => {
   }, [orderId, designForm, modelForm, reviewForm, quoteForm]);
 
   useEffect(() => {
-    refresh();
-    loadRelatedOrders();
-    loadConfigs();
-  }, [refresh, loadRelatedOrders, loadConfigs]);
+    let cancelled = false;
+    (async () => {
+      await refresh();
+      if (cancelled) return;
+      await loadRelatedOrdersRef.current();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, refresh]);
+
+  const flipRelatedInitRef = useRef(false);
+  useEffect(() => {
+    if (!flipRelatedInitRef.current) {
+      flipRelatedInitRef.current = true;
+      return;
+    }
+    void loadRelatedOrdersRef.current();
+  }, [flipTodoOnly]);
+
+  useEffect(() => {
+    void loadConfigs();
+  }, [loadConfigs]);
 
   useEffect(() => {
     const raw = order?.designInfo?.processInfo;
@@ -1391,46 +1419,62 @@ const OrderDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      <div style={{ position: 'fixed', bottom: 96, right: 24, zIndex: 1000, maxWidth: 200, textAlign: 'right' }}>
-        <Tooltip title="开启后，底部翻页仅包含当前角色的待办订单；关闭后按订单列表拉取顺序浏览更多订单（首屏最多 500 条）。">
-          <Space direction="vertical" size={4} align="end">
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              只展示待办订单
-            </Text>
-            <Switch checked={flipTodoOnly} onChange={setFlipTodoOnlyPersist} />
-          </Space>
-        </Tooltip>
-      </div>
-
       <div
         style={{
           position: 'fixed',
           bottom: 24,
           right: 24,
+          zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
-          zIndex: 1000,
+          alignItems: 'flex-end',
+          gap: 12,
+          maxWidth: 'min(260px, calc(100vw - 40px))',
+          pointerEvents: 'auto',
         }}
       >
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={goToPrevOrder}
-          disabled={!relatedOrders.length || currentOrderIndex <= 0}
-          style={{ borderRadius: '50%', width: 48, height: 48, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-        />
-        <Button
-          icon={<ArrowRightOutlined />}
-          onClick={goToNextOrder}
-          disabled={!relatedOrders.length || currentOrderIndex >= relatedOrders.length - 1}
-          style={{ borderRadius: '50%', width: 48, height: 48, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-        />
-      </div>
-
-      <div style={{ position: 'fixed', bottom: 28, right: 80, zIndex: 1000 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {relatedOrders.length > 0 ? `${currentOrderIndex + 1} / ${relatedOrders.length}` : ''}
-        </Text>
+        <Tooltip title="开启后，底部翻页仅包含当前角色的待办订单；关闭后按订单列表拉取顺序浏览更多订单（首屏最多 500 条）。">
+          <div
+            style={{
+              background: '#fff',
+              padding: '10px 12px',
+              borderRadius: 10,
+              boxShadow: '0 2px 12px rgba(0, 0, 0, 0.12)',
+            }}
+          >
+            <Space direction="vertical" size={6} align="end">
+              <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                只展示待办订单
+              </Text>
+              <Switch checked={flipTodoOnly} onChange={setFlipTodoOnlyPersist} />
+            </Space>
+          </div>
+        </Tooltip>
+        {relatedOrders.length > 0 && (
+          <Text type="secondary" style={{ fontSize: 12, lineHeight: '20px' }}>
+            {currentOrderIndex + 1} / {relatedOrders.length}
+          </Text>
+        )}
+        <Space size={10}>
+          <Button
+            type="default"
+            shape="circle"
+            icon={<ArrowLeftOutlined />}
+            onClick={goToPrevOrder}
+            disabled={!relatedOrders.length || currentOrderIndex <= 0}
+            aria-label="上一单"
+            style={{ width: 48, height: 48, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' }}
+          />
+          <Button
+            type="default"
+            shape="circle"
+            icon={<ArrowRightOutlined />}
+            onClick={goToNextOrder}
+            disabled={!relatedOrders.length || currentOrderIndex >= relatedOrders.length - 1}
+            aria-label="下一单"
+            style={{ width: 48, height: 48, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' }}
+          />
+        </Space>
       </div>
     </div>
   );
