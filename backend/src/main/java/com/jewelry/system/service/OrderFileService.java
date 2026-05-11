@@ -2,8 +2,11 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.dto.order.FileInfoDto;
 import com.jewelry.system.entity.FileEntity;
+import com.jewelry.system.entity.Order;
+import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.repository.FileEntityRepository;
+import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ public class OrderFileService {
     private final FileStorageService fileStorageService;
     private final AliyunOssService aliyunOssService;
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
 
     @Transactional(readOnly = true)
     public List<FileInfoDto> listForOrder(long orderId) {
@@ -40,6 +44,7 @@ public class OrderFileService {
     public FileInfoDto uploadDesignFile(long orderId, MultipartFile file, String notes) throws IOException {
         long uid = SecurityUtils.currentUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        assertCanUploadDesign(orderId, uid);
         return save(orderId, file, "design", "DESIGN", notes, uid);
     }
 
@@ -55,6 +60,7 @@ public class OrderFileService {
     public FileInfoDto uploadModelFile(long orderId, MultipartFile file, String notes) throws IOException {
         long uid = SecurityUtils.currentUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        assertCanUploadModel(orderId, uid);
         return save(orderId, file, "model", "MODEL", notes, uid);
     }
 
@@ -63,6 +69,7 @@ public class OrderFileService {
     public FileInfoDto uploadModelEffectImage(long orderId, MultipartFile file, String notes) throws IOException {
         long uid = SecurityUtils.currentUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        assertCanUploadModel(orderId, uid);
         return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);
     }
 
@@ -132,5 +139,42 @@ public class OrderFileService {
                 .isLatest(true)
                 .notes(null)
                 .build();
+    }
+
+    private Order requireOrder(long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+    }
+
+    private boolean isAdminRole() {
+        return "ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null));
+    }
+
+    private void assertCanUploadDesign(long orderId, long uid) {
+        Order order = requireOrder(orderId);
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"DESIGNER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅设计师或管理员可上传设计文件");
+        }
+        User d = order.getDesigner();
+        if (d != null && d.getId() != uid) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派设计师可上传设计文件");
+        }
+    }
+
+    private void assertCanUploadModel(long orderId, long uid) {
+        Order order = requireOrder(orderId);
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"MODELER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师或管理员可上传建模相关文件");
+        }
+        User m = order.getModeler();
+        if (m != null && m.getId() != uid) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派建模师可上传建模相关文件");
+        }
     }
 }

@@ -19,6 +19,7 @@ import {
   Divider,
   Image,
   Alert,
+  Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -43,7 +44,9 @@ import { OrderSource, OrderStatus, ProcessType } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
-import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker, useIsPreSales } from '@/stores/authStore';
+import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
+import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
+import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -54,7 +57,7 @@ function modelSourceUploadListFromSaved(modelFiles: unknown): UploadFile[] {
     .filter((x) => x.fileId != null && x.fileUrl)
     .map((x, i) => {
       const name = x.fileName || '';
-      const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(name);
+      const isImg = isRasterImageFileName(name);
       return {
         uid: `src-${x.fileId}-${i}`,
         name: name || `file-${x.fileId}`,
@@ -112,7 +115,6 @@ const OrderDetailPage: React.FC = () => {
   const isDesigner = useIsDesigner();
   const isModeler = useIsModeler();
   const isTracker = useIsTracker();
-  const isPreSales = useIsPreSales();
 
   const [order, setOrder] = useState<OrderInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,6 +136,22 @@ const OrderDetailPage: React.FC = () => {
   const [customerProgressLink, setCustomerProgressLink] = useState<CustomerProgressLinkResponse | null>(null);
   const [customerCardPreviewUrl, setCustomerCardPreviewUrl] = useState<string | null>(null);
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
+  const [flipTodoOnly, setFlipTodoOnly] = useState(() => {
+    try {
+      return window.localStorage.getItem('orderDetailFlipTodoOnly') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const setFlipTodoOnlyPersist = useCallback((v: boolean) => {
+    setFlipTodoOnly(v);
+    try {
+      window.localStorage.setItem('orderDetailFlipTodoOnly', v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const [designForm] = Form.useForm();
   const [modelForm] = Form.useForm();
@@ -145,31 +163,42 @@ const OrderDetailPage: React.FC = () => {
     if (!currentUser) return;
     try {
       let orders: OrderInfo[] = [];
-      
-      if (isDesigner) {
-        const res = await orderService.workbenchDesignerTodo(0, 100);
-        orders = res.content || [];
-      } else if (isModeler) {
-        const res = await orderService.workbenchModelerTodo(0, 100);
-        orders = res.content || [];
-      } else if (isTracker) {
-        const res = await orderService.workbenchTrackerTodo(0, 100);
-        orders = res.content || [];
-      } else if (isSales || isAdmin || isPreSales) {
-        const res = await orderService.getOrders({ page: 0, size: 100 });
-        orders = res.content || [];
+      if (flipTodoOnly) {
+        if (isDesigner) {
+          const res = await orderService.workbenchDesignerTodo(0, 200);
+          orders = res.content || [];
+        } else if (isModeler) {
+          const res = await orderService.workbenchModelerTodo(0, 200);
+          orders = res.content || [];
+        } else if (isTracker) {
+          const res = await orderService.workbenchTrackerTodo(0, 200);
+          orders = res.content || [];
+        } else {
+          const res = await orderService.getOrders({ page: 0, size: 400 });
+          const all = res.content || [];
+          orders = filterOrdersForTodoFlip(currentUser, all);
+        }
+      } else {
+        const res = await orderService.getOrders({ page: 0, size: 500 });
+        orders = [...(res.content || [])];
       }
-      
+
+      if (order && !orders.some((o) => o.baseInfo.id === orderId)) {
+        orders = [...orders, order];
+      }
+      orders.sort((a, b) => {
+        const ta = a.baseInfo.orderTime || '';
+        const tb = b.baseInfo.orderTime || '';
+        return tb.localeCompare(ta);
+      });
+
       setRelatedOrders(orders);
-      
       const index = orders.findIndex((o) => o.baseInfo.id === orderId);
-      if (index >= 0) {
-        setCurrentOrderIndex(index);
-      }
+      setCurrentOrderIndex(index >= 0 ? index : 0);
     } catch (error) {
       console.error('加载相关订单失败:', error);
     }
-  }, [currentUser, orderId, isDesigner, isModeler, isTracker, isSales, isAdmin, isPreSales]);
+  }, [currentUser, orderId, flipTodoOnly, order, isDesigner, isModeler, isTracker]);
 
   const navigateToOrder = useCallback((newOrderId: number) => {
     navigate(`/orders/${newOrderId}`, { replace: true });
@@ -305,6 +334,37 @@ const OrderDetailPage: React.FC = () => {
     }
     return opts;
   }, [processConfig, order?.designInfo?.processInfo]);
+
+  const canOperateDesign = useMemo(
+    () =>
+      !!order &&
+      (isAdmin ||
+        (isDesigner && (!order.designInfo?.designerId || order.designInfo.designerId === currentUser?.id))),
+    [order, isAdmin, isDesigner, currentUser?.id]
+  );
+
+  const canOperateModel = useMemo(
+    () =>
+      !!order &&
+      (isAdmin ||
+        (isModeler && (!order.modelInfo?.modelerId || order.modelInfo.modelerId === currentUser?.id))),
+    [order, isAdmin, isModeler, currentUser?.id]
+  );
+
+  const canOperateReview = useMemo(
+    () =>
+      !!order &&
+      (isAdmin ||
+        (isTracker && (!order.reviewInfo?.trackerId || order.reviewInfo.trackerId === currentUser?.id))),
+    [order, isAdmin, isTracker, currentUser?.id]
+  );
+
+  const canOperateQuote = useMemo(
+    () =>
+      !!order &&
+      (isAdmin || (isSales && (!order.assignedSalesId || order.assignedSalesId === currentUser?.id))),
+    [order, isAdmin, isSales, currentUser?.id]
+  );
 
   useEffect(() => {
     (async () => {
@@ -466,6 +526,7 @@ const OrderDetailPage: React.FC = () => {
 
   const canShareCustomerProgress = useMemo(() => {
     if (!order || (!isDesigner && !isAdmin)) return false;
+    if (isDesigner && !canOperateDesign) return false;
     const hasDesignImgs = (order.designInfo?.designImages?.length ?? 0) > 0;
     const st = order.currentStatus as OrderStatus;
     const lateEnough =
@@ -476,7 +537,7 @@ const OrderDetailPage: React.FC = () => {
       st === OrderStatus.PRODUCING ||
       st === OrderStatus.COMPLETED;
     return hasDesignImgs || lateEnough;
-  }, [order, isDesigner, isAdmin]);
+  }, [order, isDesigner, isAdmin, canOperateDesign]);
 
   useEffect(() => {
     return () => {
@@ -599,41 +660,79 @@ const OrderDetailPage: React.FC = () => {
     }
   };
 
-  const fileColumns: ColumnsType<FileInfo> = [
-    { title: '文件名', dataIndex: 'fileName', ellipsis: true },
-    {
-      title: '大小',
-      dataIndex: 'fileSize',
-      width: 100,
-      render: (n: number) => (n != null ? `${(n / 1024).toFixed(1)} KB` : '-'),
-    },
-    { title: '上传者', dataIndex: 'uploaderName', width: 100 },
-    {
-      title: '时间',
-      dataIndex: 'uploadTime',
-      width: 170,
-      render: (t) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: '操作',
-      key: 'op',
-      width: 160,
-      render: (_, r) => (
-        <Space>
-          <Button type="link" size="small" onClick={() => previewFile(r.id)}>
-            打开 / 下载
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+  const fileColumns: ColumnsType<FileInfo> = useMemo(
+    () => [
+      {
+        title: '预览',
+        key: 'thumb',
+        width: 96,
+        align: 'center',
+        render: (_, r) => {
+          const url = (r.fileUrl || '').trim();
+          if (url && isRasterImageFileName(r.fileName)) {
+            return (
+              <Image
+                src={url}
+                alt={r.fileName || '附件'}
+                width={72}
+                height={72}
+                style={{ objectFit: 'cover', borderRadius: 6 }}
+                preview={{ mask: '放大' }}
+              />
+            );
+          }
+          return (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              —
+            </Text>
+          );
+        },
+      },
+      { title: '文件名', dataIndex: 'fileName', ellipsis: true },
+      {
+        title: '大小',
+        dataIndex: 'fileSize',
+        width: 100,
+        render: (n: number) => (n != null ? `${(n / 1024).toFixed(1)} KB` : '-'),
+      },
+      { title: '上传者', dataIndex: 'uploaderName', width: 100 },
+      {
+        title: '时间',
+        dataIndex: 'uploadTime',
+        width: 170,
+        render: (t) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: '操作',
+        key: 'op',
+        width: 160,
+        render: (_, r) => (
+          <Space>
+            <Button type="link" size="small" onClick={() => previewFile(r.id)}>
+              打开 / 下载
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    []
+  );
 
   const getTaskForm = () => {
     if (!order) return null;
 
     if (isDesigner) {
       return (
-        <Form form={designForm} layout="vertical" style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 720 }}>
+          {!canOperateDesign && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="当前订单的设计工作由其他同事负责，您可查看信息，无法在此保存或上传。"
+            />
+          )}
+          <Form form={designForm} layout="vertical" disabled={!canOperateDesign}>
           <Form.Item name="designerId" label="设计师">
             <Select
               allowClear
@@ -740,6 +839,7 @@ const OrderDetailPage: React.FC = () => {
             </Card>
           )}
         </Form>
+        </div>
       );
     }
 
@@ -748,7 +848,15 @@ const OrderDetailPage: React.FC = () => {
         order.currentStatus === OrderStatus.PENDING_MODEL || order.currentStatus === OrderStatus.MODELING;
       return (
         <div style={{ maxWidth: 720 }}>
-          {canReject && (
+          {!canOperateModel && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="当前订单的建模工作由其他同事负责，您可查看信息，无法在此保存、上传或驳回。"
+            />
+          )}
+          {canOperateModel && canReject && (
             <Collapse
               style={{ marginBottom: 16 }}
               defaultActiveKey={[]}
@@ -799,7 +907,7 @@ const OrderDetailPage: React.FC = () => {
               ]}
             />
           )}
-          <Form form={modelForm} layout="vertical" style={{ maxWidth: 520 }}>
+          <Form form={modelForm} layout="vertical" style={{ maxWidth: 520 }} disabled={!canOperateModel}>
             <Form.Item name="modelerId" label="建模师">
               <Select
                 allowClear
@@ -857,7 +965,16 @@ const OrderDetailPage: React.FC = () => {
 
     if (isTracker) {
       return (
-        <Form form={reviewForm} layout="vertical" style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 720 }}>
+          {!canOperateReview && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="当前订单的工艺评审由其他跟单同事负责，您可查看信息，无法在此保存。"
+            />
+          )}
+          <Form form={reviewForm} layout="vertical" disabled={!canOperateReview}>
           <Form.Item name="trackerId" label="跟单员">
             <Select
               allowClear
@@ -880,12 +997,22 @@ const OrderDetailPage: React.FC = () => {
             保存评审
           </Button>
         </Form>
+        </div>
       );
     }
 
     if (isSales || isAdmin) {
       return (
-        <Form form={quoteForm} layout="vertical" style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 720 }}>
+          {!canOperateQuote && isSales && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="当前订单的报价由其他售中同事负责，您可查看信息，无法在此保存。"
+            />
+          )}
+          <Form form={quoteForm} layout="vertical" disabled={isSales && !canOperateQuote}>
           <Space wrap>
             <Form.Item name="processCost" label="工艺费">
               <InputNumber min={0} step={0.01} />
@@ -928,6 +1055,7 @@ const OrderDetailPage: React.FC = () => {
             保存报价
           </Button>
         </Form>
+        </div>
       );
     }
 
@@ -1262,6 +1390,17 @@ const OrderDetailPage: React.FC = () => {
           />
         </div>
       </Card>
+
+      <div style={{ position: 'fixed', bottom: 96, right: 24, zIndex: 1000, maxWidth: 200, textAlign: 'right' }}>
+        <Tooltip title="开启后，底部翻页仅包含当前角色的待办订单；关闭后按订单列表拉取顺序浏览更多订单（首屏最多 500 条）。">
+          <Space direction="vertical" size={4} align="end">
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              只展示待办订单
+            </Text>
+            <Switch checked={flipTodoOnly} onChange={setFlipTodoOnlyPersist} />
+          </Space>
+        </Tooltip>
+      </div>
 
       <div
         style={{

@@ -155,6 +155,8 @@ public class OrderCommandService {
     @Transactional
     public OrderInfoDto updateDesign(long orderId, OrderDesignUpdateRequest req) {
         Order order = loadOrder(orderId);
+        assertCanEditDesign(order);
+        assertReassignDesigner(order, req.getDesignerId());
         OrderDetail od = orderDetailRepository.findByOrderId(orderId).orElseGet(() -> {
             OrderDetail d = new OrderDetail();
             d.setOrderId(orderId);
@@ -236,6 +238,8 @@ public class OrderCommandService {
     @Transactional
     public OrderInfoDto updateModel(long orderId, OrderModelUpdateRequest req) {
         Order order = loadOrder(orderId);
+        assertCanEditModel(order);
+        assertReassignModeler(order, req.getModelerId());
         ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElseGet(() -> {
             ModelingInfo m = new ModelingInfo();
             m.setOrderId(orderId);
@@ -363,9 +367,15 @@ public class OrderCommandService {
     @Transactional
     public OrderInfoDto updateReview(long orderId, OrderReviewUpdateRequest req) {
         Order order = loadOrder(orderId);
-        long reviewerId = req.getTrackerId() != null
-                ? req.getTrackerId()
-                : SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Long uid = SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        if (!isAdminRole()) {
+            assertCanEditReview(order);
+            if (req.getTrackerId() != null && !req.getTrackerId().equals(uid)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "不可将评审指派给其他跟单员");
+            }
+        }
+        long reviewerId = req.getTrackerId() != null ? req.getTrackerId() : uid;
         order.setFollowUp(userRepository.getReferenceById(reviewerId));
         orderRepository.save(order);
 
@@ -393,7 +403,8 @@ public class OrderCommandService {
 
     @Transactional
     public OrderInfoDto updateQuotation(long orderId, OrderQuotationUpdateRequest req) {
-        loadOrder(orderId);
+        Order order = loadOrder(orderId);
+        assertCanEditQuotation(order);
         Quotation q = quotationRepository.findByOrderId(orderId).orElseGet(() -> {
             Quotation n = new Quotation();
             n.setOrderId(orderId);
@@ -706,5 +717,104 @@ public class OrderCommandService {
 
     private static double nz(Double d) {
         return d != null ? d : 0;
+    }
+
+    private boolean isAdminRole() {
+        return "ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null));
+    }
+
+    private Long requireUserId() {
+        return SecurityUtils.currentUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+    }
+
+    private void assertCanEditDesign(Order order) {
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"DESIGNER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅设计师或管理员可保存设计信息");
+        }
+        Long uid = requireUserId();
+        User d = order.getDesigner();
+        if (d != null && !uid.equals(d.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派设计师可保存设计信息");
+        }
+    }
+
+    private void assertReassignDesigner(Order order, Long newDesignerId) {
+        if (newDesignerId == null) {
+            return;
+        }
+        Long cur = order.getDesigner() != null ? order.getDesigner().getId() : null;
+        if (Objects.equals(newDesignerId, cur)) {
+            return;
+        }
+        if (isAdminRole()) {
+            return;
+        }
+        if (cur == null && newDesignerId.equals(requireUserId())) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可变更指派设计师");
+    }
+
+    private void assertCanEditModel(Order order) {
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"MODELER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师或管理员可保存建模信息");
+        }
+        Long uid = requireUserId();
+        User m = order.getModeler();
+        if (m != null && !uid.equals(m.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派建模师可保存建模信息");
+        }
+    }
+
+    private void assertReassignModeler(Order order, Long newModelerId) {
+        if (newModelerId == null) {
+            return;
+        }
+        Long cur = order.getModeler() != null ? order.getModeler().getId() : null;
+        if (Objects.equals(newModelerId, cur)) {
+            return;
+        }
+        if (isAdminRole()) {
+            return;
+        }
+        if (cur == null && newModelerId.equals(requireUserId())) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可变更指派建模师");
+    }
+
+    private void assertCanEditReview(Order order) {
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"TRACKER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅跟单员或管理员可保存评审信息");
+        }
+        Long uid = requireUserId();
+        User t = order.getFollowUp();
+        if (t != null && !uid.equals(t.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派跟单员可保存评审信息");
+        }
+    }
+
+    private void assertCanEditQuotation(Order order) {
+        if (isAdminRole()) {
+            return;
+        }
+        if (!"SALES".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅售中客服或管理员可保存报价信息");
+        }
+        Long uid = requireUserId();
+        User s = order.getSalesMid();
+        if (s != null && !uid.equals(s.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派售中客服可保存报价信息");
+        }
     }
 }

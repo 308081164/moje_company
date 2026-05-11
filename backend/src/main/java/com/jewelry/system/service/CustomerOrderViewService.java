@@ -173,7 +173,7 @@ public class CustomerOrderViewService {
         if ("ADMIN".equals(role)) {
             return;
         }
-        if ("DESIGNER".equals(role) && order.getDesigner() != null && uid.equals(order.getDesigner().getId())) {
+        if ("DESIGNER".equals(role) && (order.getDesigner() == null || uid.equals(order.getDesigner().getId()))) {
             return;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅订单设计师或管理员可生成客户进度链接");
