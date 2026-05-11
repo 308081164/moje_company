@@ -1,0 +1,81 @@
+# Flutter WebView 壳：任意分支每次 push 均构建 Release APK，并上传为 Actions Artifact（同分支并发会取消旧运行）。
+#
+# 请在仓库 Settings → Secrets and variables → Actions → Variables 中设置：
+#   MOJE_WEB_APP_URL  例如 https://your-domain.com（编译进 APK 的 WEB_APP_URL）
+
+name: Flutter WebView Shell (Android APK)
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: flutter-webview-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: flutter_webview_shell
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate MOJE_WEB_APP_URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ vars.MOJE_WEB_APP_URL }}" ]; then
+            echo "::error::请在仓库 Variables 中设置 MOJE_WEB_APP_URL（生产环境 Web 管理端完整 URL，含 https://）"
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project & resolve dependencies
+        run: |
+          set -euo pipefail
+          flutter --version
+          flutter pub get
+          # 仓库仅保留 lib/pubspec 时，在 CI 内补齐 android/
+          flutter create . \
+            --org com.moje \
+            --project-name moje_webview_shell \
+            --platforms=android
+
+      - name: Build release APK
+        env:
+          MOJE_WEB_APP_URL: ${{ vars.MOJE_WEB_APP_URL }}
+        run: |
+          set -euo pipefail
+          flutter build apk --release \
+            --dart-define=WEB_APP_URL="${MOJE_WEB_APP_URL}"
+
+      - name: Stage APK with readable name
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$SRC"
+          OUT="moje-webview-shell-${GITHUB_SHA:0:7}.apk"
+          cp "$SRC" "${GITHUB_WORKSPACE}/${OUT}"
+          echo "path=${GITHUB_WORKSPACE}/${OUT}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moje-webview-shell-apk-${{ github.run_id }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
