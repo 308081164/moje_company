@@ -288,7 +288,17 @@ const AppLayout: React.FC = () => {
   };
 
   return (
-    <Layout className={`app-layout${isMobile ? ' app-layout--mobile' : ''}`} style={{ minHeight: '100vh' }}>
+    <Layout
+      className={`app-layout${isMobile ? ' app-layout--mobile' : ''}`}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
+        width: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+      }}
+    >
       {!isMobile && (
         <Sider
           width={240}
@@ -303,7 +313,8 @@ const AppLayout: React.FC = () => {
             borderRight: '1px solid #e8e8e8',
             overflowY: 'auto',
             overflowX: 'hidden',
-            height: '100vh',
+            height: '100%',
+            maxHeight: '100%',
             position: 'sticky',
             left: 0,
             top: 0,
@@ -380,7 +391,7 @@ const AppLayout: React.FC = () => {
       </Drawer>
       )}
 
-      <Layout style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <Layout style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <Header
           style={{
             padding: '0 16px',

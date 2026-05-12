@@ -151,18 +151,23 @@ const App: React.FC = () => {
   if (initializing || authLoading || !appReady) {
     console.log('[App] show initializing screen');
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: '#f0f2f5',
-      }}>
-        <Spin
-          indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />}
-          tip="正在初始化应用..."
-          size="large"
-        />
+      <div className="app-router-fill app-router-fill--scroll">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flex: 1,
+            minHeight: 240,
+            backgroundColor: '#f0f2f5',
+          }}
+        >
+          <Spin
+            indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />}
+            tip="正在初始化应用..."
+            size="large"
+          />
+        </div>
       </div>
     );
   }
@@ -172,10 +177,12 @@ const App: React.FC = () => {
     console.log('[App] not authenticated -> login router');
     return (
       <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+        <div className="app-router-fill app-router-fill--scroll">
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </div>
       </Router>
     );
   }
@@ -186,26 +193,28 @@ const App: React.FC = () => {
   console.log('[App] authenticated -> main router');
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<AppLayout />}>
-          {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
-          <Route index element={<DashboardPage />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="workbench" element={<WorkbenchPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="orders/*" element={<OrderManagementPage />} />
-          <Route
-            path="users/*"
-            element={isAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" replace />}
-          />
-          <Route
-            path="system/*"
-            element={isAdmin ? <SystemConfigPage /> : <Navigate to="/dashboard" replace />}
-          />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
+      <div className="app-router-fill">
+        <Routes>
+          <Route path="/" element={<AppLayout />}>
+            {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
+            <Route index element={<DashboardPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="workbench" element={<WorkbenchPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="orders/*" element={<OrderManagementPage />} />
+            <Route
+              path="users/*"
+              element={isAdmin ? <UserManagementPage /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route
+              path="system/*"
+              element={isAdmin ? <SystemConfigPage /> : <Navigate to="/dashboard" replace />}
+            />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </div>
     </Router>
   );
 };

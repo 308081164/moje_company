@@ -147,7 +147,7 @@
   min-height: calc(100vh - 140px);
   width: 100%;
   box-sizing: border-box;
-  overflow: auto;
+  overflow: visible;
 }
 
 /* 响应式样式 */
