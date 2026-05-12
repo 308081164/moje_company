@@ -15,6 +15,7 @@ import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.OrderCustomerViewLink;
 import com.jewelry.system.entity.OrderCustomerViewLink.LinkStatus;
+import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.OrderCustomerViewLinkRepository;
@@ -41,6 +42,10 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -66,6 +71,10 @@ public class CustomerOrderViewService {
 
     @Value("${app.customer-order.public-frontend-base-url:http://localhost:5173}")
     private String publicFrontendBaseUrl;
+
+    /** Electron / 静态部署使用 HashRouter 时为 true，链接形如 base/#/order-status/{token} */
+    @Value("${app.customer-order.use-hash-routing:true}")
+    private boolean customerOrderUseHashRouting;
 
     @Value("${app.customer-order.link-ttl-days:90}")
     private int linkTtlDays;
@@ -176,7 +185,13 @@ public class CustomerOrderViewService {
         if ("DESIGNER".equals(role) && (order.getDesigner() == null || uid.equals(order.getDesigner().getId()))) {
             return;
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅订单设计师或管理员可生成客户进度链接");
+        if ("PRE_SALES".equals(role)) {
+            User sp = order.getSalesPre();
+            if (sp == null || uid.equals(sp.getId())) {
+                return;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅订单设计师、本单售前经理或管理员可生成客户进度链接");
     }
 
     private OrderCustomerViewLink findActiveLink(String token) {
@@ -199,7 +214,10 @@ public class CustomerOrderViewService {
         while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
-        return base + "/order-status/" + token;
+        String path = customerOrderUseHashRouting
+                ? "/#/order-status/" + token
+                : "/order-status/" + token;
+        return base + path;
     }
 
     private String resolveDisplayTitle(Order order) {
@@ -260,6 +278,26 @@ public class CustomerOrderViewService {
                 .build());
     }
 
+    private Font pickUiFont(int style, float sizePx) {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        Set<String> available = new HashSet<>(Arrays.asList(ge.getAvailableFontFamilyNames(Locale.CHINA)));
+        String[] preferred = {
+                "Microsoft YaHei UI", "Microsoft YaHei",
+                "PingFang SC", "Hiragino Sans GB",
+                "Noto Sans CJK SC", "Noto Serif CJK SC",
+                "Source Han Sans SC", "Source Han Sans CN",
+                "WenQuanYi Micro Hei", "WenQuanYi Zen Hei",
+                "SimHei", "SimSun", "Dialog"
+        };
+        int size = Math.max(8, Math.round(sizePx));
+        for (String name : preferred) {
+            if (available.contains(name)) {
+                return new Font(name, style, size);
+            }
+        }
+        return new Font(Font.SANS_SERIF, style, size);
+    }
+
     private byte[] composeCardPng(Order order, String thumbUrl, String qrContent) throws IOException {
         final int W = 360;
         final int H = 440;
@@ -272,7 +310,7 @@ public class CustomerOrderViewService {
         g.setColor(new Color(235, 237, 240));
         g.fillRect(0, 0, W, 56);
         g.setColor(new Color(24, 144, 255));
-        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        g.setFont(pickUiFont(Font.BOLD, 16f));
         g.drawString("定制进度", 16, 36);
 
         int thumbSize = 96;
@@ -284,33 +322,35 @@ public class CustomerOrderViewService {
             g.setColor(new Color(245, 245, 245));
             g.fillRect(16, y0, thumbSize, thumbSize);
             g.setColor(new Color(160, 160, 160));
-            g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+            g.setFont(pickUiFont(Font.PLAIN, 12f));
             g.drawString("暂无预览", 38, y0 + thumbSize / 2);
         }
 
         g.setColor(Color.BLACK);
-        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        g.setFont(pickUiFont(Font.BOLD, 13f));
         int tx = 16 + thumbSize + 12;
         int ty = y0 + 18;
         g.drawString("单号 " + order.getOrderNumber(), tx, ty);
         ty += 22;
-        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        g.setFont(pickUiFont(Font.PLAIN, 12f));
         String title = resolveDisplayTitle(order);
         drawFittedString(g, title, tx, ty, W - tx - 16);
         ty += 40;
         if (order.getCreatedAt() != null) {
             g.setColor(new Color(90, 90, 90));
+            g.setFont(pickUiFont(Font.PLAIN, 12f));
             g.drawString("创建 " + ISO.format(order.getCreatedAt()), tx, ty);
             ty += 18;
         }
         g.setColor(new Color(24, 144, 255));
+        g.setFont(pickUiFont(Font.BOLD, 12f));
         g.drawString("状态：" + order.getStatus().getDescription(), tx, ty);
 
         int qrSize = 128;
         BufferedImage qr = encodeQr(qrContent, qrSize);
         g.drawImage(qr, W - 16 - qrSize, H - 16 - qrSize, null);
         g.setColor(new Color(130, 130, 130));
-        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+        g.setFont(pickUiFont(Font.PLAIN, 10f));
         g.drawString("扫码查看进度", W - 16 - qrSize, H - 8);
 
         g.dispose();

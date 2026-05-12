@@ -14,6 +14,7 @@ import WorkbenchPage from '@/pages/WorkbenchPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import AppLayout from '@/components/layout/AppLayout';
+import CustomerOrderStatusPage from '@/pages/CustomerOrderStatusPage';
 import './App.css';
 
 const App: React.FC = () => {
@@ -179,6 +180,7 @@ const App: React.FC = () => {
       <Router>
         <div className="app-router-fill app-router-fill--scroll">
           <Routes>
+            <Route path="/order-status/:token" element={<CustomerOrderStatusPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
@@ -195,6 +197,7 @@ const App: React.FC = () => {
     <Router>
       <div className="app-router-fill">
         <Routes>
+          <Route path="/order-status/:token" element={<CustomerOrderStatusPage />} />
           <Route path="/" element={<AppLayout />}>
             {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
             <Route index element={<DashboardPage />} />
