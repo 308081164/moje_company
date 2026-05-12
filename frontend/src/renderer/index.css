@@ -1,11 +1,28 @@
-html, body {
-  margin: 0;
-  padding: 0;
+html {
   height: 100%;
 }
 
-#app {
+html,
+body {
+  margin: 0;
+  padding: 0;
   height: 100%;
+  overflow-x: hidden;
+}
+
+/* 与 Electron / index.html 中 #root 的 flex 列布局配合，保证主区域可接收滚轮并滚动 */
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ========== 浏览器 / PWA 移动体验（Electron 不受影响：主要为 WebView 与手机 Safari/Chrome） ========== */

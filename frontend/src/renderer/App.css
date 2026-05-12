@@ -27,7 +27,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, var(--moje-light-gray) 0%, var(--moje-platinum) 100%);
   color: var(--moje-charcoal);
+  overflow-x: hidden;
+}
+
+/* 填满 #app，主壳用 overflow:hidden + 内层 Content 滚动；登录等全屏路由用 --scroll 变体 */
+.app-router-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.app-router-fill--scroll {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 奢华渐变背景 */
