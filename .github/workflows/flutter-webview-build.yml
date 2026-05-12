@@ -1,7 +1,10 @@
 # Flutter WebView 壳：任意分支每次 push 均构建 Release APK，并上传为 Actions Artifact（同分支并发会取消旧运行）。
 #
-# 请在仓库 Settings → Secrets and variables → Actions → Variables 中设置：
-#   MOJE_WEB_APP_URL  例如 https://your-domain.com（编译进 APK 的 WEB_APP_URL）
+# WebView 加载地址按以下顺序取第一个非空值（编译进 APK）：
+#   1. Variables「MOJE_WEB_APP_URL」
+#   2. Secrets「MOJE_WEB_APP_URL」
+#   3. Secrets「JEWELRY_WEB_APP_URL」
+#   4. Secrets「JEWELRY_API_ORIGIN」（与 Electron 构建相同；若管理端与 API 不同域请用前三种之一单独配置）
 
 name: Flutter WebView Shell (Android APK)
 
@@ -25,14 +28,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate MOJE_WEB_APP_URL
+      - name: Resolve Web app URL (for APK)
         shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          V_MOJE: ${{ vars.MOJE_WEB_APP_URL }}
+          S_MOJE: ${{ secrets.MOJE_WEB_APP_URL }}
+          S_JWEB: ${{ secrets.JEWELRY_WEB_APP_URL }}
+          S_API: ${{ secrets.JEWELRY_API_ORIGIN }}
         run: |
           set -euo pipefail
-          if [ -z "${{ vars.MOJE_WEB_APP_URL }}" ]; then
-            echo "::error::请在仓库 Variables 中设置 MOJE_WEB_APP_URL（生产环境 Web 管理端完整 URL，含 https://）"
+          RES=""
+          SRC=""
+          if [ -n "${V_MOJE}" ]; then RES="${V_MOJE}"; SRC="vars.MOJE_WEB_APP_URL"; fi
+          if [ -z "${RES}" ] && [ -n "${S_MOJE}" ]; then RES="${S_MOJE}"; SRC="secrets.MOJE_WEB_APP_URL"; fi
+          if [ -z "${RES}" ] && [ -n "${S_JWEB}" ]; then RES="${S_JWEB}"; SRC="secrets.JEWELRY_WEB_APP_URL"; fi
+          if [ -z "${RES}" ] && [ -n "${S_API}" ]; then
+            RES="${S_API}"
+            SRC="secrets.JEWELRY_API_ORIGIN"
+            echo "::notice::未单独配置管理端 URL，已使用 JEWELRY_API_ORIGIN；若 APK 应打开独立前端地址，请设置 MOJE_WEB_APP_URL。"
+          fi
+          if [ -z "${RES}" ]; then
+            echo "::error::请配置其一：Variables「MOJE_WEB_APP_URL」、Secrets「MOJE_WEB_APP_URL」或「JEWELRY_WEB_APP_URL」；或已配置 Secrets「JEWELRY_API_ORIGIN」且与加载地址一致。"
             exit 1
           fi
+          # 若误带末尾 /api，去掉（JEWELRY_API_ORIGIN 约定为不含 /api，此处仅容错）
+          case "${RES}" in
+            */api) RES="${RES%/api}" ;;
+            */api/) RES="${RES%/api/}" ;;
+          esac
+          RES="${RES%/}"
+          echo "Resolved WEB_APP_URL from: ${SRC}"
+          printf '%s' "${RES}" > "${RUNNER_TEMP}/moje_web_app_url.txt"
 
       - uses: actions/setup-java@v4
         with:
@@ -56,10 +83,9 @@ jobs:
             --platforms=android
 
       - name: Build release APK
-        env:
-          MOJE_WEB_APP_URL: ${{ vars.MOJE_WEB_APP_URL }}
         run: |
           set -euo pipefail
+          MOJE_WEB_APP_URL="$(cat "${RUNNER_TEMP}/moje_web_app_url.txt")"
           flutter build apk --release \
             --dart-define=WEB_APP_URL="${MOJE_WEB_APP_URL}"
 
