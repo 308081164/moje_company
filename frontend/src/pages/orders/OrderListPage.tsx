@@ -17,6 +17,7 @@ import {
   Tag,
   Typography,
   message,
+  notification,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -25,7 +26,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, useIsAdmin, useIsSales } from '@/stores/authStore';
 import { orderService } from '@/services/orderService';
 import { OrderInfo, OrderSource, OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
@@ -40,6 +41,8 @@ const OrderListPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
+  const isAdmin = useIsAdmin();
+  const isSales = useIsSales();
 
   const [orders, setOrders] = useState<OrderInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -151,6 +154,126 @@ const OrderListPage: React.FC = () => {
     setPageSize(size);
   };
 
+  const canUserCloseOrder = useCallback(
+    (r: OrderInfo) => {
+      if (!isAdmin && !isSales) return false;
+      if (r.currentStatus === OrderStatus.CANCELLED || r.currentStatus === OrderStatus.COMPLETED) return false;
+      if (isAdmin) return true;
+      return !r.assignedSalesId || r.assignedSalesId === user?.id;
+    },
+    [isAdmin, isSales, user?.id]
+  );
+
+  const runCloseOrderWithGuards = useCallback(
+    async (orderId: number, orderNumber: string) => {
+      const confirmStep = (title: string, content: string, okText: string, cancelText: string) =>
+        new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title,
+            content,
+            okText,
+            cancelText,
+            maskClosable: false,
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+
+      if (
+        !(await confirmStep(
+          '关闭订单 — 第一次确认',
+          `您即将关闭订单「${orderNumber}」。关闭后订单状态将变为「已取消」，请谨慎操作。`,
+          '继续',
+          '放弃'
+        ))
+      ) {
+        return;
+      }
+      if (
+        !(await confirmStep(
+          '关闭订单 — 第二次确认',
+          '再次确认：该操作对客户可见进度与内部统计均有影响，确定继续关闭流程？',
+          '继续关闭流程',
+          '放弃'
+        ))
+      ) {
+        return;
+      }
+      const thirdConfirm = await new Promise<boolean>((resolve) => {
+        Modal.confirm({
+          title: '关闭订单 — 第三次确认',
+          content:
+            '最后一次确认。防误触设计：左侧为「取消关闭」，右侧红色按钮为「确认关闭」。请点击右侧按钮才会真正提交关闭请求。',
+          okText: '取消关闭订单',
+          cancelText: '确认关闭此订单',
+          okButtonProps: { type: 'default' },
+          cancelButtonProps: { type: 'primary', danger: true },
+          maskClosable: false,
+          keyboard: false,
+          onOk: () => resolve(false),
+          onCancel: () => resolve(true),
+        });
+      });
+      if (!thirdConfirm) return;
+
+      const secondaryKeyRef = { current: '' };
+
+      const postClose = async (sk?: string) => {
+        await orderService.closeOrder(orderId, sk);
+      };
+
+      try {
+        await postClose();
+      } catch (e: unknown) {
+        const msg = String((e as any)?.response?.data?.message || (e as any)?.message || '');
+        if (msg.includes('二级密钥') || msg.includes('secondaryKey')) {
+          await new Promise<void>((resolve, reject) => {
+            Modal.confirm({
+              title: '需要当日二级密钥',
+              content: (
+                <div>
+                  <p style={{ marginBottom: 10 }}>{msg}</p>
+                  <p style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>
+                    请向杨兴辉索取当日密钥后填入下方（密钥与服务器日期相关）。
+                  </p>
+                  <Input
+                    placeholder="请输入二级密钥"
+                    onChange={(ev) => {
+                      secondaryKeyRef.current = ev.target.value;
+                    }}
+                  />
+                </div>
+              ),
+              okText: '提交密钥并关闭',
+              cancelText: '取消',
+              maskClosable: false,
+              onOk: async () => {
+                try {
+                  await postClose(secondaryKeyRef.current);
+                  resolve();
+                } catch (err) {
+                  reject(err);
+                }
+              },
+              onCancel: () => reject(new Error('abort')),
+            });
+          });
+        } else {
+          throw e;
+        }
+      }
+
+      notification.success({
+        message: '订单已成功关闭',
+        description: `订单「${orderNumber}」已置为已取消，列表已刷新。`,
+        duration: 8,
+        placement: 'top',
+      });
+      loadOrders();
+    },
+    [loadOrders]
+  );
+
   const canCreate = useMemo(
     () => [UserRole.PRE_SALES, UserRole.ADMIN].includes(user?.role as UserRole),
     [user?.role]
@@ -208,7 +331,7 @@ const OrderListPage: React.FC = () => {
         title: '操作',
         key: 'actions',
         fixed: 'right',
-        width: 200,
+        width: 280,
         render: (_, record) => (
           <Space wrap>
             <Button
@@ -218,11 +341,21 @@ const OrderListPage: React.FC = () => {
             >
               详情
             </Button>
+            {canUserCloseOrder(record) && (
+              <Button
+                size="small"
+                type="link"
+                danger
+                onClick={() => void runCloseOrderWithGuards(record.baseInfo.id, record.baseInfo.orderNumber || '')}
+              >
+                关闭订单
+              </Button>
+            )}
           </Space>
         ),
       },
     ],
-    [navigate]
+    [navigate, canUserCloseOrder, runCloseOrderWithGuards]
   );
 
   const handleOpenCreateModal = () => {

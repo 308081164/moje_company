@@ -160,6 +160,13 @@ public class OrderController {
         orderCommandService.deleteBatch(body.getOrderIds());
     }
 
+    @PostMapping("/{id:\\d+}/close")
+    @Operation(summary = "关闭订单（管理员或售中客服；每自然日免密钥最多 2 次，超出需当日二级密钥）")
+    public OrderInfoDto closeOrder(@PathVariable long id, @RequestBody(required = false) OrderCloseRequestDto body) {
+        String secondaryKey = body != null ? body.getSecondaryKey() : null;
+        return orderCommandService.closeOrderByUser(id, secondaryKey);
+    }
+
     @PutMapping("/{id:\\d+}/design")
     @Operation(summary = "更新设计信息")
     public OrderInfoDto updateDesign(@PathVariable long id, @RequestBody OrderDesignUpdateRequest body) {

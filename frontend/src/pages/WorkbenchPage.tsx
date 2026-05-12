@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Button, Card, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
+import { Badge, Button, Card, Select, Space, Table, Tabs, Tag, Typography, message, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { orderService } from '@/services/orderService';
 import type { OrderInfo } from '@/types/order';
+import { OrderStatus } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import dayjs from 'dayjs';
@@ -82,6 +83,15 @@ const WorkbenchPage: React.FC = () => {
     setIsB2b(value);
     setPage(1);
   };
+
+  const designerReviewAlerts = useMemo(() => {
+    if (role !== UserRole.DESIGNER || tab !== 'todo') return [];
+    return orders.filter(
+      (o) =>
+        o.currentStatus === OrderStatus.DESIGNING &&
+        !!o.modelInfo?.lastRejectToDesignerMessage?.trim()
+    );
+  }, [role, tab, orders]);
 
   const columns: ColumnsType<OrderInfo> = useMemo(
     () => [
@@ -187,6 +197,40 @@ const WorkbenchPage: React.FC = () => {
           },
         ]}
       />
+
+      {designerReviewAlerts.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          {designerReviewAlerts.map((o) => (
+            <Alert
+              key={o.baseInfo.id}
+              type="warning"
+              showIcon
+              banner
+              style={{
+                marginBottom: 12,
+                border: '2px solid #faad14',
+                background: '#fffbe6',
+              }}
+              message={
+                <Space wrap>
+                  <Text strong>设计复审 · 建模师驳回</Text>
+                  <Tag>{o.baseInfo.orderNumber}</Tag>
+                </Space>
+              }
+              description={
+                <div>
+                  <Text>{o.modelInfo?.lastRejectToDesignerMessage}</Text>
+                  <div style={{ marginTop: 8 }}>
+                    <Button type="primary" size="small" onClick={() => navigate(`/orders/${o.baseInfo.id}`)}>
+                      打开订单处理
+                    </Button>
+                  </div>
+                </div>
+              }
+            />
+          ))}
+        </div>
+      )}
 
       <Table
         style={{ marginTop: 8 }}

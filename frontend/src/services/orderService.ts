@@ -118,6 +118,15 @@ export const orderService = {
       throw error;
     }
   },
+
+  /** 关闭订单（管理员 / 售中）；日限额与二级密钥由后端校验 */
+  async closeOrder(orderId: number, secondaryKey?: string): Promise<OrderInfo> {
+    const body: { secondaryKey?: string } = {};
+    if (secondaryKey != null && secondaryKey.trim() !== '') {
+      body.secondaryKey = secondaryKey.trim();
+    }
+    return api.post<OrderInfo>(`/orders/${orderId}/close`, body);
+  },
   
   // 更新订单设计信息
   async updateOrderDesign(orderId: number, designData: OrderDesignUpdateRequest): Promise<OrderInfo> {
