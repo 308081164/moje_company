@@ -22,7 +22,8 @@ build_script:
 deploy:
   provider: S3
   region: eu-central-1
-  access_key_id: AKIAJRIZYZRNQUXO7WZA
+  # 示例占位：请勿在仓库中填写真实 AK；在 AppVeyor 项目设置中配置 S3 部署凭据
+  access_key_id: AKIAIOSFODNN7EXAMPLE
   secret_access_key:
     secure: Vy3I/MR5NtWDTXLbHcUzS6cwCSKZa/M8JYQZwHrip7cVW50Aez239OeqpC2je9yd
   bucket: instant-meshes

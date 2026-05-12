@@ -32,10 +32,10 @@
    ```sql
    CREATE DATABASE moje_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
-3. 默认连接配置：
-   - 主机：localhost:3306
-   - 用户名：root
-   - 密码：@Group666
+3. 连接信息（**勿将真实口令写入仓库**；本地可借助仓库根目录 `.env.example` 复制为 `.env` 并填写）：
+   - 主机：`localhost:3306`
+   - 用户名：与 `DB_USER` 一致（默认 `root`）
+   - 密码：由环境变量 `DB_PASSWORD` 提供
 
 ### 启动方式
 
@@ -138,12 +138,14 @@ src/main/resources/db/migration/
 └── V1__init_database.sql          # 初始数据库脚本
 ```
 
-## 默认用户
+## 默认管理员（首次启动）
 
-系统初始化时会创建默认管理员用户：
-- **用户名**: kuangjun
-- **密码**: moje666
-- **角色**: 管理员
+Flyway 种子中的管理员密码为占位哈希；应用启动时会根据环境变量写入可登录密码：
+
+- **用户名**：`DEFAULT_ADMIN_USERNAME`（默认 `kuangjun`）
+- **密码**：`DEFAULT_ADMIN_PASSWORD`（**必填**，勿提交到 Git）
+
+未设置 `DEFAULT_ADMIN_PASSWORD` 时不会自动覆盖种子密码，将无法登录。
 
 ## API文档
 
@@ -166,13 +168,13 @@ src/main/resources/db/migration/
 ### 请求示例
 
 #### 用户登录
+
+请先设置环境变量 `TEST_ADMIN_PASSWORD`（及可选的 `TEST_ADMIN_USERNAME`），或使用与当前环境一致的账号调用登录接口，例如：
+
 ```bash
 curl -X POST "http://localhost:8851/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "kuangjun",
-    "password": "moje666"
-  }'
+  -d "{\"username\":\"${ADMIN_USER:-kuangjun}\",\"password\":\"$DEFAULT_ADMIN_PASSWORD\"}"
 ```
 
 #### 健康检查
@@ -228,16 +230,23 @@ curl "http://localhost:8851/api/health"
 
 ### 环境变量配置
 
-| 变量名 | 描述 | 默认值 |
-|--------|------|--------|
-| DB_HOST | 数据库主机 | mysql |
-| DB_PORT | 数据库端口 | 3306 |
-| DB_NAME | 数据库名 | moje_database |
-| DB_USER | 数据库用户 | root |
-| DB_PASSWORD | 数据库密码 | @Group666 |
-| OSS_ACCESS_KEY_ID | 阿里云OSS AccessKey ID | - |
-| OSS_ACCESS_KEY_SECRET | 阿里云OSS AccessKey Secret | - |
-| SERVER_PORT | 服务端口 | 8851 |
+完整说明见仓库根目录 **`docs/环境变量清单.md`** 与 **`.env.example`**。常用项如下：
+
+| 变量名 | 描述 | 是否必填（生产） |
+|--------|------|------------------|
+| DB_HOST | 数据库主机 | 可选，默认 localhost |
+| DB_PORT | 数据库端口 | 可选，默认 3306 |
+| DB_NAME | 数据库名 | 可选，默认 moje_database |
+| DB_USER | 数据库用户 | 可选，默认 root |
+| DB_PASSWORD | 数据库密码 | **必填** |
+| JWT_SECRET | JWT 签名密钥 | **必填** |
+| DEFAULT_ADMIN_PASSWORD | 种子管理员可登录密码 | **首次启动必填** |
+| DEFAULT_ADMIN_USERNAME | 种子管理员用户名 | 可选，默认 kuangjun |
+| OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET / OSS_BUCKET_NAME | 阿里云 OSS | 使用 OSS 上传时必填 |
+| ALIYUN_OSS_ENDPOINT | OSS Endpoint | 可选，有默认地域 |
+| JEWELRY_PUBLIC_BASE_URL / B2B_PUBLIC_BASE_URL | B2B 公网基址 | 视部署而定 |
+
+使用 Flyway Maven 插件（`mvn flyway:*`）时，请先在 shell 中 `export DB_PASSWORD=...`，插件从环境变量读取。
 
 ## 故障排除
 

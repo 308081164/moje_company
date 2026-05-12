@@ -24,7 +24,7 @@ public class LoginResponse {
     @Schema(description = "用户ID", example = "1")
     private Long userId;
     
-    @Schema(description = "用户名", example = "kuangjun")
+    @Schema(description = "用户名", example = "admin_user")
     private String username;
     
     @Schema(description = "真实姓名", example = "系统管理员")

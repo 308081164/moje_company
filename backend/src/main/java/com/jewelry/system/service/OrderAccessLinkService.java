@@ -42,7 +42,7 @@ public class OrderAccessLinkService {
     private String accessUrlPrefix;
 
     /** 公网基址，无路径；与 server.servlet.context-path 及 B2B 路由组合为访问链接 */
-    @Value("${app.b2b.public-base-url:http://39.102.213.51:8852}")
+    @Value("${app.b2b.public-base-url:http://localhost:8852}")
     private String publicBaseUrl;
 
     private static final String B2B_ORDER_ACCESS_PATH = "/api/b2b/order/";

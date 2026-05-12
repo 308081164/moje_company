@@ -10,10 +10,10 @@ import jakarta.validation.constraints.NotBlank;
 public class LoginRequest {
     
     @NotBlank(message = "用户名不能为空")
-    @Schema(description = "用户名", example = "kuangjun", required = true)
+    @Schema(description = "用户名", example = "admin_user", required = true)
     private String username;
     
     @NotBlank(message = "密码不能为空")
-    @Schema(description = "密码", example = "moje666", required = true)
+    @Schema(description = "密码", example = "your_password", required = true)
     private String password;
 }

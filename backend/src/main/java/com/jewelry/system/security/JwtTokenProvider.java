@@ -35,6 +35,9 @@ public class JwtTokenProvider {
             @Value("${jwt.expiration}") long accessExpirationMs,
             @Value("${jwt.refresh-expiration:604800000}") long refreshExpirationMs
     ) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("未配置 JWT 密钥：请设置环境变量 JWT_SECRET（或 Spring 配置 jwt.secret），长度建议不少于 32 字符。");
+        }
         this.key = hmacKey(secret);
         this.accessExpirationMs = accessExpirationMs;
         this.refreshExpirationMs = refreshExpirationMs;

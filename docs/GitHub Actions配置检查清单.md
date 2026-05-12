@@ -16,22 +16,32 @@
 #### 必需配置的Secrets：
 
 1. **SSH_HOST**：服务器IP地址
-   - 值：`39.102.213.51`
+   - 值：`<YOUR_SERVER_HOST>`
 
 2. **SSH_USERNAME**：SSH用户名
    - 值：`root`
 
-3. **SSH_PASSWORD**：SSH密码
-   - 值：`@Group666`
+3. **SSH_PASSWORD**：SSH 密码
+   - 值：`<YOUR_SSH_PASSWORD>`
 
 4. **DB_PASSWORD**：数据库密码
-   - 值：`@Group666`
+   - 值：`<YOUR_DB_PASSWORD>`
 
-5. **OSS_ACCESS_KEY_ID**：阿里云OSS AccessKey ID
-   - 值：`LTAI5tFTJEe9v9Vr7HRh4J9F`
+5. **JWT_SECRET**：后端 JWT 签名密钥（建议随机长串）
 
-6. **OSS_ACCESS_KEY_SECRET**：阿里云OSS AccessKey Secret
-   - 值：[您已配置的AccessKey Secret]
+6. **DEFAULT_ADMIN_PASSWORD**：种子管理员首次可登录密码
+
+7. **OSS_ACCESS_KEY_ID**：阿里云 OSS AccessKey ID
+   - 值：`<YOUR_OSS_ACCESS_KEY_ID>`
+
+8. **OSS_ACCESS_KEY_SECRET**：阿里云 OSS AccessKey Secret
+   - 值：[您已配置的 AccessKey Secret]
+
+9. **OSS_BUCKET_NAME**（可选）：OSS Bucket 名称；与 `ALIYUN_OSS_ENDPOINT`（可选）用于生产 OSS
+
+#### 可选：
+
+- **DEFAULT_ADMIN_USERNAME**：不设置则默认 `kuangjun`
 
 #### 配置步骤：
 
@@ -57,7 +67,7 @@
    - 构建Docker镜像并推送到GitHub Container Registry
 
 2. **部署阶段**：
-   - 通过SSH连接到服务器（39.102.213.51）
+   - 通过SSH连接到服务器（<YOUR_SERVER_HOST>）
    - 创建项目目录：`/opt/jewelry-system`
    - 拉取最新代码
    - 创建docker-compose.prod.yml配置文件
@@ -88,7 +98,7 @@
 ### 1. 检查服务器环境
 ```bash
 # 登录服务器
-ssh root@39.102.213.51
+ssh root@<YOUR_SERVER_HOST>
 
 # 检查Docker是否安装
 docker --version
@@ -115,7 +125,7 @@ chmod 755 /opt/jewelry-system
 ### 3. 测试SSH连接（从GitHub Actions角度）
 ```bash
 # 测试密码登录
-sshpass -p '@Group666' ssh root@39.102.213.51 "echo 'SSH连接测试成功'"
+sshpass -p '<YOUR_SSH_PASSWORD>' ssh root@<YOUR_SERVER_HOST> "echo 'SSH连接测试成功'"
 ```
 
 ## 手动测试部署
@@ -178,7 +188,7 @@ curl http://localhost:8851/actuator/health
 ### 3. 数据库备份
 ```bash
 # 备份脚本
-docker exec jewelry-mysql mysqldump -u root -p@Group666 moje_database > backup_$(date +%Y%m%d).sql
+docker exec jewelry-mysql mysqldump -u root -p<YOUR_DB_PASSWORD> moje_database > backup_$(date +%Y%m%d).sql
 ```
 
 ## 紧急恢复措施
@@ -198,7 +208,7 @@ docker compose -f docker-compose.prod.yml up -d
 ### 如果数据库出现问题：
 ```bash
 # 进入MySQL容器
-docker exec -it jewelry-mysql mysql -u root -p@Group666
+docker exec -it jewelry-mysql mysql -u root -p<YOUR_DB_PASSWORD>
 
 # 检查数据库
 SHOW DATABASES;

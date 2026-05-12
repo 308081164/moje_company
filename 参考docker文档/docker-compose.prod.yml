@@ -76,7 +76,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: autoattend-attachments
-      PLATFORM_OPS_PASSWORD: liubangproject
+      PLATFORM_OPS_PASSWORD: ${PLATFORM_OPS_PASSWORD:?请在部署环境设置 PLATFORM_OPS_PASSWORD}
     volumes:
       # 与仓库同步的迁移清单与 SQL（deploy workflow 会 scp atuo_attend_backend 到本目录）
       - ./atuo_attend_backend/src/main/resources/db:/app/db:ro

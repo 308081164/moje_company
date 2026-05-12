@@ -6,7 +6,7 @@
 ## 一、前提条件
 
 ### 1.1 已确认信息
-- ✅ **服务器IP**：39.102.213.51
+- ✅ **服务器IP**：<YOUR_SERVER_HOST>
 - ✅ **现有服务**：同一服务器上已有使用类似架构部署的其他服务
 - ✅ **部署模式**：GitHub Actions + SSH密钥认证 + Docker Compose
 - ✅ **参考配置**：已有完整的docker-compose.prod.yml和部署流程
@@ -15,12 +15,12 @@
 基于您提供的信息，已确认以下配置：
 1. **SSH登录方式**：密码登录（非密钥）
 2. **SSH用户名**：root
-3. **SSH密码**：@Group666
+3. **SSH密码**：`<YOUR_SSH_PASSWORD>`
 4. **服务器目录**：`/mnt/newdisk/app/[项目名]`
 5. **阿里云OSS**：已在GitHub Secrets中配置
-   - OSS_ACCESS_KEY_ID：LTAI5tFTJEe9v9Vr7HRh4J9F
+   - OSS_ACCESS_KEY_ID：<YOUR_OSS_ACCESS_KEY_ID>
    - OSS_ACCESS_KEY_SECRET：[已配置]
-6. **数据库密码**：@Group666（与SSH密码相同）
+6. **数据库密码**：`<YOUR_DB_PASSWORD>`（可与 SSH 密码不同，建议在 Secrets 中分别配置）
 
 ## 二、配置步骤
 
@@ -30,7 +30,7 @@
 
 ```bash
 # 登录服务器（使用现有SSH方式）
-ssh [现有用户名]@39.102.213.51
+ssh [现有用户名]@<YOUR_SERVER_HOST>
 
 # 查看现有项目目录
 ls -la /opt/  # 或 /home/[用户名]/ 等目录
@@ -50,16 +50,16 @@ netstat -tulpn | grep :8851  # 检查我们的端口是否被占用
 在您的GitHub仓库中配置以下Secrets：
 
 **必需Secrets**：
-1. **SSH_HOST**：`39.102.213.51`
+1. **SSH_HOST**：`<YOUR_SERVER_HOST>`
 2. **SSH_USERNAME**：`root`
-3. **SSH_PASSWORD**：`@Group666`
+3. **SSH_PASSWORD**：`<YOUR_DB_PASSWORD>`
 
 **应用配置Secrets**：
-4. **OSS_ACCESS_KEY_ID**：`LTAI5tFTJEe9v9Vr7HRh4J9F`（您已配置）
+4. **OSS_ACCESS_KEY_ID**：`<YOUR_OSS_ACCESS_KEY_ID>`（您已配置）
 5. **OSS_ACCESS_KEY_SECRET**：[您已配置的AccessKey Secret]
 
 **数据库配置**：
-6. **DB_PASSWORD**：`@Group666`（与SSH密码相同）
+6. **DB_PASSWORD**：`<YOUR_DB_PASSWORD>`（与SSH密码相同）
 
 **配置方法**：
 1. 进入GitHub仓库 → Settings → Secrets and variables → Actions
@@ -180,7 +180,7 @@ services:
     container_name: jewelry-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: @Group666
+      MYSQL_ROOT_PASSWORD: <YOUR_DB_PASSWORD>
       MYSQL_DATABASE: moje_database
       TZ: Asia/Shanghai
     volumes:
@@ -201,11 +201,11 @@ services:
       DB_PORT: 3306
       DB_NAME: moje_database
       DB_USER: root
-      DB_PASSWORD: @Group666
+      DB_PASSWORD: <YOUR_DB_PASSWORD>
       OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
       OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
       OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
-      OSS_BUCKET: moje-jewelry-files
+      OSS_BUCKET: <YOUR_OSS_BUCKET_NAME>
       SERVER_PORT: 8851
     ports:
       - "8851:8851"
@@ -259,8 +259,8 @@ EOF
           docker image prune -f
           
           echo "=== 部署完成 ==="
-          echo "服务地址: http://39.102.213.51:8851"
-          echo "健康检查: http://39.102.213.51:8851/actuator/health"
+          echo "服务地址: http://<YOUR_SERVER_HOST>:8851"
+          echo "健康检查: http://<YOUR_SERVER_HOST>:8851/actuator/health"
 ```
 
 ### 2.4 第四步：创建数据库迁移文件
@@ -474,7 +474,7 @@ docker logs jewelry-backend -f
 docker exec -it jewelry-backend /bin/bash
 
 # 检查数据库连接
-docker exec jewelry-mysql mysql -u root -p@Group666 -e "SHOW DATABASES;"
+docker exec jewelry-mysql mysql -u root -p<YOUR_DB_PASSWORD> -e "SHOW DATABASES;"
 
 # 检查网络
 docker network inspect jewelry-network
@@ -488,7 +488,7 @@ docker network inspect jewelry-network
 - 限制SSH用户权限
 
 ### 5.2 数据库安全
-- 使用强密码（@Group666建议加强）
+- 使用强密码；勿将真实口令写入仓库，仅通过 GitHub Secrets 或服务器环境变量注入。
 - 不暴露3306端口到公网
 - 定期备份数据
 
@@ -517,4 +517,4 @@ docker logs --tail 100 -f jewelry-backend
 #!/bin/bash
 BACKUP_DIR="/opt/jewelry-system/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
-docker exec jewelry-mysql mysqldump -u root -p@Group666 moje_database > $BACKUP_DIR/backup_$
+docker exec jewelry-mysql mysqldump -u root -p<YOUR_DB_PASSWORD> moje_database > $BACKUP_DIR/backup_$

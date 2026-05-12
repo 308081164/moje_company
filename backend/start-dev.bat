@@ -29,12 +29,16 @@ if errorlevel 1 (
     echo 请确保MySQL已启动并运行在3306端口
 )
 
-REM 创建数据库（如果不存在）
+REM 创建数据库（如果不存在）；密码来自环境变量 DB_PASSWORD
 echo 创建数据库...
-mysql -u root -p@Group666 -e "CREATE DATABASE IF NOT EXISTS moje_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>nul
-if errorlevel 1 (
-    echo 警告: 无法连接到MySQL数据库
-    echo 请检查MySQL服务是否运行，用户名/密码是否正确
+if not defined DB_PASSWORD (
+    echo 警告: 未设置环境变量 DB_PASSWORD，已跳过 mysql 建库命令。请手动创建数据库 moje_database。
+) else (
+    mysql -u root -p%DB_PASSWORD% -e "CREATE DATABASE IF NOT EXISTS moje_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>nul
+    if errorlevel 1 (
+        echo 警告: 无法连接到MySQL数据库
+        echo 请检查MySQL服务是否运行，用户名/密码是否正确
+    )
 )
 
 REM 清理并构建项目

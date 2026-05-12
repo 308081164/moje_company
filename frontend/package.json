@@ -97,7 +97,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://moje-jewelry-files.oss-cn-guangzhou.aliyuncs.com/desktop-updates/win"
+        "url": "https://example.com/desktop-updates/win"
       }
     ],
     "nsis": {

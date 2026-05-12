@@ -234,7 +234,7 @@
                 <configuration>
                     <url>jdbc:mysql://localhost:3306/moje_database</url>
                     <user>root</user>
-                    <password>@Group666</password>
+                    <password>${env.DB_PASSWORD}</password>
                 </configuration>
             </plugin>
         </plugins>

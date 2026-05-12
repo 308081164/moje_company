@@ -69,7 +69,13 @@ Test-Endpoint -method "GET" -url "/b2b/modeler/status" -description "B2B modeler
 Write-Host "Phase 2: Auth APIs"
 Write-Host "-----------------"
 
-$loginBody = '{"username":"kuangjun","password":"moje666"}'
+if (-not $env:TEST_ADMIN_PASSWORD) {
+    Write-Host "SKIP: 未设置 TEST_ADMIN_PASSWORD，跳过登录与需鉴权接口测试" -ForegroundColor Yellow
+    Write-Host "示例: `$env:TEST_ADMIN_USERNAME='kuangjun'; `$env:TEST_ADMIN_PASSWORD='你的口令'"
+    exit 0
+}
+$loginUser = if ($env:TEST_ADMIN_USERNAME) { $env:TEST_ADMIN_USERNAME } else { "kuangjun" }
+$loginBody = (@{ username = $loginUser; password = $env:TEST_ADMIN_PASSWORD } | ConvertTo-Json -Compress)
 $loginResponse = Test-Endpoint -method "POST" -url "/auth/login" -body $loginBody -description "Admin login"
 
 if ($loginResponse) {

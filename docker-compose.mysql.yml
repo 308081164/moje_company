@@ -1,11 +1,12 @@
-version: '3.8'
+# 仅启动 MySQL：复制根目录 .env.example 为 .env 并设置 DB_PASSWORD 后执行
+# docker compose --env-file .env -f docker-compose.mysql.yml up -d
 
 services:
   mysql:
     image: mysql:8.0
     container_name: jewelry-mysql-dev
     environment:
-      MYSQL_ROOT_PASSWORD: "@Group666"
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
       MYSQL_DATABASE: moje_database
       TZ: Asia/Shanghai
     ports:
@@ -13,7 +14,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p\"@Group666\""]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

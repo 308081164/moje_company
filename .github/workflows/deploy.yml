@@ -85,8 +85,13 @@ jobs:
       uses: appleboy/ssh-action@v0.1.5
       env:
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        DEFAULT_ADMIN_PASSWORD: ${{ secrets.DEFAULT_ADMIN_PASSWORD }}
+        DEFAULT_ADMIN_USERNAME: ${{ secrets.DEFAULT_ADMIN_USERNAME }}
         OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
         OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
+        ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
         DOCKER_COMPOSE_CONFIG: |
           version: "3.9"
 
@@ -105,7 +110,7 @@ jobs:
               networks:
                 - jewelry-network
               healthcheck:
-                test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+                test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
                 interval: 10s
                 timeout: 5s
                 retries: 30
@@ -123,10 +128,13 @@ jobs:
                 DB_NAME: moje_database
                 DB_USER: root
                 DB_PASSWORD: ${DB_PASSWORD}
+                JWT_SECRET: ${JWT_SECRET}
+                DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+                DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-kuangjun}
                 OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
                 OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-                OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
-                OSS_BUCKET: moje-jewelry-files
+                ALIYUN_OSS_ENDPOINT: ${ALIYUN_OSS_ENDPOINT:-oss-cn-guangzhou.aliyuncs.com}
+                OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
                 SERVER_PORT: 8851
                 SPRING_PROFILES_ACTIVE: prod
               ports:
@@ -175,14 +183,16 @@ jobs:
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
-        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET
+        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,ALIYUN_OSS_ENDPOINT
         script: |
           set -euo pipefail
           : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
           : "${DB_PASSWORD:?DB_PASSWORD is empty (missing GitHub secret DB_PASSWORD)}"
+          : "${JWT_SECRET:?JWT_SECRET is empty (missing GitHub secret JWT_SECRET)}"
+          : "${DEFAULT_ADMIN_PASSWORD:?DEFAULT_ADMIN_PASSWORD is empty (missing GitHub secret DEFAULT_ADMIN_PASSWORD)}"
 
           # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
-          export DB_PASSWORD OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET
+          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME ALIYUN_OSS_ENDPOINT
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
