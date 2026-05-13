@@ -163,7 +163,7 @@ public class OrderAccessLinkService {
         B2BOrderAccessDto dto = new B2BOrderAccessDto();
         dto.setOrderId(link.getOrderId());
         dto.setOrderNumber(order != null ? order.getOrderNumber() : null);
-        dto.setAccessToken(link.getAccessToken());
+        dto.setToken(link.getAccessToken());
         dto.setAccessUrl(resolveB2bPortalShareUrlPrefix() + link.getAccessToken());
         dto.setQrcodeBase64(link.getQrcodeData());
         dto.setExpireTime(link.getExpireTime());
