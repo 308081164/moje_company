@@ -12,9 +12,22 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/PortalView.vue')
   },
   {
-    path: '/order/:token',
-    name: 'OrderDetail',
+    path: '/portal/b2b/order/:token',
+    name: 'B2BOrderDetail',
     component: () => import('@/views/OrderDetailView.vue')
+  },
+  {
+    path: '/portal/c/progress/:token',
+    name: 'CustomerOrderProgress',
+    component: () => import('@/views/CustomerProgressView.vue')
+  },
+  {
+    path: '/order/:token',
+    redirect: (to) => {
+      const raw = to.params.token
+      const token = Array.isArray(raw) ? raw[0] : raw
+      return { path: `/portal/b2b/order/${token ?? ''}` }
+    }
   }
 ]
 

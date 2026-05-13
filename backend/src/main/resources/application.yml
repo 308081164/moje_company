@@ -112,15 +112,13 @@ app:
     gold-margin: 10 # 10元
     design-copyright-fee: 500 # 设计买断费用
     appraisal-certificate-fee: 300 # 鉴定证书费用
-  # B2B configuration
+  # B2B / C 端客户公开进度页：同一 Vue 门户（通常为 Nginx 8852，见 docs/8852统一客户进度门户.md）
+  portal:
+    base-url: ${JEWELRY_PORTAL_BASE_URL:http://localhost:8852}
   b2b:
-    # 非空时作为完整访问链接前缀（须含 /api/b2b/order/ 与末尾 /），优先生效
+    # 非空时作为 B2B 订单公开页「完整 URL 前缀」（须以 / 结尾），覆盖 portal.base-url + /portal/b2b/order/
     access-url-prefix: ${B2B_ACCESS_URL_PREFIX:}
-    # 公网 scheme://host:port，无路径；在 access-url-prefix 为空时拼出 {base}/api/b2b/order/{token}
-    public-base-url: ${JEWELRY_PUBLIC_BASE_URL:${B2B_PUBLIC_BASE_URL:http://localhost:8852}}
-  # C 端客户进度页（前端 SPA 部署基址，用于拼二维码中的打开链接）
   customer-order:
-    public-frontend-base-url: ${JEWELRY_CUSTOMER_ORDER_FRONTEND_URL:http://localhost:3000}
-    # 与 webpack 渲染入口 HashRouter 一致：生成 /#/order-status/{token}；若静态站为 BrowserRouter 且无 #，设 false
-    use-hash-routing: ${JEWELRY_CUSTOMER_ORDER_USE_HASH_ROUTING:true}
+    # 非空时单独指定 C 端进度页 SPA 根地址（否则使用 app.portal.base-url）
+    public-frontend-base-url: ${JEWELRY_CUSTOMER_ORDER_FRONTEND_URL:}
     link-ttl-days: ${JEWELRY_CUSTOMER_ORDER_LINK_TTL_DAYS:90}

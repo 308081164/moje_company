@@ -5,7 +5,6 @@ import { LoadingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
 import LoginPage from '@/pages/LoginPage';
-import CustomerOrderStatusPage from '@/pages/CustomerOrderStatusPage';
 import DashboardPage from '@/pages/DashboardPage';
 import OrderManagementPage from '@/pages/OrderManagementPage';
 import UserManagementPage from '@/pages/UserManagementPage';
@@ -21,18 +20,10 @@ const App: React.FC = () => {
   const { isAuthenticated, user, loading: authLoading, checkAuth } = useAuthStore();
   const { appReady, initializeApp } = useAppStore();
   const [initializing, setInitializing] = useState(true);
-  const [isPublicOrderStatus] = useState(
-    () => typeof window !== 'undefined' && /^#\/order-status\/.+/.test(window.location.hash),
-  );
-
-  console.log('[App] render', { initializing, authLoading, appReady, isAuthenticated, isPublicOrderStatus });
+  console.log('[App] render', { initializing, authLoading, appReady, isAuthenticated });
 
   // 初始化应用
   useEffect(() => {
-    if (isPublicOrderStatus) {
-      setInitializing(false);
-      return;
-    }
     const init = async () => {
       try {
         // 检查认证状态
@@ -57,13 +48,10 @@ const App: React.FC = () => {
     };
 
     init();
-  }, [checkAuth, initializeApp, isAuthenticated, user, isPublicOrderStatus]);
+  }, [checkAuth, initializeApp, isAuthenticated, user]);
 
   // 监听Electron菜单事件
   useEffect(() => {
-    if (isPublicOrderStatus) {
-      return;
-    }
     const electronAPI = window.electronAPI;
     if (electronAPI) {
       const handleNewOrder = () => {
@@ -89,13 +77,10 @@ const App: React.FC = () => {
         electronAPI.removeShowAboutListener(handleShowAbout);
       };
     }
-  }, [isAuthenticated, isPublicOrderStatus]);
+  }, [isAuthenticated]);
 
   // 自动更新监听
   useEffect(() => {
-    if (isPublicOrderStatus) {
-      return;
-    }
     const electronAPI = window.electronAPI;
     if (!electronAPI || !isAuthenticated) {
       return;
@@ -159,20 +144,7 @@ const App: React.FC = () => {
       window.removeEventListener('electron-update-download-progress', onProgress);
       message.destroy('update-progress');
     };
-  }, [isAuthenticated, isPublicOrderStatus]);
-
-  // C 端客户进度（Hash 路由）：免登录，不参与全局初始化阻塞
-  if (isPublicOrderStatus) {
-    return (
-      <Router>
-        <div className="app-router-fill app-router-fill--scroll">
-          <Routes>
-            <Route path="/order-status/:token" element={<CustomerOrderStatusPage />} />
-          </Routes>
-        </div>
-      </Router>
-    );
-  }
+  }, [isAuthenticated]);
 
   // 显示加载状态
   if (initializing || authLoading || !appReady) {
@@ -206,7 +178,6 @@ const App: React.FC = () => {
       <Router>
         <div className="app-router-fill app-router-fill--scroll">
           <Routes>
-            <Route path="/order-status/:token" element={<CustomerOrderStatusPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>

@@ -49,7 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * C 端客户订单公开进度与设计师分享卡片。
+ * C 端客户订单公开进度与设计师分享卡片（页面入口为统一门户 {@code /portal/c/progress/{token}}）。
  * <p>限流：可按 view_token 做 Bucket4j / Redis 计数（此处仅占位，未实现）。</p>
  */
 @Service
@@ -64,15 +64,18 @@ public class CustomerOrderViewService {
     private final DesignInfoRepository designInfoRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.customer-order.public-frontend-base-url:http://localhost:3000}")
-    private String publicFrontendBaseUrl;
+    /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
+    @Value("${app.portal.base-url:http://localhost:8852}")
+    private String portalBaseUrl;
+
+    /**
+     * 非空时单独指定 C 端进度页 SPA 根地址（否则使用 {@link #portalBaseUrl}）。
+     */
+    @Value("${app.customer-order.public-frontend-base-url:}")
+    private String publicFrontendBaseUrlOverride;
 
     @Value("${app.customer-order.link-ttl-days:90}")
     private int linkTtlDays;
-
-    /** 与前端 HashRouter 一致时为 true，生成 /#/order-status/{token} */
-    @Value("${app.customer-order.use-hash-routing:true}")
-    private boolean customerOrderUseHashRouting;
 
     public static String maskCustomerName(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -199,14 +202,16 @@ public class CustomerOrderViewService {
     }
 
     private String buildPublicPageUrl(String token) {
-        String base = publicFrontendBaseUrl == null ? "" : publicFrontendBaseUrl.trim();
+        String base;
+        if (StringUtils.hasText(publicFrontendBaseUrlOverride)) {
+            base = publicFrontendBaseUrlOverride.trim();
+        } else {
+            base = portalBaseUrl == null ? "" : portalBaseUrl.trim();
+        }
         while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
-        if (customerOrderUseHashRouting) {
-            return base + "/#/order-status/" + token;
-        }
-        return base + "/order-status/" + token;
+        return base + "/portal/c/progress/" + token;
     }
 
     private String resolveDisplayTitle(Order order) {

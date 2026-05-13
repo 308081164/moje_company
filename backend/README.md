@@ -244,7 +244,8 @@ curl "http://localhost:8851/api/health"
 | DEFAULT_ADMIN_USERNAME | 种子管理员用户名 | 可选，默认 kuangjun |
 | OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET / OSS_BUCKET_NAME | 阿里云 OSS | 使用 OSS 上传时必填 |
 | ALIYUN_OSS_ENDPOINT | OSS Endpoint | 可选，有默认地域 |
-| JEWELRY_PUBLIC_BASE_URL / B2B_PUBLIC_BASE_URL | B2B 公网基址 | 视部署而定 |
+| JEWELRY_PUBLIC_BASE_URL | API 等集成用对外基址（无路径） | 视部署而定 |
+| JEWELRY_PORTAL_BASE_URL | B2B/C 统一门户（8852 Vue），用于生成 `/portal/b2b/order/`、`/portal/c/progress/` 链接 | **生产必填**公网地址 |
 
 使用 Flyway Maven 插件（`mvn flyway:*`）时，请先在 shell 中 `export DB_PASSWORD=...`，插件从环境变量读取。
 

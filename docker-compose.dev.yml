@@ -40,6 +40,7 @@ services:
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:?请在 .env 中设置 DEFAULT_ADMIN_PASSWORD}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-kuangjun}
       - JEWELRY_PUBLIC_BASE_URL=${JEWELRY_PUBLIC_BASE_URL:-http://localhost:8851}
+      - JEWELRY_PORTAL_BASE_URL=${JEWELRY_PORTAL_BASE_URL:-http://localhost:8852}
     ports:
       - "8851:8851"
     depends_on:
