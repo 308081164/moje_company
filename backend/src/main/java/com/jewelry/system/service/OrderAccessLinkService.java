@@ -1,7 +1,6 @@
 package com.jewelry.system.service;
 
 import com.jewelry.system.dto.b2b.B2BOrderAccessDto;
-import com.jewelry.system.entity.B2BClient;
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.OrderAccessLink;
 import com.jewelry.system.entity.OrderAccessLink.LinkStatus;
@@ -37,15 +36,15 @@ public class OrderAccessLinkService {
     private final OrderAccessLinkRepository linkRepository;
     private final OrderRepository orderRepository;
 
-    /** 完整前缀；非空时覆盖 {@link #publicBaseUrl} 拼接逻辑 */
+    /** 非空时作为 B2B 订单公开页完整 URL 前缀（须以 / 结尾），覆盖默认门户路径 */
     @Value("${app.b2b.access-url-prefix:}")
     private String accessUrlPrefix;
 
-    /** 公网基址，无路径；与 server.servlet.context-path 及 B2B 路由组合为访问链接 */
-    @Value("${app.b2b.public-base-url:http://localhost:8852}")
-    private String publicBaseUrl;
+    /** Vue 门户基址（无路径），用于生成 {base}/portal/b2b/order/{token} */
+    @Value("${app.portal.base-url:http://localhost:8852}")
+    private String portalBaseUrl;
 
-    private static final String B2B_ORDER_ACCESS_PATH = "/api/b2b/order/";
+    private static final String B2B_PORTAL_ORDER_PATH = "/portal/b2b/order/";
 
     @Transactional
     public B2BOrderAccessDto createLink(Long orderId, Long clientId) {
@@ -56,12 +55,14 @@ public class OrderAccessLinkService {
         if (existing != null && LinkStatus.ACTIVE.equals(existing.getStatus())) {
             existing.setViewCount(0);
             existing.setExpireTime(LocalDateTime.now().plusDays(30));
+            String refreshUrl = resolveB2bPortalShareUrlPrefix() + existing.getAccessToken();
+            existing.setQrcodeData(generateQrcodeBase64(refreshUrl));
             linkRepository.save(existing);
             return toDto(existing);
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");
-        String accessUrl = resolveAccessUrlPrefix() + token;
+        String accessUrl = resolveB2bPortalShareUrlPrefix() + token;
 
         OrderAccessLink link = new OrderAccessLink();
         link.setOrderId(orderId);
@@ -123,18 +124,18 @@ public class OrderAccessLinkService {
 
     /**
      * 返回以 / 结尾的完整前缀。若配置了 {@code app.b2b.access-url-prefix} 则直接使用；
-     * 否则为 {@code publicBaseUrl} + {@code /api/b2b/order/}（与 context-path /api 及 {@code /b2b/order/{token}} 一致）。
+     * 否则为 {@code portalBaseUrl} + {@code /portal/b2b/order/}（与 b2b-client 路由一致）。
      */
-    private String resolveAccessUrlPrefix() {
+    private String resolveB2bPortalShareUrlPrefix() {
         if (StringUtils.hasText(accessUrlPrefix)) {
             String p = accessUrlPrefix.trim();
             return p.endsWith("/") ? p : p + "/";
         }
-        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+        String base = portalBaseUrl == null ? "" : portalBaseUrl.trim();
         while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
-        return base + B2B_ORDER_ACCESS_PATH;
+        return base + B2B_PORTAL_ORDER_PATH;
     }
 
     private String generateQrcodeBase64(String content) {
@@ -162,7 +163,8 @@ public class OrderAccessLinkService {
         B2BOrderAccessDto dto = new B2BOrderAccessDto();
         dto.setOrderId(link.getOrderId());
         dto.setOrderNumber(order != null ? order.getOrderNumber() : null);
-        dto.setAccessUrl(resolveAccessUrlPrefix() + link.getAccessToken());
+        dto.setAccessToken(link.getAccessToken());
+        dto.setAccessUrl(resolveB2bPortalShareUrlPrefix() + link.getAccessToken());
         dto.setQrcodeBase64(link.getQrcodeData());
         dto.setExpireTime(link.getExpireTime());
         return dto;

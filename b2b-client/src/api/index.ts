@@ -35,10 +35,30 @@ export interface B2BClientResponse {
 }
 
 export interface B2BOrderAccessDto {
+  orderId?: number
   orderNumber: string
+  /** 与 accessUrl 中路径段一致，供前端跳转 */
+  token?: string
   accessUrl: string
   qrcodeBase64: string
   expireTime: string
+}
+
+export interface CustomerOrderPublicMilestoneDto {
+  code: string
+  label: string
+  at: string
+}
+
+export interface CustomerOrderPublicDto {
+  orderNumber: string
+  displayTitle: string
+  customerNameMasked?: string
+  createdAt?: string
+  currentStatus: string
+  currentStatusLabel?: string
+  firstDesignImageUrl?: string
+  milestones?: CustomerOrderPublicMilestoneDto[]
 }
 
 export interface OrderInfoDto {
@@ -92,6 +112,11 @@ export function createOrderWithFiles(
 
 export function getOrderByToken(token: string): Promise<OrderInfoDto> {
   return request.get(`/b2b/order/${token}`)
+}
+
+/** C 端客户凭 view_token 查看进度（公开接口，无需登录） */
+export function getCustomerOrderPublic(token: string): Promise<CustomerOrderPublicDto> {
+  return request.get(`/public/customer-order/${encodeURIComponent(token)}`)
 }
 
 export function loginClient(data: B2BClientLoginRequest): Promise<B2BClientResponse> {

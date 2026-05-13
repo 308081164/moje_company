@@ -104,6 +104,7 @@ jobs:
         OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
         OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
         ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
+        JEWELRY_PORTAL_BASE_URL: ${{ secrets.JEWELRY_PORTAL_BASE_URL }}
         DOCKER_COMPOSE_CONFIG: |
           version: "3.9"
 
@@ -149,6 +150,7 @@ jobs:
                 OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
                 SERVER_PORT: 8851
                 SPRING_PROFILES_ACTIVE: prod
+                JEWELRY_PORTAL_BASE_URL: ${JEWELRY_PORTAL_BASE_URL:-http://localhost:8852}
               ports:
                 - "8851:8851"
               volumes:
@@ -195,7 +197,7 @@ jobs:
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
-        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,ALIYUN_OSS_ENDPOINT
+        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,ALIYUN_OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
         script: |
           set -euo pipefail
           : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
@@ -204,7 +206,7 @@ jobs:
           : "${DEFAULT_ADMIN_PASSWORD:?DEFAULT_ADMIN_PASSWORD is empty (missing GitHub secret DEFAULT_ADMIN_PASSWORD)}"
 
           # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
-          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME ALIYUN_OSS_ENDPOINT
+          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME ALIYUN_OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
