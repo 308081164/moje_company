@@ -207,5 +207,17 @@
             `;
         });
     </script>
+    <!-- 浏览器访问（非 Electron）：未注入 API 时，按「与页面同主机 + 8851 端口」请求后端，与 docker-compose.dev 端口映射一致 -->
+    <script>
+      (function () {
+        if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
+        window.env = window.env || {};
+        if (window.env.API_URL && String(window.env.API_URL).trim()) return;
+        var h = window.location.hostname;
+        if (!h || h === 'localhost' || h === '127.0.0.1') return;
+        var p = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        window.env.API_URL = p + '//' + h + ':8851/api';
+      })();
+    </script>
 </body>
 </html>

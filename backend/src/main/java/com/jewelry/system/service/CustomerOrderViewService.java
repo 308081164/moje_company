@@ -64,11 +64,15 @@ public class CustomerOrderViewService {
     private final DesignInfoRepository designInfoRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.customer-order.public-frontend-base-url:http://localhost:5173}")
+    @Value("${app.customer-order.public-frontend-base-url:http://localhost:3000}")
     private String publicFrontendBaseUrl;
 
     @Value("${app.customer-order.link-ttl-days:90}")
     private int linkTtlDays;
+
+    /** 与前端 HashRouter 一致时为 true，生成 /#/order-status/{token} */
+    @Value("${app.customer-order.use-hash-routing:true}")
+    private boolean customerOrderUseHashRouting;
 
     public static String maskCustomerName(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -198,6 +202,9 @@ public class CustomerOrderViewService {
         String base = publicFrontendBaseUrl == null ? "" : publicFrontendBaseUrl.trim();
         while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
+        }
+        if (customerOrderUseHashRouting) {
+            return base + "/#/order-status/" + token;
         }
         return base + "/order-status/" + token;
     }
