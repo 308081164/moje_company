@@ -68,18 +68,30 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Validate SSH secrets
+    - name: Validate deployment secrets
       shell: bash
       run: |
         set -euo pipefail
         if [ -z "${{ secrets.SSH_HOST }}" ] || [ -z "${{ secrets.SSH_USERNAME }}" ]; then
-          echo "Missing required secrets: SSH_HOST / SSH_USERNAME"
+          echo "::error::缺少 Secrets：SSH_HOST 和/或 SSH_USERNAME"
           exit 1
         fi
         if [ -z "${{ secrets.SSH_PASSWORD }}" ] && [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-          echo "Missing SSH credential: set either SSH_PASSWORD or SSH_PRIVATE_KEY (recommended)."
+          echo "::error::缺少 SSH 凭据：请设置 SSH_PASSWORD 或 SSH_PRIVATE_KEY（推荐密钥）"
           exit 1
         fi
+        missing=""
+        [ -z "${{ secrets.DB_PASSWORD }}" ] && missing="${missing} DB_PASSWORD"
+        [ -z "${{ secrets.JWT_SECRET }}" ] && missing="${missing} JWT_SECRET"
+        [ -z "${{ secrets.DEFAULT_ADMIN_PASSWORD }}" ] && missing="${missing} DEFAULT_ADMIN_PASSWORD"
+        if [ -n "${missing}" ]; then
+          echo "::error::以下 GitHub Actions Secrets 未配置或为空（与 AccessKey 轮换无关）：${missing}"
+          echo ""
+          echo "请在仓库 Settings → Secrets and variables → Actions 中新增/填写，说明见 docs/环境变量清单.md 第三节。"
+          echo "若刚合并安全相关 PR，请务必新增 JWT_SECRET、DEFAULT_ADMIN_PASSWORD。"
+          exit 1
+        fi
+        echo "Deploy secrets 校验通过（已配置 DB_PASSWORD、JWT_SECRET、DEFAULT_ADMIN_PASSWORD）。"
     
     - name: Deploy to production server
       uses: appleboy/ssh-action@v0.1.5
