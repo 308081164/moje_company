@@ -12,6 +12,9 @@ public class OrderInfoDto {
 
     private OrderBaseDto baseInfo;
     private String currentStatus;
+    /** 售前客服（C 端订单创建人，对应 orders.sales_pre_id） */
+    private Long assignedPreSalesId;
+    private String assignedPreSalesName;
     private Long assignedSalesId;
     private String assignedSalesName;
     private String createdAt;

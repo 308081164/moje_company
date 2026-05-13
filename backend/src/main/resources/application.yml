@@ -121,4 +121,6 @@ app:
   # C 端客户进度页（前端 SPA 部署基址，用于拼二维码中的打开链接）
   customer-order:
     public-frontend-base-url: ${JEWELRY_CUSTOMER_ORDER_FRONTEND_URL:http://localhost:5173}
+    # 与前端路由一致：Electron / HashRouter 为 true（链接含 #/order-status/）；纯 BrowserRouter 部署请设为 false
+    use-hash-routing: ${JEWELRY_CUSTOMER_ORDER_USE_HASH_ROUTING:true}
     link-ttl-days: ${JEWELRY_CUSTOMER_ORDER_LINK_TTL_DAYS:90}

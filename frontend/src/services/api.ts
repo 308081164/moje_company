@@ -111,7 +111,7 @@ api.interceptors.response.use(
           window.location.hash = '#/login';
           break;
         case 403:
-          message.error('权限不足，无法访问');
+          message.error(data?.message || '权限不足，无法访问');
           break;
         case 404:
           message.error('请求的资源不存在');

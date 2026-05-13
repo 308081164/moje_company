@@ -8,6 +8,7 @@ import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ReviewResult;
 import com.jewelry.system.repository.*;
+import com.jewelry.system.util.OrderCloseSecondaryKeyUtil;
 import com.jewelry.system.util.OrderSourceMapper;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class OrderCommandService {
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final OrderRepository orderRepository;
+    private final OperationLogRepository operationLogRepository;
     private final FileEntityRepository fileEntityRepository;
     private final UserRepository userRepository;
     private final OrderDetailRepository orderDetailRepository;
@@ -79,7 +81,7 @@ public class OrderCommandService {
         o.setOrderNumber(generateOrderNumber());
         o.setStatus(OrderStatus.PENDING_DESIGN);
 
-        SecurityUtils.currentRoleApi().filter("PRE_SALES"::equals).flatMap(r -> SecurityUtils.currentUserId())
+        SecurityUtils.currentUserId()
                 .ifPresent(uid -> o.setSalesPre(userRepository.getReferenceById(uid)));
 
         orderRepository.save(o);
@@ -828,5 +830,53 @@ public class OrderCommandService {
         if (s != null && !uid.equals(s.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派售中客服可保存报价信息");
         }
+    }
+
+    /**
+     * 管理员或售中客服关闭订单；同一用户每自然日最多 2 次免密钥关闭，超出需填写当日二级密钥（见 {@link OrderCloseSecondaryKeyUtil}）。
+     */
+    @Transactional
+    public OrderInfoDto closeOrderByUser(long orderId, String secondaryKey) {
+        Order order = loadOrder(orderId);
+        if (OrderStatus.COMPLETED.equals(order.getStatus()) || OrderStatus.CANCELLED.equals(order.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "订单已结束，无法再次关闭");
+        }
+        assertCanCloseOrder(order);
+        Long uid = requireUserId();
+        LocalDate today = LocalDate.now();
+        LocalDateTime start = today.atStartOfDay();
+        LocalDateTime end = today.plusDays(1).atStartOfDay();
+        long normalCloses = operationLogRepository.countByTypeAndUserAndCreatedAtRange(
+                "ORDER_USER_CLOSE", uid, start, end);
+        if (normalCloses >= 2) {
+            if (!OrderCloseSecondaryKeyUtil.matches(secondaryKey, today)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "您今日在无需密钥情况下关闭订单已达 2 单上限。继续关闭请向杨兴辉索取当日二级密钥，并在请求体中填写 secondaryKey 字段。");
+            }
+            order.transitionTo(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            auditLogService.log("ORDER_USER_CLOSE_SECONDARY", "ORDER", orderId, "用户关闭订单（已校验二级密钥）");
+        } else {
+            order.transitionTo(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            auditLogService.log("ORDER_USER_CLOSE", "ORDER", orderId, "用户关闭订单");
+        }
+        return orderQueryService.getOrder(orderId);
+    }
+
+    private void assertCanCloseOrder(Order order) {
+        String role = SecurityUtils.currentRoleApi().orElse("");
+        if ("ADMIN".equals(role)) {
+            return;
+        }
+        if ("SALES".equals(role)) {
+            Long uid = requireUserId();
+            User mid = order.getSalesMid();
+            if (mid != null && !uid.equals(mid.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派售中客服或管理员可关闭订单");
+            }
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员或售中客服可关闭订单");
     }
 }

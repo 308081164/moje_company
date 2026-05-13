@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Image, Space, Typography, message } from 'antd';
-import { PictureOutlined, PlusOutlined, ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import type { OrderDraftFromChatImageResponse } from '@/types/order';
 
@@ -190,13 +190,7 @@ const ChatScreenshotImportButton: React.FC<Props> = ({ onDraft }) => {
             </div>
           ))}
         </div>
-      ) : (
-        <div style={{ marginTop: 10 }}>
-          <Button icon={<PictureOutlined />} type="dashed" onClick={() => inputRef.current?.click()}>
-            从相册选择截图
-          </Button>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 package com.jewelry.system.service;
 
 import com.jewelry.system.dto.order.OrderInfoDto;
+import com.jewelry.system.dto.order.OrderModelBlockDto;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import jakarta.persistence.criteria.Predicate;
 
 @Service
@@ -82,7 +85,35 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
+        return mapDesignerPageWithRejectHints(orderRepository.findAll(spec, pageable));
+    }
+
+    private Page<OrderInfoDto> mapDesignerPageWithRejectHints(Page<Order> raw) {
+        List<Order> content = raw.getContent();
+        if (content.isEmpty()) {
+            return raw.map(o -> OrderApiMapper.toOrderInfo(o, false));
+        }
+        List<Long> ids = content.stream().map(Order::getId).toList();
+        List<ModelingInfo> mis = modelingInfoRepository.findAllByOrderIdIn(ids);
+        Map<Long, String> rejectByOrder = new HashMap<>();
+        for (ModelingInfo mi : mis) {
+            String msg = mi.getModelerRejectToDesignerMessage();
+            if (msg != null && !msg.isBlank()) {
+                rejectByOrder.put(mi.getOrderId(), msg.trim());
+            }
+        }
+        return raw.map(o -> {
+            OrderInfoDto dto = OrderApiMapper.toOrderInfo(o, false);
+            String hint = rejectByOrder.get(o.getId());
+            if (hint != null) {
+                dto.setModelInfo(OrderModelBlockDto.builder()
+                        .id(o.getId())
+                        .orderId(o.getId())
+                        .lastRejectToDesignerMessage(hint)
+                        .build());
+            }
+            return dto;
+        });
     }
 
     @Transactional(readOnly = true)

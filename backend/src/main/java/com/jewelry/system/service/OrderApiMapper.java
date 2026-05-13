@@ -46,9 +46,20 @@ public final class OrderApiMapper {
                     ? salesMid.getRealName()
                     : salesMid.getUsername();
         }
+        User salesPre = o.getSalesPre();
+        String preSalesName = null;
+        Long preSalesId = null;
+        if (salesPre != null) {
+            preSalesId = salesPre.getId();
+            preSalesName = salesPre.getRealName() != null && !salesPre.getRealName().isBlank()
+                    ? salesPre.getRealName()
+                    : salesPre.getUsername();
+        }
         OrderInfoDto.OrderInfoDtoBuilder b = OrderInfoDto.builder()
                 .baseInfo(base)
                 .currentStatus(o.getStatus() != null ? o.getStatus().name() : null)
+                .assignedPreSalesId(preSalesId)
+                .assignedPreSalesName(preSalesName)
                 .assignedSalesId(salesMid != null ? salesMid.getId() : null)
                 .assignedSalesName(salesName)
                 .createdAt(o.getCreatedAt() != null ? ISO.format(o.getCreatedAt()) : null)

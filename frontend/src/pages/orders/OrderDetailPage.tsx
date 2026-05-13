@@ -16,10 +16,12 @@ import {
   Tag,
   Typography,
   message,
+  notification,
   Divider,
   Image,
   Alert,
   Tooltip,
+  Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -46,7 +48,7 @@ import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
 import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
-import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
+import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker, useIsPreSales } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -115,6 +117,7 @@ const OrderDetailPage: React.FC = () => {
   const isDesigner = useIsDesigner();
   const isModeler = useIsModeler();
   const isTracker = useIsTracker();
+  const isPreSales = useIsPreSales();
 
   const [order, setOrder] = useState<OrderInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -465,6 +468,15 @@ const OrderDetailPage: React.FC = () => {
     [orderId]
   );
 
+  const beforeModelSourceUpload = useCallback<NonNullable<UploadProps['beforeUpload']>>((file) => {
+    const name = ((file as File).name || '').toLowerCase();
+    if (!/\.(stl|jcd|obj)$/.test(name)) {
+      message.error('建模源文件仅支持 .stl、.jcd、.obj，请避免选择其它格式');
+      return Upload.LIST_IGNORE;
+    }
+    return true;
+  }, []);
+
   const handleModelSourceUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
     setModelSourceFileList(normalizeModelSourceUploadFileList(fileList));
   }, []);
@@ -548,12 +560,17 @@ const OrderDetailPage: React.FC = () => {
       designImages: collectDoneImageUrlsFromFileList(designImageFileList),
       processInfo,
     });
-    message.success('设计信息已保存');
-    refresh();
+    notification.success({
+      message: '任务已成功提交',
+      description: '设计信息已保存，底部待办订单翻页列表已同步更新。',
+      duration: 4.5,
+    });
+    await refresh();
+    await loadRelatedOrdersRef.current();
   };
 
   const canShareCustomerProgress = useMemo(() => {
-    if (!order || (!isDesigner && !isAdmin)) return false;
+    if (!order || (!isDesigner && !isAdmin && !isPreSales)) return false;
     if (isDesigner && !canOperateDesign) return false;
     const hasDesignImgs = (order.designInfo?.designImages?.length ?? 0) > 0;
     const st = order.currentStatus as OrderStatus;
@@ -565,7 +582,7 @@ const OrderDetailPage: React.FC = () => {
       st === OrderStatus.PRODUCING ||
       st === OrderStatus.COMPLETED;
     return hasDesignImgs || lateEnough;
-  }, [order, isDesigner, isAdmin, canOperateDesign]);
+  }, [order, isDesigner, isAdmin, isPreSales, canOperateDesign]);
 
   useEffect(() => {
     return () => {
@@ -624,8 +641,13 @@ const OrderDetailPage: React.FC = () => {
       modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
       modelSourceFileIds: sourceIds,
     });
-    message.success('建模信息已保存');
-    refresh();
+    notification.success({
+      message: '任务已成功提交',
+      description: '建模信息已保存，底部待办订单翻页列表已同步更新。',
+      duration: 4.5,
+    });
+    await refresh();
+    await loadRelatedOrdersRef.current();
   };
 
   const submitRejectToDesigner = async () => {
@@ -639,10 +661,15 @@ const OrderDetailPage: React.FC = () => {
         message: v.rejectMessage as string,
         attachmentFileIds: attachmentFileIds.length ? attachmentFileIds : undefined,
       });
-      message.success('已驳回给设计师，订单已进入「设计复审中」');
+      notification.success({
+        message: '任务已成功提交',
+        description: '已驳回给设计师，待办订单列表已同步更新。',
+        duration: 4.5,
+      });
       rejectDesignerForm.resetFields();
       setRejectDesignerAttachList([]);
-      refresh();
+      await refresh();
+      await loadRelatedOrdersRef.current();
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
     }
@@ -668,15 +695,25 @@ const OrderDetailPage: React.FC = () => {
       rejectionReason: v.rejectionReason,
       rejectedProcesses: arr.length ? arr : undefined,
     });
-    message.success('评审已保存');
-    refresh();
+    notification.success({
+      message: '任务已成功提交',
+      description: '工艺评审已保存，待办订单翻页列表已同步更新。',
+      duration: 4.5,
+    });
+    await refresh();
+    await loadRelatedOrdersRef.current();
   };
 
   const saveQuote = async () => {
     const v = await quoteForm.validateFields();
     await orderService.updateOrderQuotation(orderId, v);
-    message.success('报价已保存');
-    refresh();
+    notification.success({
+      message: '任务已成功提交',
+      description: '报价信息已保存，待办订单翻页列表已同步更新。',
+      duration: 4.5,
+    });
+    await refresh();
+    await loadRelatedOrdersRef.current();
   };
 
   const previewFile = async (fileId: number) => {
@@ -744,6 +781,51 @@ const OrderDetailPage: React.FC = () => {
       },
     ],
     []
+  );
+
+  const renderCustomerProgressShareCard = () => (
+    <Card size="small" title="客户进度分享" style={{ marginTop: 16 }}>
+      <Paragraph type="secondary" style={{ marginTop: 0 }}>
+        生成安全链接后，客户无需登录即可在手机查看进度。可下载带二维码的小名片图发给客户。
+      </Paragraph>
+      <Space wrap>
+        <Button type="primary" loading={customerProgressBusy} onClick={() => void onGenerateCustomerProgress()}>
+          生成客户进度二维码
+        </Button>
+        <Button
+          disabled={!customerProgressLink}
+          loading={customerProgressBusy}
+          onClick={() => void onDownloadCustomerCard()}
+        >
+          下载名片 PNG
+        </Button>
+      </Space>
+      {customerProgressLink && (
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary">客户打开链接（已写入二维码）：</Text>
+          <Paragraph copyable style={{ marginBottom: 8 }}>
+            {customerProgressLink.publicPageUrl}
+          </Paragraph>
+          {customerProgressLink.expiresAt && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              有效期至 {dayjs(customerProgressLink.expiresAt).format('YYYY-MM-DD HH:mm')}
+            </Text>
+          )}
+        </div>
+      )}
+      {customerCardPreviewUrl && (
+        <div style={{ marginTop: 16 }}>
+          <Text type="secondary">名片预览</Text>
+          <div>
+            <img
+              alt="客户进度名片"
+              src={customerCardPreviewUrl}
+              style={{ maxWidth: 360, width: '100%', borderRadius: 8, border: '1px solid #eee' }}
+            />
+          </div>
+        </div>
+      )}
+    </Card>
   );
 
   const getTaskForm = () => {
@@ -822,50 +904,7 @@ const OrderDetailPage: React.FC = () => {
             保存设计信息
           </Button>
 
-          {canShareCustomerProgress && (
-            <Card size="small" title="客户进度分享" style={{ marginTop: 16 }}>
-              <Paragraph type="secondary" style={{ marginTop: 0 }}>
-                生成安全链接后，客户无需登录即可在手机查看进度。可下载带二维码的小名片图发给客户。
-              </Paragraph>
-              <Space wrap>
-                <Button type="primary" loading={customerProgressBusy} onClick={() => void onGenerateCustomerProgress()}>
-                  生成客户进度二维码
-                </Button>
-                <Button
-                  disabled={!customerProgressLink}
-                  loading={customerProgressBusy}
-                  onClick={() => void onDownloadCustomerCard()}
-                >
-                  下载名片 PNG
-                </Button>
-              </Space>
-              {customerProgressLink && (
-                <div style={{ marginTop: 12 }}>
-                  <Text type="secondary">客户打开链接（已写入二维码）：</Text>
-                  <Paragraph copyable style={{ marginBottom: 8 }}>
-                    {customerProgressLink.publicPageUrl}
-                  </Paragraph>
-                  {customerProgressLink.expiresAt && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      有效期至 {dayjs(customerProgressLink.expiresAt).format('YYYY-MM-DD HH:mm')}
-                    </Text>
-                  )}
-                </div>
-              )}
-              {customerCardPreviewUrl && (
-                <div style={{ marginTop: 16 }}>
-                  <Text type="secondary">名片预览</Text>
-                  <div>
-                    <img
-                      alt="客户进度名片"
-                      src={customerCardPreviewUrl}
-                      style={{ maxWidth: 360, width: '100%', borderRadius: 8, border: '1px solid #eee' }}
-                    />
-                  </div>
-                </div>
-              )}
-            </Card>
-          )}
+          {canShareCustomerProgress && renderCustomerProgressShareCard()}
         </Form>
         </div>
       );
@@ -970,12 +1009,14 @@ const OrderDetailPage: React.FC = () => {
               </UploadWithImagePreview>
             </Form.Item>
             <Form.Item
-              label="建模源文件（STL / ZIP 等）"
-              extra="先上传文件，再保存建模信息；保存时会写入本单的 MODEL 类型文件引用。"
+              label="建模源文件（STL / JCD / OBJ）"
+              extra="仅可选择 .stl、.jcd、.obj；先上传再点「保存建模信息」写入本单建模文件引用。"
             >
               <UploadWithImagePreview
                 multiple
                 imageOnlyRasterPreview
+                accept=".stl,.jcd,.obj,.STL,.JCD,.OBJ"
+                beforeUpload={beforeModelSourceUpload}
                 fileList={modelSourceFileList}
                 onChange={handleModelSourceUploadChange}
                 customRequest={handleModelSourceCustomRequest}
@@ -1083,6 +1124,30 @@ const OrderDetailPage: React.FC = () => {
             保存报价
           </Button>
         </Form>
+        </div>
+      );
+    }
+
+    if (isPreSales) {
+      return (
+        <div style={{ maxWidth: 720 }}>
+          {!canShareCustomerProgress ? (
+            <Alert
+              type="info"
+              showIcon
+              message="当前阶段暂无法向客户分享进度页：需已有款式参考图上传，或订单已进入建模及之后阶段。您可在「订单信息」查看详情。"
+            />
+          ) : (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="链接与二维码中的地址由后台「客户进度前端基址」与 Hash 路由配置决定；若客户打不开，请核对部署地址与 JEWELRY_CUSTOMER_ORDER_USE_HASH_ROUTING 是否与当前客户端一致。"
+              />
+              {renderCustomerProgressShareCard()}
+            </>
+          )}
         </div>
       );
     }
