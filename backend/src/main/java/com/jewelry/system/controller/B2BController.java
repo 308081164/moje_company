@@ -3,6 +3,7 @@ package com.jewelry.system.controller;
 import com.jewelry.system.dto.b2b.*;
 import com.jewelry.system.dto.order.FileInfoDto;
 import com.jewelry.system.dto.order.OrderInfoDto;
+import com.jewelry.system.dto.portal.PortalBindOrderRequest;
 import com.jewelry.system.service.*;
 import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,7 +35,7 @@ public class B2BController {
 
     @PostMapping("/client/register")
     @Operation(summary = "B端客户注册")
-    public ResponseEntity<B2BClientResponse> register(@RequestBody B2BClientRegisterRequest req) {
+    public ResponseEntity<B2BClientLoginResponse> register(@RequestBody B2BClientRegisterRequest req) {
         return ResponseEntity.ok(clientService.register(req));
     }
 
@@ -87,9 +88,16 @@ public class B2BController {
     }
 
     @GetMapping("/client/orders")
-    @Operation(summary = "获取客户订单列表")
-    public ResponseEntity<List<OrderInfoDto>> getClientOrders(@RequestParam Long clientId) {
-        return ResponseEntity.ok(orderService.getClientOrders(clientId));
+    @Operation(summary = "获取当前登录客户的订单列表")
+    public ResponseEntity<List<OrderInfoDto>> getClientOrders() {
+        return ResponseEntity.ok(orderService.getClientOrders());
+    }
+
+    @PostMapping("/client/bind-order")
+    @Operation(summary = "凭订单编号 + 凭证（view_token 或 B2B access_token）将订单归属到当前B端账号")
+    public ResponseEntity<Void> bindOrder(@RequestBody PortalBindOrderRequest body) {
+        orderService.bindOrderWithProofForB2bClient(body.getOrderNumber(), body.getProofToken());
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/modeler/status")

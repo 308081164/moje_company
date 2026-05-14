@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -12,6 +13,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -33,8 +35,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/health", "/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/b2b/client/register", "/b2b/client/login").permitAll()
+                        .requestMatchers("/portal/c/account/register", "/portal/c/account/login").permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/public/customer-order/*/hint", HttpMethod.GET.name())).permitAll()
                         .requestMatchers("/b2b/order/{token}", "/b2b/order/{token}/files").permitAll()
-                        .requestMatchers("/public/customer-order/**").permitAll()
                         .requestMatchers("/b2b/modeler/status").permitAll()
                         // WebSocket 握手无法带 Authorization；路径为 context-path 下的 /ws/**
                         .requestMatchers("/ws/**").permitAll()

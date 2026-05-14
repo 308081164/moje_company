@@ -79,7 +79,7 @@ public class OrderCommandService {
         o.setOrderNumber(generateOrderNumber());
         o.setStatus(OrderStatus.PENDING_DESIGN);
 
-        SecurityUtils.currentRoleApi().filter("PRE_SALES"::equals).flatMap(r -> SecurityUtils.currentUserId())
+        SecurityUtils.currentRoleApi().filter("PRE_SALES"::equals).flatMap(r -> SecurityUtils.currentStaffUserId())
                 .ifPresent(uid -> o.setSalesPre(userRepository.getReferenceById(uid)));
 
         orderRepository.save(o);
@@ -230,7 +230,7 @@ public class OrderCommandService {
         if (!SecurityUtils.currentRoleApi().filter("DESIGNER"::equals).isPresent()) {
             return false;
         }
-        Long uid = SecurityUtils.currentUserId().orElse(null);
+        Long uid = SecurityUtils.currentStaffUserId().orElse(null);
         if (uid == null || order.getDesigner() == null || !uid.equals(order.getDesigner().getId())) {
             return false;
         }
@@ -286,7 +286,7 @@ public class OrderCommandService {
         if (!SecurityUtils.currentRoleApi().filter("MODELER"::equals).isPresent()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师可操作驳回给设计师");
         }
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         Order order = loadOrder(orderId);
         if (order.getModeler() == null || !Objects.equals(order.getModeler().getId(), uid)) {
@@ -379,7 +379,7 @@ public class OrderCommandService {
     @Transactional
     public OrderInfoDto updateReview(long orderId, OrderReviewUpdateRequest req) {
         Order order = loadOrder(orderId);
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         if (!isAdminRole()) {
             assertCanEditReview(order);
@@ -736,7 +736,7 @@ public class OrderCommandService {
     }
 
     private Long requireUserId() {
-        return SecurityUtils.currentUserId()
+        return SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
     }
 

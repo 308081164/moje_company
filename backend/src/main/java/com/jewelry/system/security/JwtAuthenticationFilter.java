@@ -52,7 +52,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (role == null) {
                 role = "ADMIN";
             }
-            SecurityUserPrincipal principal = new SecurityUserPrincipal(userId, username, role);
+            String acct = claims.get("acct", String.class);
+            AccountKind kind = AccountKind.fromClaims(acct, role);
+            SecurityUserPrincipal principal = new SecurityUserPrincipal(userId, username, role, kind);
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
             auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

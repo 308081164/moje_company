@@ -17,6 +17,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/OrderDetailView.vue')
   },
   {
+    path: '/portal/b2b/my-orders',
+    name: 'B2bMyOrders',
+    component: () => import('@/views/B2bMyOrdersView.vue')
+  },
+  {
+    path: '/portal/c/my-orders',
+    name: 'CPortalMyOrders',
+    component: () => import('@/views/CPortalMyOrdersView.vue')
+  },
+  {
+    path: '/portal/c/orders/:orderId/track',
+    name: 'CPortalOrderTrack',
+    component: () => import('@/views/CPortalOrderTrackView.vue')
+  },
+  {
     path: '/portal/c/progress/:token',
     name: 'CustomerOrderProgress',
     component: () => import('@/views/CustomerProgressView.vue')

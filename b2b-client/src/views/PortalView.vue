@@ -10,6 +10,10 @@
               <HomeOutlined />
               返回首页
             </router-link>
+            <router-link v-if="b2bToken" to="/portal/b2b/my-orders" class="back-btn" style="margin-left: 16px">
+              我的订单
+            </router-link>
+            <a-button v-if="b2bToken" type="link" danger @click="b2bLogout">退出登录</a-button>
           </div>
         </div>
 
@@ -28,38 +32,37 @@
 
         <a-tabs v-model:activeKey="activeTab">
           <a-tab-pane key="create" tab="创建订单">
+            <template v-if="!b2bToken">
+              <a-alert
+                type="warning"
+                show-icon
+                message="请先登录或注册"
+                description="按业务要求，录入订单前须完成 B 端账号登录。"
+              />
+              <div style="margin-top: 16px; text-align: center">
+                <a-button type="primary" @click="activeTab = 'login'">去登录</a-button>
+                <a-button style="margin-left: 12px" @click="activeTab = 'register'">去注册</a-button>
+              </div>
+            </template>
             <a-form
+              v-else
               ref="orderFormRef"
               :model="orderForm"
               layout="vertical"
               @finish="handleCreateOrder"
               class="b2b-form"
             >
+              <a-alert
+                type="info"
+                show-icon
+                message="已登录 B 端账号"
+                style="margin-bottom: 16px"
+              />
+
               <div class="form-section">
                 <div class="section-header">
-                  <h4 class="section-title">联系方式</h4>
-                  <span class="section-hint">(创建订单必需)</span>
+                  <h4 class="section-title">客户信息（可选补充）</h4>
                 </div>
-
-                <a-form-item
-                  label="联系方式"
-                  name="contact"
-                  :rules="[{ required: true, message: '请输入手机号或微信号' }]"
-                >
-                  <a-input
-                    v-model:value="orderForm.contact"
-                    placeholder="手机号或微信号"
-                    class="b2b-input"
-                  />
-                </a-form-item>
-
-                <a-form-item label="设置密码(选填)" name="password">
-                  <a-input-password
-                    v-model:value="orderForm.password"
-                    placeholder="设置密码方便下次登录"
-                    class="b2b-input"
-                  />
-                </a-form-item>
 
                 <a-row :gutter="16">
                   <a-col :span="12">
@@ -81,14 +84,6 @@
                     </a-form-item>
                   </a-col>
                 </a-row>
-
-                <a-form-item label="邮箱" name="email">
-                  <a-input
-                    v-model:value="orderForm.email"
-                    placeholder="电子邮箱"
-                    class="b2b-input"
-                  />
-                </a-form-item>
               </div>
 
               <div class="gold-divider-small"></div>
@@ -343,6 +338,25 @@
             </a-form>
           </a-tab-pane>
         </a-tabs>
+
+        <template v-if="b2bToken">
+          <a-divider />
+          <h4 style="margin-bottom: 12px">绑定已有订单</h4>
+          <p style="color: #888; font-size: 13px; margin-bottom: 12px">
+            输入订单编号与凭证（分享链接中的 view_token 或 B2B 访问 token），将订单纳入「我的订单」。
+          </p>
+          <a-form layout="inline" @finish="handleB2bBind">
+            <a-form-item label="订单编号">
+              <a-input v-model:value="b2bBindForm.orderNumber" style="width: 200px" />
+            </a-form-item>
+            <a-form-item label="凭证">
+              <a-input-password v-model:value="b2bBindForm.proofToken" style="width: 220px" />
+            </a-form-item>
+            <a-form-item>
+              <a-button type="default" html-type="submit" :loading="bindLoading">绑定</a-button>
+            </a-form-item>
+          </a-form>
+        </template>
       </a-card>
     </div>
 
@@ -412,7 +426,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   ShopOutlined,
@@ -422,20 +436,58 @@ import {
   HomeOutlined,
   UploadOutlined
 } from '@ant-design/icons-vue'
-import { createOrder, createOrderWithFiles, loginClient, registerClient } from '@/api'
-import type {
-  B2BOrderCreateRequest,
-  B2BClientLoginRequest,
-  B2BClientRegisterRequest,
-  B2BOrderAccessDto
+import {
+  createOrder,
+  createOrderWithFiles,
+  loginClient,
+  registerClient,
+  b2bBindOrder,
+  type B2BClientLoginResponse,
+  type B2BOrderCreateRequest,
+  type B2BClientLoginRequest,
+  type B2BClientRegisterRequest,
+  type B2BOrderAccessDto
 } from '@/api'
 import type { UploadProps, UploadFile } from 'ant-design-vue'
 
-const activeTab = ref('create')
+const activeTab = ref('login')
 const loading = ref(false)
 const showResult = ref(false)
 const orderResult = ref<B2BOrderAccessDto | null>(null)
 const fileList = ref<UploadFile[]>([])
+
+const b2bToken = ref(false)
+const syncB2bToken = () => {
+  b2bToken.value = !!localStorage.getItem('moje_b2b_token')
+}
+
+onMounted(() => {
+  syncB2bToken()
+  if (b2bToken.value) {
+    activeTab.value = 'create'
+  }
+})
+
+const b2bLogout = () => {
+  localStorage.removeItem('moje_b2b_token')
+  syncB2bToken()
+  activeTab.value = 'login'
+  message.success('已退出')
+}
+
+const b2bBindForm = ref({ orderNumber: '', proofToken: '' })
+const bindLoading = ref(false)
+
+const handleB2bBind = async () => {
+  bindLoading.value = true
+  try {
+    await b2bBindOrder(b2bBindForm.value.orderNumber.trim(), b2bBindForm.value.proofToken.trim())
+    message.success('绑定成功')
+    b2bBindForm.value = { orderNumber: '', proofToken: '' }
+  } finally {
+    bindLoading.value = false
+  }
+}
 
 /** originFileObj 在类型上含 RcFile 扩展字段，不能写 `filter((f): f is File => …)`（TS2677）。 */
 function toFormFile(raw: UploadFile['originFileObj']): File | null {
@@ -445,11 +497,8 @@ function toFormFile(raw: UploadFile['originFileObj']): File | null {
 }
 
 const orderForm = ref<B2BOrderCreateRequest>({
-  contact: '',
-  password: '',
   companyName: '',
   contactPerson: '',
-  email: '',
   basicRequirements: '',
   styleInfo: '',
   materialInfo: '',
@@ -512,11 +561,8 @@ const handleCreateOrder = async () => {
     showResult.value = true
     message.success('订单创建成功')
     orderForm.value = {
-      contact: '',
-      password: '',
       companyName: '',
       contactPerson: '',
-      email: '',
       basicRequirements: '',
       styleInfo: '',
       materialInfo: '',
@@ -532,12 +578,15 @@ const handleCreateOrder = async () => {
 
 const handleLogin = async () => {
   try {
-    await loginClient(loginForm.value)
+    const res: B2BClientLoginResponse = await loginClient(loginForm.value)
+    localStorage.setItem('moje_b2b_token', res.accessToken)
+    syncB2bToken()
     message.success('登录成功')
     loginForm.value = {
       contact: '',
       password: ''
     }
+    activeTab.value = 'create'
   } catch (error) {
     console.error('登录失败:', error)
   }
@@ -545,9 +594,11 @@ const handleLogin = async () => {
 
 const handleRegister = async () => {
   try {
-    await registerClient(registerForm.value)
-    message.success('注册成功')
-    activeTab.value = 'login'
+    const res: B2BClientLoginResponse = await registerClient(registerForm.value)
+    localStorage.setItem('moje_b2b_token', res.accessToken)
+    syncB2bToken()
+    message.success('注册成功，已自动登录')
+    activeTab.value = 'create'
     registerForm.value = {
       contact: '',
       password: '',

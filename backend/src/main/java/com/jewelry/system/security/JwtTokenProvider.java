@@ -65,6 +65,7 @@ public class JwtTokenProvider {
                 .claim(CLAIM_TYP, TYP_ACCESS)
                 .claim("username", user.getUsername())
                 .claim(CLAIM_ROLE, roleApi)
+                .claim("acct", "STAFF")
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .signWith(key)
@@ -80,6 +81,22 @@ public class JwtTokenProvider {
                 .claim("username", contact)
                 .claim(CLAIM_ROLE, "B2B_CLIENT")
                 .claim("isB2B", true)
+                .claim("acct", "B2B")
+                .setIssuedAt(now)
+                .setExpiration(exp)
+                .signWith(key)
+                .compact();
+    }
+
+    public String createPortalCustomerAccessToken(Long portalCustomerId, String contact) {
+        Date now = new Date();
+        Date exp = new Date(now.getTime() + accessExpirationMs);
+        return Jwts.builder()
+                .setSubject(String.valueOf(portalCustomerId))
+                .claim(CLAIM_TYP, TYP_ACCESS)
+                .claim("username", contact)
+                .claim(CLAIM_ROLE, "C_PORTAL_CUSTOMER")
+                .claim("acct", "C_PORTAL")
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .signWith(key)

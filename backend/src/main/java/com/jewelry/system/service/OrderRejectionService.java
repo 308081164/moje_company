@@ -27,7 +27,7 @@ public class OrderRejectionService {
     // ==============================================
     @Transactional
     public OrderRejectionFlowDto createRejection(OrderRejectionRequestDto request) {
-        Long currentUserId = SecurityUtils.currentUserId()
+        Long currentUserId = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
 
         OrderRejectionFlow flow = new OrderRejectionFlow();
@@ -52,7 +52,7 @@ public class OrderRejectionService {
     // ==============================================
     @Transactional
     public OrderRejectionFlowDto updateStageToInFix(Long flowId) {
-        Long currentUserId = SecurityUtils.currentUserId()
+        Long currentUserId = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
 
         OrderRejectionFlow flow = orderRejectionFlowRepository.findById(flowId)
@@ -74,7 +74,7 @@ public class OrderRejectionService {
     // ==============================================
     @Transactional
     public OrderRejectionFlowDto resubmit(Long flowId) {
-        Long currentUserId = SecurityUtils.currentUserId()
+        Long currentUserId = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
 
         OrderRejectionFlow flow = orderRejectionFlowRepository.findById(flowId)
@@ -97,7 +97,7 @@ public class OrderRejectionService {
     // ==============================================
     @Transactional
     public OrderRejectionFlowDto resolveRejection(Long flowId) {
-        Long currentUserId = SecurityUtils.currentUserId()
+        Long currentUserId = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
 
         OrderRejectionFlow flow = orderRejectionFlowRepository.findById(flowId)

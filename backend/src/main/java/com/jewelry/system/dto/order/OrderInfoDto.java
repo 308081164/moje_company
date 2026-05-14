@@ -29,6 +29,9 @@ public class OrderInfoDto {
     /** 企微自动进群失败说明 */
     private String wecomJoinError;
 
+    /** B2B 匿名访问令牌（「我的订单」列表用于打开 /portal/b2b/order/{token}） */
+    private String b2bShareAccessToken;
+
     @Data
     @Builder
     public static class OrderBaseDto {

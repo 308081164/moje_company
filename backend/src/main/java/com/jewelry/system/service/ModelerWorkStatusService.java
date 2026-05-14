@@ -29,14 +29,14 @@ public class ModelerWorkStatusService {
 
     @Transactional
     public ModelerWorkStatusDto getCurrentModelerStatus() {
-        return SecurityUtils.currentUserId()
+        return SecurityUtils.currentStaffUserId()
                 .map(this::getOrCreateStatus)
                 .orElse(null);
     }
 
     @Transactional
     public ModelerWorkStatusDto updateWorkMode(String workMode) {
-        Long userId = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
 
         WorkMode mode;
@@ -54,7 +54,7 @@ public class ModelerWorkStatusService {
 
     @Transactional
     public ModelerWorkStatusDto updateWorkStatus(String workStatus, String pauseReason) {
-        Long userId = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
         
         status.setStatus(WorkStatus.valueOf(workStatus));
@@ -72,7 +72,7 @@ public class ModelerWorkStatusService {
 
     @Transactional
     public ModelerWorkStatusDto toggleAutoAssign(Boolean enabled) {
-        Long userId = SecurityUtils.currentUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
         
         if (Boolean.TRUE.equals(enabled)) {

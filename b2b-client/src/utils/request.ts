@@ -11,6 +11,17 @@ const instance: AxiosInstance = axios.create({
 
 instance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    const url = config.url || ''
+    let bearer: string | null = null
+    if (url.startsWith('/portal/c')) {
+      bearer = localStorage.getItem('moje_c_portal_token')
+    } else if (url.startsWith('/b2b')) {
+      bearer = localStorage.getItem('moje_b2b_token')
+    }
+    if (bearer) {
+      config.headers = config.headers || {}
+      ;(config.headers as Record<string, string>)['Authorization'] = `Bearer ${bearer}`
+    }
     if (config.data instanceof FormData) {
       delete (config.headers as Record<string, unknown>)['Content-Type']
     }

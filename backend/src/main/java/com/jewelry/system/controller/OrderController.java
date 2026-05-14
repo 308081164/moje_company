@@ -58,7 +58,7 @@ public class OrderController {
     @GetMapping("/workbench/designer/todo")
     @Operation(summary = "设计师工作台-待办")
     public Page<OrderInfoDto> designerTodo(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageDesignerTodo(pageable, uid, isB2b);
     }
@@ -66,7 +66,7 @@ public class OrderController {
     @GetMapping("/workbench/designer/done")
     @Operation(summary = "设计师工作台-已完成")
     public Page<OrderInfoDto> designerDone(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageDesignerDone(pageable, uid, isB2b);
     }
@@ -74,7 +74,7 @@ public class OrderController {
     @GetMapping("/workbench/modeler/todo")
     @Operation(summary = "建模师工作台-待办")
     public Page<OrderInfoDto> modelerTodo(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageModelerTodo(pageable, uid, isB2b);
     }
@@ -82,7 +82,7 @@ public class OrderController {
     @GetMapping("/workbench/modeler/done")
     @Operation(summary = "建模师工作台-已完成")
     public Page<OrderInfoDto> modelerDone(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageModelerDone(pageable, uid, isB2b);
     }
@@ -90,7 +90,7 @@ public class OrderController {
     @GetMapping("/workbench/tracker/todo")
     @Operation(summary = "跟单员工作台-待评审")
     public Page<OrderInfoDto> trackerTodo(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageTrackerTodo(pageable, uid, isB2b);
     }
@@ -98,7 +98,7 @@ public class OrderController {
     @GetMapping("/workbench/tracker/done")
     @Operation(summary = "跟单员工作台-已完成")
     public Page<OrderInfoDto> trackerDone(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageTrackerDone(pageable, uid, isB2b);
     }

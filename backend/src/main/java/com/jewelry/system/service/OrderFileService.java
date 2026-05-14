@@ -42,7 +42,7 @@ public class OrderFileService {
 
     @Transactional
     public FileInfoDto uploadDesignFile(long orderId, MultipartFile file, String notes) throws IOException {
-        long uid = SecurityUtils.currentUserId()
+        long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         assertCanUploadDesign(orderId, uid);
         return save(orderId, file, "design", "DESIGN", notes, uid);
@@ -58,7 +58,7 @@ public class OrderFileService {
 
     @Transactional
     public FileInfoDto uploadModelFile(long orderId, MultipartFile file, String notes) throws IOException {
-        long uid = SecurityUtils.currentUserId()
+        long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         assertCanUploadModel(orderId, uid);
         return save(orderId, file, "model", "MODEL", notes, uid);
@@ -67,7 +67,7 @@ public class OrderFileService {
     /** 建模效果图（图片），与源文件 {@link #uploadModelFile} 区分 fileType=MODEL_EFFECT */
     @Transactional
     public FileInfoDto uploadModelEffectImage(long orderId, MultipartFile file, String notes) throws IOException {
-        long uid = SecurityUtils.currentUserId()
+        long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         assertCanUploadModel(orderId, uid);
         return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);

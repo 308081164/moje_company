@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 export interface B2BOrderCreateRequest {
-  contact: string
+  contact?: string
   password?: string
   companyName?: string
   contactPerson?: string
@@ -26,18 +26,20 @@ export interface B2BClientRegisterRequest {
   email?: string
 }
 
-export interface B2BClientResponse {
+export interface B2BClientLoginResponse {
   id: number
   contact: string
   companyName?: string
   contactPerson?: string
   email?: string
+  accessToken: string
+  expiresIn: number
+  createdAt?: string
 }
 
 export interface B2BOrderAccessDto {
   orderId?: number
   orderNumber: string
-  /** 与 accessUrl 中路径段一致，供前端跳转 */
   token?: string
   accessUrl: string
   qrcodeBase64: string
@@ -61,72 +63,105 @@ export interface CustomerOrderPublicDto {
   milestones?: CustomerOrderPublicMilestoneDto[]
 }
 
-export interface OrderInfoDto {
-  id: number
+export interface CustomerOrderRegistrationHintDto {
+  orderId: number
   orderNumber: string
-  status: string
-  statusDescription: string
-  customerPhone: string
-  customerName: string
-  source: string
-  sourceDescription: string
-  basicRequirements: string
-  styleInfo: string
-  materialInfo: string
-  depositAmount?: number
-  designPlanUrl?: string
-  designPlanDescription?: string
-  modelFileUrl?: string
-  reviewResult?: string
-  reviewComment?: string
-  quotationAmount?: number
-  quotationDetails?: string
-  productionDetails?: string
-  productionStatus?: string
-  productionNotes?: string
-  shippingTracking?: string
-  internalNotes?: string
-  createdAt: string
-  updatedAt: string
+  displayTitle: string
+  suggestedPhone?: string
+  suggestedWechat?: string
+  suggestedCustomerName?: string
+}
+
+export interface PortalCustomerLoginResponse {
+  id: number
+  contact: string
+  displayName?: string
+  accessToken: string
+  expiresIn: number
+  createdAt?: string
+}
+
+export interface PortalCustomerRegisterRequest {
+  contact: string
+  password: string
+  displayName?: string
+  viewToken?: string
+}
+
+export interface PortalCustomerLoginRequest {
+  contact: string
+  password: string
+}
+
+export interface PortalCustomerOrderListItemDto {
+  orderId: number
+  orderNumber: string
+  displayTitle: string
+  currentStatus: string
+  currentStatusLabel: string
+  createdAt?: string
 }
 
 export function createOrder(data: B2BOrderCreateRequest): Promise<B2BOrderAccessDto> {
   return request.post('/b2b/order/create', data)
 }
 
-/** 创建订单并上传附件（与后台 {@code /b2b/order/create-with-files} 一致） */
 export function createOrderWithFiles(
   data: B2BOrderCreateRequest,
   files: File[]
 ): Promise<B2BOrderAccessDto> {
   const formData = new FormData()
-  formData.append(
-    'orderData',
-    new Blob([JSON.stringify(data)], { type: 'application/json' })
-  )
+  formData.append('orderData', new Blob([JSON.stringify(data)], { type: 'application/json' }))
   for (const f of files) {
     formData.append('files', f)
   }
   return request.post('/b2b/order/create-with-files', formData)
 }
 
-export function getOrderByToken(token: string): Promise<OrderInfoDto> {
+export function getOrderByToken(token: string): Promise<unknown> {
   return request.get(`/b2b/order/${token}`)
 }
 
-/** C 端客户凭 view_token 查看进度（公开接口，无需登录） */
-export function getCustomerOrderPublic(token: string): Promise<CustomerOrderPublicDto> {
-  return request.get(`/public/customer-order/${encodeURIComponent(token)}`)
-}
-
-export function loginClient(data: B2BClientLoginRequest): Promise<B2BClientResponse> {
+export function loginClient(data: B2BClientLoginRequest): Promise<B2BClientLoginResponse> {
   return request.post('/b2b/client/login', data)
 }
 
-export function registerClient(data: B2BClientRegisterRequest): Promise<B2BClientResponse> {
+export function registerClient(data: B2BClientRegisterRequest): Promise<B2BClientLoginResponse> {
   return request.post('/b2b/client/register', data)
 }
 
-export function getClientOrders(clientId: number): Promise<OrderInfoDto[]> {
-  return request.get('/b2b/client/orders', { params: { clientId } })
+export function getClientOrders(): Promise<unknown[]> {
+  return request.get('/b2b/client/orders')
+}
+
+export function b2bBindOrder(orderNumber: string, proofToken: string): Promise<void> {
+  return request.post('/b2b/client/bind-order', { orderNumber, proofToken })
+}
+
+export function getCustomerOrderHint(viewToken: string): Promise<CustomerOrderRegistrationHintDto> {
+  return request.get(`/public/customer-order/${encodeURIComponent(viewToken)}/hint`)
+}
+
+export function portalRegister(data: PortalCustomerRegisterRequest): Promise<PortalCustomerLoginResponse> {
+  return request.post('/portal/c/account/register', data)
+}
+
+export function portalLogin(data: PortalCustomerLoginRequest): Promise<PortalCustomerLoginResponse> {
+  return request.post('/portal/c/account/login', data)
+}
+
+export function portalBindViewToken(viewToken: string): Promise<void> {
+  return request.post('/portal/c/account/bind-view-token', { viewToken })
+}
+
+export function portalBindOrder(orderNumber: string, proofToken: string): Promise<void> {
+  return request.post('/portal/c/account/bind-order', { orderNumber, proofToken })
+}
+
+export function portalListOrders(): Promise<PortalCustomerOrderListItemDto[]> {
+  return request.get('/portal/c/orders')
+}
+
+export function portalOrderSummary(orderId: number): Promise<CustomerOrderPublicDto> {
+  return request.get(`/portal/c/orders/${orderId}/summary`)
 }

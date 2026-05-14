@@ -108,13 +108,91 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ShopOutlined } from '@ant-design/icons-vue'
 import { getOrderByToken } from '@/api'
-import type { OrderInfoDto } from '@/api'
+
+/** 与模板字段对齐的扁平结构（由后端 OrderInfoDto 嵌套 JSON 转换） */
+interface FlatOrderDetail {
+  orderNumber: string
+  status: string
+  statusDescription: string
+  customerName?: string
+  customerPhone?: string
+  sourceDescription?: string
+  depositAmount?: number
+  basicRequirements?: string
+  styleInfo?: string
+  materialInfo?: string
+  designPlanUrl?: string
+  designPlanDescription?: string
+  modelFileUrl?: string
+  reviewResult?: string
+  reviewComment?: string
+  quotationAmount?: number
+  quotationDetails?: string
+  productionStatus?: string
+  productionNotes?: string
+  shippingTracking?: string
+}
+
+const STATUS_ZH: Record<string, string> = {
+  PENDING_DESIGN: '待设计',
+  DESIGNING: '设计中',
+  PENDING_MODEL: '待建模',
+  MODELING: '建模中',
+  PENDING_REVIEW: '待工艺评审',
+  PENDING_QUOTATION: '待报价',
+  QUOTED: '已报价',
+  PENDING_PRODUCTION: '待生产',
+  IN_PRODUCTION: '生产中',
+  PRODUCING: '生产中',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消'
+}
+
+function flattenOrder(r: any): FlatOrderDetail {
+  const b = r.baseInfo || {}
+  const d = r.designInfo || {}
+  const m = r.modelInfo || {}
+  const rv = r.reviewInfo || {}
+  const q = r.quotationInfo || {}
+  const st = r.currentStatus || ''
+  const imgs: string[] | undefined = d.designImages
+  const firstImg = imgs && imgs.length ? imgs[0] : undefined
+  let modelUrl: string | undefined
+  if (m.modelFiles && typeof m.modelFiles === 'object') {
+    const files = (m.modelFiles as any).files
+    if (Array.isArray(files) && files.length && files[0].url) {
+      modelUrl = files[0].url
+    }
+  }
+  return {
+    orderNumber: b.orderNumber,
+    status: st,
+    statusDescription: STATUS_ZH[st] || st,
+    customerName: b.customerName,
+    customerPhone: b.customerContact,
+    sourceDescription: b.source,
+    depositAmount: b.depositAmount,
+    basicRequirements: b.basicRequirements,
+    styleInfo: b.style,
+    materialInfo: b.materialInfo,
+    designPlanUrl: firstImg,
+    designPlanDescription: d.designNotes,
+    modelFileUrl: modelUrl,
+    reviewResult: rv.reviewResult,
+    reviewComment: rv.reviewComment,
+    quotationAmount: q.quotationAmount,
+    quotationDetails: q.quotationDetails,
+    productionStatus: r.productionStatus,
+    productionNotes: r.productionNotes,
+    shippingTracking: r.shippingTracking
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const orderInfo = ref<OrderInfoDto | null>(null)
+const orderInfo = ref<FlatOrderDetail | null>(null)
 
 const getStatusColor = (status: string) => {
   const colorMap: Record<string, string> = {
@@ -141,7 +219,8 @@ const loadOrder = async () => {
   
   try {
     loading.value = true
-    orderInfo.value = await getOrderByToken(token)
+    const raw = await getOrderByToken(token)
+    orderInfo.value = flattenOrder(raw)
   } catch (error) {
     console.error('加载订单失败:', error)
   } finally {

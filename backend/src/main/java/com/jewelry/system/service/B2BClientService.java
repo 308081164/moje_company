@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -20,24 +21,35 @@ public class B2BClientService {
     private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
-    public B2BClientResponse register(B2BClientRegisterRequest req) {
-        if (clientRepository.existsByContact(req.getContact())) {
+    public B2BClientLoginResponse register(B2BClientRegisterRequest req) {
+        if (!StringUtils.hasText(req.getContact()) || !StringUtils.hasText(req.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "联系方式与密码不能为空");
+        }
+        String contact = req.getContact().trim();
+        if (clientRepository.existsByContact(contact)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该联系方式已注册");
         }
-        
+
         B2BClient client = new B2BClient();
-        client.setContact(req.getContact());
+        client.setContact(contact);
         client.setPassword(passwordEncoder.encode(req.getPassword()));
         client.setCompanyName(req.getCompanyName());
         client.setContactPerson(req.getContactPerson());
         client.setEmail(req.getEmail());
-        
+
         clientRepository.save(client);
-        return toDto(client);
+
+        B2BClientLoginRequest loginReq = new B2BClientLoginRequest();
+        loginReq.setContact(contact);
+        loginReq.setPassword(req.getPassword());
+        return login(loginReq);
     }
 
     public B2BClientLoginResponse login(B2BClientLoginRequest req) {
-        B2BClient client = clientRepository.findByContact(req.getContact())
+        if (!StringUtils.hasText(req.getContact()) || !StringUtils.hasText(req.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "联系方式与密码不能为空");
+        }
+        B2BClient client = clientRepository.findByContact(req.getContact().trim())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "联系方式或密码错误"));
         
         if (!passwordEncoder.matches(req.getPassword(), client.getPassword())) {

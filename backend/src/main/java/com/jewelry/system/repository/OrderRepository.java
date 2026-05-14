@@ -67,4 +67,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     long countByModelerIdAndStatusIn(Long modelerId, List<OrderStatus> statuses);
 
     long countByFollowUpIdAndStatusIn(Long followUpId, List<OrderStatus> statuses);
+
+    List<Order> findByB2bClientIdOrderByCreatedAtDesc(Long b2bClientId);
+
+    Optional<Order> findByOrderNumber(String orderNumber);
 }

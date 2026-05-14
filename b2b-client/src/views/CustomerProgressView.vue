@@ -6,7 +6,10 @@
         <template #title>
           <div class="card-header">
             <GiftOutlined class="header-icon" />
-            <span>定制订单进度</span>
+            <span>定制进度</span>
+            <router-link v-if="hasCToken" to="/portal/c/my-orders" style="margin-left: auto; font-size: 14px">
+              我的订单
+            </router-link>
           </div>
         </template>
 
@@ -14,61 +17,65 @@
           <a-empty :description="err" />
         </div>
 
-        <template v-else-if="data">
-          <div style="text-align: center; margin-bottom: 20px">
-            <a-typography-text type="secondary" style="font-size: 13px">C 端客户公开页</a-typography-text>
-            <a-typography-title :level="4" style="margin: 8px 0 0">
-              {{ data.displayTitle }}
-            </a-typography-title>
-            <a-tag :color="statusColor(data.currentStatus)" style="margin-top: 10px">
-              {{ data.currentStatusLabel || data.currentStatus }}
-            </a-tag>
-          </div>
+        <template v-else-if="hint">
+          <a-alert
+            type="info"
+            show-icon
+            :message="`订单 ${hint.orderNumber}`"
+            :description="hint.displayTitle"
+            style="margin-bottom: 16px"
+          />
 
-          <div v-if="data.firstDesignImageUrl" style="text-align: center; margin-bottom: 20px">
-            <img
-              :src="data.firstDesignImageUrl"
-              alt="设计预览"
-              class="design-preview"
-            />
-          </div>
-
-          <div class="info-block">
-            <div class="desc-row">
-              <span class="desc-label">订单编号</span>
-              <span class="desc-value">{{ data.orderNumber }}</span>
-            </div>
-            <div v-if="data.customerNameMasked" class="desc-row">
-              <span class="desc-label">客户称呼</span>
-              <span class="desc-value">{{ data.customerNameMasked }}</span>
-            </div>
-            <div v-if="data.createdAt" class="desc-row">
-              <span class="desc-label">创建时间</span>
-              <span class="desc-value">{{ dayjs(data.createdAt).format('YYYY-MM-DD HH:mm') }}</span>
-            </div>
-          </div>
-
-          <template v-if="data.milestones && data.milestones.length > 0">
-            <a-divider orientation="left">关键节点</a-divider>
-            <a-timeline>
-              <a-timeline-item v-for="(m, idx) in data.milestones" :key="idx" color="blue">
-                <div>
-                  <a-typography-text strong>{{ m.label }}</a-typography-text>
-                  <div>
-                    <a-typography-text type="secondary" style="font-size: 12px">
-                      {{ dayjs(m.at).format('YYYY-MM-DD HH:mm') }}
-                    </a-typography-text>
-                  </div>
-                </div>
-              </a-timeline-item>
-            </a-timeline>
+          <template v-if="data">
+            <CustomerProgressBody :data="data" />
           </template>
 
-          <div class="footer-actions" style="margin-top: 24px; text-align: center">
-            <router-link to="/">
-              <a-button type="primary">返回门户首页</a-button>
-            </router-link>
-          </div>
+          <template v-else>
+            <a-tabs v-model:activeKey="authTab">
+              <a-tab-pane key="login" tab="登录">
+                <a-form layout="vertical" @finish="doLogin">
+                  <a-form-item label="联系方式" required>
+                    <a-input v-model:value="loginForm.contact" placeholder="手机号或微信" />
+                  </a-form-item>
+                  <a-form-item label="密码" required>
+                    <a-input-password v-model:value="loginForm.password" />
+                  </a-form-item>
+                  <a-button type="primary" html-type="submit" block :loading="authLoading">登录并绑定</a-button>
+                </a-form>
+              </a-tab-pane>
+              <a-tab-pane key="register" tab="注册">
+                <a-form layout="vertical" @finish="doRegister">
+                  <a-form-item label="联系方式" required>
+                    <a-input v-model:value="registerForm.contact" placeholder="手机号或微信" />
+                  </a-form-item>
+                  <a-form-item label="密码" required>
+                    <a-input-password v-model:value="registerForm.password" />
+                  </a-form-item>
+                  <a-form-item label="确认密码" required>
+                    <a-input-password v-model:value="registerForm.confirmPassword" />
+                  </a-form-item>
+                  <a-form-item label="称呼（可选）">
+                    <a-input v-model:value="registerForm.displayName" placeholder="如何称呼您" />
+                  </a-form-item>
+                  <a-button type="primary" html-type="submit" block :loading="authLoading">注册并绑定</a-button>
+                </a-form>
+              </a-tab-pane>
+            </a-tabs>
+
+            <a-divider>绑定其他订单</a-divider>
+            <a-form layout="vertical" @finish="doBindOrder">
+              <a-form-item label="订单编号">
+                <a-input v-model:value="bindForm.orderNumber" placeholder="如 B2B202601080001" />
+              </a-form-item>
+              <a-form-item label="凭证（view_token 或 B2B 访问 token）">
+                <a-input-password v-model:value="bindForm.proofToken" placeholder="来自分享链接路径中的 token" />
+              </a-form-item>
+              <a-button type="default" html-type="submit" block :loading="bindLoading" :disabled="!hasCToken">
+                绑定到当前账号
+              </a-button>
+              <div v-if="!hasCToken" style="margin-top: 8px; color: #888; font-size: 12px">请先登录后再绑定</div>
+            </a-form>
+          </template>
         </template>
       </a-card>
     </div>
@@ -76,54 +83,143 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { GiftOutlined } from '@ant-design/icons-vue'
-import dayjs from 'dayjs'
-import { getCustomerOrderPublic, type CustomerOrderPublicDto } from '@/api'
+import { message } from 'ant-design-vue'
+import {
+  getCustomerOrderHint,
+  portalLogin,
+  portalRegister,
+  portalBindViewToken,
+  portalBindOrder,
+  portalOrderSummary,
+  type CustomerOrderRegistrationHintDto,
+  type CustomerOrderPublicDto
+} from '@/api'
+import CustomerProgressBody from './CustomerProgressBody.vue'
 
 const route = useRoute()
-const loading = ref(false)
-const data = ref<CustomerOrderPublicDto | null>(null)
+const loading = ref(true)
 const err = ref<string | null>(null)
+const hint = ref<CustomerOrderRegistrationHintDto | null>(null)
+const data = ref<CustomerOrderPublicDto | null>(null)
+const authTab = ref('login')
+const authLoading = ref(false)
+const bindLoading = ref(false)
 
-const statusColor = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_DESIGN: 'blue',
-    DESIGNING: 'orange',
-    PENDING_MODEL: 'cyan',
-    MODELING: 'geekblue',
-    PENDING_REVIEW: 'purple',
-    PENDING_QUOTATION: 'magenta',
-    QUOTED: 'volcano',
-    PENDING_PRODUCTION: 'gold',
-    IN_PRODUCTION: 'yellow',
-    COMPLETED: 'green',
-    CANCELLED: 'red'
+const hasCToken = ref(!!localStorage.getItem('moje_c_portal_token'))
+
+const loginForm = ref({ contact: '', password: '' })
+const registerForm = ref({ contact: '', password: '', confirmPassword: '', displayName: '' })
+const bindForm = ref({ orderNumber: '', proofToken: '' })
+
+const viewToken = computed(() => (route.params.token as string) || '')
+
+const applyHintToForms = () => {
+  const h = hint.value
+  if (!h) return
+  const phone = h.suggestedPhone?.trim()
+  const wx = h.suggestedWechat?.trim()
+  const contact = phone || wx || ''
+  if (contact) {
+    loginForm.value.contact = contact
+    registerForm.value.contact = contact
   }
-  return map[status] || 'default'
+  if (h.suggestedCustomerName) {
+    registerForm.value.displayName = h.suggestedCustomerName
+  }
 }
 
-const load = async () => {
-  const token = route.params.token as string
-  if (!token) {
+const afterAuth = async () => {
+  const h = hint.value
+  if (!h) return
+  await portalBindViewToken(viewToken.value)
+  message.success('已绑定订单')
+  await loadSummary(h.orderId)
+}
+
+const loadSummary = async (orderId: number) => {
+  try {
+    data.value = await portalOrderSummary(orderId)
+  } catch {
+    data.value = null
+  }
+}
+
+const doLogin = async () => {
+  authLoading.value = true
+  try {
+    const res = await portalLogin(loginForm.value)
+    localStorage.setItem('moje_c_portal_token', res.accessToken)
+    hasCToken.value = true
+    await afterAuth()
+  } finally {
+    authLoading.value = false
+  }
+}
+
+const doRegister = async () => {
+  if (registerForm.value.password !== registerForm.value.confirmPassword) {
+    message.error('两次密码不一致')
+    return
+  }
+  authLoading.value = true
+  try {
+    const res = await portalRegister({
+      contact: registerForm.value.contact,
+      password: registerForm.value.password,
+      displayName: registerForm.value.displayName || undefined,
+      viewToken: viewToken.value
+    })
+    localStorage.setItem('moje_c_portal_token', res.accessToken)
+    hasCToken.value = true
+    message.success('注册成功')
+    await loadSummary(hint.value!.orderId)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+const doBindOrder = async () => {
+  if (!hasCToken.value) {
+    message.warning('请先登录')
+    return
+  }
+  bindLoading.value = true
+  try {
+    await portalBindOrder(bindForm.value.orderNumber.trim(), bindForm.value.proofToken.trim())
+    message.success('绑定成功')
+    bindForm.value = { orderNumber: '', proofToken: '' }
+  } finally {
+    bindLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  const vt = viewToken.value
+  if (!vt) {
     err.value = '链接无效'
+    loading.value = false
     return
   }
   try {
-    loading.value = true
-    data.value = await getCustomerOrderPublic(token)
-    err.value = null
-  } catch (e: unknown) {
+    hint.value = await getCustomerOrderHint(vt)
+    applyHintToForms()
+    if (hasCToken.value) {
+      try {
+        await portalBindViewToken(vt)
+      } catch {
+        /* 可能已绑定 */
+      }
+      await loadSummary(hint.value.orderId)
+    }
+  } catch (e) {
     console.error(e)
-    err.value = '加载失败，请检查链接是否过期或已失效'
+    err.value = '无法加载链接信息，可能已失效'
   } finally {
     loading.value = false
   }
-}
-
-onMounted(() => {
-  load()
 })
 </script>
 
@@ -132,7 +228,6 @@ onMounted(() => {
   min-height: 100vh;
   position: relative;
 }
-
 .card-header {
   display: flex;
   align-items: center;
@@ -140,40 +235,8 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
 }
-
 .header-icon {
   color: var(--primary-color);
   font-size: 20px;
-}
-
-.design-preview {
-  width: 100%;
-  max-height: 220px;
-  object-fit: cover;
-  border-radius: 12px;
-  background: #f0f0f0;
-}
-
-.info-block {
-  background: #fafafa;
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-}
-
-.desc-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-}
-
-.desc-label {
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.desc-value {
-  text-align: right;
-  word-break: break-all;
 }
 </style>

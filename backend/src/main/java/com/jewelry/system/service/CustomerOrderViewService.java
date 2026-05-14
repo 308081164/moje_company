@@ -10,6 +10,7 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
 import com.jewelry.system.dto.customer.CustomerOrderPublicMilestoneDto;
+import com.jewelry.system.dto.customer.CustomerOrderRegistrationHintDto;
 import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
 import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.Order;
@@ -144,6 +145,22 @@ public class CustomerOrderViewService {
         return linkRepository.save(created);
     }
 
+    @Transactional(readOnly = true)
+    public CustomerOrderRegistrationHintDto getRegistrationHint(String viewToken) {
+        OrderCustomerViewLink link = findActiveLink(viewToken);
+        assertLinkNotExpired(link);
+        Order order = orderRepository.findById(link.getOrderId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        return CustomerOrderRegistrationHintDto.builder()
+                .orderId(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .displayTitle(resolveDisplayTitle(order))
+                .suggestedPhone(order.getCustomerPhone())
+                .suggestedWechat(order.getCustomerWechat())
+                .suggestedCustomerName(order.getCustomerName())
+                .build();
+    }
+
     @Transactional
     public CustomerOrderPublicDto getPublicSummary(String token) {
         OrderCustomerViewLink link = findActiveLink(token);
@@ -157,6 +174,14 @@ public class CustomerOrderViewService {
 
         Order order = orderRepository.findById(link.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        return buildPublicProgressDto(order);
+    }
+
+    /**
+     * 已绑定 C 端门户账号后查看进度（不经过 view_token 计数）。
+     */
+    @Transactional(readOnly = true)
+    public CustomerOrderPublicDto buildPublicProgressDto(Order order) {
         DesignInfo di = designInfoRepository.findByOrderId(order.getId()).orElse(null);
         List<String> images = parseDesignImages(di);
         String firstImg = images.isEmpty() ? null : images.get(0);
@@ -173,9 +198,15 @@ public class CustomerOrderViewService {
                 .build();
     }
 
+    private void assertLinkNotExpired(OrderCustomerViewLink link) {
+        if (link.getExpireTime() != null && link.getExpireTime().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "链接已过期");
+        }
+    }
+
     private void assertDesignerOrAdmin(Order order) {
         String role = SecurityUtils.currentRoleApi().orElse("");
-        Long uid = SecurityUtils.currentUserId()
+        Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         if ("ADMIN".equals(role)) {
             return;
@@ -212,6 +243,10 @@ public class CustomerOrderViewService {
             base = base.substring(0, base.length() - 1);
         }
         return base + "/portal/c/progress/" + token;
+    }
+
+    public String resolveDisplayTitleForOrder(Order order) {
+        return resolveDisplayTitle(order);
     }
 
     private String resolveDisplayTitle(Order order) {

@@ -93,11 +93,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       // 这里可以加载应用初始化需要的数据
       // 例如：用户信息、配置、权限等
-      
+
       // 模拟初始化过程
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      set({ 
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      set({
         appReady: true,
         loading: false,
       });
@@ -105,6 +105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         error: error.message || '应用初始化失败',
         loading: false,
+        appReady: true,
       });
       throw error;
     }

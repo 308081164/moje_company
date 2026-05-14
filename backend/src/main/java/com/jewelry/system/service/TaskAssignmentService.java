@@ -200,7 +200,7 @@ public class TaskAssignmentService {
     // ==============================================
     @Transactional
     public void reassignTask(TaskReassignRequestDto request) {
-        Long currentUserId = SecurityUtils.currentUserId()
+        Long currentUserId = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
 
         Order order = orderRepository.findById(request.getOrderId())

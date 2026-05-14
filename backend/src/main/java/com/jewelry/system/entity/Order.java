@@ -80,6 +80,10 @@ public class Order {
     // B端标识
     @Column(name = "is_b2b")
     private Boolean isB2b = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "b2b_client_id")
+    private B2BClient b2bClient;
     
     // 时间信息
     @Column(name = "order_time")
