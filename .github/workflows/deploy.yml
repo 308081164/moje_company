@@ -237,6 +237,8 @@ jobs:
           export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           # ========== 4. 修复 Flyway 状态 ==========
+          # 说明：正式库结构迭代由后端镜像内 Flyway 在 Spring Boot 启动时自动执行（见 backend/src/main/resources/db/migration）。
+          # 本 job 在拉起新 backend 容器后即完成迁移；下方健康检查通过后会打印 flyway_schema_history 便于在 Actions 日志中核对。
           echo "检查 Flyway 状态..."
           # 先启动 MySQL 来修复数据库状态
           docker compose -f docker-compose.prod.yml up -d mysql
@@ -318,6 +320,10 @@ jobs:
           
           if [ "$ok" = "1" ]; then
             echo "✅ 服务健康检查通过"
+            echo "--- 最近 Flyway 迁移记录（success=1 表示该版本已应用；新合并的 V13 等应出现在列表顶部）---"
+            docker exec jewelry-mysql mysql -uroot -p"${DB_PASSWORD}" moje_database -e \
+              "SELECT installed_rank, version, description, type, installed_on, success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 15;" \
+              2>/dev/null || echo "(无法读取 flyway_schema_history，请检查 MySQL 与库名 moje_database)"
           else
             echo "⚠️  服务健康检查最终失败，输出诊断信息..."
             echo "--- curl /api/actuator/health ---"
