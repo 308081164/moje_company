@@ -90,6 +90,34 @@ export enum FileType {
   OTHER = 'OTHER',             // 其他
 }
 
+/** 建模材料归档：小组件行 */
+export interface ModelingArchiveComponentRow {
+  complexity?: number;
+  markerFileIds: number[];
+}
+
+/** 建模材料归档：镶嵌结构行 */
+export interface ModelingArchiveInlayRow {
+  complexity?: number;
+  markerFileIds: number[];
+}
+
+/** 建模材料归档（与后端 ModelingArchiveDto 对齐） */
+export interface ModelingArchiveData {
+  orderId: number;
+  mainStructureComplexity?: number;
+  mainMarkerFileIds: number[];
+  textureComplexity?: number;
+  textureMarkerFileIds: number[];
+  smallComponentCount?: number;
+  inlayStructureCount?: number;
+  components: ModelingArchiveComponentRow[];
+  inlays: ModelingArchiveInlayRow[];
+  completedAt?: string;
+  completedByUserId?: number;
+  completedByDisplayName?: string;
+}
+
 // 订单基本信息
 export interface OrderBaseInfo {
   id: number;

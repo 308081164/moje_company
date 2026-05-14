@@ -17,7 +17,10 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -73,6 +76,27 @@ public class OrderFileService {
         return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);
     }
 
+    @Transactional
+    public FileInfoDto uploadArchiveMarkerFile(long orderId, MultipartFile file) throws IOException {
+        return uploadArchiveMarkerFile(orderId, file, null);
+    }
+
+    @Transactional
+    public FileInfoDto uploadArchiveMarkerFile(long orderId, MultipartFile file, String notes) throws IOException {
+        assertArchiveMarkerRole();
+        long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        String n = notes != null && !notes.isBlank() ? notes : "建模归档样式标记";
+        return save(orderId, file, "archive/markers", "ARCHIVE_MARKER", n, uid);
+    }
+
+    private void assertArchiveMarkerRole() {
+        String r = SecurityUtils.currentRoleApi().orElse("");
+        if (!("ADMIN".equals(r) || "SALES".equals(r) || "DATA_ARCHIVIST".equals(r))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无上传归档标记截图权限");
+        }
+    }
+
     private FileInfoDto save(long orderId, MultipartFile file, String subDir, String fileType, String notes, Long uploaderId) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
@@ -86,7 +110,7 @@ public class OrderFileService {
         if (dot >= 0) {
             ext = original.substring(dot);
         }
-        String storedFileName = java.util.UUID.randomUUID() + ext;
+        String storedFileName = buildStandardStoredFileName(orderId, fileType, original, ext);
         String objectKey = "order/" + orderId + "/" + subDir + "/" + storedFileName;
 
         // 所有文件强制上传到 OSS，不再保留本地副本
@@ -98,7 +122,7 @@ public class OrderFileService {
         }
 
         FileEntity e = new FileEntity();
-        e.setFileName(original);
+        e.setFileName(storedFileName);
         e.setOriginalName(original);
         e.setFilePath(objectKey);
         e.setFileUrl(url);
@@ -112,6 +136,27 @@ public class OrderFileService {
         e.setUploaderId(uploaderId);
         fileEntityRepository.save(e);
         return toDto(e);
+    }
+
+    private static final SecureRandom RND = new SecureRandom();
+
+    private static String buildStandardStoredFileName(long orderId, String fileType, String original, String ext) {
+        String ts = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now());
+        byte[] buf = new byte[4];
+        RND.nextBytes(buf);
+        String rand = HexFormat.of().formatHex(buf);
+        String base = original;
+        if (base.lastIndexOf('.') > 0) {
+            base = base.substring(0, base.lastIndexOf('.'));
+        }
+        base = base.replaceAll("[^a-zA-Z0-9._\\-\\u4e00-\\u9fa5]+", "_");
+        if (base.length() > 48) {
+            base = base.substring(0, 48);
+        }
+        if (base.isBlank()) {
+            base = "file";
+        }
+        return "jewelry_ord_" + orderId + "_" + fileType + "_" + ts + "_" + rand + "_" + base + ext;
     }
 
     private FileInfoDto toDto(FileEntity e) {

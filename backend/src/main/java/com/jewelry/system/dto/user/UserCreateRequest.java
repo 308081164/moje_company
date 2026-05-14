@@ -19,7 +19,7 @@ public class UserCreateRequest {
     private String email;
     private String phone;
 
-    /** 前端角色：PRE_SALES / SALES / TRACKER / ADMIN / DESIGNER / MODELER */
+    /** 前端角色：PRE_SALES / SALES / TRACKER / ADMIN / DESIGNER / MODELER / DATA_ARCHIVIST */
     @NotBlank
     private String role;
 

@@ -27,6 +27,7 @@ const roleOptions = [
   { label: '售中客服', value: UserRole.SALES },
   { label: '设计师', value: UserRole.DESIGNER },
   { label: '建模师', value: UserRole.MODELER },
+  { label: '信息化数据归档师', value: UserRole.DATA_ARCHIVIST },
   { label: '跟单员', value: UserRole.TRACKER },
 ];
 

@@ -11,6 +11,8 @@ import UserManagementPage from '@/pages/UserManagementPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
+import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
+import BulkExportPage from '@/pages/BulkExportPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -199,6 +201,8 @@ const App: React.FC = () => {
             <Route index element={<DashboardPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="workbench" element={<WorkbenchPage />} />
+            <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
+            <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="orders/*" element={<OrderManagementPage />} />

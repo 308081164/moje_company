@@ -72,8 +72,8 @@ public class User {
         return UserRole.MODELER.equals(this.role);
     }
     
-    public boolean isFollowUp() {
-        return UserRole.FOLLOW_UP.equals(this.role);
+    public boolean isDataArchivist() {
+        return UserRole.DATA_ARCHIVIST.equals(this.role);
     }
     
     public boolean isActive() {

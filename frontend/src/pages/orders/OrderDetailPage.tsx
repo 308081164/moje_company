@@ -46,6 +46,7 @@ import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
 import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
+import ModelingArchivePanel from '@/components/ModelingArchivePanel';
 import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;
@@ -1260,6 +1261,8 @@ const OrderDetailPage: React.FC = () => {
             <Text type="secondary">暂无建模信息</Text>
           )}
         </Card>
+
+        {order.modelInfo && <ModelingArchivePanel orderId={Number(orderId)} />}
 
         <Card size="small" title="评审信息" style={{ marginBottom: 16 }}>
           {order.reviewInfo ? (

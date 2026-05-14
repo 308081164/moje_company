@@ -65,6 +65,27 @@ public class AliyunOssService {
     }
 
     /**
+     * 按对象 key 读取 OSS 对象内容到内存（适用于导出等中小文件）。
+     */
+    public byte[] readObjectBytes(String objectKey) throws IOException {
+        if (!isEnabled() || objectKey == null || objectKey.isBlank()) {
+            throw new IllegalStateException("OSS 未配置或 key 为空");
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            try (var ossObj = ossClient.getObject(bucketName, objectKey);
+                 var in = ossObj.getObjectContent()) {
+                return in.readAllBytes();
+            }
+        } catch (Exception e) {
+            log.error("OSS readObjectBytes failed. key={}", objectKey, e);
+            throw new IOException("OSS 读取失败", e);
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    /**
      * 根据对象 key 删除 OSS 上的文件，失败会记录日志但不抛出异常。
      */
     public void deleteObject(String objectKey) {

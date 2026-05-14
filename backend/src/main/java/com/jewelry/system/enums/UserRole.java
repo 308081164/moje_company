@@ -6,7 +6,8 @@ public enum UserRole {
     SALES_MID("售中客服"),
     DESIGNER("设计师"),
     MODELER("建模师"),
-    FOLLOW_UP("跟单员");
+    FOLLOW_UP("跟单员"),
+    DATA_ARCHIVIST("信息化数据归档师");
     
     private final String description;
     

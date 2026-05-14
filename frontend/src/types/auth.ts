@@ -6,6 +6,7 @@ export enum UserRole {
   DESIGNER = 'DESIGNER',     // 设计师
   MODELER = 'MODELER',       // 建模师
   TRACKER = 'TRACKER',       // 跟单员
+  DATA_ARCHIVIST = 'DATA_ARCHIVIST', // 信息化数据归档师
 }
 
 // 用户状态枚举

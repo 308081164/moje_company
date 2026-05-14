@@ -27,6 +27,7 @@ import {
   FileTextOutlined,
   ShopOutlined,
   MenuOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -81,6 +82,11 @@ const AppLayout: React.FC = () => {
             ],
           },
           {
+            key: '/workbench/modeling-archive',
+            icon: <FileTextOutlined />,
+            label: '建模归档任务池',
+          },
+          {
             key: '/users',
             icon: <TeamOutlined />,
             label: '用户管理',
@@ -94,6 +100,11 @@ const AppLayout: React.FC = () => {
             key: '/system/monitor',
             icon: <ShopOutlined />,
             label: '系统监控',
+          },
+          {
+            key: '/exports',
+            icon: <DownloadOutlined />,
+            label: '批量导出 ZIP',
           },
         ];
       case 'PRE_SALES':
@@ -121,6 +132,7 @@ const AppLayout: React.FC = () => {
               { key: '/orders?status=PENDING_MODEL', label: '待建模' },
               { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
               { key: '/orders?status=PENDING_PRODUCTION', label: '待生产' },
+              { key: '/workbench/modeling-archive', label: '建模归档任务池' },
             ],
           },
         ];
@@ -178,6 +190,21 @@ const AppLayout: React.FC = () => {
               { key: '/orders', label: '全部订单' },
               { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
             ],
+          },
+        ];
+      case 'DATA_ARCHIVIST':
+        return [
+          ...baseItems,
+          {
+            key: '/workbench/modeling-archive',
+            icon: <FileTextOutlined />,
+            label: '建模归档任务池',
+          },
+          {
+            key: '/orders',
+            icon: <ShoppingCartOutlined />,
+            label: '订单列表',
+            children: [{ key: '/orders', label: '全部订单' }],
           },
         ];
       default:
@@ -265,6 +292,12 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/dashboard')) {
       return ['/dashboard'];
+    }
+    if (path.startsWith('/workbench/modeling-archive')) {
+      return ['/workbench/modeling-archive'];
+    }
+    if (path.startsWith('/exports')) {
+      return ['/exports'];
     }
     if (path.startsWith('/workbench')) {
       return ['/workbench'];
@@ -486,6 +519,11 @@ const AppLayout: React.FC = () => {
           {['DESIGNER', 'MODELER', 'TRACKER'].includes(user?.role || '') && (
             <Button type="text" onClick={() => navigateAndCloseMobile('/workbench')}>
               工作台
+            </Button>
+          )}
+          {['ADMIN', 'SALES', 'DATA_ARCHIVIST'].includes(user?.role || '') && (
+            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/modeling-archive')}>
+              归档池
             </Button>
           )}
           <Button type="text" onClick={() => setMobileMenuOpen(true)}>

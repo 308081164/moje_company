@@ -22,6 +22,7 @@ import {
   StoneInfo,
   OrderDraftFromChatImageResponse,
   CustomerProgressLinkResponse,
+  ModelingArchiveData,
 } from '@/types/order';
 
 // 订单服务
@@ -625,5 +626,30 @@ export const orderService = {
       console.error('拆分订单失败:', error);
       throw error;
     }
+  },
+
+  /** 建模归档共享池（管理员 / 售中 / 归档师） */
+  async workbenchModelingArchivePool(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/modeling-archive/pool', { params: { page, size } });
+  },
+
+  async getModelingArchive(orderId: number): Promise<ModelingArchiveData> {
+    return api.get(`/orders/${orderId}/modeling-archive`);
+  },
+
+  async saveModelingArchive(orderId: number, body: ModelingArchiveData): Promise<ModelingArchiveData> {
+    return api.put(`/orders/${orderId}/modeling-archive`, body);
+  },
+
+  async submitModelingArchive(orderId: number): Promise<ModelingArchiveData> {
+    return api.post(`/orders/${orderId}/modeling-archive/submit`);
+  },
+
+  async uploadModelingArchiveMarker(orderId: number, file: File): Promise<FileInfo> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/orders/${orderId}/modeling-archive/marker-upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
   },
 };

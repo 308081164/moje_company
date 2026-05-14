@@ -113,6 +113,9 @@ api.interceptors.response.use(
         case 403:
           message.error('权限不足，无法访问');
           break;
+        case 409:
+          message.warning(data?.message || data?.detail || '请求冲突');
+          break;
         case 404:
           message.error('请求的资源不存在');
           break;
@@ -125,7 +128,7 @@ api.interceptors.response.use(
           message.error('服务暂时不可用，请稍后重试');
           break;
         default:
-          message.error(data?.message || `请求失败 (${status})`);
+          message.error(data?.message || data?.detail || `请求失败 (${status})`);
       }
     } else if (error.request) {
       // 请求已发出但没有收到响应

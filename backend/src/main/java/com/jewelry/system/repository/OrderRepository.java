@@ -71,4 +71,12 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     List<Order> findByB2bClientIdOrderByCreatedAtDesc(Long b2bClientId);
 
     Optional<Order> findByOrderNumber(String orderNumber);
+
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            WHERE EXISTS (SELECT 1 FROM ModelingInfo mi WHERE mi.orderId = o.id)
+            AND NOT EXISTS (SELECT 1 FROM OrderModelingArchive ma WHERE ma.orderId = o.id AND ma.completedAt IS NOT NULL)
+            ORDER BY o.updatedAt DESC
+            """)
+    Page<Order> pageModelingArchiveSharedPool(Pageable pageable);
 }
