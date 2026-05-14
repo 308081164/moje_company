@@ -16,7 +16,22 @@ console.log('[renderer] boot', {
   href: window.location.href,
   hasAppEl: !!document.getElementById('app'),
   hasRootEl: !!document.getElementById('root'),
+  readyState: document.readyState,
 });
+
+/** 通知 index.html 隐藏启动遮罩（必须与 DOMContentLoaded 解耦：bundle 常在事件之后执行） */
+function dispatchAppLoaded(reason: string) {
+  try {
+    console.log('[renderer] app-loaded', reason);
+    window.dispatchEvent(new Event('app-loaded'));
+  } catch (e) {
+    console.error('[renderer] dispatch app-loaded failed', e);
+  }
+}
+
+function scheduleAppLoaded(reason: string, ms: number) {
+  window.setTimeout(() => dispatchAppLoaded(reason), ms);
+}
 
 // 配置dayjs本地化
 dayjs.locale('zh-cn');
@@ -61,18 +76,17 @@ const theme = {
   },
 };
 
-// 渲染应用
+// 创建 React root
 const root = ReactDOM.createRoot(
   document.getElementById('app') as HTMLElement
 );
 
-// 应用加载完成事件
-window.addEventListener('DOMContentLoaded', () => {
-  // 显示加载完成
-  setTimeout(() => {
-    window.dispatchEvent(new Event('app-loaded'));
-  }, 500);
-});
+// 1) 脚本执行时 DOM 往往已是 interactive/complete，仅监听 DOMContentLoaded 会永远收不到事件
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => scheduleAppLoaded('DOMContentLoaded', 0), { once: true });
+} else {
+  scheduleAppLoaded('document-already-ready', 0);
+}
 
 // 错误边界
 class ErrorBoundary extends React.Component<
@@ -161,7 +175,7 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// 渲染应用
+// 挂载 React 根
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
@@ -171,6 +185,12 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// 2) React 已挂载后再通知一次（首帧绘制后隐藏，避免闪白）
+scheduleAppLoaded('after-root-render', 120);
+
+// 3) 硬兜底：极端情况下仍保证遮罩消失
+scheduleAppLoaded('hard-fallback', 4000);
 
 // 热模块替换（开发环境）
 // Webpack HMR（避免 import.meta 在 commonjs module 下报错）

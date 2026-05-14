@@ -177,20 +177,20 @@
             });
         }
         
-        // 应用加载完成后的处理
-        window.addEventListener('app-loaded', () => {
-            console.log('[index.html] app-loaded');
-            document.getElementById('loadingScreen').style.display = 'none';
-        });
-
-        // 兜底：如果渲染进程未触发 app-loaded，避免一直遮挡导致“白屏”
-        setTimeout(() => {
+        function hideLoadingSplash(reason) {
             const loading = document.getElementById('loadingScreen');
-            if (loading && loading.style.display !== 'none') {
-                console.warn('[index.html] app-loaded not fired, hide loading by fallback');
-                loading.style.display = 'none';
-            }
-        }, 3000);
+            if (!loading) return;
+            if (loading.style.display === 'none') return;
+            console.log('[index.html] hide loading:', reason);
+            loading.style.display = 'none';
+            loading.setAttribute('aria-hidden', 'true');
+        }
+
+        window.addEventListener('app-loaded', () => hideLoadingSplash('app-loaded'));
+
+        // 兜底：渲染 bundle 若异常未派发 app-loaded，仍自动收起遮罩
+        setTimeout(() => hideLoadingSplash('timeout-fallback'), 2500);
+        window.addEventListener('load', () => hideLoadingSplash('window-load'));
         
         // 错误处理
         window.addEventListener('error', (event) => {

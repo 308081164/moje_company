@@ -24,19 +24,19 @@ const App: React.FC = () => {
   const [initializing, setInitializing] = useState(true);
   console.log('[App] render', { initializing, authLoading, appReady, isAuthenticated });
 
-  // 初始化应用
+  // 仅挂载时执行一次：避免 checkAuth → 更新 user 后 effect 重复触发导致多次初始化或竞态
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       try {
-        // 检查认证状态
         await checkAuth();
-        
-        // 初始化应用
         await initializeApp();
-        
-        // 显示欢迎消息
-        if (isAuthenticated && user) {
-          message.success(`欢迎回来，${user.realName || user.username}！`);
+        if (!cancelled) {
+          const u = useAuthStore.getState().user;
+          const authed = useAuthStore.getState().isAuthenticated;
+          if (authed && u) {
+            message.success(`欢迎回来，${u.realName || u.username}！`);
+          }
         }
       } catch (error) {
         console.error('应用初始化失败:', error);
@@ -45,12 +45,17 @@ const App: React.FC = () => {
           description: '请检查网络连接或联系管理员',
         });
       } finally {
-        setInitializing(false);
+        if (!cancelled) {
+          setInitializing(false);
+        }
       }
     };
 
-    init();
-  }, [checkAuth, initializeApp, isAuthenticated, user]);
+    void init();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkAuth, initializeApp]);
 
   // 监听Electron菜单事件
   useEffect(() => {
