@@ -29,6 +29,8 @@ import {
   MenuOutlined,
   DownloadOutlined,
   HighlightOutlined,
+  PictureOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -106,6 +108,16 @@ const AppLayout: React.FC = () => {
             key: '/exports',
             icon: <DownloadOutlined />,
             label: '批量导出 ZIP',
+          },
+          {
+            key: '/admin-portal',
+            icon: <PictureOutlined />,
+            label: '门户展示配置',
+          },
+          {
+            key: '/legacy-archives',
+            icon: <DatabaseOutlined />,
+            label: '历史订单归档',
           },
           {
             key: '/marketing',
@@ -304,6 +316,12 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/dashboard')) {
       return ['/dashboard'];
+    }
+    if (path.startsWith('/admin-portal')) {
+      return ['/admin-portal'];
+    }
+    if (path.startsWith('/legacy-archives')) {
+      return ['/legacy-archives'];
     }
     if (path.startsWith('/workbench/modeling-archive')) {
       return ['/workbench/modeling-archive'];

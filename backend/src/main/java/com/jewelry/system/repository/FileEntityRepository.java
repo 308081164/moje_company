@@ -9,4 +9,10 @@ import java.util.List;
 public interface FileEntityRepository extends JpaRepository<FileEntity, Long> {
 
     List<FileEntity> findByRelatedTypeAndRelatedIdOrderByIdDesc(FileRelatedType relatedType, Long relatedId);
+
+    List<FileEntity> findByRelatedTypeAndRelatedIdAndFileTypeInOrderByIdDesc(
+            FileRelatedType relatedType,
+            Long relatedId,
+            java.util.Collection<String> fileTypes
+    );
 }

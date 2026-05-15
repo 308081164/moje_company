@@ -7,6 +7,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/HomeView.vue')
   },
   {
+    path: '/gallery/:slug',
+    name: 'GalleryCategory',
+    component: () => import('@/views/GalleryCategoryView.vue')
+  },
+  {
     path: '/portal',
     name: 'Portal',
     component: () => import('@/views/PortalView.vue')

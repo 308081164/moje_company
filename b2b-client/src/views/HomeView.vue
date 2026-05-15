@@ -26,8 +26,11 @@
       </div>
       <div class="hero-content">
         <div class="hero-text">
-          <h1 class="hero-title">匠心定制·永恒经典</h1>
-          <p class="hero-subtitle">MOJE 珠宝 - 专注高端珠宝定制服务</p>
+          <h1 class="hero-title">{{ portal?.heroTitle || '匠心定制·永恒经典' }}</h1>
+          <p class="hero-subtitle">{{ portal?.heroSubtitle || 'MOJE 珠宝 - 专注高端珠宝定制服务' }}</p>
+          <div v-if="portal?.carousel?.length" class="hero-carousel">
+            <img v-for="(c, i) in portal.carousel" :key="i" :src="c.url" alt="" />
+          </div>
           <div class="hero-buttons">
             <router-link to="/portal" class="btn-primary">立即定制</router-link>
             <a href="#about" class="btn-secondary">了解更多</a>
@@ -49,7 +52,8 @@
       </div>
       <div class="about-content">
         <div class="about-text">
-          <p class="about-description">
+          <div v-if="portal?.aboutHtml" class="about-description" v-html="portal.aboutHtml"></div>
+          <p v-else class="about-description">
             MOJE 珠宝创立于2018年，致力于为全球客户提供高端定制珠宝服务。
             我们拥有专业的设计团队和精湛的工艺，每一件作品都凝聚着匠人的心血。
           </p>
@@ -77,7 +81,10 @@
           </div>
         </div>
         <div class="about-image">
-          <div class="about-image-placeholder">
+          <div v-if="portal?.companyPhotos?.length" class="company-photo-strip">
+            <img v-for="(p, i) in portal.companyPhotos" :key="i" :src="p.url" alt="企业实拍" />
+          </div>
+          <div v-else class="about-image-placeholder">
             <span class="image-icon">🏛️</span>
           </div>
         </div>
@@ -92,16 +99,34 @@
         <div class="section-divider"></div>
       </div>
       <div class="products-grid">
-        <div class="product-card" v-for="(product, index) in products" :key="index">
+        <router-link
+          v-for="cat in portal?.categories || []"
+          :key="cat.slug"
+          :to="`/gallery/${cat.slug}`"
+          class="product-card product-card--link"
+        >
           <div class="product-image">
-            <span class="product-icon">{{ product.icon }}</span>
+            <img v-if="cat.coverUrl" :src="cat.coverUrl" :alt="cat.nameCn" class="product-cover" />
+            <span v-else class="product-icon">💎</span>
           </div>
           <div class="product-info">
-            <h3 class="product-name">{{ product.name }}</h3>
-            <p class="product-description">{{ product.description }}</p>
-            <span class="product-tag">{{ product.tag }}</span>
+            <h3 class="product-name">{{ cat.nameCn }}</h3>
+            <p class="product-description">{{ cat.description || '查看该分类下管理员精选的建模与设计展示图' }}</p>
+            <span class="product-tag">{{ cat.visibleItemCount }} 张展示</span>
           </div>
-        </div>
+        </router-link>
+        <template v-if="!(portal?.categories?.length)">
+          <div class="product-card" v-for="(product, index) in products" :key="index">
+            <div class="product-image">
+              <span class="product-icon">{{ product.icon }}</span>
+            </div>
+            <div class="product-info">
+              <h3 class="product-name">{{ product.name }}</h3>
+              <p class="product-description">{{ product.description }}</p>
+              <span class="product-tag">{{ product.tag }}</span>
+            </div>
+          </div>
+        </template>
       </div>
     </section>
 
@@ -132,28 +157,35 @@
             <div class="contact-icon">📍</div>
             <div class="contact-details">
               <h4>地址</h4>
-              <p>上海市静安区南京西路1266号恒隆广场33楼</p>
+              <p>{{ portal?.address || '上海市静安区南京西路1266号恒隆广场33楼' }}</p>
             </div>
           </div>
           <div class="contact-item">
             <div class="contact-icon">📞</div>
             <div class="contact-details">
               <h4>电话</h4>
-              <p>400-888-8888</p>
+              <p>{{ portal?.contactPhone || '400-888-8888' }}</p>
+            </div>
+          </div>
+          <div class="contact-item" v-if="portal?.contactWechat">
+            <div class="contact-icon">💬</div>
+            <div class="contact-details">
+              <h4>微信</h4>
+              <p>{{ portal.contactWechat }}</p>
             </div>
           </div>
           <div class="contact-item">
             <div class="contact-icon">✉️</div>
             <div class="contact-details">
               <h4>邮箱</h4>
-              <p>info@moje珠宝.com</p>
+              <p>{{ portal?.contactEmail || 'info@moje珠宝.com' }}</p>
             </div>
           </div>
           <div class="contact-item">
             <div class="contact-icon">🕐</div>
             <div class="contact-details">
               <h4>营业时间</h4>
-              <p>周一至周日 10:00-21:00</p>
+              <p>{{ portal?.businessHours || '周一至周日 10:00-21:00' }}</p>
             </div>
           </div>
         </div>
@@ -211,7 +243,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { getPortalHome, type PortalHomePublicDto } from '@/api'
+
+const portal = ref<PortalHomePublicDto | null>(null)
 
 const products = ref([
   {
@@ -251,6 +286,13 @@ const products = ref([
     tag: '耳钉'
   }
 ])
+onMounted(async () => {
+  try {
+    portal.value = await getPortalHome()
+  } catch {
+    portal.value = null
+  }
+})
 </script>
 
 <style scoped>
@@ -631,6 +673,48 @@ const products = ref([
 .product-card:hover {
   transform: translateY(-8px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.product-card--link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.product-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-carousel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin: 20px 0 8px;
+  padding-bottom: 4px;
+}
+
+.hero-carousel img {
+  height: 120px;
+  width: auto;
+  max-width: 220px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.company-photo-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.company-photo-strip img {
+  width: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  max-height: 200px;
 }
 
 .product-image {

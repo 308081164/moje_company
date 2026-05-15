@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers("/b2b/client/register", "/b2b/client/login").permitAll()
                         .requestMatchers("/portal/c/account/register", "/portal/c/account/login").permitAll()
                         .requestMatchers(new AntPathRequestMatcher("/public/customer-order/*/hint", HttpMethod.GET.name())).permitAll()
+                        .requestMatchers("/public/portal/**").permitAll()
                         .requestMatchers("/b2b/order/{token}", "/b2b/order/{token}/files").permitAll()
                         .requestMatchers("/b2b/modeler/status").permitAll()
                         // WebSocket 握手无法带 Authorization；路径为 context-path 下的 /ws/**

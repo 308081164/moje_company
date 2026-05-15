@@ -14,6 +14,8 @@ import WorkbenchPage from '@/pages/WorkbenchPage';
 import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
 import MarketingCopyPoolPage from '@/pages/MarketingCopyPoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
+import PortalShowcaseAdminPage from '@/pages/PortalShowcaseAdminPage';
+import LegacyOrderArchivePage from '@/pages/LegacyOrderArchivePage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -215,6 +217,8 @@ const App: React.FC = () => {
               element={canAccessMarketingCopy ? <MarketingCopyPoolPage /> : <Navigate to="/dashboard" replace />}
             />
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="admin-portal" element={isAdmin ? <PortalShowcaseAdminPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="legacy-archives" element={isAdmin ? <LegacyOrderArchivePage /> : <Navigate to="/dashboard" replace />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="orders/*" element={<OrderManagementPage />} />

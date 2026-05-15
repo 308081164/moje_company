@@ -165,3 +165,49 @@ export function portalListOrders(): Promise<PortalCustomerOrderListItemDto[]> {
 export function portalOrderSummary(orderId: number): Promise<CustomerOrderPublicDto> {
   return request.get(`/portal/c/orders/${orderId}/summary`)
 }
+
+export interface PortalImageDto {
+  fileId: number
+  url: string
+  caption?: string | null
+}
+
+export interface PortalCategoryPublicDto {
+  slug: string
+  nameCn: string
+  nameEn?: string | null
+  description?: string | null
+  coverUrl?: string | null
+  visibleItemCount: number
+  preview: PortalImageDto[]
+}
+
+export interface PortalHomePublicDto {
+  heroTitle?: string | null
+  heroSubtitle?: string | null
+  aboutHtml?: string | null
+  businessHours?: string | null
+  contactPhone?: string | null
+  contactWechat?: string | null
+  contactEmail?: string | null
+  address?: string | null
+  carousel: PortalImageDto[]
+  companyPhotos: PortalImageDto[]
+  categories: PortalCategoryPublicDto[]
+}
+
+export function getPortalHome(): Promise<PortalHomePublicDto> {
+  return request.get('/public/portal/home')
+}
+
+export interface PortalCategoryDetailPublicDto {
+  slug: string
+  nameCn: string
+  nameEn?: string | null
+  description?: string | null
+  items: PortalImageDto[]
+}
+
+export function getPortalCategory(slug: string): Promise<PortalCategoryDetailPublicDto> {
+  return request.get(`/public/portal/category/${encodeURIComponent(slug)}`)
+}

@@ -143,6 +143,69 @@ public class OrderFileService {
         return toDto(e);
     }
 
+    /**
+     * 管理员上传 B 端门户公共素材（轮播、企业实拍等），OSS 路径为 public/portal/...，{@link FileRelatedType#PORTAL}。
+     */
+    @Transactional
+    public FileInfoDto uploadPortalPublicFile(MultipartFile file, String subDir, String fileTypeLabel) throws IOException {
+        if (!isAdminRole()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可上传门户展示素材");
+        }
+        long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return savePortalPublic(file, subDir, fileTypeLabel, uid);
+    }
+
+    public FileInfoDto toFileInfoDto(FileEntity e) {
+        return toDto(e);
+    }
+
+    private FileInfoDto savePortalPublic(MultipartFile file, String subDir, String fileType, Long uploaderId) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
+        }
+        if (!aliyunOssService.isEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "对象存储 OSS 未就绪：请配置 OSS_ACCESS_KEY_ID、OSS_ACCESS_KEY_SECRET、桶名（OSS_BUCKET_NAME 或 OSS_BUCKET）、"
+                            + "地域节点（ALIYUN_OSS_ENDPOINT 或 OSS_ENDPOINT，勿含 https://）。GitHub Actions 部署时 Secret 名需与 application.yml 一致，"
+                            + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
+            );
+        }
+        String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String ext = "";
+        int dot = original.lastIndexOf('.');
+        if (dot >= 0) {
+            ext = original.substring(dot);
+        }
+        long pseudoOrderId = 0L;
+        String storedFileName = buildStandardStoredFileName(pseudoOrderId, fileType, original, ext);
+        String objectKey = "public/portal/" + subDir + "/" + storedFileName;
+
+        String url;
+        try {
+            url = aliyunOssService.uploadObject(objectKey, file);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", ex);
+        }
+
+        FileEntity ent = new FileEntity();
+        ent.setFileName(storedFileName);
+        ent.setOriginalName(original);
+        ent.setFilePath(objectKey);
+        ent.setFileUrl(url);
+        ent.setFileSize(file.getSize());
+        ent.setFileType(fileType);
+        if (dot >= 0) {
+            ent.setFileExtension(original.substring(dot + 1));
+        }
+        ent.setRelatedType(FileRelatedType.PORTAL);
+        ent.setRelatedId(0L);
+        ent.setUploaderId(uploaderId);
+        fileEntityRepository.save(ent);
+        return toDto(ent);
+    }
+
     private static final SecureRandom RND = new SecureRandom();
 
     private static String buildStandardStoredFileName(long orderId, String fileType, String original, String ext) {
