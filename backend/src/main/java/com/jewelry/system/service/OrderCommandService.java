@@ -53,6 +53,7 @@ public class OrderCommandService {
     private final AuditLogService auditLogService;
     private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
+    private final OrderMarketingCopyService orderMarketingCopyService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -223,7 +224,7 @@ public class OrderCommandService {
     }
 
     /**
-     * 指派设计师本人保存设计信息时，若订单仍处于设计师阶段，则自动推进至「待建模师设计」。
+     * 指派设计师本人保存设计信息时，若订单仍处于设计师阶段，则自动推进至「建模中」（PENDING_MODEL）。
      * 其他角色（如管理员、客服）编辑设计信息不会触发自动流转。
      */
     private boolean tryAdvanceOrderAfterDesignerDesignSave(Order order) {
@@ -409,6 +410,15 @@ public class OrderCommandService {
         }
         pr.setReviewTime(LocalDateTime.now());
         processReviewRepository.save(pr);
+        if (order.getStatus() == OrderStatus.PENDING_REVIEW && rejected) {
+            try {
+                order.transitionTo(OrderStatus.MODELING);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+            orderRepository.save(order);
+            auditLogService.log("ORDER_REVIEW_REJECT_TO_MODELER", "ORDER", orderId, "工艺评审驳回，订单退回建模修改中");
+        }
         auditLogService.log("ORDER_UPDATE_REVIEW", "ORDER", orderId, "更新工艺评审信息");
         return orderQueryService.getOrder(orderId);
     }
@@ -455,6 +465,9 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
+        if (target == OrderStatus.COMPLETED) {
+            orderMarketingCopyService.ensurePendingRowForCompletedOrder(orderId);
+        }
         auditLogService.log("ORDER_CHANGE_STATUS", "ORDER", orderId, "变更状态为: " + target.name());
         return orderQueryService.getOrder(orderId);
     }

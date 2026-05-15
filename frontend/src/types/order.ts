@@ -26,6 +26,18 @@ export enum OrderStatus {
   CANCELLED = 'CANCELLED',
 }
 
+/** 营销文案（通义千问生成结果） */
+export interface OrderMarketingCopyDto {
+  orderId: number;
+  orderNumber: string;
+  generationComplete: boolean;
+  xhsGrassCopy?: string | null;
+  xianyuTaobaoCopy?: string | null;
+  douyinBroadcastCopy?: string | null;
+  lastGeneratedAt?: string | null;
+  lastGeneratedByName?: string | null;
+}
+
 // 材质类型枚举
 export enum MaterialType {
   SILVER_925 = 'SILVER_925',   // 925银

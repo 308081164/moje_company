@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { orderService } from '@/services/orderService';
 import type { OrderInfo } from '@/types/order';
 import { orderStatusLabel } from '@/utils/orderLabels';
@@ -10,6 +10,7 @@ const { Paragraph } = Typography;
 
 const ModelingArchivePoolPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [size] = useState(20);
@@ -42,7 +43,15 @@ const ModelingArchivePoolPage: React.FC = () => {
       title: '操作',
       width: 120,
       render: (_, r) => (
-        <Button type="link" size="small" onClick={() => navigate(`/orders/${r.baseInfo?.id}`)}>
+        <Button
+          type="link"
+          size="small"
+          onClick={() =>
+            navigate(`/orders/${r.baseInfo?.id}`, {
+              state: { backTo: `${location.pathname}${location.search}` },
+            })
+          }
+        >
           打开订单
         </Button>
       ),

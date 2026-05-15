@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import {
   Badge,
@@ -38,6 +38,7 @@ const { RangePicker } = DatePicker;
 
 const OrderListPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
 
@@ -214,7 +215,11 @@ const OrderListPage: React.FC = () => {
             <Button
               size="small"
               type="link"
-              onClick={() => navigate(`/orders/${record.baseInfo.id}`)}
+              onClick={() =>
+                navigate(`/orders/${record.baseInfo.id}`, {
+                  state: { backTo: `${location.pathname}${location.search}` },
+                })
+              }
             >
               详情
             </Button>
@@ -258,7 +263,9 @@ const OrderListPage: React.FC = () => {
       message.success('创建成功');
       setCreateModalVisible(false);
       loadOrders(); // 刷新订单列表
-      navigate(`/orders/${created.baseInfo.id}`); // 跳转到新订单详情
+      navigate(`/orders/${created.baseInfo.id}`, {
+        state: { backTo: `${location.pathname}${location.search}` },
+      });
     } catch (e) {
       message.error('创建失败');
     } finally {

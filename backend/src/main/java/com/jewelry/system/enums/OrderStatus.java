@@ -3,8 +3,8 @@ package com.jewelry.system.enums;
 public enum OrderStatus {
     PENDING_DESIGN("设计中"),
     DESIGNING("设计复审中"),
-    PENDING_MODEL("待建模师设计"),
-    MODELING("建模中"),
+    PENDING_MODEL("建模中"),
+    MODELING("建模修改中"),
     PENDING_REVIEW("待工艺验证"),
     PENDING_PRODUCTION("待生产"),
     PRODUCING("生产中"),
@@ -53,7 +53,7 @@ public enum OrderStatus {
             case MODELING:
                 return targetStatus == PENDING_REVIEW || targetStatus == DESIGNING || targetStatus == CANCELLED;
             case PENDING_REVIEW:
-                return targetStatus == PENDING_PRODUCTION || targetStatus == CANCELLED;
+                return targetStatus == PENDING_PRODUCTION || targetStatus == MODELING || targetStatus == CANCELLED;
             case PENDING_PRODUCTION:
                 return targetStatus == PRODUCING || targetStatus == CANCELLED;
             case PRODUCING:

@@ -61,8 +61,8 @@ const statusColor = (status: string) => {
   const map: Record<string, string> = {
     PENDING_DESIGN: 'blue',
     DESIGNING: 'orange',
-    PENDING_MODEL: 'cyan',
-    MODELING: 'geekblue',
+    PENDING_MODEL: 'geekblue',
+    MODELING: 'purple',
     PENDING_REVIEW: 'purple',
     PENDING_QUOTATION: 'magenta',
     QUOTED: 'volcano',

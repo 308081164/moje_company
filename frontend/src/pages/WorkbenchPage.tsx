@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Badge, Button, Card, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -21,6 +21,7 @@ const B2B_OPTIONS = [
 
 const WorkbenchPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const role = user?.role as UserRole | undefined;
 
@@ -121,7 +122,15 @@ const WorkbenchPage: React.FC = () => {
         key: 'a',
         width: 100,
         render: (_, r) => (
-          <Button type="link" size="small" onClick={() => navigate(`/orders/${r.baseInfo.id}`)}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() =>
+              navigate(`/orders/${r.baseInfo.id}`, {
+                state: { backTo: `${location.pathname}${location.search}` },
+              })
+            }
+          >
             详情
           </Button>
         ),

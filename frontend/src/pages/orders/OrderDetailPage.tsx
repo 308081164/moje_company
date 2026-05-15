@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -109,6 +109,9 @@ function formatSavedProcessLine(p: ProcessInfo): string {
 const OrderDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTo =
+    ((location.state as { backTo?: string } | null | undefined)?.backTo ?? '').trim() || '/orders';
   const orderId = Number(id);
   const currentUser = useCurrentUser();
   const isAdmin = useIsAdmin();
@@ -208,9 +211,12 @@ const OrderDetailPage: React.FC = () => {
   const loadRelatedOrdersRef = useRef(loadRelatedOrders);
   loadRelatedOrdersRef.current = loadRelatedOrders;
 
-  const navigateToOrder = useCallback((newOrderId: number) => {
-    navigate(`/orders/${newOrderId}`, { replace: true });
-  }, [navigate]);
+  const navigateToOrder = useCallback(
+    (newOrderId: number) => {
+      navigate(`/orders/${newOrderId}`, { replace: true, state: location.state });
+    },
+    [navigate, location.state]
+  );
 
   const goToPrevOrder = useCallback(() => {
     if (relatedOrders.length > 0 && currentOrderIndex > 0) {
@@ -663,13 +669,18 @@ const OrderDetailPage: React.FC = () => {
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-    await orderService.updateOrderReview(orderId, {
+    const hadReject = Boolean(v.rejectionReason?.trim()) || arr.length > 0;
+    const updated = await orderService.updateOrderReview(orderId, {
       trackerId: v.trackerId,
       reviewNotes: v.reviewNotes,
       rejectionReason: v.rejectionReason,
       rejectedProcesses: arr.length ? arr : undefined,
     });
-    message.success('评审已保存');
+    if (hadReject && updated.currentStatus === OrderStatus.MODELING) {
+      message.success('评审已保存，订单已打回建模师（建模修改中）');
+    } else {
+      message.success('评审已保存');
+    }
     refresh();
   };
 
@@ -1357,7 +1368,7 @@ const OrderDetailPage: React.FC = () => {
     return (
       <Card>
         <Text>订单不存在</Text>
-        <Button onClick={() => navigate('/orders')}>返回</Button>
+        <Button onClick={() => navigate(backTo)}>返回</Button>
       </Card>
     );
   }
@@ -1366,7 +1377,7 @@ const OrderDetailPage: React.FC = () => {
     <div>
       <Card loading={loading} bordered={false}>
         <Space wrap style={{ marginBottom: 16 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>
             返回列表
           </Button>
           <Title level={4} style={{ margin: 0 }}>

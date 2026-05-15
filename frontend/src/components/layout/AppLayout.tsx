@@ -28,6 +28,7 @@ import {
   ShopOutlined,
   MenuOutlined,
   DownloadOutlined,
+  HighlightOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -106,6 +107,12 @@ const AppLayout: React.FC = () => {
             icon: <DownloadOutlined />,
             label: '批量导出 ZIP',
           },
+          {
+            key: '/marketing',
+            icon: <HighlightOutlined />,
+            label: '营销',
+            children: [{ key: '/workbench/marketing-copy', label: '待生成营销文案订单' }],
+          },
         ];
       case 'PRE_SALES':
         return [
@@ -114,9 +121,13 @@ const AppLayout: React.FC = () => {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
             label: '订单管理',
-            children: [
-              { key: '/orders', label: '订单列表' },
-            ],
+            children: [{ key: '/orders', label: '订单列表' }],
+          },
+          {
+            key: '/marketing',
+            icon: <HighlightOutlined />,
+            label: '营销',
+            children: [{ key: '/workbench/marketing-copy', label: '待生成营销文案订单' }],
           },
         ];
       case 'SALES':
@@ -129,10 +140,11 @@ const AppLayout: React.FC = () => {
             children: [
               { key: '/orders', label: '全部订单' },
               { key: '/orders?status=PENDING_DESIGN', label: '待设计' },
-              { key: '/orders?status=PENDING_MODEL', label: '待建模' },
+              { key: '/orders?status=PENDING_MODEL', label: '建模中' },
               { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
               { key: '/orders?status=PENDING_PRODUCTION', label: '待生产' },
               { key: '/workbench/modeling-archive', label: '建模归档任务池' },
+              { key: '/workbench/marketing-copy', label: '待生成营销文案订单' },
             ],
           },
         ];
@@ -169,8 +181,8 @@ const AppLayout: React.FC = () => {
             label: '订单列表',
             children: [
               { key: '/orders', label: '全部订单' },
-              { key: '/orders?status=PENDING_MODEL', label: '待建模' },
-              { key: '/orders?status=MODELING', label: '建模中' },
+              { key: '/orders?status=PENDING_MODEL', label: '建模中' },
+              { key: '/orders?status=MODELING', label: '建模修改中' },
             ],
           },
         ];
@@ -296,6 +308,9 @@ const AppLayout: React.FC = () => {
     if (path.startsWith('/workbench/modeling-archive')) {
       return ['/workbench/modeling-archive'];
     }
+    if (path.startsWith('/workbench/marketing-copy')) {
+      return ['/marketing', '/workbench/marketing-copy'];
+    }
     if (path.startsWith('/exports')) {
       return ['/exports'];
     }
@@ -377,7 +392,7 @@ const AppLayout: React.FC = () => {
           <Menu
             mode="inline"
             selectedKeys={getSelectedKeys()}
-            defaultOpenKeys={['/orders']}
+            defaultOpenKeys={['/orders', '/marketing']}
             items={menuItems}
             onClick={handleMenuClick}
             style={{
@@ -413,7 +428,7 @@ const AppLayout: React.FC = () => {
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          defaultOpenKeys={['/orders']}
+          defaultOpenKeys={['/orders', '/marketing']}
           items={menuItems}
           onClick={handleMenuClick}
           style={{
@@ -524,6 +539,11 @@ const AppLayout: React.FC = () => {
           {['ADMIN', 'SALES', 'DATA_ARCHIVIST'].includes(user?.role || '') && (
             <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/modeling-archive')}>
               归档池
+            </Button>
+          )}
+          {['ADMIN', 'PRE_SALES', 'SALES'].includes(user?.role || '') && (
+            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/marketing-copy')}>
+              营销
             </Button>
           )}
           <Button type="text" onClick={() => setMobileMenuOpen(true)}>

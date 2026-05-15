@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, Card, DatePicker, Form, Input, InputNumber, Select, Space, Typography, message } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -13,6 +13,7 @@ const { Title } = Typography;
 
 const OrderCreatePage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -43,7 +44,9 @@ const OrderCreatePage: React.FC = () => {
       };
       const created = await orderService.createOrder(payload);
       message.success('创建成功');
-      navigate(`/orders/${created.baseInfo.id}`);
+      navigate(`/orders/${created.baseInfo.id}`, {
+        state: { backTo: `${location.pathname}${location.search}` },
+      });
     } catch (e) {
       message.error('创建失败');
     } finally {

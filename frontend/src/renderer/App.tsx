@@ -12,6 +12,7 @@ import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
 import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
+import MarketingCopyPoolPage from '@/pages/MarketingCopyPoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -195,6 +196,8 @@ const App: React.FC = () => {
 
   // 主应用布局（用户管理/系统配置仅管理员可访问，与《功能设计文档》4.1 一致）
   const isAdmin = user?.role === 'ADMIN';
+  const canAccessMarketingCopy =
+    isAdmin || user?.role === 'PRE_SALES' || user?.role === 'SALES';
 
   console.log('[App] authenticated -> main router');
   return (
@@ -207,6 +210,10 @@ const App: React.FC = () => {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="workbench" element={<WorkbenchPage />} />
             <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
+            <Route
+              path="workbench/marketing-copy"
+              element={canAccessMarketingCopy ? <MarketingCopyPoolPage /> : <Navigate to="/dashboard" replace />}
+            />
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />

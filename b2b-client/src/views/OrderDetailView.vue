@@ -136,8 +136,8 @@ interface FlatOrderDetail {
 const STATUS_ZH: Record<string, string> = {
   PENDING_DESIGN: '待设计',
   DESIGNING: '设计中',
-  PENDING_MODEL: '待建模',
-  MODELING: '建模中',
+  PENDING_MODEL: '建模中',
+  MODELING: '建模修改中',
   PENDING_REVIEW: '待工艺评审',
   PENDING_QUOTATION: '待报价',
   QUOTED: '已报价',
@@ -198,8 +198,8 @@ const getStatusColor = (status: string) => {
   const colorMap: Record<string, string> = {
     'PENDING_DESIGN': 'blue',
     'DESIGNING': 'orange',
-    'PENDING_MODEL': 'cyan',
-    'MODELING': 'geekblue',
+    'PENDING_MODEL': 'geekblue',
+    'MODELING': 'purple',
     'PENDING_REVIEW': 'purple',
     'PENDING_QUOTATION': 'magenta',
     'QUOTED': 'volcano',

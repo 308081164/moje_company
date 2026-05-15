@@ -9,8 +9,8 @@ export function orderStatusLabel(status: string): string {
   const map: Record<string, string> = {
     [OrderStatus.PENDING_DESIGN]: '设计中',
     [OrderStatus.DESIGNING]: '设计复审中',
-    [OrderStatus.PENDING_MODEL]: '待建模师设计',
-    [OrderStatus.MODELING]: '建模中',
+    [OrderStatus.PENDING_MODEL]: '建模中',
+    [OrderStatus.MODELING]: '建模修改中',
     [OrderStatus.PENDING_REVIEW]: '待工艺验证',
     [OrderStatus.PENDING_PRODUCTION]: '待生产',
     [OrderStatus.PRODUCING]: '生产中',
