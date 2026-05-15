@@ -466,6 +466,17 @@ curl http://localhost:8851/actuator/health
    - 检查部署日志
 
 ### 4.3 问题排查
+
+#### GitHub Actions：`dial tcp …:22: i/o timeout`
+
+该报错出现在 **SSH 建连之前**（TCP 层即失败），与 Docker 镜像、远端部署脚本无关。请按顺序排查：
+
+1. **安全组 / 防火墙**：云服务器入站是否放行 **TCP 22**（或你在 Secret `SSH_PORT` 中配置的端口）。GitHub-hosted Runner 的出口地址 **不固定**，不能依赖「只放行某一个 GitHub IP」；可临时 `0.0.0.0/0` 验证后收紧，或改用 **与服务器同 VPC 的 self-hosted Runner**。
+2. **Secrets**：`SSH_HOST` 是否为公网可达 IP/域名；仅内网地址时，必须使用自建 Runner 或跳板机（`appleboy/ssh-action` 的 `proxy_*` 参数，见[官方文档](https://github.com/appleboy/ssh-action)）。
+3. **本仓库 workflow**：已使用 `appleboy/ssh-action@v1.2.x` 并设置较长的 **`timeout`（建连超时）**；若仍超时，说明从公网 Runner 到主机仍不可达，需从网络侧解决。
+
+部署 job 在 `ssh-action` 前增加了 **TCP 探测** 步骤：失败时会输出上述要点，便于在 Actions 日志中快速定位。
+
 ```bash
 # 查看容器日志
 docker logs jewelry-backend -f

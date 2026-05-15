@@ -92,9 +92,36 @@ jobs:
           exit 1
         fi
         echo "Deploy secrets 校验通过（已配置 DB_PASSWORD、JWT_SECRET、DEFAULT_ADMIN_PASSWORD）。"
-    
+
+    # appleboy/ssh-action 默认「建连」仅 30s；网络抖动或跨境链路易 dial timeout。先 TCP 探测可快速给出防火墙/安全组提示。
+    - name: Probe SSH reachability (from GitHub Runner)
+      env:
+        SSH_HOST: ${{ secrets.SSH_HOST }}
+        SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "从 ubuntu-latest 探测 SSH 端口连通性（最多 3 次，每次最长 60s）..."
+        ok=0
+        for a in 1 2 3; do
+          if timeout 60 bash -c "exec 3<>/dev/tcp/${SSH_HOST}/${SSH_PORT}" 2>/dev/null; then
+            ok=1
+            echo "TCP 探测成功（第 ${a} 次尝试）。"
+            break
+          fi
+          echo "TCP 探测失败，30 秒后重试 (${a}/3)..."
+          sleep 30
+        done
+        if [ "$ok" != "1" ]; then
+          echo "::error::无法从 GitHub Actions 连到服务器 SSH 端口。请检查："
+          echo "  1) 云安全组/防火墙是否放行 TCP ${SSH_PORT}（GitHub-hosted Runner 出口 IP 不固定，可临时 0.0.0.0/0 验证或改用 self-hosted Runner）"
+          echo "  2) Secrets 中 SSH_HOST、SSH_PORT 是否正确（IPv6 仅当 Runner 支持时再使用）"
+          echo "  3) 若服务器仅内网，需跳板机：在 workflow 中配置 appleboy/ssh-action 的 proxy_* 参数"
+          exit 1
+        fi
+
     - name: Deploy to production server
-      uses: appleboy/ssh-action@v0.1.5
+      uses: appleboy/ssh-action@v1.2.5
       env:
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -193,11 +220,13 @@ jobs:
             jewelry_mysql_data:
       with:
         host: ${{ secrets.SSH_HOST }}
-        port: ${{ secrets.SSH_PORT || 22 }}
+        port: ${{ secrets.SSH_PORT || '22' }}
         username: ${{ secrets.SSH_USERNAME }}
         password: ${{ secrets.SSH_PASSWORD }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        # v1.x：timeout=与远端建立 SSH 会话前的 TCP/握手超时（默认仅 30s，易出现 dial i/o timeout）
+        timeout: 5m
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
         envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
