@@ -102,7 +102,12 @@ public class OrderFileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
         if (!aliyunOssService.isEnabled()) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "OSS 未配置，无法上传文件");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "对象存储 OSS 未就绪：请配置 OSS_ACCESS_KEY_ID、OSS_ACCESS_KEY_SECRET、桶名（OSS_BUCKET_NAME 或 OSS_BUCKET）、"
+                            + "地域节点（ALIYUN_OSS_ENDPOINT 或 OSS_ENDPOINT，勿含 https://）。GitHub Actions 部署时 Secret 名需与 application.yml 一致，"
+                            + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
+            );
         }
         String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
         String ext = "";

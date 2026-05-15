@@ -60,10 +60,11 @@ jwt:
 # AliCloud OSS Configuration
 aliyun:
   oss:
-    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-guangzhou.aliyuncs.com}
+    # 兼容 .env / 旧文档中的 OSS_ENDPOINT；桶名兼容 OSS_BUCKET（与 OSS_BUCKET_NAME 二选一）
+    endpoint: ${ALIYUN_OSS_ENDPOINT:${OSS_ENDPOINT:oss-cn-guangzhou.aliyuncs.com}}
     access-key-id: ${OSS_ACCESS_KEY_ID:}
     access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
-    bucket-name: ${OSS_BUCKET_NAME:}
+    bucket-name: ${OSS_BUCKET_NAME:${OSS_BUCKET:}}
     max-size: 104857600 # 100MB
     allowed-extensions: .jpg,.jpeg,.png,.gif,.bmp,.pdf,.stl,.obj,.jad
 

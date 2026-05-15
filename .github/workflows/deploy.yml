@@ -102,8 +102,11 @@ jobs:
         DEFAULT_ADMIN_USERNAME: ${{ secrets.DEFAULT_ADMIN_USERNAME }}
         OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
         OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-        OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME }}
-        ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT }}
+        # 兼容历史 Secret 命名：OSS_BUCKET / OSS_ENDPOINT（frontend-release 等 workflow 使用）
+        OSS_BUCKET_NAME: ${{ secrets.OSS_BUCKET_NAME || secrets.OSS_BUCKET }}
+        ALIYUN_OSS_ENDPOINT: ${{ secrets.ALIYUN_OSS_ENDPOINT || secrets.OSS_ENDPOINT }}
+        OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+        OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
         JEWELRY_PORTAL_BASE_URL: ${{ secrets.JEWELRY_PORTAL_BASE_URL }}
         DOCKER_COMPOSE_CONFIG: |
           version: "3.9"
@@ -146,8 +149,8 @@ jobs:
                 DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-kuangjun}
                 OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
                 OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-                ALIYUN_OSS_ENDPOINT: ${ALIYUN_OSS_ENDPOINT:-oss-cn-guangzhou.aliyuncs.com}
-                OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
+                ALIYUN_OSS_ENDPOINT: ${ALIYUN_OSS_ENDPOINT:-${OSS_ENDPOINT:-oss-cn-guangzhou.aliyuncs.com}}
+                OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-${OSS_BUCKET:-}}
                 SERVER_PORT: 8851
                 SPRING_PROFILES_ACTIVE: prod
                 JEWELRY_PORTAL_BASE_URL: ${JEWELRY_PORTAL_BASE_URL:-http://localhost:8852}
@@ -197,7 +200,7 @@ jobs:
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
-        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,ALIYUN_OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
+        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
         script: |
           set -euo pipefail
           : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
@@ -205,8 +208,6 @@ jobs:
           : "${JWT_SECRET:?JWT_SECRET is empty (missing GitHub secret JWT_SECRET)}"
           : "${DEFAULT_ADMIN_PASSWORD:?DEFAULT_ADMIN_PASSWORD is empty (missing GitHub secret DEFAULT_ADMIN_PASSWORD)}"
 
-          # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
-          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME ALIYUN_OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
@@ -222,6 +223,23 @@ jobs:
           
           # 宿主机持久化目录
           mkdir -p ./logs
+
+          # 合并服务器本机 .env：当 GitHub Secrets 中 OSS_BUCKET_NAME 等为空（或仅配置了 OSS_BUCKET 旧名）时，使用 /mnt/newdisk/app/MOJE/.env 中的值
+          if [ -f .env ]; then
+            echo "加载本机 .env（与 CI 环境变量合并，用于 OSS 等补全）"
+            set +u
+            set -a
+            # shellcheck disable=SC1091
+            . ./.env
+            set +a
+            set -u
+          fi
+
+          # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
+          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME OSS_BUCKET ALIYUN_OSS_ENDPOINT OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL
+
+          # OSS 诊断（不回显密钥，仅长度）
+          echo "OSS 配置检查: OSS_BUCKET_NAME 字符数=$(printf %s "${OSS_BUCKET_NAME:-}" | wc -c) ALIYUN_OSS_ENDPOINT=${ALIYUN_OSS_ENDPOINT:-<未设置>} OSS_ACCESS_KEY_ID 字符数=$(printf %s "${OSS_ACCESS_KEY_ID:-}" | wc -c)"
           
           # ========== 2. 创建docker-compose配置 ==========
           echo "创建docker-compose.prod.yml..."

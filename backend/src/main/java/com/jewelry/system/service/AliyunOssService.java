@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 
 @Service
@@ -27,9 +28,30 @@ public class AliyunOssService {
     @Value("${aliyun.oss.bucket-name:}")
     private String bucketName;
 
-    /**
-     * 是否已正确配置 OSS（配置缺失则自动禁用，继续使用本地存储）。
-     */
+    @PostConstruct
+    void trimOssProperties() {
+        endpoint = trimCfg(endpoint);
+        accessKeyId = trimCfg(accessKeyId);
+        accessKeySecret = trimCfg(accessKeySecret);
+        bucketName = trimCfg(bucketName);
+        if (!isEnabled()) {
+            log.warn("Aliyun OSS 未启用：请检查 ALIYUN_OSS_ENDPOINT/OSS_ENDPOINT、OSS_ACCESS_KEY_ID、OSS_ACCESS_KEY_SECRET、OSS_BUCKET_NAME/OSS_BUCKET 是否非空（勿含不可见字符）");
+        }
+    }
+
+    private static String trimCfg(String s) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.strip();
+        // 去掉首尾引号
+        if (t.length() >= 2 && ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("'") && t.endsWith("'")))) {
+            t = t.substring(1, t.length() - 1).strip();
+        }
+        // 去掉行尾误粘贴的 ¤（U+00A4）等
+        t = t.replaceAll("\u00A4+$", "").strip();
+        return t;
+    }
     public boolean isEnabled() {
         return notBlank(endpoint) && notBlank(accessKeyId) && notBlank(accessKeySecret) && notBlank(bucketName);
     }
