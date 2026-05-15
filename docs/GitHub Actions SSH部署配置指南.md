@@ -477,6 +477,10 @@ curl http://localhost:8851/actuator/health
 
 部署 job 在 `ssh-action` 前增加了 **TCP 探测** 步骤：失败时会输出上述要点，便于在 Actions 日志中快速定位。
 
+#### 远端 `./.env`：`$'\r': command not found`
+
+说明服务器上 `/mnt/newdisk/app/MOJE/.env`（或当前目录 `.env`）为 **Windows CRLF** 换行。部署脚本已改为 **先 `sed 's/\r$//'` 再 source**，一般无需改本机文件；若仍异常，可在服务器执行 `sed -i 's/\r$//' .env` 或 `dos2unix .env` 永久转为 LF。
+
 ```bash
 # 查看容器日志
 docker logs jewelry-backend -f

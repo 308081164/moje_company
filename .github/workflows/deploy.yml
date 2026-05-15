@@ -254,14 +254,18 @@ jobs:
           mkdir -p ./logs
 
           # 合并服务器本机 .env：当 GitHub Secrets 中 OSS_BUCKET_NAME 等为空（或仅配置了 OSS_BUCKET 旧名）时，使用 /mnt/newdisk/app/MOJE/.env 中的值
+          # 注意：若在 Windows 记事本等编辑 .env 会带 CRLF，直接 source 会报 $'\r': command not found；先去掉 \r 再加载
           if [ -f .env ]; then
-            echo "加载本机 .env（与 CI 环境变量合并，用于 OSS 等补全）"
+            echo "加载本机 .env（与 CI 环境变量合并，用于 OSS 等补全；已自动去除 CRLF）"
+            ENV_TMP="$(mktemp)"
+            sed 's/\r$//' .env > "$ENV_TMP"
             set +u
             set -a
-            # shellcheck disable=SC1091
-            . ./.env
+            # shellcheck disable=SC1090
+            . "$ENV_TMP"
             set +a
             set -u
+            rm -f "$ENV_TMP"
           fi
 
           # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
