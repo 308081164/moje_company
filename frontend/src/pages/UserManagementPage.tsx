@@ -59,6 +59,8 @@ const UserManagementPage: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [editing, setEditing] = useState<UserInfo | null>(null);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +90,7 @@ const UserManagementPage: React.FC = () => {
   const onCreate = async () => {
     try {
       const v = await createForm.validateFields();
+      setCreateSubmitting(true);
       await userService.createUser({
         username: v.username,
         password: v.password,
@@ -103,6 +106,8 @@ const UserManagementPage: React.FC = () => {
       load();
     } catch {
       /* validated */
+    } finally {
+      setCreateSubmitting(false);
     }
   };
 
@@ -110,6 +115,7 @@ const UserManagementPage: React.FC = () => {
     if (!editing) return;
     try {
       const v = await editForm.validateFields();
+      setEditSubmitting(true);
       await userService.updateUser(editing.id, {
         realName: v.realName,
         phone: v.phone,
@@ -123,6 +129,8 @@ const UserManagementPage: React.FC = () => {
       load();
     } catch {
       /* validated */
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -312,6 +320,8 @@ const UserManagementPage: React.FC = () => {
         onCancel={() => setCreateOpen(false)}
         destroyOnClose
         width={520}
+        confirmLoading={createSubmitting}
+        okButtonProps={{ disabled: createSubmitting }}
       >
         <Form form={createForm} layout="vertical">
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
@@ -338,7 +348,16 @@ const UserManagementPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="编辑用户" open={editOpen} onOk={onEdit} onCancel={() => setEditOpen(false)} destroyOnClose width={520}>
+      <Modal
+        title="编辑用户"
+        open={editOpen}
+        onOk={onEdit}
+        onCancel={() => setEditOpen(false)}
+        destroyOnClose
+        width={520}
+        confirmLoading={editSubmitting}
+        okButtonProps={{ disabled: editSubmitting }}
+      >
         <Form form={editForm} layout="vertical">
           <Form.Item name="realName" label="姓名">
             <Input />

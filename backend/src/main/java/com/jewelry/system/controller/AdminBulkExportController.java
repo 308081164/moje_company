@@ -1,6 +1,7 @@
 package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.admin.ModelingArchivesZipRequest;
+import com.jewelry.system.dto.admin.OrderBulkExportPreviewRowDto;
 import com.jewelry.system.dto.admin.OrderBulkZipRequest;
 import com.jewelry.system.service.AdminBulkExportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @RestController
 @RequestMapping("/admin/exports")
@@ -26,6 +28,12 @@ import java.nio.charset.StandardCharsets;
 public class AdminBulkExportController {
 
     private final AdminBulkExportService adminBulkExportService;
+
+    @PostMapping("/orders-preview")
+    @Operation(summary = "按与订单 ZIP 导出相同的条件预览将包含的订单列表")
+    public List<OrderBulkExportPreviewRowDto> previewOrdersZip(@Valid @RequestBody OrderBulkZipRequest body) {
+        return adminBulkExportService.previewOrdersForZip(body);
+    }
 
     @PostMapping("/orders-zip")
     @Operation(summary = "按条件批量导出订单及附件 ZIP")

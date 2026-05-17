@@ -654,6 +654,25 @@ export const orderService = {
     });
   },
 
+  /** 管理员：批量导出订单 ZIP 前预览将包含的订单（条件与 orders-zip 一致） */
+  async previewBulkExportOrdersZip(body: {
+    segment: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<
+    Array<{
+      orderId: number;
+      orderNumber: string;
+      status: string;
+      b2b: boolean;
+      createdAt: string;
+      customerName?: string | null;
+      customerPhone?: string | null;
+    }>
+  > {
+    return api.post('/admin/exports/orders-preview', body);
+  },
+
   /** 营销：待生成文案的已完成订单（售前/管理员/售中） */
   async workbenchMarketingCopyPending(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/marketing-copy/pending', { params: { page, size } });

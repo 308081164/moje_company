@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { message } from 'antd';
+import { notifyAuthExpiredAndRedirect } from '@/utils/clearClientAuthSession';
 
 // API 基址：优先 Electron preload 注入的 window.env.API_URL（由主进程从 JEWELRY_API_ORIGIN / api-config.json 等解析）
 function normalizeApiOrigin(): string {
@@ -86,6 +87,15 @@ api.interceptors.response.use(
     // 处理业务逻辑错误
     if (data.code && data.code !== 200) {
       const errorMsg = data.message || '请求失败';
+      if (data.code === 401) {
+        const reqUrl = String((response.config && response.config.url) || '');
+        if (!reqUrl.includes('/auth/login') && !reqUrl.includes('/auth/refresh-token')) {
+          notifyAuthExpiredAndRedirect();
+        } else {
+          message.error(errorMsg);
+        }
+        return Promise.reject(new Error(errorMsg));
+      }
       message.error(errorMsg);
       return Promise.reject(new Error(errorMsg));
     }
@@ -101,15 +111,15 @@ api.interceptors.response.use(
         case 400:
           message.error(data?.message || '请求参数错误');
           break;
-        case 401:
-          message.error('认证失败（后端返回401），请检查后端认证配置');
-          // 清除本地存储
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user_info');
-          // 跳转到登录页
-          window.location.hash = '#/login';
+        case 401: {
+          const reqUrl = String(error.config?.url || '');
+          if (reqUrl.includes('/auth/login') || reqUrl.includes('/auth/refresh-token')) {
+            message.error(data?.message || '登录失败');
+            break;
+          }
+          notifyAuthExpiredAndRedirect();
           break;
+        }
         case 403:
           message.error('权限不足，无法访问');
           break;

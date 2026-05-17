@@ -274,6 +274,16 @@ public class OrderCommandService {
         if (req.getModelerId() != null) {
             order.setModeler(userRepository.getReferenceById(req.getModelerId()));
         }
+        OrderStatus stBefore = order.getStatus();
+        if (stBefore == OrderStatus.PENDING_MODEL || stBefore == OrderStatus.MODELING) {
+            try {
+                order.transitionTo(OrderStatus.PENDING_REVIEW);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+            auditLogService.log("ORDER_MODEL_TO_REVIEW", "ORDER", orderId,
+                    "建模师保存建模信息，订单进入待工艺验证（自 " + stBefore.name() + "）");
+        }
         orderRepository.save(order);
         auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息");
         return orderQueryService.getOrder(orderId);

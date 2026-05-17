@@ -14,6 +14,11 @@ export async function downloadWithAuth(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      const { notifyAuthExpiredAndRedirect } = await import('@/utils/clearClientAuthSession');
+      notifyAuthExpiredAndRedirect();
+      throw new Error('登录已过期');
+    }
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
@@ -58,6 +63,11 @@ export async function downloadPostWithAuth(
     body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      const { notifyAuthExpiredAndRedirect } = await import('@/utils/clearClientAuthSession');
+      notifyAuthExpiredAndRedirect();
+      throw new Error('登录已过期');
+    }
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }

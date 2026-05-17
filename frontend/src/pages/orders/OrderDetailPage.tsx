@@ -140,6 +140,7 @@ const OrderDetailPage: React.FC = () => {
   const [customerProgressLink, setCustomerProgressLink] = useState<CustomerProgressLinkResponse | null>(null);
   const [customerCardPreviewUrl, setCustomerCardPreviewUrl] = useState<string | null>(null);
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
+  const [modelSaveLoading, setModelSaveLoading] = useState(false);
   const [flipTodoOnly, setFlipTodoOnly] = useState(() => {
     try {
       return window.localStorage.getItem('orderDetailFlipTodoOnly') === '1';
@@ -616,23 +617,37 @@ const OrderDetailPage: React.FC = () => {
   };
 
   const saveModel = async () => {
-    const v = await modelForm.validateFields();
-    const sourceIds = modelSourceFileList
-      .filter((f) => f.status === 'done')
-      .map((f) => {
-        const res = f.response as FileInfo | undefined;
-        return res?.id;
-      })
-      .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
-    await orderService.updateOrderModel(orderId, {
-      modelerId: v.modelerId,
-      weight: v.weight,
-      modelNotes: v.modelNotes,
-      modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
-      modelSourceFileIds: sourceIds,
-    });
-    message.success('建模信息已保存');
-    refresh();
+    try {
+      const v = await modelForm.validateFields();
+      const sourceIds = modelSourceFileList
+        .filter((f) => f.status === 'done')
+        .map((f) => {
+          const res = f.response as FileInfo | undefined;
+          return res?.id;
+        })
+        .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
+      setModelSaveLoading(true);
+      const updated = await orderService.updateOrderModel(orderId, {
+        modelerId: v.modelerId,
+        weight: v.weight,
+        modelNotes: v.modelNotes,
+        modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
+        modelSourceFileIds: sourceIds,
+      });
+      if (updated.currentStatus === OrderStatus.PENDING_REVIEW) {
+        message.success('建模信息已保存，订单已进入「待工艺验证」');
+      } else {
+        message.success('建模信息已保存');
+      }
+      refresh();
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) {
+        return;
+      }
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setModelSaveLoading(false);
+    }
   };
 
   const submitRejectToDesigner = async () => {
@@ -995,7 +1010,7 @@ const OrderDetailPage: React.FC = () => {
                 <Button icon={<PlusOutlined />}>上传源文件</Button>
               </UploadWithImagePreview>
             </Form.Item>
-            <Button type="primary" onClick={saveModel}>
+            <Button type="primary" loading={modelSaveLoading} onClick={() => void saveModel()}>
               保存建模信息
             </Button>
           </Form>

@@ -100,11 +100,6 @@ const AppLayout: React.FC = () => {
             label: '系统配置',
           },
           {
-            key: '/system/monitor',
-            icon: <ShopOutlined />,
-            label: '系统监控',
-          },
-          {
             key: '/exports',
             icon: <DownloadOutlined />,
             label: '批量导出 ZIP',

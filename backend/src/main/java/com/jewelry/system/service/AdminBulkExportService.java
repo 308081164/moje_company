@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.admin.ModelingArchivesZipRequest;
+import com.jewelry.system.dto.admin.OrderBulkExportPreviewRowDto;
 import com.jewelry.system.dto.admin.OrderBulkZipRequest;
 import com.jewelry.system.dto.modeling.ModelingArchiveComponentRowDto;
 import com.jewelry.system.dto.modeling.ModelingArchiveDto;
@@ -46,6 +47,27 @@ public class AdminBulkExportService {
         if (!"ADMIN".equals(SecurityUtils.currentRoleApi().orElse(""))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可执行批量导出");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderBulkExportPreviewRowDto> previewOrdersForZip(OrderBulkZipRequest req) {
+        assertAdmin();
+        LocalDate start = parseDate(req.getStartDate());
+        LocalDate end = parseDate(req.getEndDate());
+        List<Order> orders = orderRepository.findAll(ordersSpec(start, end, req.getSegment()));
+        return orders.stream().map(this::toPreviewRow).toList();
+    }
+
+    private OrderBulkExportPreviewRowDto toPreviewRow(Order o) {
+        return OrderBulkExportPreviewRowDto.builder()
+                .orderId(o.getId())
+                .orderNumber(o.getOrderNumber())
+                .status(o.getStatus() != null ? o.getStatus().name() : "")
+                .b2b(Boolean.TRUE.equals(o.getIsB2b()))
+                .createdAt(o.getCreatedAt() != null ? o.getCreatedAt().toString() : "")
+                .customerName(o.getCustomerName())
+                .customerPhone(o.getCustomerPhone())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -225,6 +247,9 @@ public class AdminBulkExportService {
                 } else if ("C2C".equals(seg) || "C".equals(seg)) {
                     preds.add(cb.or(cb.isFalse(root.get("isB2b")), cb.isNull(root.get("isB2b"))));
                 }
+            }
+            if (preds.isEmpty()) {
+                return cb.conjunction();
             }
             return cb.and(preds.toArray(new Predicate[0]));
         };
