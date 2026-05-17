@@ -7,6 +7,7 @@ import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ReviewResult;
+import com.jewelry.system.enums.UserStatus;
 import com.jewelry.system.repository.*;
 import com.jewelry.system.util.OrderSourceMapper;
 import com.jewelry.system.util.SecurityUtils;
@@ -214,6 +215,10 @@ public class OrderCommandService {
         }
 
         boolean advanced = tryAdvanceOrderAfterDesignerDesignSave(order);
+        if (advanced) {
+            clearModelerRejectToDesignerFields(orderId);
+            autoAssignmentService.ensureModelerAssigned(order);
+        }
         orderRepository.save(order);
         auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息");
         if (advanced) {
@@ -246,6 +251,14 @@ public class OrderCommandService {
             return true;
         }
         return false;
+    }
+
+    private void clearModelerRejectToDesignerFields(long orderId) {
+        modelingInfoRepository.findByOrderId(orderId).ifPresent(mi -> {
+            mi.setModelerRejectToDesignerMessage(null);
+            mi.setModelerRejectToDesignerFileIdsJson(null);
+            modelingInfoRepository.save(mi);
+        });
     }
 
     @Transactional
@@ -281,6 +294,7 @@ public class OrderCommandService {
             } catch (IllegalStateException e) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
             }
+            autoAssignmentService.ensureTrackerAssigned(order);
             auditLogService.log("ORDER_MODEL_TO_REVIEW", "ORDER", orderId,
                     "建模师保存建模信息，订单进入待工艺验证（自 " + stBefore.name() + "）");
         }
@@ -426,6 +440,7 @@ public class OrderCommandService {
             } catch (IllegalStateException e) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
             }
+            autoAssignmentService.rebalanceModelerIfInvalid(order);
             orderRepository.save(order);
             auditLogService.log("ORDER_REVIEW_REJECT_TO_MODELER", "ORDER", orderId, "工艺评审驳回，订单退回建模修改中");
         }
@@ -485,6 +500,9 @@ public class OrderCommandService {
     @Transactional
     public OrderInfoDto assign(long orderId, OrderAssignRequest req) {
         Order order = loadOrder(orderId);
+        assertAdminOrSalesAssignPermission();
+        assertManualAssignStepConstraints(order, req);
+        validateAssignTargetsActive(req);
         if (req.getSalesId() != null) {
             order.setSalesMid(userRepository.getReferenceById(req.getSalesId()));
         }
@@ -756,6 +774,60 @@ public class OrderCommandService {
 
     private boolean isAdminRole() {
         return "ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null));
+    }
+
+    private boolean isAdminOrSalesAssignRole() {
+        String r = SecurityUtils.currentRoleApi().orElse("");
+        return "ADMIN".equals(r) || "SALES".equals(r);
+    }
+
+    private void assertAdminOrSalesAssignPermission() {
+        if (!isAdminOrSalesAssignRole()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员或售中客服可手动分配订单人员");
+        }
+    }
+
+    private void assertManualAssignStepConstraints(Order order, OrderAssignRequest req) {
+        if (req.getDesignerId() != null) {
+            OrderStatus st = order.getStatus();
+            if (st != OrderStatus.PENDING_DESIGN && st != OrderStatus.DESIGNING) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤不可更换设计师");
+            }
+        }
+        if (req.getModelerId() != null) {
+            OrderStatus st = order.getStatus();
+            if (st != OrderStatus.PENDING_MODEL && st != OrderStatus.MODELING) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤不可更换建模师");
+            }
+        }
+        if (req.getTrackerId() != null) {
+            if (order.getStatus() != OrderStatus.PENDING_REVIEW) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前步骤不可更换跟单员");
+            }
+        }
+    }
+
+    private void validateAssignTargetsActive(OrderAssignRequest req) {
+        if (req.getSalesId() != null) {
+            requireActiveUser(req.getSalesId());
+        }
+        if (req.getDesignerId() != null) {
+            requireActiveUser(req.getDesignerId());
+        }
+        if (req.getModelerId() != null) {
+            requireActiveUser(req.getModelerId());
+        }
+        if (req.getTrackerId() != null) {
+            requireActiveUser(req.getTrackerId());
+        }
+    }
+
+    private void requireActiveUser(long userId) {
+        User u = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户不存在: " + userId));
+        if (!UserStatus.ACTIVE.equals(u.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户不可用（非在职）: " + userId);
+        }
     }
 
     private Long requireUserId() {
