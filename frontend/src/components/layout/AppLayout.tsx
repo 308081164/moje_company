@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ModelerReferenceLibraryModal from '@/components/ModelerReferenceLibraryModal';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layout,
@@ -46,6 +47,7 @@ const AppLayout: React.FC = () => {
   const { sidebarCollapsed, toggleSidebar, notifications, unreadNotifications } = useAppStore();
   const [collapsed, setCollapsed] = useState(sidebarCollapsed);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [modelerLibraryOpen, setModelerLibraryOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
   );
@@ -518,6 +520,18 @@ const AppLayout: React.FC = () => {
               </Badge>
             </Dropdown>
 
+            {user?.role === 'MODELER' && (
+              <Tooltip title="建模师资料库（门户橱窗参考）">
+                <Button
+                  type="text"
+                  icon={<DatabaseOutlined />}
+                  style={{ fontSize: 16 }}
+                  onClick={() => setModelerLibraryOpen(true)}
+                  aria-label="建模师资料库"
+                />
+              </Tooltip>
+            )}
+
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <div className="user-info-trigger">
                 <div className="user-info-content">
@@ -553,6 +567,8 @@ const AppLayout: React.FC = () => {
           </div>
         </Content>
       </Layout>
+
+      <ModelerReferenceLibraryModal open={modelerLibraryOpen} onClose={() => setModelerLibraryOpen(false)} />
 
       {isMobile && (
         <div className="mobile-bottom-nav" role="navigation" aria-label="主导航">

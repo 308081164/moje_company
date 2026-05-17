@@ -46,11 +46,48 @@ import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
 import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
-import ModelingArchivePanel from '@/components/ModelingArchivePanel';
 import InlayStructureLibraryBrowser from '@/components/InlayStructureLibraryBrowser';
 import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;
+
+/** 建模流程下的「设计审核」展示：驳回→未通过修改中；建模中→审核中；建模已提交后→已通过 */
+function renderModelerDesignAuditTag(order: OrderInfo) {
+  const st = order.currentStatus as OrderStatus;
+  const rejectMsg = order.modelInfo?.lastRejectToDesignerMessage?.trim();
+  if (st === OrderStatus.DESIGNING && rejectMsg) {
+    return <Tag color="warning">未通过正在修改</Tag>;
+  }
+  if (st === OrderStatus.PENDING_MODEL || st === OrderStatus.MODELING) {
+    return <Tag color="processing">审核中</Tag>;
+  }
+  const passed: OrderStatus[] = [
+    OrderStatus.PENDING_REVIEW,
+    OrderStatus.PENDING_PRODUCTION,
+    OrderStatus.PRODUCING,
+    OrderStatus.COMPLETED,
+  ];
+  if (passed.includes(st)) {
+    return <Tag color="success">已通过</Tag>;
+  }
+  if (st === OrderStatus.CANCELLED) {
+    return <Text type="secondary">—</Text>;
+  }
+  return <Tag color="processing">审核中</Tag>;
+}
+
+function displayAssignee(
+  name: string | undefined | null,
+  opts: { pendingAuto?: boolean }
+): React.ReactNode {
+  if (name && String(name).trim()) {
+    return name;
+  }
+  if (opts.pendingAuto) {
+    return <Text type="secondary">前置任务完成后自动分配</Text>;
+  }
+  return '-';
+}
 
 function modelSourceUploadListFromSaved(modelFiles: unknown): UploadFile[] {
   if (!modelFiles || !Array.isArray(modelFiles)) return [];
@@ -1200,10 +1237,17 @@ const OrderDetailPage: React.FC = () => {
               {order.designInfo?.designerName || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="建模师">
-              {order.modelInfo?.modelerName || '-'}
+              {displayAssignee(order.modelInfo?.modelerName, {
+                pendingAuto:
+                  (order.currentStatus === OrderStatus.PENDING_MODEL ||
+                    order.currentStatus === OrderStatus.MODELING) &&
+                  !order.modelInfo?.modelerId,
+              })}
             </Descriptions.Item>
             <Descriptions.Item label="跟单员">
-              {order.reviewInfo?.trackerName || '-'}
+              {displayAssignee(order.reviewInfo?.trackerName, {
+                pendingAuto: order.currentStatus === OrderStatus.PENDING_REVIEW && !order.reviewInfo?.trackerId,
+              })}
             </Descriptions.Item>
           </Descriptions>
         </Card>
@@ -1221,13 +1265,7 @@ const OrderDetailPage: React.FC = () => {
                 <Descriptions.Item label="手寸/链长">
                   {order.designInfo.handSize || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="设计通过">
-                  {order.designInfo.designPassed ? (
-                    <Tag color="success">已通过</Tag>
-                  ) : (
-                    <Tag color="default">未通过</Tag>
-                  )}
-                </Descriptions.Item>
+                <Descriptions.Item label="设计审核">{renderModelerDesignAuditTag(order)}</Descriptions.Item>
                 <Descriptions.Item label="设计备注" span={2}>
                   {order.designInfo.designNotes || '-'}
                 </Descriptions.Item>
@@ -1294,8 +1332,6 @@ const OrderDetailPage: React.FC = () => {
             <Text type="secondary">暂无建模信息</Text>
           )}
         </Card>
-
-        {order.modelInfo && <ModelingArchivePanel orderId={Number(orderId)} />}
 
         <Card size="small" title="评审信息" style={{ marginBottom: 16 }}>
           {order.reviewInfo ? (
