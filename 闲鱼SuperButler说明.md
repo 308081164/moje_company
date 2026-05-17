@@ -9,6 +9,7 @@
 - **本仓库内路径**：`third_party/xianyu-super-butler/`（已验证该目录存在，内含 `Start.py`、`README.md`、`requirements.txt`、`cookie_manager.py`、`db_manager.py`、`utils/browser_pool.py`、`XianyuAutoAsync.py` 等）。
 - **上游仓库**：https://github.com/23Star/xianyu-super-butler.git  
 - **Git 跟踪**：本仓库根目录 `.gitignore` 已忽略 `third_party/xianyu-super-butler/`（因目录内通常带嵌套 `.git`，避免误提交整块克隆）；若需纳入版本控制，可改为使用 **`git submodule`** 等方式单独管理该路径。
+- **Windows 安装包（本仓库维护）**：`packaging/xianyu-super-butler-windows/` — 内嵌官方 **Python 3.12 embed**、Inno Setup 可选安装目录、安装结束/首次启动可打开浏览器；构建脚本 `build-installer.ps1` 需指向本机克隆的上游根目录（`-SourceRoot`）。
 
 ## 多账号（多账号并行）结论
 

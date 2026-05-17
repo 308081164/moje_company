@@ -421,6 +421,7 @@ export interface OrderQuotationUpdateRequest {
 export interface OrderStatusChangeRequest {
   status: OrderStatus;
   notes?: string;
+  secondaryPassword?: string;
 }
 
 // 订单分配请求

@@ -3,6 +3,8 @@ package com.jewelry.system.controller;
 import com.jewelry.system.dto.LoginRequest;
 import com.jewelry.system.dto.LoginResponse;
 import com.jewelry.system.dto.RefreshTokenRequest;
+import com.jewelry.system.dto.common.SecondaryPasswordRequest;
+import com.jewelry.system.service.SensitiveOperationService;
 import com.jewelry.system.dto.user.UserResponse;
 import com.jewelry.system.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +24,7 @@ import jakarta.validation.Valid;
 public class AuthController {
     
     private final AuthService authService;
+    private final SensitiveOperationService sensitiveOperationService;
     
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "使用用户名和密码登录系统")
@@ -60,5 +63,12 @@ public class AuthController {
     @Operation(summary = "获取当前用户信息", description = "获取当前登录用户的详细信息")
     public ResponseEntity<UserResponse> getCurrentUser() {
         return ResponseEntity.ok(authService.getCurrentUser());
+    }
+
+    @PostMapping("/verify-secondary-password")
+    @Operation(summary = "校验二级密码", description = "与取消订单、镶嵌结构库超额删除等敏感操作使用同一密码")
+    public ResponseEntity<Void> verifySecondaryPassword(@Valid @RequestBody SecondaryPasswordRequest body) {
+        sensitiveOperationService.verifySecondaryPassword(body.getSecondaryPassword());
+        return ResponseEntity.ok().build();
     }
 }

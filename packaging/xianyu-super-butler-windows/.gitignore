@@ -1,0 +1,4 @@
+staging/
+dist-installer/
+.cache/
+robocopy-staging.log

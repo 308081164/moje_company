@@ -16,6 +16,7 @@ import MarketingCopyPoolPage from '@/pages/MarketingCopyPoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
 import PortalShowcaseAdminPage from '@/pages/PortalShowcaseAdminPage';
 import LegacyOrderArchivePage from '@/pages/LegacyOrderArchivePage';
+import InlayStructureLibraryPage from '@/pages/InlayStructureLibraryPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -200,6 +201,8 @@ const App: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN';
   const canAccessMarketingCopy =
     isAdmin || user?.role === 'PRE_SALES' || user?.role === 'SALES';
+  const canAccessInlayStructureLibrary =
+    isAdmin || user?.role === 'MODELER' || user?.role === 'DATA_ARCHIVIST';
 
   console.log('[App] authenticated -> main router');
   return (
@@ -219,6 +222,16 @@ const App: React.FC = () => {
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="admin-portal" element={isAdmin ? <PortalShowcaseAdminPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="legacy-archives" element={isAdmin ? <LegacyOrderArchivePage /> : <Navigate to="/dashboard" replace />} />
+            <Route
+              path="inlay-structure-library"
+              element={
+                canAccessInlayStructureLibrary ? (
+                  <InlayStructureLibraryPage />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="orders/*" element={<OrderManagementPage />} />

@@ -2,6 +2,11 @@ package com.jewelry.system.service;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.CopyObjectRequest;
+import com.aliyun.oss.model.ListObjectsV2Request;
+import com.aliyun.oss.model.ListObjectsV2Result;
+import com.aliyun.oss.model.OSSObjectSummary;
+import com.aliyun.oss.model.ObjectMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,7 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.PostConstruct;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class AliyunOssService {
@@ -124,6 +134,139 @@ public class AliyunOssService {
             if (ossClient != null) {
                 ossClient.shutdown();
             }
+        }
+    }
+
+    public String publicUrl(String objectKey) {
+        if (!isEnabled() || objectKey == null || objectKey.isBlank()) {
+            return "";
+        }
+        return "https://" + bucketName + "." + endpoint + "/" + objectKey;
+    }
+
+    public void putEmptyObject(String objectKey) throws IOException {
+        if (!isEnabled()) {
+            throw new IllegalStateException("OSS 未配置");
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            byte[] body = new byte[0];
+            ObjectMetadata meta = new ObjectMetadata();
+            meta.setContentLength(0);
+            ossClient.putObject(bucketName, objectKey, new ByteArrayInputStream(body), meta);
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    public void putObjectStream(String objectKey, InputStream in, long contentLength, String contentType) throws IOException {
+        if (!isEnabled()) {
+            throw new IllegalStateException("OSS 未配置");
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            ObjectMetadata meta = new ObjectMetadata();
+            if (contentLength >= 0) {
+                meta.setContentLength(contentLength);
+            }
+            if (contentType != null && !contentType.isBlank()) {
+                meta.setContentType(contentType);
+            }
+            ossClient.putObject(bucketName, objectKey, in, meta);
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    public void copyObject(String sourceKey, String destKey) {
+        if (!isEnabled()) {
+            throw new IllegalStateException("OSS 未配置");
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            ossClient.copyObject(new CopyObjectRequest(bucketName, sourceKey, bucketName, destKey));
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    public boolean objectExists(String objectKey) {
+        if (!isEnabled() || objectKey == null || objectKey.isBlank()) {
+            return false;
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            return ossClient.doesObjectExist(bucketName, objectKey);
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    public record OssListResult(List<String> commonPrefixes, List<OssObjectItem> objects) {}
+
+    public record OssObjectItem(String key, long size, String lastModified) {}
+
+    public OssListResult listObjectsV2(String prefix, String delimiter, int maxKeys) {
+        if (!isEnabled()) {
+            throw new IllegalStateException("OSS 未配置");
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        try {
+            ListObjectsV2Request req = new ListObjectsV2Request(bucketName);
+            req.setPrefix(prefix);
+            if (delimiter != null) {
+                req.setDelimiter(delimiter);
+            }
+            req.setMaxKeys(Math.min(Math.max(maxKeys, 1), 1000));
+            ListObjectsV2Result result = ossClient.listObjectsV2(req);
+            List<String> prefixes = new ArrayList<>(result.getCommonPrefixes());
+            List<OssObjectItem> items = new ArrayList<>();
+            for (OSSObjectSummary s : result.getObjectSummaries()) {
+                items.add(new OssObjectItem(s.getKey(), s.getSize(), s.getLastModified() != null ? s.getLastModified().toString() : null));
+            }
+            return new OssListResult(prefixes, items);
+        } finally {
+            ossClient.shutdown();
+        }
+    }
+
+    /** 删除指定前缀下所有对象（用于目录树删除） */
+    public int deleteObjectsUnderPrefix(String prefix) {
+        if (!isEnabled() || prefix == null || prefix.isBlank()) {
+            return 0;
+        }
+        OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
+        int deleted = 0;
+        try {
+            String nextToken = null;
+            do {
+                ListObjectsV2Request req = new ListObjectsV2Request(bucketName);
+                req.setPrefix(prefix);
+                req.setMaxKeys(500);
+                req.setContinuationToken(nextToken);
+                ListObjectsV2Result result = ossClient.listObjectsV2(req);
+                for (OSSObjectSummary s : result.getObjectSummaries()) {
+                    ossClient.deleteObject(bucketName, s.getKey());
+                    deleted++;
+                }
+                nextToken = result.getNextContinuationToken();
+            } while (nextToken != null);
+        } finally {
+            ossClient.shutdown();
+        }
+        return deleted;
+    }
+
+    /** 目录占位对象 key（零字节），便于在控制台/列表中识别空目录 */
+    public String directoryPlaceholderKey(String directoryPrefix) {
+        String p = directoryPrefix.endsWith("/") ? directoryPrefix : directoryPrefix + "/";
+        return p + ".dir";
+    }
+
+    public void ensureDirectoryPlaceholder(String directoryPrefix) throws IOException {
+        String key = directoryPlaceholderKey(directoryPrefix);
+        if (!objectExists(key)) {
+            putEmptyObject(key);
         }
     }
 }

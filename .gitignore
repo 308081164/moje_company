@@ -74,3 +74,13 @@ pip-wheel-metadata/
 # ========== 第三方克隆 ==========
 # 嵌套仓库体积大且独立演进；若需纳入版本控制请改用 git submodule 并删除本行
 third_party/xianyu-super-butler/
+
+# ========== 镶嵌结构库（本地文件夹，已同步 OSS，勿提交）==========
+镶嵌结构数据库/
+**/镶嵌结构数据库/
+
+# ========== 闲鱼 SuperButler Windows 安装包构建产物（脚本与 .iss 保留在仓库）==========
+packaging/xianyu-super-butler-windows/staging/
+packaging/xianyu-super-butler-windows/dist-installer/
+packaging/xianyu-super-butler-windows/.cache/
+packaging/xianyu-super-butler-windows/output/

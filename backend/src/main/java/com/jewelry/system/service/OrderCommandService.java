@@ -54,6 +54,7 @@ public class OrderCommandService {
     private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
     private final OrderMarketingCopyService orderMarketingCopyService;
+    private final SensitiveOperationService sensitiveOperationService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -469,6 +470,9 @@ public class OrderCommandService {
     public OrderInfoDto changeStatus(long orderId, OrderStatusChangeRequest req) {
         Order order = loadOrder(orderId);
         OrderStatus target = OrderStatus.fromString(req.getStatus());
+        if (target == OrderStatus.CANCELLED) {
+            sensitiveOperationService.verifySecondaryPassword(req.getSecondaryPassword());
+        }
         try {
             order.transitionTo(target);
         } catch (IllegalStateException e) {

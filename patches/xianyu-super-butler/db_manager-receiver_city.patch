@@ -1,0 +1,17 @@
+--- a/db_manager.py
++++ b/db_manager.py
+@@ -254,6 +254,15 @@
+                 self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_address TEXT DEFAULT ''")
+                 logger.info("orders 表收货人信息列添加完成")
+ 
++            # 检查并添加 receiver_city 列（BI /analytics/orders 按城市统计依赖此列）
++            try:
++                self._execute_sql(cursor, "SELECT receiver_city FROM orders LIMIT 1")
++            except sqlite3.OperationalError:
++                logger.info("正在为 orders 表添加 receiver_city 列...")
++                self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_city TEXT DEFAULT ''")
++                logger.info("orders 表 receiver_city 列添加完成")
++
+             # 检查并添加 version 列（用于乐观锁）
+             try:
+                 self._execute_sql(cursor, "SELECT version FROM orders LIMIT 1")

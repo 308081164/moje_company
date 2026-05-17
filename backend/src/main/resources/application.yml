@@ -123,3 +123,7 @@ app:
     # 非空时单独指定 C 端进度页 SPA 根地址（否则使用 app.portal.base-url）
     public-frontend-base-url: ${JEWELRY_CUSTOMER_ORDER_FRONTEND_URL:}
     link-ttl-days: ${JEWELRY_CUSTOMER_ORDER_LINK_TTL_DAYS:90}
+  # 镶嵌结构库（OSS 目录）；二级密码校验与取消订单一致（默认管理员账号密码）
+  inlay-structure:
+    oss-prefix: ${INLAY_STRUCTURE_OSS_PREFIX:inlay-structure-library/}
+    daily-delete-limit: ${INLAY_STRUCTURE_DAILY_DELETE_LIMIT:3}

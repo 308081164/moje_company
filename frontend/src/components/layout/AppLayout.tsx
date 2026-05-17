@@ -77,6 +77,11 @@ const AppLayout: React.FC = () => {
         return [
           ...baseItems,
           {
+            key: '/inlay-structure-library',
+            icon: <DatabaseOutlined />,
+            label: '镶嵌结构库',
+          },
+          {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
             label: '订单管理',
@@ -178,6 +183,11 @@ const AppLayout: React.FC = () => {
         return [
           ...baseItems,
           {
+            key: '/inlay-structure-library',
+            icon: <DatabaseOutlined />,
+            label: '镶嵌结构库',
+          },
+          {
             key: '/workbench',
             icon: <FileTextOutlined />,
             label: '我的工作台',
@@ -214,6 +224,11 @@ const AppLayout: React.FC = () => {
       case 'DATA_ARCHIVIST':
         return [
           ...baseItems,
+          {
+            key: '/inlay-structure-library',
+            icon: <DatabaseOutlined />,
+            label: '镶嵌结构库',
+          },
           {
             key: '/workbench/modeling-archive',
             icon: <FileTextOutlined />,
@@ -317,6 +332,9 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/legacy-archives')) {
       return ['/legacy-archives'];
+    }
+    if (path.startsWith('/inlay-structure-library')) {
+      return ['/inlay-structure-library'];
     }
     if (path.startsWith('/workbench/modeling-archive')) {
       return ['/workbench/modeling-archive'];
