@@ -426,7 +426,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   ShopOutlined,
@@ -448,6 +448,12 @@ import {
   type B2BClientRegisterRequest,
   type B2BOrderAccessDto
 } from '@/api'
+import {
+  clearB2bToken,
+  getB2bTokenRaw,
+  isB2bTokenExpiredOrInvalid,
+  setB2bToken
+} from '@/utils/b2bAuth'
 import type { UploadProps, UploadFile } from 'ant-design-vue'
 
 const activeTab = ref('login')
@@ -458,7 +464,25 @@ const fileList = ref<UploadFile[]>([])
 
 const b2bToken = ref(false)
 const syncB2bToken = () => {
-  b2bToken.value = !!localStorage.getItem('moje_b2b_token')
+  const raw = getB2bTokenRaw()
+  if (raw && isB2bTokenExpiredOrInvalid(raw)) {
+    clearB2bToken()
+    b2bToken.value = false
+    return
+  }
+  b2bToken.value = !!raw
+}
+
+const onStorage = (e: StorageEvent) => {
+  if (e.key === 'moje_b2b_token') syncB2bToken()
+}
+
+const onB2bAuthExpired = () => {
+  syncB2bToken()
+  if (!b2bToken.value) {
+    message.warning('登录已失效，请重新登录')
+    activeTab.value = 'login'
+  }
 }
 
 onMounted(() => {
@@ -466,10 +490,17 @@ onMounted(() => {
   if (b2bToken.value) {
     activeTab.value = 'create'
   }
+  window.addEventListener('storage', onStorage)
+  window.addEventListener('moje-b2b-auth-expired', onB2bAuthExpired as EventListener)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('storage', onStorage)
+  window.removeEventListener('moje-b2b-auth-expired', onB2bAuthExpired as EventListener)
 })
 
 const b2bLogout = () => {
-  localStorage.removeItem('moje_b2b_token')
+  clearB2bToken()
   syncB2bToken()
   activeTab.value = 'login'
   message.success('已退出')
@@ -548,6 +579,14 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
 }
 
 const handleCreateOrder = async () => {
+  const tok = getB2bTokenRaw()
+  if (!tok || isB2bTokenExpiredOrInvalid(tok)) {
+    clearB2bToken()
+    syncB2bToken()
+    message.error('登录已过期或未登录，请重新登录后再提交')
+    activeTab.value = 'login'
+    return
+  }
   try {
     loading.value = true
     const attachmentFiles = fileList.value
@@ -579,7 +618,7 @@ const handleCreateOrder = async () => {
 const handleLogin = async () => {
   try {
     const res: B2BClientLoginResponse = await loginClient(loginForm.value)
-    localStorage.setItem('moje_b2b_token', res.accessToken)
+    setB2bToken(res.accessToken)
     syncB2bToken()
     message.success('登录成功')
     loginForm.value = {
@@ -595,7 +634,7 @@ const handleLogin = async () => {
 const handleRegister = async () => {
   try {
     const res: B2BClientLoginResponse = await registerClient(registerForm.value)
-    localStorage.setItem('moje_b2b_token', res.accessToken)
+    setB2bToken(res.accessToken)
     syncB2bToken()
     message.success('注册成功，已自动登录')
     activeTab.value = 'create'
