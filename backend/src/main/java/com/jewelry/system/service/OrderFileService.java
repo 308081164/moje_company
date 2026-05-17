@@ -5,6 +5,7 @@ import com.jewelry.system.entity.FileEntity;
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.FileRelatedType;
+import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.FileEntityRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
@@ -74,6 +75,28 @@ public class OrderFileService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         assertCanUploadModel(orderId, uid);
         return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);
+    }
+
+    /** 跟单员在生产阶段上传过程记录附图 */
+    @Transactional
+    public FileInfoDto uploadProductionFollowImage(long orderId, MultipartFile file, String notes) throws IOException {
+        long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Order order = requireOrder(orderId);
+        if (order.getStatus() != OrderStatus.PRODUCING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅「生产中」订单可上传跟单过程图");
+        }
+        if (!isAdminRole()) {
+            if (!"TRACKER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅跟单员或管理员可上传跟单过程图");
+            }
+            User t = order.getFollowUp();
+            if (t == null || t.getId() != uid) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派跟单员可上传跟单过程图");
+            }
+        }
+        String n = notes != null && !notes.isBlank() ? notes : "生产过程记录附图";
+        return save(orderId, file, "production-follow", "PRODUCTION_FOLLOW", n, uid);
     }
 
     @Transactional

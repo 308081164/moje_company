@@ -37,6 +37,7 @@ public class OrderController {
     private final OrderExportService orderExportService;
     private final DashScopeChatImageDraftService dashScopeChatImageDraftService;
     private final CustomerOrderViewService customerOrderViewService;
+    private final OrderProductionFollowService orderProductionFollowService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -96,11 +97,50 @@ public class OrderController {
     }
 
     @GetMapping("/workbench/tracker/done")
-    @Operation(summary = "跟单员工作台-已完成")
+    @Operation(summary = "跟单员工作台-已完成（仅已关闭订单）")
     public Page<OrderInfoDto> trackerDone(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
         Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageTrackerDone(pageable, uid, isB2b);
+    }
+
+    @GetMapping("/workbench/tracker/producing")
+    @Operation(summary = "跟单员工作台-生产中（跟单记录）")
+    public Page<OrderInfoDto> trackerProducing(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
+        Long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerProducing(pageable, uid, isB2b);
+    }
+
+    @GetMapping("/{id:\\d+}/production-follow-logs")
+    @Operation(summary = "生产中跟单过程记录列表")
+    public List<OrderProductionFollowLogDto> listProductionFollowLogs(@PathVariable long id) {
+        return orderProductionFollowService.list(id);
+    }
+
+    @PostMapping("/{id:\\d+}/production-follow-logs")
+    @Operation(summary = "新增生产中跟单过程记录")
+    public OrderProductionFollowLogDto addProductionFollowLog(
+            @PathVariable long id,
+            @Valid @RequestBody OrderProductionFollowCreateRequest body
+    ) {
+        return orderProductionFollowService.add(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/production-complete")
+    @Operation(summary = "生产完成，关闭订单")
+    public OrderInfoDto completeProduction(@PathVariable long id) {
+        return orderCommandService.completeProduction(id);
+    }
+
+    @PostMapping(value = "/{id:\\d+}/production-follow/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传跟单过程附图")
+    public FileInfoDto uploadProductionFollowFile(
+            @PathVariable long id,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(required = false) String notes
+    ) throws IOException {
+        return orderFileService.uploadProductionFollowImage(id, file, notes);
     }
 
     @GetMapping("/{id:\\d+}")

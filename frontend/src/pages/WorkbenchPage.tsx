@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Badge, Button, Card, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
+import { Badge, Button, Card, Pagination, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,6 +10,7 @@ import { UserRole } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import dayjs from 'dayjs';
 import ModelerStatusPanel from '@/components/ModelerStatusPanel';
+import TrackerReviewTodoPanel from '@/components/TrackerReviewTodoPanel';
 
 const { Title, Text } = Typography;
 
@@ -136,7 +137,7 @@ const WorkbenchPage: React.FC = () => {
         ),
       },
     ],
-    [navigate]
+    [navigate, location.pathname, location.search]
   );
 
   if (!loader) {
@@ -185,7 +186,7 @@ const WorkbenchPage: React.FC = () => {
             key: 'todo',
             label: (
               <Space>
-                待办
+                {role === UserRole.TRACKER ? '我的任务' : '待办'}
                 <Badge status="processing" />
               </Space>
             ),
@@ -197,23 +198,40 @@ const WorkbenchPage: React.FC = () => {
         ]}
       />
 
-      <Table
-        style={{ marginTop: 8 }}
-        rowKey={(r) => r.baseInfo.id}
-        loading={loading}
-        columns={columns}
-        dataSource={orders}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps);
-          },
-        }}
-      />
+      {role === UserRole.TRACKER && tab === 'todo' ? (
+        <>
+          <TrackerReviewTodoPanel orders={orders} loading={loading} onRefresh={() => void load()} />
+          <Pagination
+            style={{ marginTop: 16, textAlign: 'right' }}
+            current={page}
+            pageSize={pageSize}
+            total={total}
+            showSizeChanger
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            }}
+          />
+        </>
+      ) : (
+        <Table
+          style={{ marginTop: 8 }}
+          rowKey={(r) => r.baseInfo.id}
+          loading={loading}
+          columns={columns}
+          dataSource={orders}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
+        />
+      )}
       </Card>
     </div>
   );

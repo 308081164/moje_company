@@ -11,6 +11,7 @@ import UserManagementPage from '@/pages/UserManagementPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
+import TrackerFollowUpPage from '@/pages/TrackerFollowUpPage';
 import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
 import MarketingCopyPoolPage from '@/pages/MarketingCopyPoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
@@ -214,6 +215,10 @@ const App: React.FC = () => {
             <Route index element={<DashboardPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="workbench" element={<WorkbenchPage />} />
+            <Route
+              path="workbench/tracker-follow-up"
+              element={user?.role === 'TRACKER' ? <TrackerFollowUpPage /> : <Navigate to="/dashboard" replace />}
+            />
             <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
             <Route
               path="workbench/marketing-copy"

@@ -10,6 +10,7 @@ import {
   Upload,
   message,
   Tag,
+  Image,
 } from 'antd';
 import {
   DeleteOutlined,
@@ -223,6 +224,30 @@ const InlayStructureLibraryBrowser: React.FC<InlayStructureLibraryBrowserProps> 
       render: (_, row) => (row.directory ? '—' : row.size != null ? `${Math.round(row.size / 1024)} KB` : '—'),
     },
     {
+      title: '预览',
+      width: 100,
+      align: 'center',
+      render: (_, row) => {
+        if (row.directory || !row.url) return '—';
+        if (/\.(png|jpe?g|gif|webp|bmp)$/i.test(row.name)) {
+          return <Image src={row.url} width={56} height={56} style={{ objectFit: 'cover', borderRadius: 4 }} />;
+        }
+        return <Text type="secondary">—</Text>;
+      },
+    },
+    {
+      title: '下载',
+      width: 100,
+      render: (_, row) =>
+        !row.directory && row.url ? (
+          <Button type="link" size="small" href={row.url} target="_blank" rel="noopener noreferrer">
+            下载 / 打开
+          </Button>
+        ) : (
+          '—'
+        ),
+    },
+    {
       title: '操作',
       width: 220,
       render: (_, row) => (
@@ -252,8 +277,8 @@ const InlayStructureLibraryBrowser: React.FC<InlayStructureLibraryBrowserProps> 
                 超额删除需二级密码
               </Tag>
             ) : (
-              <Tag color="green" style={{ marginLeft: 8 }}>
-                剩余免费 {quota?.remainingFree ?? 0} 次
+              <Tag color="blue" style={{ marginLeft: 8 }}>
+                今日还可删除 {quota?.remainingFree ?? 0} 次
               </Tag>
             )}
           </Text>

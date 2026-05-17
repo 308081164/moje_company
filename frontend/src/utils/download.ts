@@ -1,5 +1,23 @@
 import { API_ORIGIN } from '@/services/api';
 
+/** 从 Content-Disposition 解析文件名；优先 ASCII filename=，避免误解析 RFC2047 片段 */
+function parseContentDispositionFilename(cd: string | null, fallback: string): string {
+  if (!cd) return fallback;
+  const q = /filename="([^"]+)"/i.exec(cd);
+  if (q?.[1]) return q[1].trim();
+  const star = /filename\*=UTF-8''([^;\s]+)/i.exec(cd);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      return star[1].trim();
+    }
+  }
+  const plain = /filename=([^;\s]+)/i.exec(cd);
+  if (plain?.[1]) return plain[1].replace(/^"|"$/g, '').trim();
+  return fallback;
+}
+
 /** 带 Bearer 下载接口返回的文件流（适用于 GET 导出等） */
 export async function downloadWithAuth(
   path: string,
@@ -26,18 +44,7 @@ export async function downloadWithAuth(
   const fromHeader = res.headers.get('Content-Type');
   const type = blobMimeType?.trim() || (fromHeader && fromHeader.trim()) || undefined;
   const blob = new Blob([buf], type ? { type } : undefined);
-  const cd = res.headers.get('Content-Disposition');
-  let filename = fallbackFileName;
-  if (cd) {
-    const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd);
-    if (m) {
-      try {
-        filename = decodeURIComponent(m[1].replace(/"/g, '').trim());
-      } catch {
-        filename = m[1].replace(/"/g, '');
-      }
-    }
-  }
+  const filename = parseContentDispositionFilename(res.headers.get('Content-Disposition'), fallbackFileName);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -73,18 +80,7 @@ export async function downloadPostWithAuth(
   }
   const buf = await res.arrayBuffer();
   const blob = new Blob([buf], { type: res.headers.get('Content-Type') || 'application/octet-stream' });
-  const cd = res.headers.get('Content-Disposition');
-  let filename = fallbackFileName;
-  if (cd) {
-    const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd);
-    if (m) {
-      try {
-        filename = decodeURIComponent(m[1].replace(/"/g, '').trim());
-      } catch {
-        filename = m[1].replace(/"/g, '');
-      }
-    }
-  }
+  const filename = parseContentDispositionFilename(res.headers.get('Content-Disposition'), fallbackFileName);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;

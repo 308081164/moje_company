@@ -189,6 +189,22 @@ export interface OrderModelInfo {
   lastRejectToDesignerAttachmentFileIds?: number[];
 }
 
+/** 生产中跟单过程记录 */
+export interface OrderProductionFollowLogDto {
+  id: number;
+  orderId: number;
+  authorUserId: number;
+  authorName?: string;
+  note?: string;
+  imageFileIds?: number[];
+  createdAt?: string;
+}
+
+export interface OrderProductionFollowCreateRequest {
+  note?: string;
+  imageFileIds?: number[];
+}
+
 // 订单工艺评审信息
 export interface OrderReviewInfo {
   id: number;

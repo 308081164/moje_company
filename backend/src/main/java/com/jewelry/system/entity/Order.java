@@ -169,7 +169,12 @@ public class Order {
                 this.reviewCompletedTime = LocalDateTime.now();
                 break;
             case PRODUCING:
-                this.productionStartTime = LocalDateTime.now();
+                if (this.status == OrderStatus.PENDING_REVIEW && this.reviewCompletedTime == null) {
+                    this.reviewCompletedTime = LocalDateTime.now();
+                }
+                if (this.productionStartTime == null) {
+                    this.productionStartTime = LocalDateTime.now();
+                }
                 break;
             case COMPLETED:
                 this.productionCompletedTime = LocalDateTime.now();

@@ -444,8 +444,46 @@ public class OrderCommandService {
             autoAssignmentService.rebalanceModelerIfInvalid(order);
             orderRepository.save(order);
             auditLogService.log("ORDER_REVIEW_REJECT_TO_MODELER", "ORDER", orderId, "工艺评审驳回，订单退回建模修改中");
+        } else if (order.getStatus() == OrderStatus.PENDING_REVIEW && !rejected) {
+            try {
+                order.transitionTo(OrderStatus.PRODUCING);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+            orderRepository.save(order);
+            auditLogService.log("ORDER_REVIEW_PASS_TO_PRODUCING", "ORDER", orderId, "工艺评审通过，订单进入生产中");
         }
         auditLogService.log("ORDER_UPDATE_REVIEW", "ORDER", orderId, "更新工艺评审信息");
+        return orderQueryService.getOrder(orderId);
+    }
+
+    /**
+     * 跟单员在生产阶段标记整单生产流程结束，订单进入「已完成」。
+     */
+    @Transactional
+    public OrderInfoDto completeProduction(long orderId) {
+        Order order = loadOrder(orderId);
+        if (order.getStatus() != OrderStatus.PRODUCING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅「生产中」订单可执行生产完成");
+        }
+        if (!isAdminRole()) {
+            if (!"TRACKER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅跟单员或管理员可操作");
+            }
+            Long uid = requireUserId();
+            User t = order.getFollowUp();
+            if (t == null || !uid.equals(t.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派跟单员可标记生产完成");
+            }
+        }
+        try {
+            order.transitionTo(OrderStatus.COMPLETED);
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        orderRepository.save(order);
+        orderMarketingCopyService.ensurePendingRowForCompletedOrder(orderId);
+        auditLogService.log("ORDER_PRODUCTION_COMPLETED", "ORDER", orderId, "生产完成，订单已关闭");
         return orderQueryService.getOrder(orderId);
     }
 

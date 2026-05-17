@@ -140,6 +140,20 @@ public class OrderQueryService {
     }
 
     @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageTrackerProducing(Pageable pageable, Long trackerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
+            predicates.add(cb.equal(root.get("status"), OrderStatus.PRODUCING));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        return orderRepository.findAll(spec, pageable).map(o -> getOrder(o.getId()));
+    }
+
+    @Transactional(readOnly = true)
     public Page<OrderInfoDto> pageTrackerTodo(Pageable pageable, Long trackerId, Boolean isB2b) {
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
@@ -150,7 +164,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
+        return orderRepository.findAll(spec, pageable).map(o -> getOrder(o.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -158,11 +172,7 @@ public class OrderQueryService {
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
-            predicates.add(root.get("status").in(
-                    OrderStatus.PENDING_PRODUCTION,
-                    OrderStatus.PRODUCING,
-                    OrderStatus.COMPLETED
-            ));
+            predicates.add(cb.equal(root.get("status"), OrderStatus.COMPLETED));
             if (isB2b != null) {
                 predicates.add(cb.equal(root.get("isB2b"), isB2b));
             }

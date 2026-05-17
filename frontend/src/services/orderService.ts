@@ -24,6 +24,8 @@ import {
   CustomerProgressLinkResponse,
   ModelingArchiveData,
   OrderMarketingCopyDto,
+  OrderProductionFollowLogDto,
+  OrderProductionFollowCreateRequest,
 } from '@/types/order';
 
 // 订单服务
@@ -60,7 +62,30 @@ export const orderService = {
   async workbenchTrackerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/tracker/done', { params: { page, size, isB2b } });
   },
-  
+  async workbenchTrackerProducing(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/producing', { params: { page, size, isB2b } });
+  },
+
+  async listProductionFollowLogs(orderId: number): Promise<OrderProductionFollowLogDto[]> {
+    return api.get(`/orders/${orderId}/production-follow-logs`);
+  },
+
+  async addProductionFollowLog(orderId: number, body: OrderProductionFollowCreateRequest): Promise<OrderProductionFollowLogDto> {
+    return api.post(`/orders/${orderId}/production-follow-logs`, body);
+  },
+
+  async completeProduction(orderId: number): Promise<OrderInfo> {
+    return api.post(`/orders/${orderId}/production-complete`, {});
+  },
+
+  async uploadProductionFollowImage(orderId: number, file: File, notes?: string): Promise<FileInfo> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<FileInfo>(`/orders/${orderId}/production-follow/files`, fd, {
+      params: notes ? { notes } : {},
+    });
+  },
+
   // 获取订单详情
   async getOrderById(orderId: number): Promise<OrderInfo> {
     try {

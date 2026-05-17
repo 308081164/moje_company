@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import ModelerReferenceLibraryModal from '@/components/ModelerReferenceLibraryModal';
+import InlayStructureLibraryBrowser from '@/components/InlayStructureLibraryBrowser';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layout,
@@ -13,6 +13,7 @@ import {
   Tooltip,
   theme,
   message,
+  Modal,
   Drawer,
 } from 'antd';
 import {
@@ -32,6 +33,7 @@ import {
   HighlightOutlined,
   PictureOutlined,
   DatabaseOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -214,6 +216,11 @@ const AppLayout: React.FC = () => {
             label: '我的工作台',
           },
           {
+            key: '/workbench/tracker-follow-up',
+            icon: <UnorderedListOutlined />,
+            label: '跟单记录',
+          },
+          {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
             label: '订单列表',
@@ -346,6 +353,9 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/exports')) {
       return ['/exports'];
+    }
+    if (path.startsWith('/workbench/tracker-follow-up')) {
+      return ['/workbench/tracker-follow-up'];
     }
     if (path.startsWith('/workbench')) {
       return ['/workbench'];
@@ -521,13 +531,13 @@ const AppLayout: React.FC = () => {
             </Dropdown>
 
             {user?.role === 'MODELER' && (
-              <Tooltip title="建模师资料库（门户橱窗参考）">
+              <Tooltip title="镶嵌结构库">
                 <Button
                   type="text"
                   icon={<DatabaseOutlined />}
                   style={{ fontSize: 16 }}
                   onClick={() => setModelerLibraryOpen(true)}
-                  aria-label="建模师资料库"
+                  aria-label="镶嵌结构库"
                 />
               </Tooltip>
             )}
@@ -568,7 +578,17 @@ const AppLayout: React.FC = () => {
         </Content>
       </Layout>
 
-      <ModelerReferenceLibraryModal open={modelerLibraryOpen} onClose={() => setModelerLibraryOpen(false)} />
+      <Modal
+        title="镶嵌结构库"
+        open={modelerLibraryOpen}
+        onCancel={() => setModelerLibraryOpen(false)}
+        footer={null}
+        width={960}
+        destroyOnClose
+        styles={{ body: { maxHeight: '80vh', overflowY: 'auto' } }}
+      >
+        <InlayStructureLibraryBrowser compact />
+      </Modal>
 
       {isMobile && (
         <div className="mobile-bottom-nav" role="navigation" aria-label="主导航">
@@ -581,6 +601,11 @@ const AppLayout: React.FC = () => {
           {['DESIGNER', 'MODELER', 'TRACKER'].includes(user?.role || '') && (
             <Button type="text" onClick={() => navigateAndCloseMobile('/workbench')}>
               工作台
+            </Button>
+          )}
+          {user?.role === 'TRACKER' && (
+            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/tracker-follow-up')}>
+              跟单
             </Button>
           )}
           {['ADMIN', 'SALES', 'DATA_ARCHIVIST'].includes(user?.role || '') && (

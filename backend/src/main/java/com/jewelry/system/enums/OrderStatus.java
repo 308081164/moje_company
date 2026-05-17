@@ -54,7 +54,8 @@ public enum OrderStatus {
             case MODELING:
                 return targetStatus == PENDING_REVIEW || targetStatus == DESIGNING || targetStatus == CANCELLED;
             case PENDING_REVIEW:
-                return targetStatus == PENDING_PRODUCTION || targetStatus == MODELING || targetStatus == CANCELLED;
+                return targetStatus == PENDING_PRODUCTION || targetStatus == PRODUCING || targetStatus == MODELING
+                        || targetStatus == CANCELLED;
             case PENDING_PRODUCTION:
                 return targetStatus == PRODUCING || targetStatus == CANCELLED;
             case PRODUCING:
