@@ -19,7 +19,7 @@
 
         <div class="b2b-portal-header">
           <div class="b2b-portal-logo">
-            <ShopOutlined class="b2b-logo-icon" />
+            <img src="/icons/icon-maskable.svg" alt="" class="b2b-logo-mark" width="52" height="52" />
             <div class="b2b-logo-text">
               <h2 class="logo-title">MOJE</h2>
               <span class="logo-subtitle">珠宝定制服务平台</span>
@@ -347,7 +347,7 @@
     >
       <div class="success-content" v-if="orderResult">
         <div class="success-header">
-          <ShopOutlined class="success-icon" />
+          <img src="/icons/icon-maskable.svg" alt="" class="success-logo-mark" width="72" height="72" />
           <h3 class="success-title">订单创建成功</h3>
         </div>
         <div class="gold-divider"></div>
@@ -407,7 +407,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  ShopOutlined,
   QrcodeOutlined,
   LinkOutlined,
   ClockCircleOutlined,

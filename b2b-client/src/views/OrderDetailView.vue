@@ -5,7 +5,7 @@
       <a-card class="b2b-portal-card" :bordered="false" :loading="loading">
         <template #title>
           <div class="card-header">
-            <ShopOutlined class="header-icon" />
+            <img src="/icons/icon-maskable.svg" alt="" class="page-logo-mark" width="28" height="28" />
             <span>订单详情</span>
           </div>
         </template>
@@ -137,7 +137,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ShopOutlined } from '@ant-design/icons-vue'
 import { getOrderByToken } from '@/api'
 
 interface ModelFileRow {
@@ -283,9 +282,11 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.header-icon {
-  color: var(--primary-color);
-  font-size: 20px;
+.page-logo-mark {
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: block;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .gallery {

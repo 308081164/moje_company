@@ -4,8 +4,11 @@
     <header class="header">
       <div class="header-content">
         <div class="logo">
-          <span class="logo-icon">✨</span>
-          <span class="logo-text">MOJE 珠宝</span>
+          <img src="/icons/icon-maskable.svg" alt="" class="nav-logo-mark" width="36" height="36" />
+          <div class="logo-text-block">
+            <span class="logo-text">MOJE</span>
+            <span class="logo-sub">珠宝定制</span>
+          </div>
         </div>
         <nav class="nav">
           <a href="#about" class="nav-link">关于我们</a>
@@ -202,8 +205,11 @@
       <div class="footer-content">
         <div class="footer-brand">
           <div class="footer-logo">
-            <span class="logo-icon">✨</span>
-            <span class="logo-text">MOJE 珠宝</span>
+            <img src="/icons/icon-maskable.svg" alt="" class="footer-logo-mark" width="32" height="32" />
+            <div class="logo-text-block footer-logo-text-block">
+              <span class="logo-text">MOJE</span>
+              <span class="logo-sub">珠宝定制</span>
+            </div>
           </div>
           <p class="footer-slogan">匠心定制·永恒经典</p>
         </div>
@@ -326,17 +332,31 @@ onMounted(async () => {
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.logo-icon {
-  font-size: 32px;
+.nav-logo-mark {
+  flex-shrink: 0;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.logo-text-block {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
 
 .logo-text {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-color);
+  letter-spacing: 3px;
+}
+
+.logo-sub {
+  font-size: 11px;
+  color: #8b7355;
   letter-spacing: 2px;
 }
 
@@ -869,8 +889,21 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 
-.footer-logo .logo-text {
+.footer-logo-mark {
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.footer-logo-text-block .logo-text {
   color: white;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.footer-logo-text-block .logo-sub {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  letter-spacing: 1px;
 }
 
 .footer-slogan {
