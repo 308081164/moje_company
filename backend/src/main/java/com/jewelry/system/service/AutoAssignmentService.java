@@ -132,7 +132,19 @@ public class AutoAssignmentService {
         Long auto = Boolean.TRUE.equals(order.getIsB2b())
                 ? taskAssignmentService.findSuitableModelerForB2B()
                 : taskAssignmentService.findSuitableModelerForC2C();
-        return auto;
+        if (auto != null) {
+            return auto;
+        }
+        // 仅查询已维护 ModelerWorkStatus 的建模师；若库中无工作台记录则上面为空，退化为在职建模师 + 负载
+        List<User> modelers = userRepository.findByRole(UserRole.MODELER).stream()
+                .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .filter(u -> isModelerEligibleForAutoAssign(u.getId(), order.getIsB2b()))
+                .collect(Collectors.toList());
+        if (modelers.isEmpty()) {
+            return null;
+        }
+        User best = findUserWithLeastWorkload(modelers, "MODELER");
+        return best != null ? best.getId() : null;
     }
 
     private void replaceModeler(Order order, Long newModelerUserId, String auditNote) {
@@ -256,7 +268,8 @@ public class AutoAssignmentService {
                             com.jewelry.system.enums.OrderStatus.DESIGNING,
                             com.jewelry.system.enums.OrderStatus.PENDING_MODEL));
             case "DESIGNER" -> (int) orderRepository.countByDesignerIdAndStatusIn(user.getId(),
-                    List.of(com.jewelry.system.enums.OrderStatus.DESIGNING));
+                    List.of(com.jewelry.system.enums.OrderStatus.PENDING_DESIGN,
+                            com.jewelry.system.enums.OrderStatus.DESIGNING));
             case "MODELER" -> (int) orderRepository.countByModelerIdAndStatusIn(user.getId(),
                     List.of(com.jewelry.system.enums.OrderStatus.MODELING,
                             com.jewelry.system.enums.OrderStatus.PENDING_MODEL));

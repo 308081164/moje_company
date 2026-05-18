@@ -292,6 +292,9 @@ public class OrderCommandService {
         modelingInfoRepository.save(mi);
         if (req.getModelerId() != null) {
             order.setModeler(userRepository.getReferenceById(req.getModelerId()));
+        } else if (order.getModeler() == null && "MODELER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            // 与 updateDesign 补设计师对称：未写入 modeler_id 且请求未带时，由当前建模师落库，便于工作台与审计一致
+            SecurityUtils.currentStaffUserId().ifPresent(uid -> order.setModeler(userRepository.getReferenceById(uid)));
         }
         OrderStatus stBefore = order.getStatus();
         if (stBefore == OrderStatus.PENDING_MODEL || stBefore == OrderStatus.MODELING) {
