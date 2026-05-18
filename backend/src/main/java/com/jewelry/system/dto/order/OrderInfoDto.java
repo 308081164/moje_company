@@ -32,6 +32,13 @@ public class OrderInfoDto {
     /** B2B 匿名访问令牌（「我的订单」列表用于打开 /portal/b2b/order/{token}） */
     private String b2bShareAccessToken;
 
+    /** B2B 门户顾客视角状态文案：建模中 / 需要操作 / 已完成 / 已取消 */
+    private String b2bPortalStatusLabel;
+    /** 筛选用：MODELING / ACTION / DONE / CANCELLED */
+    private String b2bPortalStatusBucket;
+    /** B2B 门户：顾客上传参考图预览 URL（最多 6 张） */
+    private java.util.List<String> b2bAttachmentPreviewUrls;
+
     @Data
     @Builder
     public static class OrderBaseDto {

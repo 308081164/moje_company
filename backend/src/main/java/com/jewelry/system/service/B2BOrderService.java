@@ -1,7 +1,9 @@
 package com.jewelry.system.service;
 
+import com.jewelry.system.dto.b2b.B2BLastOrderProfileDto;
 import com.jewelry.system.dto.b2b.B2BOrderAccessDto;
 import com.jewelry.system.dto.b2b.B2BOrderCreateRequest;
+import com.jewelry.system.dto.order.FileInfoDto;
 import com.jewelry.system.dto.order.OrderInfoDto;
 import com.jewelry.system.entity.B2BClient;
 import com.jewelry.system.entity.Order;
@@ -10,6 +12,7 @@ import com.jewelry.system.entity.OrderCustomerViewLink;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
+import com.jewelry.system.util.B2BPortalOrderStatus;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,10 +24,12 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +44,7 @@ public class B2BOrderService {
     private final OrderQueryService orderQueryService;
     private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
+    private final OrderFileService orderFileService;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -52,13 +58,25 @@ public class B2BOrderService {
         B2BClient client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "客户账号无效"));
 
+        boolean clientDirty = false;
+        if (StringUtils.hasText(req.getCompanyName())) {
+            client.setCompanyName(req.getCompanyName().trim());
+            clientDirty = true;
+        }
+        if (StringUtils.hasText(req.getContactPerson())) {
+            client.setContactPerson(req.getContactPerson().trim());
+            clientDirty = true;
+        }
+        if (clientDirty) {
+            clientRepository.save(client);
+        }
+
         Order order = new Order();
         order.setIsB2b(true);
         order.setSource(OrderSource.B2B);
         order.setB2bClient(client);
-        String sourceDetail = req.getSourceDetail();
-        order.setInfluencerName(sourceDetail != null && !sourceDetail.isBlank() ? sourceDetail : null);
-        order.setDeposit(req.getDepositAmount() != null ? BigDecimal.valueOf(req.getDepositAmount()) : BigDecimal.ZERO);
+        order.setInfluencerName(null);
+        order.setDeposit(BigDecimal.ZERO);
         order.setBasicRequirements(req.getBasicRequirements());
         order.setStyleInfo(req.getStyleInfo());
         order.setMaterialInfo(req.getMaterialInfo());
@@ -90,22 +108,88 @@ public class B2BOrderService {
         return accessDto;
     }
 
+    @Transactional(readOnly = true)
     public OrderInfoDto getOrderByToken(String token) {
         Order order = linkService.getOrderEntityByToken(token);
-        return orderQueryService.getOrder(order.getId());
+        OrderInfoDto dto = orderQueryService.getOrder(order.getId());
+        accessLinkRepository.findByOrderId(order.getId()).ifPresent(link ->
+                dto.setB2bShareAccessToken(link.getAccessToken()));
+        enrichB2bPortalFields(dto, order);
+        return dto;
     }
 
-    public List<OrderInfoDto> getClientOrders() {
+    @Transactional(readOnly = true)
+    public List<OrderInfoDto> getClientOrders(String portalStatus, LocalDate from, LocalDate to) {
         Long clientId = SecurityUtils.currentB2bClientId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录"));
+        String bucketFilter = StringUtils.hasText(portalStatus) ? portalStatus.trim().toUpperCase(Locale.ROOT) : null;
+
         return orderRepository.findByB2bClientIdOrderByCreatedAtDesc(clientId).stream()
+                .filter(o -> from == null || !o.getCreatedAt().toLocalDate().isBefore(from))
+                .filter(o -> to == null || !o.getCreatedAt().toLocalDate().isAfter(to))
                 .map(o -> {
                     OrderInfoDto dto = orderQueryService.getOrder(o.getId());
                     accessLinkRepository.findByOrderId(o.getId()).ifPresent(link ->
                             dto.setB2bShareAccessToken(link.getAccessToken()));
+                    enrichB2bPortalFields(dto, o);
                     return dto;
                 })
+                .filter(dto -> bucketFilter == null || bucketFilter.equals(dto.getB2bPortalStatusBucket()))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public B2BLastOrderProfileDto getLastOrderDraftProfile() {
+        Long clientId = SecurityUtils.currentB2bClientId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录"));
+        B2BClient client = clientRepository.findById(clientId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "客户账号无效"));
+        B2BLastOrderProfileDto.B2BLastOrderProfileDtoBuilder b = B2BLastOrderProfileDto.builder();
+        if (StringUtils.hasText(client.getCompanyName())) {
+            b.companyName(client.getCompanyName().trim());
+        }
+        if (StringUtils.hasText(client.getContactPerson())) {
+            b.contactPerson(client.getContactPerson().trim());
+        }
+        orderRepository.findFirstByB2bClientIdOrderByCreatedAtDesc(clientId).ifPresent(o -> {
+            if (StringUtils.hasText(o.getStyleInfo())) {
+                b.styleInfo(o.getStyleInfo().trim());
+            }
+            if (StringUtils.hasText(o.getMaterialInfo())) {
+                b.materialInfo(o.getMaterialInfo().trim());
+            }
+        });
+        return b.build();
+    }
+
+    private void enrichB2bPortalFields(OrderInfoDto dto, Order entity) {
+        OrderStatus st = entity.getStatus();
+        dto.setB2bPortalStatusBucket(B2BPortalOrderStatus.bucket(st));
+        dto.setB2bPortalStatusLabel(B2BPortalOrderStatus.labelZh(st));
+        dto.setB2bAttachmentPreviewUrls(buildB2bAttachmentPreviewUrls(entity.getId()));
+    }
+
+    private List<String> buildB2bAttachmentPreviewUrls(long orderId) {
+        List<FileInfoDto> files = orderFileService.listForOrder(orderId);
+        return files.stream()
+                .filter(f -> "DESIGN".equals(f.getFileType()) && isImageFileName(f.getFileName()))
+                .sorted(Comparator
+                        .comparing(FileInfoDto::getUploaderId, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(FileInfoDto::getId))
+                .map(FileInfoDto::getFileUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .distinct()
+                .limit(6)
+                .toList();
+    }
+
+    private static boolean isImageFileName(String name) {
+        if (name == null) {
+            return false;
+        }
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".gif")
+                || n.endsWith(".webp") || n.endsWith(".bmp");
     }
 
     @Transactional
@@ -136,7 +220,7 @@ public class B2BOrderService {
         });
     }
 
-    private boolean proofMatchesOrder(String proofToken, Long orderId) {
+    private boolean proofMatchesOrder(String proofToken, long orderId) {
         return orderCustomerViewLinkRepository.findByViewToken(proofToken)
                 .filter(l -> l.getOrderId().equals(orderId)
                         && OrderCustomerViewLink.LinkStatus.ACTIVE.equals(l.getStatus())

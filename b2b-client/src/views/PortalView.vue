@@ -63,6 +63,7 @@
                 <div class="section-header">
                   <h4 class="section-title">客户信息（可选补充）</h4>
                 </div>
+                <p class="section-hint">已从您最近一次下单填写的内容中预填，可自行修改。</p>
 
                 <a-row :gutter="16">
                   <a-col :span="12">
@@ -124,29 +125,6 @@
                         :rows="3"
                         placeholder="材质要求，如：925银、足金、K金..."
                         class="b2b-textarea"
-                      />
-                    </a-form-item>
-                  </a-col>
-                </a-row>
-
-                <a-row :gutter="16">
-                  <a-col :span="12">
-                    <a-form-item label="定金金额" name="depositAmount">
-                      <a-input-number
-                        v-model:value="orderForm.depositAmount"
-                        style="width: 100%"
-                        placeholder="定金金额(选填)"
-                        class="b2b-input"
-                        :min="0"
-                      />
-                    </a-form-item>
-                  </a-col>
-                  <a-col :span="12">
-                    <a-form-item label="来源备注" name="sourceDetail">
-                      <a-input
-                        v-model:value="orderForm.sourceDetail"
-                        placeholder="如：抖音、小红书、达人推荐等"
-                        class="b2b-input"
                       />
                     </a-form-item>
                   </a-col>
@@ -442,6 +420,7 @@ import {
   loginClient,
   registerClient,
   b2bBindOrder,
+  getLastOrderProfile,
   type B2BClientLoginResponse,
   type B2BOrderCreateRequest,
   type B2BClientLoginRequest,
@@ -485,10 +464,24 @@ const onB2bAuthExpired = () => {
   }
 }
 
-onMounted(() => {
+const applyDraftProfile = async () => {
+  if (!getB2bTokenRaw()) return
+  try {
+    const p = await getLastOrderProfile()
+    if (p.companyName) orderForm.value.companyName = p.companyName
+    if (p.contactPerson) orderForm.value.contactPerson = p.contactPerson
+    if (p.styleInfo) orderForm.value.styleInfo = p.styleInfo
+    if (p.materialInfo) orderForm.value.materialInfo = p.materialInfo
+  } catch {
+    /* 忽略 */
+  }
+}
+
+onMounted(async () => {
   syncB2bToken()
   if (b2bToken.value) {
     activeTab.value = 'create'
+    await applyDraftProfile()
   }
   window.addEventListener('storage', onStorage)
   window.addEventListener('moje-b2b-auth-expired', onB2bAuthExpired as EventListener)
@@ -532,8 +525,7 @@ const orderForm = ref<B2BOrderCreateRequest>({
   contactPerson: '',
   basicRequirements: '',
   styleInfo: '',
-  materialInfo: '',
-  sourceDetail: ''
+  materialInfo: ''
 })
 
 const loginForm = ref<B2BClientLoginRequest>({
@@ -604,8 +596,7 @@ const handleCreateOrder = async () => {
       contactPerson: '',
       basicRequirements: '',
       styleInfo: '',
-      materialInfo: '',
-      sourceDetail: ''
+      materialInfo: ''
     }
     fileList.value = []
   } catch (error) {
@@ -626,6 +617,7 @@ const handleLogin = async () => {
       password: ''
     }
     activeTab.value = 'create'
+    await applyDraftProfile()
   } catch (error) {
     console.error('登录失败:', error)
   }
@@ -638,6 +630,7 @@ const handleRegister = async () => {
     syncB2bToken()
     message.success('注册成功，已自动登录')
     activeTab.value = 'create'
+    await applyDraftProfile()
     registerForm.value = {
       contact: '',
       password: '',

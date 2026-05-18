@@ -17,8 +17,11 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/b2b")
@@ -88,9 +91,19 @@ public class B2BController {
     }
 
     @GetMapping("/client/orders")
-    @Operation(summary = "获取当前登录客户的订单列表")
-    public ResponseEntity<List<OrderInfoDto>> getClientOrders() {
-        return ResponseEntity.ok(orderService.getClientOrders());
+    @Operation(summary = "获取当前登录客户的订单列表（含 B 端门户状态与附件预览）")
+    public ResponseEntity<List<OrderInfoDto>> getClientOrders(
+            @RequestParam(required = false) String portalStatus,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return ResponseEntity.ok(orderService.getClientOrders(portalStatus, from, to));
+    }
+
+    @GetMapping("/client/last-order-profile")
+    @Operation(summary = "获取最近一次填写的客户信息与需求字段，用于创建订单页默认填充")
+    public ResponseEntity<B2BLastOrderProfileDto> getLastOrderProfile() {
+        return ResponseEntity.ok(orderService.getLastOrderDraftProfile());
     }
 
     @PostMapping("/client/bind-order")

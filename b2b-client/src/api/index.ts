@@ -9,8 +9,13 @@ export interface B2BOrderCreateRequest {
   basicRequirements: string
   styleInfo?: string
   materialInfo?: string
-  depositAmount?: number
-  sourceDetail?: string
+}
+
+export interface B2BLastOrderProfileDto {
+  companyName?: string
+  contactPerson?: string
+  styleInfo?: string
+  materialInfo?: string
 }
 
 export interface B2BClientLoginRequest {
@@ -130,8 +135,16 @@ export function registerClient(data: B2BClientRegisterRequest): Promise<B2BClien
   return request.post('/b2b/client/register', data)
 }
 
-export function getClientOrders(): Promise<unknown[]> {
-  return request.get('/b2b/client/orders')
+export function getClientOrders(params?: {
+  portalStatus?: string
+  from?: string
+  to?: string
+}): Promise<unknown[]> {
+  return request.get('/b2b/client/orders', { params })
+}
+
+export function getLastOrderProfile(): Promise<B2BLastOrderProfileDto> {
+  return request.get('/b2b/client/last-order-profile')
 }
 
 export function b2bBindOrder(orderNumber: string, proofToken: string): Promise<void> {

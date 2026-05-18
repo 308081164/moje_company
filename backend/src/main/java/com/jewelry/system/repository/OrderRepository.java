@@ -70,6 +70,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     List<Order> findByB2bClientIdOrderByCreatedAtDesc(Long b2bClientId);
 
+    Optional<Order> findFirstByB2bClientIdOrderByCreatedAtDesc(Long b2bClientId);
+
     Optional<Order> findByOrderNumber(String orderNumber);
 
     @Query("""

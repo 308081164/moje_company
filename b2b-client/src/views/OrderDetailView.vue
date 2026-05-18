@@ -14,28 +14,50 @@
           <a-descriptions-item label="订单编号">
             <a-tag color="gold">{{ orderInfo.orderNumber }}</a-tag>
           </a-descriptions-item>
-          
+
           <a-descriptions-item label="订单状态">
-            <a-tag :color="getStatusColor(orderInfo.status)">
-              {{ orderInfo.statusDescription }}
+            <a-tag :color="getPortalStatusColor(orderInfo.portalBucket)">
+              {{ orderInfo.portalStatusLabel }}
             </a-tag>
           </a-descriptions-item>
-          
+
+          <a-descriptions-item label="下单时间">
+            {{ orderInfo.orderTime || '-' }}
+          </a-descriptions-item>
+
           <a-descriptions-item label="客户">
             {{ orderInfo.customerName || orderInfo.customerPhone }}
           </a-descriptions-item>
-          
-          <a-descriptions-item label="来源">
-            {{ orderInfo.sourceDescription }}
+
+          <a-divider>您提交的参考图</a-divider>
+          <a-descriptions-item label="上传附件" v-if="orderInfo.customerThumbUrls?.length">
+            <div class="gallery">
+              <a-image
+                v-for="(url, idx) in orderInfo.customerThumbUrls"
+                :key="'c' + idx"
+                :src="url"
+                :width="100"
+                :height="100"
+                style="object-fit: cover; border-radius: 6px"
+              />
+            </div>
           </a-descriptions-item>
-          
-          <a-descriptions-item label="定金金额">
-            <template v-if="orderInfo.depositAmount">
-              ¥{{ Number(orderInfo.depositAmount).toFixed(2) }}
-            </template>
-            <template v-else>
-              -
-            </template>
+          <a-descriptions-item v-else label="上传附件">
+            <span style="color: #999">暂无图片附件</span>
+          </a-descriptions-item>
+
+          <a-divider v-if="orderInfo.designImageUrls?.length">设计图稿</a-divider>
+          <a-descriptions-item v-if="orderInfo.designImageUrls?.length" label="设计图">
+            <div class="gallery">
+              <a-image
+                v-for="(url, idx) in orderInfo.designImageUrls"
+                :key="'d' + idx"
+                :src="url"
+                :width="100"
+                :height="100"
+                style="object-fit: cover; border-radius: 6px"
+              />
+            </div>
           </a-descriptions-item>
 
           <a-divider>订单需求</a-divider>
@@ -52,15 +74,25 @@
             {{ orderInfo.materialInfo || '-' }}
           </a-descriptions-item>
 
-          <a-divider>进度详情</a-divider>
+          <a-divider>进度与交付</a-divider>
 
-          <a-descriptions-item label="设计方案" v-if="orderInfo.designPlanUrl">
-            <a-space>
-              <a :href="orderInfo.designPlanUrl" target="_blank">查看设计图</a>
-              <template v-if="orderInfo.designPlanDescription">
-                {{ orderInfo.designPlanDescription }}
-              </template>
-            </a-space>
+          <a-descriptions-item label="建模效果图" v-if="orderInfo.effectImageUrls?.length">
+            <div class="gallery">
+              <a-image
+                v-for="(url, idx) in orderInfo.effectImageUrls"
+                :key="'e' + idx"
+                :src="url"
+                :width="100"
+                :height="100"
+                style="object-fit: cover; border-radius: 6px"
+              />
+            </div>
+          </a-descriptions-item>
+
+          <a-descriptions-item label="建模源文件" v-if="orderInfo.modelDownloadRows?.length">
+            <div v-for="row in orderInfo.modelDownloadRows" :key="row.url || row.name" style="margin-bottom: 6px">
+              <a :href="row.url" target="_blank" rel="noopener noreferrer">{{ row.name }}</a>
+            </div>
           </a-descriptions-item>
 
           <a-descriptions-item label="工艺验证" v-if="orderInfo.reviewResult">
@@ -70,10 +102,6 @@
             <p v-if="orderInfo.reviewComment" style="margin-top: 8px; color: #666">
               {{ orderInfo.reviewComment }}
             </p>
-          </a-descriptions-item>
-
-          <a-descriptions-item label="3D模型" v-if="orderInfo.modelFileUrl">
-            <a :href="orderInfo.modelFileUrl" target="_blank">下载模型文件</a>
           </a-descriptions-item>
 
           <a-descriptions-item label="报价信息" v-if="orderInfo.quotationAmount">
@@ -96,7 +124,10 @@
         </a-descriptions>
 
         <div class="footer-actions" style="margin-top: 24px; text-align: center">
-          <a-button type="primary" @click="router.go(-1)">返回</a-button>
+          <router-link to="/portal/b2b/my-orders">
+            <a-button type="primary">返回我的订单</a-button>
+          </router-link>
+          <a-button style="margin-left: 12px" @click="router.push('/portal')">返回门户</a-button>
         </div>
       </a-card>
     </div>
@@ -109,21 +140,25 @@ import { useRoute, useRouter } from 'vue-router'
 import { ShopOutlined } from '@ant-design/icons-vue'
 import { getOrderByToken } from '@/api'
 
-/** 与模板字段对齐的扁平结构（由后端 OrderInfoDto 嵌套 JSON 转换） */
+interface ModelFileRow {
+  name: string
+  url?: string
+}
+
 interface FlatOrderDetail {
   orderNumber: string
-  status: string
-  statusDescription: string
+  portalStatusLabel: string
+  portalBucket?: string
+  orderTime?: string
   customerName?: string
   customerPhone?: string
-  sourceDescription?: string
-  depositAmount?: number
   basicRequirements?: string
   styleInfo?: string
   materialInfo?: string
-  designPlanUrl?: string
-  designPlanDescription?: string
-  modelFileUrl?: string
+  customerThumbUrls: string[]
+  designImageUrls: string[]
+  effectImageUrls: string[]
+  modelDownloadRows: ModelFileRow[]
   reviewResult?: string
   reviewComment?: string
   quotationAmount?: number
@@ -133,19 +168,23 @@ interface FlatOrderDetail {
   shippingTracking?: string
 }
 
-const STATUS_ZH: Record<string, string> = {
-  PENDING_DESIGN: '待设计',
-  DESIGNING: '设计中',
-  PENDING_MODEL: '建模中',
-  MODELING: '建模修改中',
-  PENDING_REVIEW: '待工艺评审',
-  PENDING_QUOTATION: '待报价',
-  QUOTED: '已报价',
-  PENDING_PRODUCTION: '待生产',
-  IN_PRODUCTION: '生产中',
-  PRODUCING: '生产中',
-  COMPLETED: '已完成',
-  CANCELLED: '已取消'
+function collectModelFileRows(modelInfo: any): ModelFileRow[] {
+  const raw = modelInfo?.modelFiles
+  if (raw == null) return []
+  let arr: any[] = []
+  if (Array.isArray(raw)) {
+    arr = raw
+  } else if (typeof raw === 'object') {
+    const o = raw as Record<string, unknown>
+    if (Array.isArray(o.files)) arr = o.files as any[]
+    else if (Array.isArray(o.list)) arr = o.list as any[]
+  }
+  return arr
+    .map((x: any) => ({
+      name: String(x.fileName || x.name || '文件'),
+      url: typeof x.fileUrl === 'string' ? x.fileUrl : typeof x.url === 'string' ? x.url : undefined
+    }))
+    .filter((x: ModelFileRow) => Boolean(x.url))
 }
 
 function flattenOrder(r: any): FlatOrderDetail {
@@ -154,34 +193,38 @@ function flattenOrder(r: any): FlatOrderDetail {
   const m = r.modelInfo || {}
   const rv = r.reviewInfo || {}
   const q = r.quotationInfo || {}
-  const st = r.currentStatus || ''
-  const imgs: string[] | undefined = d.designImages
-  const firstImg = imgs && imgs.length ? imgs[0] : undefined
-  let modelUrl: string | undefined
-  if (m.modelFiles && typeof m.modelFiles === 'object') {
-    const files = (m.modelFiles as any).files
-    if (Array.isArray(files) && files.length && files[0].url) {
-      modelUrl = files[0].url
+  const hasReview = Boolean(rv.reviewPassedTime || rv.rejectionReason)
+  let reviewResult: string | undefined
+  let reviewComment: string | undefined
+  if (hasReview) {
+    if (rv.reviewPassed === true) {
+      reviewResult = 'APPROVED'
+    } else if (rv.reviewPassed === false) {
+      reviewResult = 'REJECTED'
     }
+    reviewComment = (rv.rejectionReason || rv.reviewNotes) as string | undefined
   }
+  const imgs: string[] = Array.isArray(d.designImages) ? d.designImages : []
+  const effects: string[] = Array.isArray(m.modelEffectImages) ? m.modelEffectImages : []
+  const b2bThumbs: string[] = Array.isArray(r.b2bAttachmentPreviewUrls) ? r.b2bAttachmentPreviewUrls : []
   return {
     orderNumber: b.orderNumber,
-    status: st,
-    statusDescription: STATUS_ZH[st] || st,
+    portalStatusLabel: r.b2bPortalStatusLabel || '建模中',
+    portalBucket: r.b2bPortalStatusBucket,
+    orderTime: b.orderTime,
     customerName: b.customerName,
     customerPhone: b.customerContact,
-    sourceDescription: b.source,
-    depositAmount: b.depositAmount,
     basicRequirements: b.basicRequirements,
-    styleInfo: b.style,
+    styleInfo: b.style ?? b.styleInfo,
     materialInfo: b.materialInfo,
-    designPlanUrl: firstImg,
-    designPlanDescription: d.designNotes,
-    modelFileUrl: modelUrl,
-    reviewResult: rv.reviewResult,
-    reviewComment: rv.reviewComment,
-    quotationAmount: q.quotationAmount,
-    quotationDetails: q.quotationDetails,
+    customerThumbUrls: b2bThumbs,
+    designImageUrls: imgs,
+    effectImageUrls: effects,
+    modelDownloadRows: collectModelFileRows(m),
+    reviewResult,
+    reviewComment,
+    quotationAmount: q?.totalCost ?? q?.totalAmount ?? q?.quotationAmount,
+    quotationDetails: q?.quotationNotes ?? q?.quotationDetails ?? q?.notes,
     productionStatus: r.productionStatus,
     productionNotes: r.productionNotes,
     shippingTracking: r.shippingTracking
@@ -194,21 +237,14 @@ const router = useRouter()
 const loading = ref(false)
 const orderInfo = ref<FlatOrderDetail | null>(null)
 
-const getStatusColor = (status: string) => {
-  const colorMap: Record<string, string> = {
-    'PENDING_DESIGN': 'blue',
-    'DESIGNING': 'orange',
-    'PENDING_MODEL': 'geekblue',
-    'MODELING': 'purple',
-    'PENDING_REVIEW': 'purple',
-    'PENDING_QUOTATION': 'magenta',
-    'QUOTED': 'volcano',
-    'PENDING_PRODUCTION': 'gold',
-    'IN_PRODUCTION': 'yellow',
-    'COMPLETED': 'green',
-    'CANCELLED': 'red'
+const getPortalStatusColor = (bucket?: string) => {
+  const map: Record<string, string> = {
+    MODELING: 'processing',
+    ACTION: 'error',
+    DONE: 'success',
+    CANCELLED: 'default'
   }
-  return colorMap[status] || 'default'
+  return map[bucket || ''] || 'processing'
 }
 
 const loadOrder = async () => {
@@ -216,7 +252,7 @@ const loadOrder = async () => {
   if (!token) {
     return
   }
-  
+
   try {
     loading.value = true
     const raw = await getOrderByToken(token)
@@ -229,7 +265,7 @@ const loadOrder = async () => {
 }
 
 onMounted(() => {
-  loadOrder()
+  void loadOrder()
 })
 </script>
 
@@ -250,5 +286,11 @@ onMounted(() => {
 .header-icon {
   color: var(--primary-color);
   font-size: 20px;
+}
+
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>
