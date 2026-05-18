@@ -213,6 +213,10 @@ public class OrderCommandService {
 
         if (req.getDesignerId() != null) {
             order.setDesigner(userRepository.getReferenceById(req.getDesignerId()));
+        } else if (order.getDesigner() == null && "DESIGNER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
+            // 请求体未带 designerId 时（常见：表单未回填），仍允许本角色保存；须写入订单设计师，
+            // 否则无法匹配「指派设计师本人」条件，建模阶段与建模师自动分配不会触发。
+            SecurityUtils.currentStaffUserId().ifPresent(uid -> order.setDesigner(userRepository.getReferenceById(uid)));
         }
 
         boolean advanced = tryAdvanceOrderAfterDesignerDesignSave(order);
@@ -232,6 +236,7 @@ public class OrderCommandService {
     /**
      * 指派设计师本人保存设计信息时，若订单仍处于设计师阶段，则自动推进至「建模中」（PENDING_MODEL）。
      * 其他角色（如管理员、客服）编辑设计信息不会触发自动流转。
+     * 若订单此前未写入 designer_id，设计师保存前会先被补全为当前登录员工（见 updateDesign）。
      */
     private boolean tryAdvanceOrderAfterDesignerDesignSave(Order order) {
         if (!SecurityUtils.currentRoleApi().filter("DESIGNER"::equals).isPresent()) {
