@@ -1,6 +1,9 @@
 import request from '@/utils/request'
 import { getB2bTokenRaw } from '@/utils/b2bAuth'
 
+/** Agent 调用大模型可能较慢，单独延长超时 */
+const AGENT_REQUEST_TIMEOUT_MS = 120_000
+
 export interface B2bAgentDraft {
   basicRequirements?: string
   styleInfo?: string
@@ -13,11 +16,23 @@ export interface B2bAgentDraft {
   missingFields?: string[]
 }
 
+export interface B2bAgentOrderResultPayload {
+  orderNumber: string
+  accessUrl: string
+  qrcodeBase64?: string
+}
+
+export interface B2bAgentMessagePayload {
+  imageUrls?: string[]
+  orderResult?: B2bAgentOrderResultPayload
+  supportWecomQrUrl?: string
+}
+
 export interface B2bAgentMessage {
   id?: number
   role: string
   content?: string
-  payload?: Record<string, unknown>
+  payload?: B2bAgentMessagePayload
   createdAt?: string
 }
 
@@ -79,6 +94,7 @@ export function agentSendMessage(
   if (data.text) form.append('text', data.text)
   if (data.image) form.append('image', data.image)
   return request.post(`/b2b/agent/sessions/${sessionId}/messages`, form, {
+    timeout: AGENT_REQUEST_TIMEOUT_MS,
     headers: {
       'Content-Type': 'multipart/form-data',
       ...authConfig(extraHeaders).headers
@@ -87,5 +103,8 @@ export function agentSendMessage(
 }
 
 export function agentCommit(sessionId: number, extraHeaders: Record<string, string>): Promise<B2bAgentChatResponse> {
-  return request.post(`/b2b/agent/sessions/${sessionId}/commit`, {}, authConfig(extraHeaders))
+  return request.post(`/b2b/agent/sessions/${sessionId}/commit`, {}, {
+    timeout: AGENT_REQUEST_TIMEOUT_MS,
+    ...authConfig(extraHeaders)
+  })
 }
