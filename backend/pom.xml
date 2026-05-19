@@ -157,7 +157,7 @@
 
         <!-- HTML 工单 → PDF（中文需配合 resources/fonts 下 OTF/TTF） -->
         <dependency>
-            <groupId>io.github.openhtmltopdf</groupId>
+            <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>
             <version>1.0.10</version>
         </dependency>
