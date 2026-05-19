@@ -27,12 +27,8 @@ public class OrderExportService {
     public byte[] exportOrderHtml(long orderId) {
         OrderInfoDto dto = orderQueryService.getOrder(orderId);
         List<FileInfoDto> files = orderFileService.listForOrder(orderId);
-        String html = renderHtml(dto, files);
+        String html = OrderHtmlWorksheetRenderer.render(dto, files);
         return html.getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static String renderHtml(OrderInfoDto o, List<FileInfoDto> files) {
-        return OrderHtmlWorksheetRenderer.render(o, files);
     }
 
     private static String renderMarkdown(OrderInfoDto o) {
@@ -100,4 +96,3 @@ public class OrderExportService {
         return "```\n" + s + "\n```";
     }
 }
-
