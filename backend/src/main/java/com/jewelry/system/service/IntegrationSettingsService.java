@@ -1,14 +1,13 @@
 package com.jewelry.system.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.integration.IntegrationSettingsViewDto;
 import com.jewelry.system.entity.SysConfig;
 import com.jewelry.system.repository.SysConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +23,8 @@ public class IntegrationSettingsService {
     public static final String KEY_DASHSCOPE_API_KEY = "integration.dashscope.apiKey";
     public static final String KEY_DASHSCOPE_ENABLED = "integration.dashscope.enabled";
     public static final String KEY_DASHSCOPE_MODEL = "integration.dashscope.vlModel";
+    public static final String KEY_DASHSCOPE_CHAT_MODEL = "integration.dashscope.chatModel";
+    public static final String KEY_B2B_SUPPORT_WECOM_QR = "portal.b2b.supportWecomQrUrl";
 
     public static final String KEY_WECOM_CORP_ID = "integration.wecom.corpId";
     public static final String KEY_WECOM_CUSTOMER_SECRET = "integration.wecom.customerSecret";
@@ -59,6 +60,12 @@ public class IntegrationSettingsService {
         }
         if (body.containsKey("dashscopeImageModel")) {
             upsert(KEY_DASHSCOPE_MODEL, String.valueOf(body.get("dashscopeImageModel")), "DashScope 视觉模型名");
+        }
+        if (body.containsKey("dashscopeChatModel")) {
+            upsert(KEY_DASHSCOPE_CHAT_MODEL, String.valueOf(body.get("dashscopeChatModel")), "DashScope 文本对话模型名");
+        }
+        if (body.containsKey("b2bSupportWecomQrUrl")) {
+            upsert(KEY_B2B_SUPPORT_WECOM_QR, String.valueOf(body.get("b2bSupportWecomQrUrl")), "B端门户客服企微二维码URL");
         }
         if (body.containsKey("dashscopeApiKey")) {
             Object v = body.get("dashscopeApiKey");
@@ -99,9 +106,6 @@ public class IntegrationSettingsService {
         return k.isBlank() ? null : k;
     }
 
-    /**
-     * 企业微信自动进群：需开启开关且 CorpId、客户联系 Secret、种子客户群 chat_id 均配置。
-     */
     @Transactional(readOnly = true)
     public Optional<WeComContext> getWeComContext() {
         if (!parseBool(read(KEY_WECOM_ENABLED, "false"), false)) {
@@ -142,6 +146,16 @@ public class IntegrationSettingsService {
     @Transactional(readOnly = true)
     public String dashScopeModel() {
         return read(KEY_DASHSCOPE_MODEL, "qwen-vl-plus");
+    }
+
+    @Transactional(readOnly = true)
+    public String dashScopeChatModel() {
+        return read(KEY_DASHSCOPE_CHAT_MODEL, "qwen-plus");
+    }
+
+    @Transactional(readOnly = true)
+    public String b2bSupportWecomQrUrl() {
+        return read(KEY_B2B_SUPPORT_WECOM_QR, "");
     }
 
     private String read(String key, String def) {

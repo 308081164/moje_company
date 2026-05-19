@@ -18,7 +18,11 @@
         </div>
 
         <div ref="msgBoxRef" class="agent-messages">
-          <div v-for="m in messages" :key="m.id || m.content" :class="['msg-row', m.role]">
+          <div
+            v-for="(m, index) in messages"
+            :key="messageKey(m, index)"
+            :class="['msg-row', m.role, { 'msg-pending': isOptimistic(m) }]"
+          >
             <div class="msg-bubble">
               <div v-if="m.content" class="msg-text">{{ m.content }}</div>
               <div v-if="payloadImages(m).length" class="msg-images">
@@ -42,6 +46,14 @@
               />
             </div>
           </div>
+
+          <div v-if="sending" class="msg-row assistant">
+            <div class="msg-bubble typing-bubble">
+              <span class="typing-dots" aria-hidden="true"><i /><i /><i /></span>
+              <span class="typing-label">Agent 正在回复…</span>
+            </div>
+          </div>
+
           <div v-if="showConfirmCard && draft" class="confirm-card">
             <h4>请确认订单信息</h4>
             <p><strong>基础需求：</strong>{{ draft.basicRequirements || '—' }}</p>
@@ -139,16 +151,19 @@ import {
   agentBindSession,
   agentListSessions,
   agentGetSession,
-  loginClient,
-  registerClient,
+  type B2bAgentChatResponse,
   type B2bAgentDraft,
   type B2bAgentMessage,
   type B2bAgentSession
 } from '@/api/agent'
+import { loginClient, registerClient } from '@/api'
 import { clearB2bToken, getB2bTokenRaw, isB2bTokenExpiredOrInvalid, setB2bToken } from '@/utils/b2bAuth'
 
 const SESSION_TOKEN_KEY = 'moje_b2b_agent_session_token'
 const SESSION_ID_KEY = 'moje_b2b_agent_session_id'
+
+const OPTIMISTIC_ID_START = -1_000_000_000_000
+let optimisticSeq = 0
 
 const b2bToken = ref(!!getB2bTokenRaw())
 const session = ref<B2bAgentSession | null>(null)
@@ -167,6 +182,7 @@ const historySessions = ref<B2bAgentSession[]>([])
 const historyLoading = ref(false)
 const msgBoxRef = ref<HTMLElement | null>(null)
 const pendingImage = ref<File | null>(null)
+const pendingOptimisticIds = ref<Set<number>>(new Set())
 
 const loginForm = ref({ contact: '', password: '' })
 const registerForm = ref({ contact: '', password: '' })
@@ -187,14 +203,58 @@ function sessionHeaders() {
   return { 'X-B2B-Agent-Session-Token': publicToken.value }
 }
 
+function isOptimistic(m: B2bAgentMessage): boolean {
+  return typeof m.id === 'number' && m.id < 0
+}
+
+function messageKey(m: B2bAgentMessage, index: number): string {
+  if (m.id != null) return `msg-${m.id}`
+  return `msg-${index}-${m.role}-${String(m.createdAt ?? '')}`
+}
+
+function nextOptimisticId(): number {
+  optimisticSeq += 1
+  return OPTIMISTIC_ID_START - optimisticSeq
+}
+
+function removeOptimisticMessages() {
+  if (!pendingOptimisticIds.value.size) return
+  const pending = pendingOptimisticIds.value
+  messages.value = messages.value.filter((m) => m.id == null || !pending.has(m.id))
+  pending.clear()
+}
+
+function pushOptimisticUser(text: string, hasImage: boolean): number {
+  const id = nextOptimisticId()
+  pendingOptimisticIds.value.add(id)
+  messages.value = [
+    ...messages.value,
+    {
+      id,
+      role: 'user',
+      content: text || (hasImage ? '（已发送参考图）' : '')
+    }
+  ]
+  scrollBottom()
+  return id
+}
+
 function applySession(s: B2bAgentSession) {
   session.value = s
-  messages.value = s.messages || []
-  draft.value = s.draft || null
+  messages.value = [...(s.messages ?? [])]
+  draft.value = s.draft ?? null
   showConfirmCard.value = Boolean(s.draft?.readyForConfirm) && !s.readOnly
   localStorage.setItem(SESSION_TOKEN_KEY, s.publicToken)
   localStorage.setItem(SESSION_ID_KEY, String(s.sessionId))
+  pendingOptimisticIds.value.clear()
   scrollBottom()
+}
+
+function applyChatResponse(res: B2bAgentChatResponse) {
+  applySession(res.session)
+  if (res.showConfirmCard !== undefined) {
+    showConfirmCard.value = res.showConfirmCard
+  }
 }
 
 async function initSession() {
@@ -211,8 +271,10 @@ async function initSession() {
 
 function scrollBottom() {
   nextTick(() => {
-    const el = msgBoxRef.value
-    if (el) el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      const el = msgBoxRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
   })
 }
 
@@ -230,32 +292,41 @@ function promptLogin() {
 }
 
 async function sendText() {
-  if (!session.value || session.value.readOnly) return
+  if (!session.value || session.value.readOnly || sending.value) return
   if (!b2bToken.value) {
     promptLogin()
     return
   }
   const text = inputText.value.trim()
-  if (!text && !pendingImage.value) return
+  const image = pendingImage.value
+  if (!text && !image) return
+
+  const savedText = text
+  const savedImage = image
+  inputText.value = ''
+  pendingImage.value = null
+
+  const optimisticId = pushOptimisticUser(savedText, Boolean(savedImage))
   sending.value = true
   try {
     const res = await agentSendMessage(
       session.value.sessionId,
-      { text: text || undefined, image: pendingImage.value || undefined },
+      { text: savedText || undefined, image: savedImage || undefined },
       sessionHeaders()
     )
     if (res.needLogin) {
+      removeOptimisticMessages()
+      inputText.value = savedText
+      pendingImage.value = savedImage
       promptLogin()
       return
     }
-    applySession(res.session)
-    if (res.latestAssistantMessage) {
-      messages.value = [...messages.value, res.latestAssistantMessage]
-    }
-    showConfirmCard.value = res.showConfirmCard
-    inputText.value = ''
-    pendingImage.value = null
+    applyChatResponse(res)
   } catch (e: unknown) {
+    pendingOptimisticIds.value.delete(optimisticId)
+    messages.value = messages.value.filter((m) => m.id !== optimisticId)
+    inputText.value = savedText
+    pendingImage.value = savedImage
     message.error(String((e as Error)?.message || e))
   } finally {
     sending.value = false
@@ -275,12 +346,10 @@ function onPickImage(file: File) {
 async function doCommit() {
   if (!session.value) return
   commitLoading.value = true
+  sending.value = true
   try {
     const res = await agentCommit(session.value.sessionId, sessionHeaders())
-    applySession(res.session)
-    if (res.latestAssistantMessage) {
-      messages.value = [...messages.value, res.latestAssistantMessage]
-    }
+    applyChatResponse(res)
     showConfirmCard.value = false
     confirmOpen.value = false
     message.success('工单已创建')
@@ -288,6 +357,7 @@ async function doCommit() {
     message.error(String((e as Error)?.message || e))
   } finally {
     commitLoading.value = false
+    sending.value = false
   }
 }
 
@@ -359,6 +429,11 @@ onMounted(async () => {
 watch(historyOpen, (v) => {
   if (v) void loadHistory()
 })
+
+watch(messages, () => scrollBottom(), { deep: true })
+watch(sending, (v) => {
+  if (v) scrollBottom()
+})
 </script>
 
 <style scoped>
@@ -398,6 +473,9 @@ watch(historyOpen, (v) => {
 .msg-row.assistant {
   justify-content: flex-start;
 }
+.msg-row.msg-pending .msg-bubble {
+  opacity: 0.85;
+}
 .msg-bubble {
   max-width: 88%;
   padding: 10px 14px;
@@ -411,6 +489,44 @@ watch(historyOpen, (v) => {
 .msg-text {
   white-space: pre-wrap;
   word-break: break-word;
+}
+.typing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.typing-label {
+  color: #bbb;
+  font-size: 13px;
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.typing-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d4af37;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 .confirm-card {
   margin-top: 16px;
