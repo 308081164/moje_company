@@ -1,16 +1,21 @@
 package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.integration.IntegrationSettingsViewDto;
+import com.jewelry.system.service.AliyunOssService;
 import com.jewelry.system.service.IntegrationSettingsService;
 import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/integrations")
@@ -19,6 +24,7 @@ import java.util.Map;
 public class IntegrationController {
 
     private final IntegrationSettingsService integrationSettingsService;
+    private final AliyunOssService aliyunOssService;
 
     @GetMapping("/settings")
     @Operation(summary = "获取集成配置（管理员）")
