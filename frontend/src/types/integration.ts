@@ -3,6 +3,8 @@ export interface IntegrationSettings {
   dashscopeEnabled: boolean;
   dashscopeApiKeyConfigured: boolean;
   dashscopeImageModel: string;
+  dashscopeChatModel?: string;
+  b2bSupportWecomQrUrl?: string;
   wecomEnabled: boolean;
   wecomCustomerSecretConfigured: boolean;
   wecomCorpId: string;

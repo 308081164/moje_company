@@ -40,6 +40,8 @@ public class IntegrationSettingsService {
                 .dashscopeEnabled(parseBool(read(KEY_DASHSCOPE_ENABLED, "false"), false))
                 .dashscopeApiKeyConfigured(key != null && !key.isBlank())
                 .dashscopeImageModel(read(KEY_DASHSCOPE_MODEL, "qwen-vl-plus"))
+                .dashscopeChatModel(read(KEY_DASHSCOPE_CHAT_MODEL, "qwen-plus"))
+                .b2bSupportWecomQrUrl(read(KEY_B2B_SUPPORT_WECOM_QR, ""))
                 .wecomEnabled(parseBool(read(KEY_WECOM_ENABLED, "false"), false))
                 .wecomCustomerSecretConfigured(!read(KEY_WECOM_CUSTOMER_SECRET, "").isBlank())
                 .wecomCorpId(read(KEY_WECOM_CORP_ID, ""))

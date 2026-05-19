@@ -60,7 +60,7 @@ final class OrderHtmlWorksheetRenderer {
         sb.append("<title>").append(e(title)).append("</title>\n");
         sb.append("<style>\n");
         sb.append("*{box-sizing:border-box;}\n");
-        sb.append("body{margin:12px;font-family:\"Microsoft YaHei\",\"PingFang SC\",SimSun,system-ui,sans-serif;");
+        sb.append("body{margin:12px;font-family:\"Noto Sans SC\",\"Microsoft YaHei\",\"PingFang SC\",SimSun,system-ui,sans-serif;");
         sb.append("font-size:12px;line-height:1.35;color:#000;background:#fff;}\n");
         sb.append("table.sheet{width:100%;max-width:210mm;border-collapse:collapse;table-layout:fixed;}\n");
         sb.append("table.sheet td,table.sheet th{border:1px solid #000;padding:3px 5px;vertical-align:middle;word-break:break-word;}\n");

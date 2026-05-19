@@ -294,14 +294,14 @@ public class OrderController {
                 .body(csv);
     }
 
-    @GetMapping("/{id:\\d+}/export")
-    @Operation(summary = "导出单个订单 Markdown 工单")
-    public ResponseEntity<byte[]> exportOne(@PathVariable long id) {
-        byte[] md = orderExportService.exportOrderMarkdown(id);
+    @GetMapping("/{id:\\d+}/export-pdf")
+    @Operation(summary = "导出单个订单 PDF 工单")
+    public ResponseEntity<byte[]> exportOnePdf(@PathVariable long id) {
+        byte[] pdf = orderPdfExportService.exportOrderPdf(id);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=order-" + id + ".md")
-                .contentType(MediaType.parseMediaType("text/markdown;charset=UTF-8"))
-                .body(md);
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=order-" + id + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @GetMapping("/{id:\\d+}/export-html")

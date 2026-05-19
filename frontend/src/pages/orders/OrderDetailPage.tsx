@@ -1455,13 +1455,12 @@ const OrderDetailPage: React.FC = () => {
               导出 HTML 工单
             </Button>
             <Button
-              type="link"
-              size="small"
+              icon={<DownloadOutlined />}
               onClick={() =>
-                void orderService.downloadOrderMarkdown(orderId).catch((err) => message.error(String(err?.message || err)))
+                void orderService.downloadOrderPdf(orderId).catch((err) => message.error(String(err?.message || err)))
               }
             >
-              Markdown
+              导出 PDF 工单
             </Button>
           </Space>
         </Space>

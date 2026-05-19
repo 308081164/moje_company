@@ -11,6 +11,8 @@ public class IntegrationSettingsViewDto {
     private boolean dashscopeEnabled;
     private boolean dashscopeApiKeyConfigured;
     private String dashscopeImageModel;
+    private String dashscopeChatModel;
+    private String b2bSupportWecomQrUrl;
 
     private boolean wecomEnabled;
     private boolean wecomCustomerSecretConfigured;

@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/portal/c/account/register", "/portal/c/account/login").permitAll()
                         .requestMatchers(new AntPathRequestMatcher("/public/customer-order/*/hint", HttpMethod.GET.name())).permitAll()
                         .requestMatchers("/public/portal/**").permitAll()
+                        .requestMatchers("/b2b/agent/sessions", "/b2b/agent/sessions/**").permitAll()
                         // 勿使用 /b2b/order/{token} 匹配所有方法：会把 POST /b2b/order/create、create-with-files 当成「匿名 token 路径」放行，导致未注入 JWT 时以匿名身份进入接口并返回 401。
                         .requestMatchers(HttpMethod.POST, "/b2b/order/create", "/b2b/order/create-with-files").authenticated()
                         .requestMatchers(HttpMethod.GET, "/b2b/order/{token}").permitAll()

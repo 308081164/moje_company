@@ -14,9 +14,10 @@ import {
   message,
   Switch,
   Divider,
+  Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import { integrationService } from '@/services/integrationService';
 import type { ProcessInfo } from '@/types/order';

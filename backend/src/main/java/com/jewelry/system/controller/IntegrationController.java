@@ -34,6 +34,30 @@ public class IntegrationController {
         return integrationSettingsService.patch(body);
     }
 
+    @PostMapping(value = "/b2b-support-wecom-qr", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传 B 端门户客服企微二维码")
+    public Map<String, String> uploadB2bSupportWecomQr(@RequestPart("file") MultipartFile file) {
+        requireAdmin();
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传图片");
+        }
+        try {
+            if (!aliyunOssService.isEnabled()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OSS 未配置");
+            }
+            String key = "portal/b2b/support-wecom/" + UUID.randomUUID() + ".png";
+            String url = aliyunOssService.uploadObject(key, file);
+            Map<String, Object> patch = new HashMap<>();
+            patch.put("b2bSupportWecomQrUrl", url);
+            integrationSettingsService.patch(patch);
+            return Map.of("url", url);
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传失败: " + e.getMessage());
+        }
+    }
+
     private static void requireAdmin() {
         if (!"ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可管理集成配置");

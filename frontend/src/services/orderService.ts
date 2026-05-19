@@ -362,9 +362,9 @@ export const orderService = {
     return response.data;
   },
 
-  /** 浏览器下载：单订单 Markdown */
-  async downloadOrderMarkdown(orderId: number): Promise<void> {
-    await downloadWithAuth(`/orders/${orderId}/export`, `order-${orderId}.md`);
+  /** 浏览器下载：单订单 PDF 工单（嵌入中文字体） */
+  async downloadOrderPdf(orderId: number): Promise<void> {
+    await downloadWithAuth(`/orders/${orderId}/export-pdf`, `order-${orderId}.pdf`, 'application/pdf');
   },
 
   /** 浏览器下载：单订单 HTML（自包含样式 + 外链/嵌入图片） */

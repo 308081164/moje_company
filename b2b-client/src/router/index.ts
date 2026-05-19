@@ -13,7 +13,12 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/portal',
-    name: 'Portal',
+    name: 'PortalAgent',
+    component: () => import('@/views/PortalAgentView.vue')
+  },
+  {
+    path: '/portal/form',
+    name: 'PortalForm',
     component: () => import('@/views/PortalView.vue')
   },
   {
