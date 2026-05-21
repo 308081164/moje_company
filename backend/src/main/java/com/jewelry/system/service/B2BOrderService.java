@@ -84,10 +84,11 @@ public class B2BOrderService {
         order.setCustomerPhone(client.getContact());
         order.setCustomerWechat(client.getContact());
         order.setOrderNumber(generateOrderNumber());
-        order.setStatus(OrderStatus.PENDING_DESIGN);
+        // B 端客户自带需求/参考图，跳过设计阶段，直接进入建模中并分配建模师
+        order.setStatus(OrderStatus.PENDING_MODEL);
 
         orderRepository.save(order);
-        autoAssignmentService.autoAssignAll(order.getId());
+        autoAssignmentService.autoAssignB2bNewOrder(order.getId());
 
         B2BOrderAccessDto accessDto = linkService.createLink(order.getId(), client.getId());
 

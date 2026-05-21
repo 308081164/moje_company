@@ -37,6 +37,7 @@ public class AutoAssignmentService {
 
     /**
      * 自动分配：售中与设计师仍在建单时分配；建模师、跟单员延后到对应阶段再分配，避免长周期流程中人员离职导致错绑。
+     * C 端 / 管理端建单走此路径（待设计 → 设计师 → 建模师）。
      */
     @Transactional
     public void autoAssignAll(Long orderId) {
@@ -48,6 +49,22 @@ public class AutoAssignmentService {
 
         orderRepository.save(order);
         auditLogService.log("ORDER_AUTO_ASSIGN", "ORDER", orderId, "订单自动分配（售中/设计）；建模师与跟单员延后至阶段入口分配");
+    }
+
+    /**
+     * B 端门户建单：跳过设计师，直接进入「建模中」并分配建模师（与 C 端先设计后建模区分）。
+     */
+    @Transactional
+    public void autoAssignB2bNewOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+
+        assignSalesMid(order);
+        ensureModelerAssigned(order);
+
+        orderRepository.save(order);
+        auditLogService.log("ORDER_AUTO_ASSIGN", "ORDER", orderId,
+                "B2B 订单自动分配（售中/建模师）；不分配设计师");
     }
 
     /**
