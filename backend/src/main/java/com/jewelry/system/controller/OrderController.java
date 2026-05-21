@@ -35,6 +35,7 @@ public class OrderController {
     private final EmployeeStatisticsService employeeStatisticsService;
     private final OrderFileService orderFileService;
     private final OrderExportService orderExportService;
+    private final OrderPdfExportService orderPdfExportService;
     private final DashScopeChatImageDraftService dashScopeChatImageDraftService;
     private final CustomerOrderViewService customerOrderViewService;
     private final OrderProductionFollowService orderProductionFollowService;
