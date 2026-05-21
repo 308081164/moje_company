@@ -287,34 +287,40 @@ jobs:
           echo "设置环境变量..."
           export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
+          COMPOSE="docker compose -f docker-compose.prod.yml -p moje"
+
+          # 强制清理历史残留（避免固定 container_name 与 compose down 项目名不一致导致冲突）
+          cleanup_jewelry_stack() {
+            for name in jewelry-mysql jewelry-backend moje-b2b-client; do
+              docker rm -f "$name" 2>/dev/null || true
+            done
+            for net in moje_jewelry-network jewelry-network; do
+              docker network rm "$net" 2>/dev/null || true
+            done
+          }
+
+          cleanup_jewelry_stack
+
           # ========== 4. 修复 Flyway 状态 ==========
           # 说明：正式库结构迭代由后端镜像内 Flyway 在 Spring Boot 启动时自动执行（见 backend/src/main/resources/db/migration）。
           # 本 job 在拉起新 backend 容器后即完成迁移；下方健康检查通过后会打印 flyway_schema_history 便于在 Actions 日志中核对。
           echo "检查 Flyway 状态..."
-          # 先启动 MySQL 来修复数据库状态
-          docker compose -f docker-compose.prod.yml up -d mysql
+          $COMPOSE up -d mysql
           sleep 30
-          
-          # 删除失败的 V5 迁移记录（如果存在）
+
           echo "清理 Flyway 失败状态..."
           docker exec jewelry-mysql mysql -uroot -p${DB_PASSWORD} moje_database -e "DELETE FROM flyway_schema_history WHERE version = '5' AND success = 0;" || true
-          
-          # 停止临时的 MySQL，让完整部署接管
-          docker compose -f docker-compose.prod.yml down
-          sleep 5
 
-          # 清理可能残留的旧容器
-          docker stop moje-b2b-client jewelry-backend jewelry-mysql 2>/dev/null || true
-          docker rm moje-b2b-client jewelry-backend jewelry-mysql 2>/dev/null || true
-          docker network rm jewelry-network 2>/dev/null || true
-          sleep 3
+          # 不在此处 down：避免残留同名容器；后续 up --force-recreate 会滚动更新各服务
           
           # ========== 5. 部署服务 ==========
           echo "拉取最新镜像..."
-          docker compose -f docker-compose.prod.yml pull
-          
+          $COMPOSE pull
+
+          cleanup_jewelry_stack
+
           echo "启动服务..."
-          docker compose -f docker-compose.prod.yml up -d --force-recreate || {
+          $COMPOSE up -d --force-recreate --remove-orphans || {
             echo "docker compose up 失败，输出诊断信息..."
             docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
             echo "--- jewelry-mysql logs ---"
