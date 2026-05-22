@@ -14,6 +14,8 @@ public class B2bAgentDraftDto {
     private String companyName;
     private String contactPerson;
     private List<String> referenceImageUrls = new ArrayList<>();
+    /** 用户已表示无更多镶嵌/小组件细节图可提供 */
+    private Boolean detailImagesComplete;
     private Boolean readyForConfirm;
     private List<String> missingFields = new ArrayList<>();
 }

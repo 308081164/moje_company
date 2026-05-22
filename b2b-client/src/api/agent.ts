@@ -12,6 +12,7 @@ export interface B2bAgentDraft {
   companyName?: string
   contactPerson?: string
   referenceImageUrls?: string[]
+  detailImagesComplete?: boolean
   readyForConfirm?: boolean
   missingFields?: string[]
 }
@@ -87,18 +88,31 @@ export function agentBindSession(sessionId: number, publicToken: string): Promis
 
 export function agentSendMessage(
   sessionId: number,
-  data: { text?: string; image?: File },
+  data: { text?: string; images?: File[] },
   extraHeaders: Record<string, string>
 ): Promise<B2bAgentChatResponse> {
   const form = new FormData()
   if (data.text) form.append('text', data.text)
-  if (data.image) form.append('image', data.image)
+  if (data.images?.length) {
+    for (const img of data.images) {
+      form.append('images', img)
+    }
+  }
   return request.post(`/b2b/agent/sessions/${sessionId}/messages`, form, {
     timeout: AGENT_REQUEST_TIMEOUT_MS,
     headers: {
       'Content-Type': 'multipart/form-data',
       ...authConfig(extraHeaders).headers
     }
+  })
+}
+
+export function agentSpeechToText(audio: Blob, filename = 'voice.webm'): Promise<{ text: string }> {
+  const form = new FormData()
+  form.append('audio', audio, filename)
+  return request.post('/b2b/agent/speech-to-text', form, {
+    timeout: AGENT_REQUEST_TIMEOUT_MS,
+    headers: { 'Content-Type': 'multipart/form-data', ...authConfig().headers }
   })
 }
 

@@ -10,6 +10,9 @@
               <HomeOutlined />
               返回首页
             </router-link>
+            <router-link to="/portal" class="back-btn" style="margin-left: 16px">
+              Agent 智能录入
+            </router-link>
             <router-link v-if="b2bToken" to="/portal/b2b/my-orders" class="back-btn" style="margin-left: 16px">
               我的订单
             </router-link>

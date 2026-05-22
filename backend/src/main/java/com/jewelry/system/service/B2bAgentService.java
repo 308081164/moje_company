@@ -40,6 +40,7 @@ public class B2bAgentService {
     private final B2bAgentMessageRepository messageRepository;
     private final B2BClientRepository clientRepository;
     private final DashScopeChatService dashScopeChatService;
+    private final DashScopeAsrService dashScopeAsrService;
     private final DashScopeChatImageDraftService imageDraftService;
     private final AliyunOssService aliyunOssService;
     private final B2BOrderService b2bOrderService;
@@ -98,13 +99,24 @@ public class B2bAgentService {
         return toSessionDto(session, true);
     }
 
+    public Map<String, String> speechToText(MultipartFile audio) {
+        SecurityUtils.currentB2bClientId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录后再使用语音输入"));
+        String text = dashScopeAsrService.transcribe(audio);
+        return Map.of("text", text);
+    }
+
     @Transactional
-    public B2bAgentChatResponse sendMessage(long sessionId, String publicToken, String text, MultipartFile image) {
+    public B2bAgentChatResponse sendMessage(long sessionId, String publicToken, String text,
+                                            MultipartFile image, List<MultipartFile> images) {
         B2bAgentSession session = resolveSession(sessionId, publicToken);
         ensureActive(session);
 
+        List<MultipartFile> uploads = collectUploads(image, images);
+        boolean hasUploads = !uploads.isEmpty();
+
         boolean loggedIn = SecurityUtils.currentB2bClientId().isPresent();
-        if (!loggedIn && (StringUtils.hasText(text) || (image != null && !image.isEmpty()))) {
+        if (!loggedIn && (StringUtils.hasText(text) || hasUploads)) {
             return B2bAgentChatResponse.builder()
                     .session(toSessionDto(session, true))
                     .needLogin(true)
@@ -118,19 +130,28 @@ public class B2bAgentService {
         B2bAgentDraftDto draft = readDraft(session.getDraftJson());
         String userVisible = text != null ? text.trim() : "";
 
-        if (image != null && !image.isEmpty()) {
-            String url = uploadReferenceImage(session.getId(), image);
-            if (!draft.getReferenceImageUrls().contains(url)) {
-                draft.getReferenceImageUrls().add(url);
+        if (hasUploads) {
+            int uploaded = 0;
+            for (MultipartFile file : uploads) {
+                if (file == null || file.isEmpty()) {
+                    continue;
+                }
+                uploaded++;
+                String url = uploadReferenceImage(session.getId(), file);
+                if (!draft.getReferenceImageUrls().contains(url)) {
+                    draft.getReferenceImageUrls().add(url);
+                }
+                try {
+                    OrderDraftFromChatImageResponse parsed = imageDraftService.draftFromImage(file);
+                    mergeImageDraft(draft, parsed);
+                } catch (Exception e) {
+                    log.warn("Agent image parse failed: {}", e.getMessage());
+                }
             }
-            try {
-                OrderDraftFromChatImageResponse parsed = imageDraftService.draftFromImage(image);
-                mergeImageDraft(draft, parsed);
-            } catch (Exception e) {
-                log.warn("Agent image parse failed: {}", e.getMessage());
-            }
-            if (!StringUtils.hasText(userVisible)) {
-                userVisible = "[用户上传了珠宝参考图]";
+            if (!StringUtils.hasText(userVisible) && uploaded > 0) {
+                userVisible = uploaded > 1
+                        ? "[用户上传了 " + uploaded + " 张参考/细节图]"
+                        : "[用户上传了珠宝参考或细节图]";
             }
         }
 
@@ -247,6 +268,21 @@ public class B2bAgentService {
         }
     }
 
+    private static List<MultipartFile> collectUploads(MultipartFile image, List<MultipartFile> images) {
+        List<MultipartFile> out = new ArrayList<>();
+        if (image != null && !image.isEmpty()) {
+            out.add(image);
+        }
+        if (images != null) {
+            for (MultipartFile f : images) {
+                if (f != null && !f.isEmpty()) {
+                    out.add(f);
+                }
+            }
+        }
+        return out;
+    }
+
     private static String suffix(String name) {
         if (name == null || !name.contains(".")) {
             return ".jpg";
@@ -281,7 +317,7 @@ public class B2bAgentService {
         }
         B2BClient c = clientRepository.findById(clientId).orElse(null);
         String name = c != null ? firstNonBlank(c.getContactPerson(), c.getCompanyName(), c.getContact()) : "客户";
-        return "您好，" + name + "！欢迎回来。请上传珠宝参考图并描述您的定制需求，我将协助您完成订单信息收集。"
+        return "您好，" + name + "！欢迎回来。请上传珠宝参考图并描述定制需求；若有镶嵌结构或主体小组件，也欢迎补充细节图（可多张）。"
                 + "信息确认后可一键创建工单。";
     }
 
@@ -301,11 +337,14 @@ public class B2bAgentService {
                 规则：
                 1. 先友好回复客户（不要只输出 JSON）。
                 2. 若客户更换图片或修改需求，更新草稿并简要确认已更新。
-                3. 追问缺失项：basicRequirements（必填）、款式/材质、参考图等。
-                4. 当 basicRequirements 非空且信息足够时，在 JSON 中设 readyForConfirm=true。
-                5. 在回复末尾附加一个 ```json 代码块```，格式：
-                {"patch":{"basicRequirements":"...","styleInfo":"...","materialInfo":"...","jewelryType":"戒指",...},"readyForConfirm":false}
-                patch 只需包含需要更新的字段；referenceImageUrls 由系统维护，无需在 patch 中重复。
+                3. 追问缺失项：basicRequirements（必填）、款式/材质等；参考图建议上传但不强制。
+                4. **细节图引导（重要，非强制）**：在客户已提供主参考图或描述主体后，主动、友好地邀请上传「镶嵌结构图」「主体小组件细节图」等（可多张）。
+                   若客户表示没有更多细节、没有了、就这些、类似语义，则不再追问细节图，可在 patch 中设 detailImagesComplete=true。
+                   客户拒绝或跳过上传细节图时，尊重选择，继续其他字段收集。
+                5. 当 basicRequirements 非空且信息足够时，在 JSON 中设 readyForConfirm=true（不因未上传细节图而阻止确认）。
+                6. 在回复末尾附加一个 ```json 代码块```，格式：
+                {"patch":{"basicRequirements":"...","styleInfo":"...","detailImagesComplete":true,...},"readyForConfirm":false}
+                patch 只需包含需要更新的字段；referenceImageUrls 由系统维护（含细节图），无需在 patch 中重复。
                 """.formatted(loggedIn ? "已登录" : "未登录", draftJson);
     }
 
@@ -369,6 +408,9 @@ public class B2bAgentService {
         if (patch.get("contactPerson") != null) {
             draft.setContactPerson(String.valueOf(patch.get("contactPerson")));
         }
+        if (patch.get("detailImagesComplete") != null) {
+            draft.setDetailImagesComplete(Boolean.parseBoolean(String.valueOf(patch.get("detailImagesComplete"))));
+        }
     }
 
     private void mergeImageDraft(B2bAgentDraftDto draft, OrderDraftFromChatImageResponse p) {
@@ -394,9 +436,6 @@ public class B2bAgentService {
         List<String> missing = new ArrayList<>();
         if (!StringUtils.hasText(draft.getBasicRequirements())) {
             missing.add("基础需求");
-        }
-        if (draft.getReferenceImageUrls() == null || draft.getReferenceImageUrls().isEmpty()) {
-            missing.add("参考图");
         }
         draft.setMissingFields(missing);
         if (missing.isEmpty() && StringUtils.hasText(draft.getBasicRequirements())) {

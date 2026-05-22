@@ -51,13 +51,21 @@ public class B2bAgentController {
     }
 
     @PostMapping(value = "/sessions/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "发送消息（文本/图片）")
+    @Operation(summary = "发送消息（文本/图片，支持多图）")
     public ResponseEntity<B2bAgentChatResponse> sendMessage(
             @PathVariable long id,
             @RequestHeader(value = "X-B2B-Agent-Session-Token", required = false) String publicToken,
             @RequestPart(value = "text", required = false) String text,
-            @RequestPart(value = "image", required = false) MultipartFile image) {
-        return ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image));
+            @RequestPart(value = "image", required = false) MultipartFile image,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image, images));
+    }
+
+    @PostMapping(value = "/speech-to-text", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "语音转文字（通义千问 ASR）")
+    public ResponseEntity<Map<String, String>> speechToText(
+            @RequestPart("audio") MultipartFile audio) {
+        return ResponseEntity.ok(agentService.speechToText(audio));
     }
 
     @PostMapping("/sessions/{id}/commit")
