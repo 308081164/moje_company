@@ -71,9 +71,17 @@ __pycache__/
 pip-wheel-metadata/
 *.spec.bak
 
+# ========== 3D AIGC 子项目（运行时产物，源码见 3d_aigc_project/）==========
+3d_aigc_project/.cache/
+3d_aigc_project/models/*
+!3d_aigc_project/models/.gitkeep
+3d_aigc_project/outputs/
+3d_aigc_project/uploads/
+
 # ========== 第三方克隆 ==========
 # 嵌套仓库体积大且独立演进；若需纳入版本控制请改用 git submodule 并删除本行
 third_party/xianyu-super-butler/
+Hunyuan3D-2-main/
 
 # ========== 镶嵌结构库（本地文件夹，已同步 OSS，勿提交）==========
 镶嵌结构数据库/

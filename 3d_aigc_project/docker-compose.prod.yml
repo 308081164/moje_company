@@ -1,0 +1,144 @@
+# ==========================================
+# Docker Compose - 生产环境
+# 3D AIGC 平台服务编排（生产配置）
+# ==========================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # AI服务 - 3D模型生成核心服务
+  # ==========================================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: 3d-aigc-ai-service
+    ports:
+      - "${AI_SERVICE_PORT:-8855}:8855"
+    environment:
+      - GPU_MEMORY_GB=${GPU_MEMORY_GB:-8}
+      - MODEL_VERSION=${MODEL_VERSION:-auto}
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=info
+    volumes:
+      - ./models:/app/models:ro
+      - ${INLAY_DB_PATH:-./镶嵌结构数据库}:/app/inlay_db:ro
+      - ./outputs:/app/outputs
+      - ./uploads:/app/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8855/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - 3d-aigc-network
+
+  # ==========================================
+  # 业务服务 - API网关和任务管理
+  # ==========================================
+  business-service:
+    build:
+      context: ./business-service
+      dockerfile: Dockerfile
+    container_name: 3d-aigc-business-service
+    ports:
+      - "${BUSINESS_SERVICE_PORT:-8854}:8854"
+    environment:
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8855}
+      - INLAY_DB_PATH=/app/inlay_db
+      - UPLOAD_DIR=/app/uploads
+      - OUTPUT_DIR=/app/outputs
+      - DATABASE_URL=sqlite:///./data/tasks.db
+      - LOG_LEVEL=info
+    volumes:
+      - ${INLAY_DB_PATH:-./镶嵌结构数据库}:/app/inlay_db:ro
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - business-data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8854/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - 3d-aigc-network
+
+  # ==========================================
+  # 前端服务 - Vue应用
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: 3d-aigc-frontend
+    ports:
+      - "${FRONTEND_PORT:-8853}:8853"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    depends_on:
+      business-service:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8853/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - 3d-aigc-network
+
+# ==========================================
+# 数据卷
+# ==========================================
+volumes:
+  business-data:
+    driver: local
+
+# ==========================================
+# 网络
+# ==========================================
+networks:
+  3d-aigc-network:
+    driver: bridge

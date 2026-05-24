@@ -1,0 +1,37 @@
+server:
+  port: 8854
+
+# AI推理服务配置
+ai-service:
+  base-url: http://localhost:8855
+  # Docker内部部署时使用: http://ai-service:8855
+
+# 镶嵌结构数据库路径配置
+inlay-db:
+  path: ../镶嵌结构数据库
+
+# 文件存储配置
+file:
+  upload-dir: ./uploads
+  output-dir: ./outputs
+
+# Spring应用配置
+spring:
+  application:
+    name: jewelry3d-business-service
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# 日志配置
+logging:
+  level:
+    com.moje.jewelry3d: INFO
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
