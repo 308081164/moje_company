@@ -66,10 +66,13 @@ public class B2bAgentService {
         session.setDraftJson(writeDraft(new B2bAgentDraftDto()));
         sessionRepository.save(session);
 
-        String welcome = buildWelcomeMessage(clientId);
-        saveMessage(session.getId(), "assistant", welcome, null);
-
         return toSessionDto(session, true);
+    }
+
+    @Transactional(readOnly = true)
+    public String getWelcomeMessage() {
+        Long clientId = SecurityUtils.currentB2bClientId().orElse(null);
+        return buildWelcomeMessage(clientId);
     }
 
     @Transactional(readOnly = true)
@@ -323,7 +326,7 @@ public class B2bAgentService {
 
     private String buildWelcomeMessage(Long clientId) {
         if (clientId == null) {
-            return "您好，欢迎光临恒鎏珠宝AI建模平台！我是您的智能助理，可引导您提交建模订单。"
+            return "您好，欢迎光临恒鎏珠宝定制服务！我是您的智能助理，可引导您提交建模订单。"
                     + "请先登录或注册，以便保存需求并创建工单。您也可以先了解流程，登录后上传参考图开始定制。";
         }
         B2BClient c = clientRepository.findById(clientId).orElse(null);
@@ -340,7 +343,7 @@ public class B2bAgentService {
             draftJson = String.valueOf(draft);
         }
         return """
-                你是 MOJE 珠宝定制 B 端门户的智能助理，用简体中文与客户对话，引导完成「建模订单」信息收集。
+                你是恒鎏珠宝 B 端门户的智能助理，用简体中文与客户对话，引导完成「建模订单」信息收集。
                 当前登录状态：%s
                 当前订单草稿 JSON：
                 %s
