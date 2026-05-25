@@ -1,7 +1,6 @@
 <template>
   <div class="home-container">
-    <!-- 导航栏 -->
-    <header class="header">
+    <header class="header" :class="{ 'header--solid': headerSolid }">
       <div class="header-content">
         <div class="logo">
           <img src="/icons/icon-maskable.svg" alt="" class="nav-logo-mark" width="36" height="36" />
@@ -12,7 +11,8 @@
         </div>
         <nav class="nav">
           <a href="#about" class="nav-link">关于我们</a>
-          <a href="#products" class="nav-link">产品展示</a>
+          <a href="#collections" class="nav-link">作品系列</a>
+          <a href="#atelier" class="nav-link">工坊工艺</a>
           <a href="#contact" class="nav-link">联系方式</a>
         </nav>
         <router-link to="/portal" class="b2b-entrance">
@@ -22,289 +22,296 @@
       </div>
     </header>
 
-    <!-- Hero Section -->
+    <!-- Hero：全屏单品轮播（Boucheron / Chanel 风格，无模特） -->
     <section class="hero">
-      <div class="hero-background">
-        <div class="hero-gradient"></div>
-      </div>
-      <div class="hero-content">
-        <div class="hero-text">
-          <h1 class="hero-title">{{ portal?.heroTitle || '匠心定制·永恒经典' }}</h1>
-          <p class="hero-subtitle">{{ portal?.heroSubtitle || 'MOJE 珠宝 - 专注高端珠宝定制服务' }}</p>
-          <div v-if="portal?.carousel?.length" class="hero-carousel">
-            <img v-for="(c, i) in portal.carousel" :key="i" :src="c.url" alt="" />
-          </div>
-          <div class="hero-buttons">
-            <router-link to="/portal" class="btn-primary">立即定制</router-link>
-            <a href="#about" class="btn-secondary">了解更多</a>
-          </div>
+      <div class="hero-slides">
+        <div
+          v-for="(slide, i) in heroSlides"
+          :key="slide.src"
+          class="hero-slide"
+          :class="{ 'hero-slide--active': i === activeHero }"
+        >
+          <img :src="slide.src" :alt="slide.caption" class="hero-slide-img" />
+          <div class="hero-slide-vignette" />
         </div>
+      </div>
+      <div class="hero-overlay">
+        <p class="hero-eyebrow">Maison MOJE · B2B Atelier</p>
+        <h1 class="hero-title">{{ portal?.heroTitle || '匠心定制 · 永恒经典' }}</h1>
+        <p class="hero-subtitle">
+          {{ portal?.heroSubtitle || '以设计图与高精度 3D 建模，为 B 端伙伴呈现可生产的珠宝方案' }}
+        </p>
+        <div class="hero-actions">
+          <router-link to="/portal" class="btn-primary">立即定制</router-link>
+          <a href="#collections" class="btn-ghost">浏览作品</a>
+        </div>
+        <p class="hero-caption">{{ heroSlides[activeHero]?.caption }}</p>
+      </div>
+      <div class="hero-dots">
+        <button
+          v-for="(_, i) in heroSlides"
+          :key="i"
+          type="button"
+          class="hero-dot"
+          :class="{ 'hero-dot--active': i === activeHero }"
+          :aria-label="`第 ${i + 1} 张`"
+          @click="activeHero = i"
+        />
       </div>
       <div class="scroll-indicator">
-        <span class="scroll-text">向下滚动</span>
-        <div class="scroll-arrow"></div>
+        <span class="scroll-text">Scroll</span>
+        <div class="scroll-line" />
       </div>
     </section>
 
-    <!-- 关于我们 -->
-    <section id="about" class="section about-section">
-      <div class="section-header">
-        <span class="section-label">About Us</span>
-        <h2 class="section-title">关于 MOJE</h2>
-        <div class="section-divider"></div>
+    <!-- 系列：不对称编辑网格（Bulgari / Pomellato） -->
+    <section id="collections" class="section collections-section">
+      <div class="section-intro">
+        <span class="section-label">Collections</span>
+        <h2 class="section-title">作品系列</h2>
+        <p class="section-desc">以产品摄影级呈现，聚焦结构、材质与光影——无需模特，作品即主角。</p>
       </div>
-      <div class="about-content">
-        <div class="about-text">
-          <div v-if="portal?.aboutHtml" class="about-description" v-html="portal.aboutHtml"></div>
-          <p v-else class="about-description">
-            MOJE 珠宝创立于2018年，致力于为全球客户提供高端定制珠宝服务。
-            我们拥有专业的设计团队和精湛的工艺，每一件作品都凝聚着匠人的心血。
-          </p>
-          <div class="about-features">
-            <div class="feature-item">
-              <div class="feature-icon">💎</div>
-              <h3 class="feature-title">精选原石</h3>
-              <p class="feature-text">全球甄选优质钻石、彩宝，确保每件作品都熠熠生辉</p>
-            </div>
-            <div class="feature-item">
-              <div class="feature-icon">✍️</div>
-              <h3 class="feature-title">原创设计</h3>
-              <p class="feature-text">资深设计师团队，每款设计都独一无二</p>
-            </div>
-            <div class="feature-item">
-              <div class="feature-icon">⚒️</div>
-              <h3 class="feature-title">精湛工艺</h3>
-              <p class="feature-text">传统手工技艺与现代科技的完美结合</p>
-            </div>
-            <div class="feature-item">
-              <div class="feature-icon">🎯</div>
-              <h3 class="feature-title">专属定制</h3>
-              <p class="feature-text">一对一专属服务，打造您的专属珠宝</p>
-            </div>
-          </div>
-        </div>
-        <div class="about-image">
-          <div v-if="portal?.companyPhotos?.length" class="company-photo-strip">
-            <img v-for="(p, i) in portal.companyPhotos" :key="i" :src="p.url" alt="企业实拍" />
-          </div>
-          <div v-else class="about-image-placeholder">
-            <span class="image-icon">🏛️</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 产品展示 -->
-    <section id="products" class="section products-section">
-      <div class="section-header">
-        <span class="section-label">Our Collection</span>
-        <h2 class="section-title">产品展示</h2>
-        <div class="section-divider"></div>
-      </div>
-      <div class="products-grid">
+      <div class="collections-grid">
         <router-link
-          v-for="cat in portal?.categories || []"
+          v-for="(cat, index) in displayCategories"
           :key="cat.slug"
           :to="`/gallery/${cat.slug}`"
-          class="product-card product-card--link"
+          class="collection-card"
+          :class="`collection-card--${index % 5}`"
         >
-          <div class="product-image">
-            <img v-if="cat.coverUrl" :src="cat.coverUrl" :alt="cat.nameCn" class="product-cover" />
-            <span v-else class="product-icon">💎</span>
+          <div class="collection-media">
+            <img
+              v-if="cat.coverUrl"
+              :src="cat.coverUrl"
+              :alt="cat.nameCn"
+              class="collection-img"
+              loading="lazy"
+            />
           </div>
-          <div class="product-info">
-            <h3 class="product-name">{{ cat.nameCn }}</h3>
-            <p class="product-description">{{ cat.description || '查看该分类下管理员精选的建模与设计展示图' }}</p>
-            <span class="product-tag">{{ cat.visibleItemCount }} 张展示</span>
+          <div class="collection-meta">
+            <span class="collection-count">{{ cat.visibleItemCount }} 件作品</span>
+            <h3 class="collection-name">{{ cat.nameCn }}</h3>
+            <p class="collection-desc">{{ cat.description || '查看该分类精选展示' }}</p>
+            <span class="collection-link">探索系列 →</span>
           </div>
         </router-link>
-        <template v-if="!(portal?.categories?.length)">
-          <div class="product-card" v-for="(product, index) in products" :key="index">
-            <div class="product-image">
-              <span class="product-icon">{{ product.icon }}</span>
-            </div>
-            <div class="product-info">
-              <h3 class="product-name">{{ product.name }}</h3>
-              <p class="product-description">{{ product.description }}</p>
-              <span class="product-tag">{{ product.tag }}</span>
-            </div>
-          </div>
-        </template>
       </div>
     </section>
 
-    <!-- CTA Section - 显眼的B端需求入口 -->
+    <!-- 设计 → 建模（Chaumet / Buccellati 工坊叙事） -->
+    <section id="process" class="section process-section">
+      <div class="section-intro section-intro--light">
+        <span class="section-label">From Sketch to Masterpiece</span>
+        <h2 class="section-title">设计图 · 建模预览</h2>
+        <p class="section-desc">从平面方案到可生产 3D 数据，直观呈现 MOJE 定制全流程。</p>
+      </div>
+      <div class="process-grid">
+        <article v-for="pair in designModelPairs" :key="pair.title" class="process-card">
+          <h3 class="process-card-title">{{ pair.title }}</h3>
+          <div class="process-pair">
+            <figure class="process-figure">
+              <img :src="pair.design.src" :alt="`${pair.title}设计图`" loading="lazy" />
+              <figcaption>{{ pair.design.label }}</figcaption>
+            </figure>
+            <div class="process-arrow" aria-hidden="true">→</div>
+            <figure class="process-figure process-figure--model">
+              <img :src="pair.model.src" :alt="`${pair.title}建模预览`" loading="lazy" />
+              <figcaption>{{ pair.model.label }}</figcaption>
+            </figure>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 高级定制横滑（Repossi / Chanel 横向画廊） -->
+    <section class="haute-section">
+      <div class="haute-header">
+        <div>
+          <span class="section-label section-label--gold">Haute Couture</span>
+          <h2 class="section-title section-title--inline">高级定制设计图</h2>
+        </div>
+        <p class="haute-note">52 张原创方案 · 横滑浏览精选</p>
+      </div>
+      <div class="haute-track">
+        <figure v-for="(src, i) in hauteCoutureStrip" :key="src" class="haute-item">
+          <img :src="src" :alt="`高级定制设计 ${i + 1}`" loading="lazy" />
+        </figure>
+      </div>
+    </section>
+
+    <!-- 工坊工艺 -->
+    <section id="atelier" class="section atelier-section">
+      <div class="section-intro">
+        <span class="section-label">Atelier</span>
+        <h2 class="section-title">高精度珠宝建模</h2>
+        <p class="section-desc">面向 B 端确认与生产的 3D 呈现，细节可审、结构可读。</p>
+      </div>
+      <div class="craft-grid">
+        <article v-for="item in craftShowcase" :key="item.title" class="craft-card">
+          <div class="craft-image-wrap">
+            <img :src="item.src" :alt="item.title" loading="lazy" />
+          </div>
+          <div class="craft-body">
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.text }}</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 关于 -->
+    <section id="about" class="section about-section">
+      <div class="about-layout">
+        <div class="about-visual">
+          <img
+            v-if="portal?.companyPhotos?.length"
+            :src="portal.companyPhotos[0].url"
+            alt="企业展示"
+            class="about-photo"
+          />
+          <img v-else src="/showcase/about-01.jpg" alt="MOJE 定制作品" class="about-photo" />
+        </div>
+        <div class="about-copy">
+          <span class="section-label">About MOJE</span>
+          <h2 class="section-title section-title--left">关于 MOJE</h2>
+          <div v-if="portal?.aboutHtml" class="about-description" v-html="portal.aboutHtml" />
+          <p v-else class="about-description">
+            MOJE 专注高端珠宝定制与 B 端协同服务。我们以原创设计、高精度建模与透明订单流程，
+            帮助合作伙伴高效完成从需求到成品的全链路交付。
+          </p>
+          <ul class="about-features">
+            <li v-for="f in atelierFeatures" :key="f.title">
+              <strong>{{ f.title }}</strong>
+              <span>{{ f.text }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
     <section class="cta-section">
+      <div class="cta-bg">
+        <img src="/showcase/cta-bg.jpg" alt="" aria-hidden="true" />
+      </div>
       <div class="cta-content">
-        <h2 class="cta-title">准备开始您的定制之旅？</h2>
-        <p class="cta-subtitle">欢迎B端合作伙伴洽谈合作，共创美好未来</p>
-        <div class="cta-buttons">
-          <router-link to="/portal" class="btn-primary btn-large">
-            <span>立即提交需求</span>
-            <span>→</span>
-          </router-link>
-        </div>
+        <span class="section-label section-label--gold">Partner With Us</span>
+        <h2 class="cta-title">开启 B 端定制合作</h2>
+        <p class="cta-subtitle">提交需求、上传参考图，Agent 智能录入或表单均可快速下单</p>
+        <router-link to="/portal" class="btn-primary btn-large">立即提交需求</router-link>
       </div>
     </section>
 
-    <!-- 联系我们 -->
+    <!-- 联系 -->
     <section id="contact" class="section contact-section">
-      <div class="section-header">
-        <span class="section-label">Contact Us</span>
+      <div class="section-intro">
+        <span class="section-label">Contact</span>
         <h2 class="section-title">联系我们</h2>
-        <div class="section-divider"></div>
       </div>
-      <div class="contact-content">
-        <div class="contact-info">
+      <div class="contact-grid">
+        <div class="contact-list">
           <div class="contact-item">
-            <div class="contact-icon">📍</div>
-            <div class="contact-details">
-              <h4>地址</h4>
-              <p>{{ portal?.address || '上海市静安区南京西路1266号恒隆广场33楼' }}</p>
-            </div>
+            <span class="contact-label">地址</span>
+            <p>{{ portal?.address || '上海市静安区南京西路1266号恒隆广场33楼' }}</p>
           </div>
           <div class="contact-item">
-            <div class="contact-icon">📞</div>
-            <div class="contact-details">
-              <h4>电话</h4>
-              <p>{{ portal?.contactPhone || '400-888-8888' }}</p>
-            </div>
+            <span class="contact-label">电话</span>
+            <p>{{ portal?.contactPhone || '400-888-8888' }}</p>
           </div>
-          <div class="contact-item" v-if="portal?.contactWechat">
-            <div class="contact-icon">💬</div>
-            <div class="contact-details">
-              <h4>微信</h4>
-              <p>{{ portal.contactWechat }}</p>
-            </div>
+          <div v-if="portal?.contactWechat" class="contact-item">
+            <span class="contact-label">微信</span>
+            <p>{{ portal.contactWechat }}</p>
           </div>
           <div class="contact-item">
-            <div class="contact-icon">✉️</div>
-            <div class="contact-details">
-              <h4>邮箱</h4>
-              <p>{{ portal?.contactEmail || 'info@moje珠宝.com' }}</p>
-            </div>
+            <span class="contact-label">邮箱</span>
+            <p>{{ portal?.contactEmail || 'info@moje珠宝.com' }}</p>
           </div>
           <div class="contact-item">
-            <div class="contact-icon">🕐</div>
-            <div class="contact-details">
-              <h4>营业时间</h4>
-              <p>{{ portal?.businessHours || '周一至周日 10:00-21:00' }}</p>
-            </div>
+            <span class="contact-label">营业时间</span>
+            <p>{{ portal?.businessHours || '周一至周日 10:00–21:00' }}</p>
           </div>
         </div>
-        <div class="contact-map">
-          <div class="map-placeholder">
-            <span class="map-icon">🗺️</span>
-          </div>
+        <div class="contact-aside">
+          <p class="contact-aside-title">B 端业务咨询</p>
+          <p class="contact-aside-text">欢迎珠宝零售商、定制工作室与品牌方洽谈长期合作。</p>
+          <router-link to="/portal" class="btn-outline">进入业务门户</router-link>
         </div>
       </div>
     </section>
 
-    <!-- 页脚 -->
     <footer class="footer">
-      <div class="footer-content">
+      <div class="footer-inner">
         <div class="footer-brand">
-          <div class="footer-logo">
-            <img src="/icons/icon-maskable.svg" alt="" class="footer-logo-mark" width="32" height="32" />
-            <div class="logo-text-block footer-logo-text-block">
-              <span class="logo-text">MOJE</span>
-              <span class="logo-sub">珠宝定制</span>
-            </div>
+          <img src="/icons/icon-maskable.svg" alt="" width="28" height="28" />
+          <div>
+            <div class="footer-logo-text">MOJE</div>
+            <div class="footer-tagline">匠心定制 · 永恒经典</div>
           </div>
-          <p class="footer-slogan">匠心定制·永恒经典</p>
         </div>
         <div class="footer-links">
-          <div class="footer-column">
-            <h4 class="footer-title">快速链接</h4>
-            <a href="#about" class="footer-link">关于我们</a>
-            <a href="#products" class="footer-link">产品展示</a>
-            <a href="#contact" class="footer-link">联系我们</a>
-          </div>
-          <div class="footer-column">
-            <h4 class="footer-title">服务支持</h4>
-            <router-link to="/portal" class="footer-link">B端业务</router-link>
-            <a href="#" class="footer-link">配送说明</a>
-            <a href="#" class="footer-link">售后服务</a>
-          </div>
-        </div>
-        <div class="footer-contact">
-          <h4 class="footer-title">关注我们</h4>
-          <div class="social-links">
-            <a href="#" class="social-link">📱</a>
-            <a href="#" class="social-link">💬</a>
-            <a href="#" class="social-link">📷</a>
-            <a href="#" class="social-link">🎵</a>
-          </div>
+          <a href="#about">关于我们</a>
+          <a href="#collections">作品系列</a>
+          <router-link to="/portal">B端业务</router-link>
+          <a href="#contact">联系我们</a>
         </div>
       </div>
       <div class="footer-bottom">
-        <p>© 2024 MOJE 珠宝. All rights reserved. | 
-          <a href="#" class="footer-bottom-link">隐私政策</a> | 
-          <a href="#" class="footer-bottom-link">使用条款</a>
-        </p>
-        <p class="footer-domain">官网地址：www.MOJE珠宝.com</p>
+        <p>© {{ new Date().getFullYear() }} MOJE 珠宝 · All rights reserved.</p>
       </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getPortalHome, type PortalHomePublicDto } from '@/api'
+import {
+  heroSlides,
+  fallbackCategories,
+  designModelPairs,
+  hauteCoutureStrip,
+  craftShowcase,
+  atelierFeatures
+} from '@/data/homeShowcase'
 
 const portal = ref<PortalHomePublicDto | null>(null)
+const headerSolid = ref(false)
+const activeHero = ref(0)
+let heroTimer: ReturnType<typeof setInterval> | null = null
 
-const products = ref([
-  {
-    icon: '💍',
-    name: '经典钻戒系列',
-    description: '璀璨钻石与贵金属的完美结合',
-    tag: '经典款'
-  },
-  {
-    icon: '👑',
-    name: '高级定制',
-    description: '专属设计，为您打造独一无二的珠宝',
-    tag: '定制款'
-  },
-  {
-    icon: '📿',
-    name: '彩宝系列',
-    description: '红宝石、蓝宝石、祖母绿等彩色宝石',
-    tag: '彩宝'
-  },
-  {
-    icon: '🎗️',
-    name: '黄金系列',
-    description: '传统工艺与现代设计的完美融合',
-    tag: '黄金'
-  },
-  {
-    icon: '🔗',
-    name: '手链系列',
-    description: '精致细腻，点缀您的手腕',
-    tag: '手链'
-  },
-  {
-    icon: '⭐',
-    name: '耳钉系列',
-    description: '简约优雅，尽显高贵气质',
-    tag: '耳钉'
-  }
-])
+const displayCategories = computed(() => {
+  const fromApi = portal.value?.categories?.filter((c) => c.coverUrl || c.visibleItemCount > 0)
+  if (fromApi?.length) return fromApi
+  return fallbackCategories
+})
+
+const onScroll = () => {
+  headerSolid.value = window.scrollY > 48
+}
+
 onMounted(async () => {
+  window.addEventListener('scroll', onScroll, { passive: true })
+  heroTimer = setInterval(() => {
+    activeHero.value = (activeHero.value + 1) % heroSlides.length
+  }, 5500)
   try {
     portal.value = await getPortalHome()
   } catch {
     portal.value = null
   }
 })
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  if (heroTimer) clearInterval(heroTimer)
+})
 </script>
 
 <style scoped>
 .home-container {
   min-height: 100vh;
-  background: var(--white-color);
+  background: var(--ivory, #f7f4ef);
+  color: var(--charcoal, #1a1814);
 }
 
 /* Header */
@@ -314,19 +321,40 @@ onMounted(async () => {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(201, 169, 98, 0.1);
+  transition: background 0.4s ease, border-color 0.4s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.header--solid {
+  background: rgba(247, 244, 239, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom-color: rgba(26, 24, 20, 0.08);
+}
+
+.header--solid .nav-link,
+.header--solid .logo-text {
+  color: var(--charcoal, #1a1814);
+}
+
+.header:not(.header--solid) .nav-link,
+.header:not(.header--solid) .logo-text,
+.header:not(.header--solid) .logo-sub {
+  color: #fff;
+}
+
+.header:not(.header--solid) .logo-sub {
+  opacity: 0.75;
 }
 
 .header-content {
-  max-width: 1400px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 40px;
-  height: 80px;
+  padding: 0 clamp(20px, 4vw, 48px);
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
 }
 
 .logo {
@@ -336,195 +364,251 @@ onMounted(async () => {
 }
 
 .nav-logo-mark {
-  flex-shrink: 0;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
 }
 
 .logo-text-block {
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .logo-text {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-color);
-  letter-spacing: 3px;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
 }
 
 .logo-sub {
-  font-size: 11px;
-  color: #8b7355;
-  letter-spacing: 2px;
+  font-size: 10px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
 }
 
 .nav {
   display: flex;
-  gap: 40px;
+  gap: clamp(20px, 3vw, 40px);
 }
 
 .nav-link {
   text-decoration: none;
-  color: var(--text-color);
-  font-size: 15px;
-  font-weight: 500;
-  position: relative;
-  transition: color 0.3s;
-}
-
-.nav-link::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: var(--primary-color);
-  transition: width 0.3s;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.92;
+  transition: opacity 0.25s;
 }
 
 .nav-link:hover {
-  color: var(--primary-color);
-}
-
-.nav-link:hover::after {
-  width: 100%;
+  opacity: 1;
 }
 
 .b2b-entrance {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
-  background: linear-gradient(135deg, var(--primary-color), #E5C89A);
-  color: white;
+  padding: 10px 22px;
+  border: 1px solid rgba(201, 169, 98, 0.85);
+  color: #fff;
   text-decoration: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: transform 0.3s, box-shadow 0.3s;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background 0.3s, color 0.3s;
+}
+
+.header--solid .b2b-entrance {
+  background: var(--charcoal, #1a1814);
+  border-color: var(--charcoal, #1a1814);
+  color: #fff;
 }
 
 .b2b-entrance:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(201, 169, 98, 0.3);
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
 }
 
-.entrance-arrow {
-  font-size: 16px;
-  transition: transform 0.3s;
-}
-
-.b2b-entrance:hover .entrance-arrow {
-  transform: translateX(3px);
-}
-
-/* Hero Section */
+/* Hero */
 .hero {
-  height: 100vh;
   position: relative;
+  min-height: 100vh;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  margin-top: 80px;
+  align-items: flex-end;
   overflow: hidden;
+  background: #0e0d0b;
 }
 
-.hero-background {
+.hero-slides {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, #FDFBF8 0%, #F5F0EB 50%, #EDE8E0 100%);
 }
 
-.hero-gradient {
+.hero-slide {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 30%, rgba(201, 169, 98, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(201, 169, 98, 0.05) 0%, transparent 50%);
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s ease;
 }
 
-.hero-content {
+.hero-slide--active {
+  opacity: 1;
+}
+
+.hero-slide-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.03);
+  animation: heroKen 8s ease-out forwards;
+}
+
+.hero-slide--active .hero-slide-img {
+  animation: heroKen 8s ease-out forwards;
+}
+
+@keyframes heroKen {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.hero-slide-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, rgba(14, 13, 11, 0.88) 0%, rgba(14, 13, 11, 0.35) 45%, rgba(14, 13, 11, 0.15) 100%),
+    linear-gradient(to right, rgba(14, 13, 11, 0.5) 0%, transparent 55%);
+}
+
+.hero-overlay {
   position: relative;
-  z-index: 1;
-  text-align: center;
-  max-width: 900px;
-  padding: 0 20px;
+  z-index: 2;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 140px clamp(20px, 4vw, 48px) 120px;
+}
+
+.hero-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--primary-light, #e5c89a);
+  margin-bottom: 20px;
 }
 
 .hero-title {
-  font-size: 72px;
-  font-weight: 700;
-  color: var(--text-color);
-  line-height: 1.2;
+  font-family: var(--font-serif);
+  font-size: clamp(36px, 6vw, 68px);
+  font-weight: 400;
+  line-height: 1.15;
+  color: #fff;
+  max-width: 12ch;
   margin-bottom: 20px;
-  letter-spacing: 4px;
 }
 
 .hero-subtitle {
-  font-size: 20px;
-  color: #666;
-  margin-bottom: 50px;
-  letter-spacing: 2px;
+  font-size: clamp(14px, 1.6vw, 17px);
+  line-height: 1.75;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 520px;
+  margin-bottom: 36px;
 }
 
-.hero-buttons {
+.hero-actions {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.btn-primary,
+.btn-ghost,
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  padding: 14px 32px;
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
 }
 
 .btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px 40px;
-  background: linear-gradient(135deg, var(--primary-color), #E5C89A);
-  color: white;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: 1px;
-  transition: transform 0.3s, box-shadow 0.3s;
+  background: var(--primary-color);
+  color: #fff;
+  border: 1px solid var(--primary-color);
 }
 
 .btn-primary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 35px rgba(201, 169, 98, 0.35);
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 40px;
-  background: transparent;
-  color: var(--text-color);
-  text-decoration: none;
-  border: 2px solid var(--text-color);
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: 1px;
-  transition: all 0.3s;
+.btn-ghost {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
 }
 
-.btn-secondary:hover {
-  background: var(--text-color);
-  color: white;
+.btn-ghost:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-outline {
+  color: var(--charcoal);
+  border: 1px solid var(--charcoal);
+}
+
+.btn-outline:hover {
+  background: var(--charcoal);
+  color: #fff;
 }
 
 .btn-large {
-  padding: 20px 60px;
-  font-size: 18px;
+  padding: 16px 40px;
+}
+
+.hero-caption {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+}
+
+.hero-dots {
+  position: absolute;
+  right: clamp(20px, 4vw, 48px);
+  bottom: 120px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s;
+}
+
+.hero-dot--active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: scale(1.15);
 }
 
 .scroll-indicator {
@@ -532,468 +616,599 @@ onMounted(async () => {
   bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 2;
   text-align: center;
-  z-index: 1;
 }
 
 .scroll-text {
   display: block;
-  color: #888;
-  font-size: 13px;
-  margin-bottom: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-.scroll-arrow {
-  width: 30px;
-  height: 50px;
-  border: 2px solid var(--primary-color);
-  border-radius: 15px;
-  margin: 0 auto;
-  position: relative;
-}
-
-.scroll-arrow::after {
-  content: '';
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  background: var(--primary-color);
-  border-radius: 50%;
-  transform: translateX(-50%);
-  animation: scrollDown 1.5s infinite;
-}
-
-@keyframes scrollDown {
-  0% { opacity: 1; top: 10px; }
-  100% { opacity: 0; top: 30px; }
-}
-
-/* Section */
-.section {
-  padding: 100px 40px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.section-header {
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.section-label {
-  display: inline-block;
-  color: var(--primary-color);
-  font-size: 13px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-}
-
-.section-title {
-  font-size: 42px;
-  font-weight: 700;
-  color: var(--text-color);
-  margin-bottom: 20px;
-}
-
-.section-divider {
-  width: 60px;
-  height: 3px;
-  background: var(--primary-color);
-  margin: 0 auto;
-}
-
-/* About Section */
-.about-section {
-  background: #FDFBF8;
-}
-
-.about-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 80px;
-  align-items: center;
-}
-
-.about-description {
-  font-size: 18px;
-  line-height: 1.8;
-  color: #555;
-  margin-bottom: 50px;
-}
-
-.about-features {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
-}
-
-.feature-item {
-  text-align: center;
-}
-
-.feature-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.feature-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-color);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.45);
   margin-bottom: 8px;
 }
 
-.feature-text {
-  font-size: 14px;
-  color: #777;
-  line-height: 1.6;
+.scroll-line {
+  width: 1px;
+  height: 40px;
+  margin: 0 auto;
+  background: linear-gradient(to bottom, var(--primary-color), transparent);
+  animation: scrollPulse 2s ease infinite;
 }
 
-.about-image {
-  display: flex;
-  justify-content: center;
+@keyframes scrollPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scaleY(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
 }
 
-.about-image-placeholder {
-  width: 100%;
-  height: 500px;
-  background: linear-gradient(135deg, #F5F0EB, #EDE8E0);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+/* Sections */
+.section {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: clamp(72px, 10vw, 120px) clamp(20px, 4vw, 48px);
 }
 
-.image-icon {
-  font-size: 100px;
-  opacity: 0.3;
+.section-intro {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 56px;
 }
 
-/* Products Section */
-.products-grid {
+.section-intro--light .section-title,
+.section-intro--light .section-desc {
+  color: #f7f4ef;
+}
+
+.section-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--warm-gray, #6b6560);
+  margin-bottom: 12px;
+}
+
+.section-label--gold {
+  color: var(--primary-color);
+}
+
+.section-title {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 400;
+  margin-bottom: 16px;
+}
+
+.section-title--left {
+  text-align: left;
+}
+
+.section-title--inline {
+  display: inline;
+  margin-left: 12px;
+}
+
+.section-desc {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--warm-gray, #6b6560);
+}
+
+/* Collections */
+.collections-section {
+  background: var(--ivory, #f7f4ef);
+}
+
+.collections-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 30px;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
 }
 
-.product-card {
-  background: white;
-  border-radius: 12px;
+.collection-card {
+  position: relative;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.product-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-}
-
-.product-card--link {
   text-decoration: none;
   color: inherit;
+  background: #fff;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.collection-card--0 {
+  grid-column: span 7;
+  min-height: 480px;
+}
+
+.collection-card--1 {
+  grid-column: span 5;
+}
+
+.collection-card--2 {
+  grid-column: span 5;
+}
+
+.collection-card--3 {
+  grid-column: span 4;
+}
+
+.collection-card--4 {
+  grid-column: span 3;
+}
+
+.collection-media {
+  position: absolute;
+  inset: 0;
+}
+
+.collection-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.collection-card:hover .collection-img {
+  transform: scale(1.06);
+}
+
+.collection-meta {
+  position: relative;
+  z-index: 1;
+  padding: 28px;
+  background: linear-gradient(to top, rgba(26, 24, 20, 0.82), transparent);
+  color: #fff;
+}
+
+.collection-count {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.collection-name {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  margin: 8px 0;
+}
+
+.collection-desc {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+
+.collection-link {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+/* Process */
+.process-section {
+  background: var(--charcoal, #1a1814);
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.process-section .section-intro,
+.process-grid {
+  max-width: 1320px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(20px, 4vw, 48px);
+  padding-right: clamp(20px, 4vw, 48px);
+}
+
+.process-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.process-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 24px;
+}
+
+.process-card-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: #fff;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.process-pair {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.process-figure {
+  margin: 0;
+}
+
+.process-figure img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #fff;
+}
+
+.process-figure figcaption {
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 10px;
+}
+
+.process-figure--model img {
+  background: #2a2824;
+}
+
+.process-arrow {
+  color: var(--primary-color);
+  font-size: 18px;
+}
+
+/* Haute strip */
+.haute-section {
+  background: #11100e;
+  padding: 72px 0 80px;
+  overflow: hidden;
+}
+
+.haute-header {
+  max-width: 1320px;
+  margin: 0 auto 32px;
+  padding: 0 clamp(20px, 4vw, 48px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.haute-header .section-title {
+  color: #fff;
+  margin: 0;
+}
+
+.haute-note {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.haute-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 0 clamp(20px, 4vw, 48px) 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.haute-item {
+  flex: 0 0 clamp(220px, 28vw, 320px);
+  margin: 0;
+  scroll-snap-align: start;
+}
+
+.haute-item img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Craft */
+.atelier-section {
+  background: #fff;
+}
+
+.craft-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.craft-card {
+  border: 1px solid rgba(26, 24, 20, 0.08);
+}
+
+.craft-image-wrap {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+
+.craft-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.craft-card:hover .craft-image-wrap img {
+  transform: scale(1.04);
+}
+
+.craft-body {
+  padding: 24px;
+}
+
+.craft-body h3 {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+
+.craft-body p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--warm-gray);
+}
+
+/* About */
+.about-section {
+  background: var(--ivory, #f7f4ef);
+}
+
+.about-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: clamp(32px, 5vw, 72px);
+  align-items: center;
+}
+
+.about-photo {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
   display: block;
 }
 
-.product-cover {
+.about-description {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--warm-gray);
+  margin-bottom: 32px;
+}
+
+.about-features {
+  list-style: none;
+  display: grid;
+  gap: 20px;
+}
+
+.about-features li {
+  padding-left: 16px;
+  border-left: 2px solid var(--primary-color);
+}
+
+.about-features strong {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 400;
+  margin-bottom: 4px;
+}
+
+.about-features span {
+  font-size: 14px;
+  color: var(--warm-gray);
+  line-height: 1.6;
+}
+
+/* CTA */
+.cta-section {
+  position: relative;
+  min-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cta-bg {
+  position: absolute;
+  inset: 0;
+}
+
+.cta-bg img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.hero-carousel {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  margin: 20px 0 8px;
-  padding-bottom: 4px;
-}
-
-.hero-carousel img {
-  height: 120px;
-  width: auto;
-  max-width: 220px;
-  object-fit: cover;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-
-.company-photo-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.company-photo-strip img {
-  width: 100%;
-  border-radius: 12px;
-  object-fit: cover;
-  max-height: 200px;
-}
-
-.product-image {
-  height: 280px;
-  background: linear-gradient(135deg, #F5F0EB, #EDE8E0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.product-icon {
-  font-size: 80px;
-}
-
-.product-info {
-  padding: 24px;
-}
-
-.product-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 8px;
-}
-
-.product-description {
-  font-size: 14px;
-  color: #777;
-  margin-bottom: 16px;
-}
-
-.product-tag {
-  display: inline-block;
-  padding: 4px 12px;
-  background: rgba(201, 169, 98, 0.1);
-  color: var(--primary-color);
-  font-size: 12px;
-  border-radius: 4px;
-}
-
-/* CTA Section */
-.cta-section {
-  padding: 100px 40px;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+.cta-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 24, 20, 0.72);
 }
 
 .cta-content {
-  max-width: 900px;
-  margin: 0 auto;
+  position: relative;
+  z-index: 1;
   text-align: center;
+  padding: 48px 24px;
+  max-width: 640px;
 }
 
 .cta-title {
-  font-size: 48px;
-  font-weight: 700;
-  color: white;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 400;
+  color: #fff;
   margin-bottom: 16px;
 }
 
 .cta-subtitle {
-  font-size: 18px;
-  color: #aaa;
-  margin-bottom: 40px;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 32px;
+  line-height: 1.7;
 }
 
-.cta-buttons {
-  display: flex;
-  justify-content: center;
-}
-
-/* Contact Section */
+/* Contact */
 .contact-section {
-  background: #FDFBF8;
+  background: #fff;
 }
 
-.contact-content {
+.contact-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
 }
 
-.contact-info {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
+.contact-list {
+  display: grid;
+  gap: 24px;
 }
 
-.contact-item {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-}
-
-.contact-icon {
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
-.contact-details h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-color);
+.contact-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--warm-gray);
   margin-bottom: 6px;
 }
 
-.contact-details p {
-  font-size: 14px;
-  color: #777;
+.contact-item p {
+  font-size: 15px;
   line-height: 1.6;
 }
 
-.contact-map {
-  display: flex;
-  justify-content: center;
+.contact-aside {
+  padding: 32px;
+  background: var(--ivory);
+  border: 1px solid rgba(26, 24, 20, 0.06);
 }
 
-.map-placeholder {
-  width: 100%;
-  height: 400px;
-  background: linear-gradient(135deg, #E5E4E2, #D5D5D5);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.contact-aside-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  margin-bottom: 12px;
 }
 
-.map-icon {
-  font-size: 80px;
-  opacity: 0.3;
+.contact-aside-text {
+  font-size: 14px;
+  color: var(--warm-gray);
+  line-height: 1.7;
+  margin-bottom: 24px;
 }
 
 /* Footer */
 .footer {
-  background: #1a1a1a;
-  color: white;
-  padding: 60px 40px 20px;
+  background: var(--charcoal);
+  color: rgba(255, 255, 255, 0.65);
+  padding: 48px clamp(20px, 4vw, 48px) 24px;
 }
 
-.footer-content {
-  max-width: 1400px;
+.footer-inner {
+  max-width: 1320px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 2fr 2fr 1fr;
-  gap: 80px;
-  margin-bottom: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 32px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.footer-logo {
+.footer-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
 }
 
-.footer-logo-mark {
-  flex-shrink: 0;
-  border-radius: 8px;
+.footer-logo-text {
+  font-family: var(--font-serif);
+  letter-spacing: 0.25em;
+  color: #fff;
 }
 
-.footer-logo-text-block .logo-text {
-  color: white;
-  font-size: 20px;
-  letter-spacing: 2px;
-}
-
-.footer-logo-text-block .logo-sub {
-  color: rgba(255, 255, 255, 0.75);
+.footer-tagline {
   font-size: 11px;
-  letter-spacing: 1px;
+  letter-spacing: 0.15em;
+  margin-top: 4px;
 }
 
-.footer-slogan {
-  color: #888;
-  font-size: 14px;
-}
-
-.footer-column {
+.footer-links {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 24px;
 }
 
-.footer-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 8px;
-}
-
-.footer-link,
-.footer-bottom-link {
-  color: #aaa;
+.footer-links a {
+  color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
-  font-size: 14px;
-  transition: color 0.3s;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.25s;
 }
 
-.footer-link:hover,
-.footer-bottom-link:hover {
-  color: var(--primary-color);
-}
-
-.social-links {
-  display: flex;
-  gap: 16px;
-}
-
-.social-link {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  transition: all 0.3s;
-}
-
-.social-link:hover {
-  background: var(--primary-color);
-  transform: translateY(-3px);
+.footer-links a:hover {
+  color: var(--primary-light);
 }
 
 .footer-bottom {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding-top: 30px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 1320px;
+  margin: 24px auto 0;
   text-align: center;
+  font-size: 12px;
 }
 
-.footer-bottom p {
-  color: #777;
-  font-size: 13px;
-}
-
-.footer-domain {
-  margin-top: 10px;
-  color: var(--primary-color);
-}
-
-/* Responsive */
 @media (max-width: 1024px) {
-  .about-content,
-  .contact-content {
-    grid-template-columns: 1fr;
-  }
-
-  .products-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .footer-content {
+  .collections-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .hero-title {
-    font-size: 48px;
+  .collection-card--0,
+  .collection-card--1,
+  .collection-card--2,
+  .collection-card--3,
+  .collection-card--4 {
+    grid-column: span 1;
+    min-height: 320px;
+  }
+
+  .collection-card--0 {
+    grid-column: span 2;
+    min-height: 400px;
+  }
+
+  .process-grid,
+  .craft-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about-layout,
+  .contact-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1002,29 +1217,29 @@ onMounted(async () => {
     display: none;
   }
 
-  .products-grid {
+  .hero-dots {
+    flex-direction: row;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 88px;
+  }
+
+  .collections-grid {
     grid-template-columns: 1fr;
   }
 
-  .footer-content {
+  .collection-card--0 {
+    grid-column: span 1;
+  }
+
+  .process-pair {
     grid-template-columns: 1fr;
-    gap: 40px;
   }
 
-  .hero-title {
-    font-size: 36px;
-  }
-
-  .hero-buttons {
-    flex-direction: column;
-  }
-
-  .section {
-    padding: 60px 20px;
-  }
-
-  .header-content {
-    padding: 0 20px;
+  .process-arrow {
+    text-align: center;
+    transform: rotate(90deg);
   }
 }
 </style>

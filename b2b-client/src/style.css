@@ -3,6 +3,10 @@
   --primary-light: #E5C89A;
   --primary-dark: #9E8343;
   --text-color: #2C2C2C;
+  --charcoal: #1A1814;
+  --ivory: #F7F4EF;
+  --warm-gray: #6B6560;
+  --font-serif: 'Cormorant Garamond', 'Noto Serif SC', 'Songti SC', serif;
   --bg-color: #F5F5F5;
   --white-color: #FFFFFF;
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
