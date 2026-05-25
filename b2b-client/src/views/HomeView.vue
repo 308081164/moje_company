@@ -5,7 +5,8 @@
         <div class="logo">
           <img src="/icons/icon-maskable.svg" alt="" class="nav-logo-mark" width="36" height="36" />
           <div class="logo-text-block">
-            <span class="logo-text">恒鎏珠宝AI建模平台</span>
+            <span class="logo-text">MOJE</span>
+            <span class="logo-sub">珠宝定制</span>
           </div>
         </div>
         <nav class="nav">
@@ -211,11 +212,11 @@
         <div class="contact-list">
           <div class="contact-item">
             <span class="contact-label">地址</span>
-            <p>{{ portal?.address || '上海市静安区南京西路1266号恒隆广场33楼' }}</p>
+            <p>{{ portal?.address || '广东省广州市番禺区 广州番禺沙头街小平村工业大道2号李济新能源大厦2楼' }}</p>
           </div>
           <div class="contact-item">
             <span class="contact-label">电话</span>
-            <p>{{ portal?.contactPhone || '400-888-8888' }}</p>
+            <p>{{ portal?.contactPhone?.trim() || '' }}</p>
           </div>
           <div v-if="portal?.contactWechat" class="contact-item">
             <span class="contact-label">微信</span>
@@ -223,7 +224,7 @@
           </div>
           <div class="contact-item">
             <span class="contact-label">邮箱</span>
-            <p>{{ portal?.contactEmail || 'info@moje珠宝.com' }}</p>
+            <p>{{ portal?.contactEmail?.trim() || '' }}</p>
           </div>
           <div class="contact-item">
             <span class="contact-label">营业时间</span>
@@ -243,7 +244,7 @@
         <div class="footer-brand">
           <img src="/icons/icon-maskable.svg" alt="" width="28" height="28" />
           <div>
-            <div class="footer-logo-text">恒鎏珠宝AI建模平台</div>
+            <div class="footer-logo-text">MOJE</div>
             <div class="footer-tagline">匠心定制 · 永恒经典</div>
           </div>
         </div>
@@ -255,7 +256,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>© {{ new Date().getFullYear() }} 恒鎏珠宝AI建模平台 · All rights reserved.</p>
+        <p>© {{ new Date().getFullYear() }} MOJE 珠宝 · All rights reserved.</p>
       </div>
     </footer>
   </div>
