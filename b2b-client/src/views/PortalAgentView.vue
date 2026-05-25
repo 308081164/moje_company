@@ -4,7 +4,7 @@
     <div v-if="!b2bToken" class="b2b-portal-content agent-auth-wrap">
         <div class="agent-auth-panel">
           <div class="auth-panel-intro">
-            <h2>恒鎏珠宝AI建模平台 · 需求录入</h2>
+            <h2>恒鎏珠宝 · 需求录入</h2>
             <p>请先登录或注册 B 端账号，登录后将进入智能助理对话，引导您完成定制需求提交。</p>
           </div>
           <a-tabs v-model:activeKey="loginTab" class="auth-tabs">
@@ -38,7 +38,7 @@
       <aside v-if="isDesktop" class="agent-sidebar">
         <div class="sidebar-brand">
           <img src="/icons/icon-maskable.svg" alt="" width="32" height="32" />
-          <span>恒鎏珠宝AI建模平台</span>
+          <span>恒鎏珠宝</span>
         </div>
         <button type="button" class="sidebar-new-chat" @click="startNewChat">
           <PlusOutlined /> 新对话

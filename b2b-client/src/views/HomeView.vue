@@ -5,8 +5,8 @@
         <div class="logo">
           <img src="/icons/icon-maskable.svg" alt="" class="nav-logo-mark" width="36" height="36" />
           <div class="logo-text-block">
-            <span class="logo-text">MOJE</span>
-            <span class="logo-sub">珠宝定制</span>
+            <span class="logo-text">恒鎏珠宝</span>
+            <span class="logo-sub">定制服务</span>
           </div>
         </div>
         <nav class="nav">
@@ -36,7 +36,7 @@
         </div>
       </div>
       <div class="hero-overlay">
-        <p class="hero-eyebrow">Maison MOJE · B2B Atelier</p>
+        <p class="hero-eyebrow">恒鎏珠宝 · B2B Atelier</p>
         <h1 class="hero-title">{{ portal?.heroTitle || '匠心定制 · 永恒经典' }}</h1>
         <p class="hero-subtitle">
           {{ portal?.heroSubtitle || '以设计图与高精度 3D 建模，为 B 端伙伴呈现可生产的珠宝方案' }}
@@ -103,7 +103,7 @@
       <div class="section-intro section-intro--light">
         <span class="section-label">From Sketch to Masterpiece</span>
         <h2 class="section-title">设计图 · 建模预览</h2>
-        <p class="section-desc">从平面方案到可生产 3D 数据，直观呈现 MOJE 定制全流程。</p>
+        <p class="section-desc">从平面方案到可生产 3D 数据，直观呈现恒鎏珠宝定制全流程。</p>
       </div>
       <div class="process-grid">
         <article v-for="pair in designModelPairs" :key="pair.title" class="process-card">
@@ -169,14 +169,14 @@
             alt="企业展示"
             class="about-photo"
           />
-          <img v-else src="/showcase/about-01.jpg" alt="MOJE 定制作品" class="about-photo" />
+          <img v-else src="/showcase/about-01.jpg" alt="恒鎏珠宝定制作品" class="about-photo" />
         </div>
         <div class="about-copy">
-          <span class="section-label">About MOJE</span>
-          <h2 class="section-title section-title--left">关于 MOJE</h2>
+          <span class="section-label">About 恒鎏珠宝</span>
+          <h2 class="section-title section-title--left">关于恒鎏珠宝</h2>
           <div v-if="portal?.aboutHtml" class="about-description" v-html="portal.aboutHtml" />
           <p v-else class="about-description">
-            MOJE 专注高端珠宝定制与 B 端协同服务。我们以原创设计、高精度建模与透明订单流程，
+            恒鎏珠宝专注高端珠宝定制与 B 端协同服务。我们以原创设计、高精度建模与透明订单流程，
             帮助合作伙伴高效完成从需求到成品的全链路交付。
           </p>
           <ul class="about-features">
@@ -212,11 +212,11 @@
         <div class="contact-list">
           <div class="contact-item">
             <span class="contact-label">地址</span>
-            <p>{{ portal?.address || '广东省广州市番禺区 广州番禺沙头街小平村工业大道2号李济新能源大厦2楼' }}</p>
+            <p>{{ portal?.address || '上海市静安区南京西路1266号恒隆广场33楼' }}</p>
           </div>
           <div class="contact-item">
             <span class="contact-label">电话</span>
-            <p>{{ portal?.contactPhone?.trim() || '' }}</p>
+            <p>{{ portal?.contactPhone || '400-888-8888' }}</p>
           </div>
           <div v-if="portal?.contactWechat" class="contact-item">
             <span class="contact-label">微信</span>
@@ -224,7 +224,7 @@
           </div>
           <div class="contact-item">
             <span class="contact-label">邮箱</span>
-            <p>{{ portal?.contactEmail?.trim() || '' }}</p>
+            <p>{{ portal?.contactEmail || 'info@hengliujewelry.com' }}</p>
           </div>
           <div class="contact-item">
             <span class="contact-label">营业时间</span>
@@ -244,7 +244,7 @@
         <div class="footer-brand">
           <img src="/icons/icon-maskable.svg" alt="" width="28" height="28" />
           <div>
-            <div class="footer-logo-text">MOJE</div>
+            <div class="footer-logo-text">恒鎏珠宝</div>
             <div class="footer-tagline">匠心定制 · 永恒经典</div>
           </div>
         </div>
@@ -256,7 +256,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>© {{ new Date().getFullYear() }} MOJE 珠宝 · All rights reserved.</p>
+        <p>© {{ new Date().getFullYear() }} 恒鎏珠宝 · All rights reserved.</p>
       </div>
     </footer>
   </div>
