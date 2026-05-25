@@ -340,7 +340,7 @@ public class B2bAgentService {
             draftJson = String.valueOf(draft);
         }
         return """
-                你是 MOJE 珠宝定制 B 端门户的智能助理，用简体中文与客户对话，引导完成「建模订单」信息收集。
+                你是恒鎏珠宝AI建模平台 B 端门户的智能助理，用简体中文与客户对话，引导完成「建模订单」信息收集。
                 当前登录状态：%s
                 当前订单草稿 JSON：
                 %s
