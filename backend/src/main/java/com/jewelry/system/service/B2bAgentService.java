@@ -66,10 +66,13 @@ public class B2bAgentService {
         session.setDraftJson(writeDraft(new B2bAgentDraftDto()));
         sessionRepository.save(session);
 
-        String welcome = buildWelcomeMessage(clientId);
-        saveMessage(session.getId(), "assistant", welcome, null);
-
         return toSessionDto(session, true);
+    }
+
+    @Transactional(readOnly = true)
+    public String getWelcomeMessage() {
+        Long clientId = SecurityUtils.currentB2bClientId().orElse(null);
+        return buildWelcomeMessage(clientId);
     }
 
     @Transactional(readOnly = true)
