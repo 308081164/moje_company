@@ -207,8 +207,12 @@ public class B2bAgentService {
 
         B2BOrderAccessDto access = b2bOrderService.createOrder(req);
         Long orderId = access.getOrderId();
+        Set<String> attachedUrls = new LinkedHashSet<>();
         for (String url : draft.getReferenceImageUrls()) {
-            attachReferenceUrlToOrder(orderId, url);
+            if (!StringUtils.hasText(url) || !attachedUrls.add(url.strip())) {
+                continue;
+            }
+            attachReferenceUrlToOrder(orderId, url.strip());
         }
 
         session.setStatus(B2bAgentSessionStatus.COMMITTED);
@@ -250,8 +254,15 @@ public class B2bAgentService {
     }
 
     private void attachReferenceUrlToOrder(Long orderId, String url) {
-        // 设计图已在 OSS，由跟单/设计环节使用；B2B 创建流程与 create-with-files 一致时可扩展
-        log.debug("Order {} reference image: {}", orderId, url);
+        try {
+            orderFileService.attachGuestDesignFromOssUrl(orderId, url, "Agent 上传参考图");
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to attach agent reference image to order {}: {}", orderId, url, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "参考图写入订单失败: " + e.getMessage());
+        }
     }
 
     private String uploadReferenceImage(long sessionId, MultipartFile file) {

@@ -60,6 +60,64 @@ public class OrderFileService {
         return save(orderId, file, "design", "DESIGN", notes, null);
     }
 
+    /**
+     * 将 Agent 会话中已上传至 OSS 的参考图复制到订单 design 目录并写入 files 表（与 create-with-files 一致）。
+     */
+    @Transactional
+    public FileInfoDto attachGuestDesignFromOssUrl(long orderId, String ossUrl, String notes) {
+        if (ossUrl == null || ossUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片地址无效");
+        }
+        if (!aliyunOssService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储 OSS 未就绪，无法关联参考图");
+        }
+        requireOrder(orderId);
+
+        String sourceKey = aliyunOssService.resolveObjectKeyFromUrl(ossUrl.strip());
+        if (sourceKey == null || sourceKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析 OSS 对象 key: " + ossUrl);
+        }
+        if (!aliyunOssService.objectExists(sourceKey)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "参考图在 OSS 中不存在: " + sourceKey);
+        }
+
+        String original = fileNameFromObjectKey(sourceKey);
+        String ext = extensionOf(original);
+        String storedFileName = buildStandardStoredFileName(orderId, "DESIGN", original, ext);
+        String destKey = "order/" + orderId + "/design/" + storedFileName;
+
+        if (!sourceKey.equals(destKey)) {
+            aliyunOssService.copyObject(sourceKey, destKey);
+        }
+
+        FileEntity e = new FileEntity();
+        e.setFileName(storedFileName);
+        e.setOriginalName(original);
+        e.setFilePath(destKey);
+        e.setFileUrl(aliyunOssService.publicUrl(destKey));
+        e.setFileSize(null);
+        e.setFileType("DESIGN");
+        if (!ext.isBlank()) {
+            e.setFileExtension(ext.startsWith(".") ? ext.substring(1) : ext);
+        }
+        e.setRelatedType(FileRelatedType.ORDER);
+        e.setRelatedId(orderId);
+        e.setUploaderId(null);
+        fileEntityRepository.save(e);
+        return toDto(e);
+    }
+
+    private static String fileNameFromObjectKey(String objectKey) {
+        int slash = objectKey.lastIndexOf('/');
+        String name = slash >= 0 ? objectKey.substring(slash + 1) : objectKey;
+        return name.isBlank() ? "reference.jpg" : name;
+    }
+
+    private static String extensionOf(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot >= 0 ? fileName.substring(dot) : ".jpg";
+    }
+
     @Transactional
     public FileInfoDto uploadModelFile(long orderId, MultipartFile file, String notes) throws IOException {
         long uid = SecurityUtils.currentStaffUserId()

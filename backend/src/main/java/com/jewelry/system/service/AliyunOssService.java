@@ -144,6 +144,28 @@ public class AliyunOssService {
         return "https://" + bucketName + "." + endpoint + "/" + objectKey;
     }
 
+    /**
+     * 从 {@link #publicUrl} / {@link #uploadObject} 返回的 URL 解析对象 key。
+     */
+    public String resolveObjectKeyFromUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        String trimmed = url.strip();
+        String prefix = "https://" + bucketName + "." + endpoint + "/";
+        if (trimmed.startsWith(prefix)) {
+            return trimmed.substring(prefix.length());
+        }
+        int scheme = trimmed.indexOf("://");
+        if (scheme > 0) {
+            int slash = trimmed.indexOf('/', scheme + 3);
+            if (slash >= 0 && slash + 1 < trimmed.length()) {
+                return trimmed.substring(slash + 1);
+            }
+        }
+        return null;
+    }
+
     public void putEmptyObject(String objectKey) throws IOException {
         if (!isEnabled()) {
             throw new IllegalStateException("OSS 未配置");
