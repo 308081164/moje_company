@@ -70,6 +70,10 @@ function authConfig(extra?: Record<string, string>) {
   return { headers }
 }
 
+export function agentWelcome(): Promise<{ message: string }> {
+  return request.get('/b2b/agent/welcome', authConfig())
+}
+
 export function agentCreateSession(): Promise<B2bAgentSession> {
   return request.post('/b2b/agent/sessions', {}, authConfig())
 }

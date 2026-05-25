@@ -1,0 +1,59 @@
+    <div v-else class="agent-shell" :class="{ 'agent-shell--desktop': isDesktop }">
+      <aside v-if="isDesktop" class="agent-sidebar">
+        <div class="sidebar-brand">
+          <img src="/icons/icon-maskable.svg" alt="" width="32" height="32" />
+          <span>恒鎏珠宝AI建模平台</span>
+        </div>
+        <button type="button" class="sidebar-new-chat" @click="startNewChat">
+          <PlusOutlined /> 新对话
+        </button>
+        <div class="sidebar-section-title">历史对话</div>
+        <div class="sidebar-history">
+          <a-spin v-if="historyLoading" />
+          <button
+            v-for="item in historySessions"
+            :key="item.sessionId"
+            type="button"
+            class="sidebar-history-item"
+            @click="openHistory(item)"
+          >
+            <span class="history-status">{{ item.status }}</span>
+            <span class="history-time">{{ formatTime(item.createdAt) }}</span>
+          </button>
+          <p v-if="!historyLoading && !historySessions.length" class="sidebar-empty">暂无历史记录</p>
+        </div>
+        <div class="sidebar-footer">
+          <router-link to="/portal/b2b/my-orders" class="sidebar-link"><UnorderedListOutlined /> 我的订单</router-link>
+          <router-link to="/portal/form" class="sidebar-link"><FileTextOutlined /> 传统表单</router-link>
+          <router-link to="/" class="sidebar-link"><HomeOutlined /> 返回首页</router-link>
+          <button type="button" class="sidebar-link sidebar-link--danger" @click="b2bLogout"><LogoutOutlined /> 退出</button>
+        </div>
+      </aside>
+
+      <main class="agent-main">
+        <header class="agent-topbar">
+          <div class="topbar-left">
+            <button v-if="!isDesktop" type="button" class="topbar-icon-btn" aria-label="菜单" @click="sidebarOpen = true">
+              <MenuOutlined />
+            </button>
+            <h1 class="topbar-title">智能录入助手</h1>
+          </div>
+          <div class="topbar-actions">
+            <a-dropdown v-if="!isDesktop" :trigger="['click']">
+              <button type="button" class="topbar-text-btn">更多</button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item key="orders" @click="$router.push('/portal/b2b/my-orders')">我的订单</a-menu-item>
+                  <a-menu-item key="form" @click="$router.push('/portal/form')">传统表单录入</a-menu-item>
+                  <a-menu-item key="home" @click="$router.push('/')">返回首页</a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="logout" danger @click="b2bLogout">退出登录</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+            <button v-if="!isDesktop" type="button" class="topbar-text-btn" @click="startNewChat">新对话</button>
+          </div>
+        </header>
+
+        <div class="agent-chat-column">
+            <div ref="msgBoxRef" class="agent-messages">

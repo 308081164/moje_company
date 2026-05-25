@@ -21,4 +21,15 @@ public class AsyncConfig {
         ex.initialize();
         return ex;
     }
+
+    @Bean(name = "b2bAgentExecutor")
+    public Executor b2bAgentExecutor() {
+        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
+        ex.setCorePoolSize(4);
+        ex.setMaxPoolSize(16);
+        ex.setQueueCapacity(500);
+        ex.setThreadNamePrefix("b2b-agent-");
+        ex.initialize();
+        return ex;
+    }
 }
