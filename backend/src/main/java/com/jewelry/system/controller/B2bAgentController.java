@@ -5,7 +5,7 @@ import com.jewelry.system.dto.b2b.agent.B2bAgentSessionDto;
 import com.jewelry.system.service.B2bAgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,17 +13,31 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @RestController
 @RequestMapping("/b2b/agent")
-@RequiredArgsConstructor
 @Tag(name = "B2B Agent", description = "B端门户智能引导录入")
 public class B2bAgentController {
 
     private final B2bAgentService agentService;
+    private final Executor b2bAgentExecutor;
+
+    public B2bAgentController(B2bAgentService agentService,
+                                @Qualifier("b2bAgentExecutor") Executor b2bAgentExecutor) {
+        this.agentService = agentService;
+        this.b2bAgentExecutor = b2bAgentExecutor;
+    }
+
+    @GetMapping("/welcome")
+    @Operation(summary = "获取欢迎语（不落库、不创建会话）")
+    public ResponseEntity<Map<String, String>> welcome() {
+        return ResponseEntity.ok(Map.of("message", agentService.getWelcomeMessage()));
+    }
 
     @PostMapping("/sessions")
-    @Operation(summary = "创建新 Agent 会话")
+    @Operation(summary = "创建 Agent 会话（空会话，首条用户消息前不落库欢迎语）")
     public ResponseEntity<B2bAgentSessionDto> createSession() {
         return ResponseEntity.ok(agentService.createSession());
     }
@@ -51,14 +65,16 @@ public class B2bAgentController {
     }
 
     @PostMapping(value = "/sessions/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "发送消息（文本/图片，支持多图）")
-    public ResponseEntity<B2bAgentChatResponse> sendMessage(
+    @Operation(summary = "发送消息（异步执行大模型，不长期占用 Tomcat 工作线程）")
+    public CompletableFuture<ResponseEntity<B2bAgentChatResponse>> sendMessage(
             @PathVariable long id,
             @RequestHeader(value = "X-B2B-Agent-Session-Token", required = false) String publicToken,
             @RequestPart(value = "text", required = false) String text,
             @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestPart(value = "images", required = false) List<MultipartFile> images) {
-        return ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image, images));
+        return CompletableFuture.supplyAsync(
+                () -> ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image, images)),
+                b2bAgentExecutor);
     }
 
     @PostMapping(value = "/speech-to-text", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -70,9 +86,11 @@ public class B2bAgentController {
 
     @PostMapping("/sessions/{id}/commit")
     @Operation(summary = "确认创建工单")
-    public ResponseEntity<B2bAgentChatResponse> commit(
+    public CompletableFuture<ResponseEntity<B2bAgentChatResponse>> commit(
             @PathVariable long id,
             @RequestHeader(value = "X-B2B-Agent-Session-Token", required = false) String publicToken) {
-        return ResponseEntity.ok(agentService.commit(id, publicToken));
+        return CompletableFuture.supplyAsync(
+                () -> ResponseEntity.ok(agentService.commit(id, publicToken)),
+                b2bAgentExecutor);
     }
 }

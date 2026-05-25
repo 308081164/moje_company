@@ -1,0 +1,43 @@
+async function showWelcomeOnly() {
+  session.value = null
+  draft.value = null
+  showConfirmCard.value = false
+  pendingOptimisticIds.value.clear()
+  localStorage.removeItem(SESSION_TOKEN_KEY)
+  localStorage.removeItem(SESSION_ID_KEY)
+  try {
+    const { message: welcome } = await agentWelcome()
+    messages.value = [{ id: WELCOME_MSG_ID, role: 'assistant', content: welcome }]
+  } catch {
+    messages.value = [
+      {
+        id: WELCOME_MSG_ID,
+        role: 'assistant',
+        content: '您好！请描述珠宝定制需求，上传参考图后点击发送开始对话。'
+      }
+    ]
+  }
+  scrollBottom()
+}
+
+async function ensureSession(): Promise<B2bAgentSession> {
+  if (session.value && !session.value.readOnly) {
+    return session.value
+  }
+  const s = await agentCreateSession()
+  try {
+    await agentBindSession(s.sessionId, s.publicToken)
+  } catch {
+    /* ignore */
+  }
+  session.value = { ...s, messages: s.messages ?? [], readOnly: false }
+  localStorage.setItem(SESSION_TOKEN_KEY, s.publicToken)
+  localStorage.setItem(SESSION_ID_KEY, String(s.sessionId))
+  return session.value
+}
+
+function startNewChat() {
+  if (sending.value) return
+  void showWelcomeOnly()
+  if (isDesktop.value) void loadHistory()
+}

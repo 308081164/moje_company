@@ -1,0 +1,26 @@
+    <a-drawer
+      v-model:open="sidebarOpen"
+      title="菜单与历史"
+      placement="left"
+      :width="300"
+      class="agent-mobile-drawer"
+    >
+      <button type="button" class="sidebar-new-chat sidebar-new-chat--block" @click="startNewChat(); sidebarOpen = false">
+        <PlusOutlined /> 新对话
+      </button>
+      <div class="sidebar-section-title">历史对话</div>
+      <a-list :data-source="historySessions" :loading="historyLoading" class="mobile-history-list">
+        <template #renderItem="{ item }">
+          <a-list-item class="history-item" @click="openHistory(item); sidebarOpen = false">
+            <a-list-item-meta :title="item.status" :description="formatTime(item.createdAt)" />
+          </a-list-item>
+        </template>
+      </a-list>
+      <div class="drawer-footer-links">
+        <router-link to="/portal/b2b/my-orders" @click="sidebarOpen = false">我的订单</router-link>
+        <router-link to="/portal/form" @click="sidebarOpen = false">传统表单录入</router-link>
+        <router-link to="/" @click="sidebarOpen = false">返回首页</router-link>
+      </div>
+    </a-drawer>
+
+    <a-drawer v-if="false" v-model:open="historyOpen" title="历史对话" width="360">

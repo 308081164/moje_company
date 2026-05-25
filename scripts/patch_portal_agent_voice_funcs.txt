@@ -1,0 +1,137 @@
+function resizeInputArea() {
+  const el = inputAreaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  const next = Math.min(Math.max(el.scrollHeight, 72), 200)
+  el.style.height = `${next}px`
+}
+
+function appendVoiceText(text: string) {
+  const t = text.trim()
+  if (!t) return
+  inputText.value = inputText.value ? `${inputText.value} ${t}` : t
+  nextTick(resizeInputArea)
+  message.success('语音识别完成，可编辑后点击发送')
+}
+
+function cleanupMediaStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+  }
+}
+
+function stopSpeechRecognition() {
+  if (speechRecognition) {
+    try {
+      speechRecognition.stop()
+    } catch {
+      /* ignore */
+    }
+    speechRecognition = null
+  }
+}
+
+async function startMediaRecorderVoice() {
+  const mime = voiceMimeType.value
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  mediaStream = stream
+  voiceChunks = []
+  mediaRecorder = new MediaRecorder(stream, { mimeType: mime })
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) voiceChunks.push(e.data)
+  }
+  mediaRecorder.onstop = () => {
+    cleanupMediaStream()
+    mediaRecorder = null
+    void handleVoiceStop()
+  }
+  mediaRecorder.start()
+  recording.value = true
+}
+
+function stopMediaRecorderVoice() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    recording.value = false
+    cleanupMediaStream()
+    return
+  }
+  mediaRecorder.stop()
+  recording.value = false
+}
+
+function startBrowserSpeechRecognition() {
+  const recognition = createSpeechRecognition()
+  if (!recognition) {
+    message.error('当前浏览器不支持语音输入')
+    return
+  }
+  speechRecognition = recognition
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    const text = event.results?.[0]?.[0]?.transcript
+    if (text) appendVoiceText(text)
+  }
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    if (event.error !== 'aborted') {
+      message.error(`语音识别失败：${event.error}`)
+    }
+  }
+  recognition.onend = () => {
+    recording.value = false
+    speechRecognition = null
+  }
+  try {
+    recognition.start()
+    recording.value = true
+  } catch {
+    recording.value = false
+    speechRecognition = null
+    message.error('无法启动语音识别，请检查麦克风权限')
+  }
+}
+
+async function onVoiceButtonClick() {
+  if (!voiceAvailable.value || sending.value) return
+  if (recording.value) {
+    if (voiceMode.value === 'speech-recognition') {
+      stopSpeechRecognition()
+      recording.value = false
+    } else {
+      stopMediaRecorderVoice()
+    }
+    return
+  }
+  if (voiceMode.value === 'speech-recognition') {
+    startBrowserSpeechRecognition()
+    return
+  }
+  try {
+    await startMediaRecorderVoice()
+  } catch {
+    message.error('无法访问麦克风，请在浏览器设置中允许麦克风权限')
+  }
+}
+
+async function handleVoiceStop() {
+  if (!voiceChunks.length) {
+    message.warning('未录到有效语音，请重试')
+    return
+  }
+  const mime = voiceChunks[0]?.type || voiceMimeType.value
+  const blob = new Blob(voiceChunks, { type: mime })
+  voiceChunks = []
+  if (blob.size < 800) {
+    message.warning('录音太短，请重试')
+    return
+  }
+  const ext = extensionForMime(mime)
+  sending.value = true
+  try {
+    const { text } = await agentSpeechToText(blob, `voice.${ext}`)
+    if (text) appendVoiceText(text)
+  } catch (e: unknown) {
+    message.error(String((e as Error)?.message || e))
+  } finally {
+    sending.value = false
+  }
+}

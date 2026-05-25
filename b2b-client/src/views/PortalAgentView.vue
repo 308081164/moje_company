@@ -1,20 +1,8 @@
 <template>
-  <div class="b2b-portal-container agent-portal-page">
+  <div class="agent-portal-page">
     <div class="b2b-portal-background"></div>
-    <div class="b2b-portal-content agent-layout">
-      <a-card class="b2b-portal-card agent-card" :bordered="false">
-        <div class="portal-header agent-header">
-          <router-link to="/" class="back-btn"><HomeOutlined /> 返回首页</router-link>
-          <template v-if="b2bToken">
-            <router-link to="/portal/form" class="back-btn">传统表单录入</router-link>
-            <router-link to="/portal/b2b/my-orders" class="back-btn">我的订单</router-link>
-            <a-button type="link" @click="historyOpen = true">历史对话</a-button>
-            <a-button type="link" danger @click="b2bLogout">退出</a-button>
-          </template>
-        </div>
-
-        <!-- 未登录：登录注册页 -->
-        <div v-if="!b2bToken" class="agent-auth-panel">
+    <div v-if="!b2bToken" class="b2b-portal-content agent-auth-wrap">
+        <div class="agent-auth-panel">
           <div class="auth-panel-intro">
             <h2>恒鎏珠宝AI建模平台 · 需求录入</h2>
             <p>请先登录或注册 B 端账号，登录后将进入智能助理对话，引导您完成定制需求提交。</p>
@@ -44,17 +32,68 @@
             </a-tab-pane>
           </a-tabs>
         </div>
+    </div>
 
-        <!-- 已登录：Agent 对话 -->
-        <template v-else>
-          <div class="agent-body">
-            <div class="agent-quick-bar">
-              <a-button type="primary" ghost block @click="$router.push('/portal/b2b/my-orders')">
-                查看我的订单进度
-              </a-button>
-            </div>
+    <div v-else class="agent-shell" :class="{ 'agent-shell--desktop': isDesktop }">
+      <aside v-if="isDesktop" class="agent-sidebar">
+        <div class="sidebar-brand">
+          <img src="/icons/icon-maskable.svg" alt="" width="32" height="32" />
+          <span>恒鎏珠宝AI建模平台</span>
+        </div>
+        <button type="button" class="sidebar-new-chat" @click="startNewChat">
+          <PlusOutlined /> 新对话
+        </button>
+        <div class="sidebar-section-title">历史对话</div>
+        <div class="sidebar-history">
+          <a-spin v-if="historyLoading" />
+          <button
+            v-for="item in historySessions"
+            :key="item.sessionId"
+            type="button"
+            class="sidebar-history-item"
+            @click="openHistory(item)"
+          >
+            <span class="history-status">{{ item.status }}</span>
+            <span class="history-time">{{ formatTime(item.createdAt) }}</span>
+          </button>
+          <p v-if="!historyLoading && !historySessions.length" class="sidebar-empty">暂无历史记录</p>
+        </div>
+        <div class="sidebar-footer">
+          <router-link to="/portal/b2b/my-orders" class="sidebar-link"><UnorderedListOutlined /> 我的订单</router-link>
+          <router-link to="/portal/form" class="sidebar-link"><FileTextOutlined /> 传统表单</router-link>
+          <router-link to="/" class="sidebar-link"><HomeOutlined /> 返回首页</router-link>
+          <button type="button" class="sidebar-link sidebar-link--danger" @click="b2bLogout"><LogoutOutlined /> 退出</button>
+        </div>
+      </aside>
 
+      <main class="agent-main">
+        <header class="agent-topbar">
+          <div class="topbar-left">
+            <button v-if="!isDesktop" type="button" class="topbar-icon-btn" aria-label="菜单" @click="sidebarOpen = true">
+              <MenuOutlined />
+            </button>
+            <h1 class="topbar-title">智能录入助手</h1>
+          </div>
+          <div class="topbar-actions">
+            <a-dropdown v-if="!isDesktop" :trigger="['click']">
+              <button type="button" class="topbar-text-btn">更多</button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item key="orders" @click="$router.push('/portal/b2b/my-orders')">我的订单</a-menu-item>
+                  <a-menu-item key="form" @click="$router.push('/portal/form')">传统表单录入</a-menu-item>
+                  <a-menu-item key="home" @click="$router.push('/')">返回首页</a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="logout" danger @click="b2bLogout">退出登录</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+            <button v-if="!isDesktop" type="button" class="topbar-text-btn" @click="startNewChat">新对话</button>
+          </div>
+        </header>
+
+        <div class="agent-chat-column">
             <div ref="msgBoxRef" class="agent-messages">
+
               <div
                 v-for="(m, index) in messages"
                 :key="messageKey(m, index)"
@@ -116,7 +155,7 @@
             <div v-if="session?.readOnly" class="agent-readonly-hint">
               当前为历史会话，仅可查看，无法继续发送消息。
             </div>
-            <div v-else class="agent-compose">
+            <div v-else class="agent-compose-wrap">
               <div class="agent-compose-box">
                 <div v-if="pendingPreviews.length" class="pending-images compose-pending">
                   <div v-for="p in pendingPreviews" :key="p.id" class="pending-thumb">
@@ -172,16 +211,41 @@
               </div>
               <p v-if="recording" class="voice-hint">{{ voiceHintText }}</p>
             </div>
-          </div>
-        </template>
-      </a-card>
+        </div>
+      </main>
     </div>
 
     <a-modal v-model:open="confirmOpen" title="二次确认" @ok="doCommit">
       <p>确认根据当前卡片信息创建正式工单？创建后可在「我的订单」查看进度。</p>
     </a-modal>
 
-    <a-drawer v-model:open="historyOpen" title="历史对话" width="360">
+    <a-drawer
+      v-model:open="sidebarOpen"
+      title="菜单与历史"
+      placement="left"
+      :width="300"
+      class="agent-mobile-drawer"
+    >
+      <button type="button" class="sidebar-new-chat sidebar-new-chat--block" @click="startNewChat(); sidebarOpen = false">
+        <PlusOutlined /> 新对话
+      </button>
+      <div class="sidebar-section-title">历史对话</div>
+      <a-list :data-source="historySessions" :loading="historyLoading" class="mobile-history-list">
+        <template #renderItem="{ item }">
+          <a-list-item class="history-item" @click="openHistory(item); sidebarOpen = false">
+            <a-list-item-meta :title="item.status" :description="formatTime(item.createdAt)" />
+          </a-list-item>
+        </template>
+      </a-list>
+      <div class="drawer-footer-links">
+        <router-link to="/portal/b2b/my-orders" @click="sidebarOpen = false">我的订单</router-link>
+        <router-link to="/portal/form" @click="sidebarOpen = false">传统表单录入</router-link>
+        <router-link to="/" @click="sidebarOpen = false">返回首页</router-link>
+      </div>
+    </a-drawer>
+
+    <a-drawer v-if="false" v-model:open="historyOpen" title="历史对话" width="360">
+
       <a-list :data-source="historySessions" :loading="historyLoading">
         <template #renderItem="{ item }">
           <a-list-item class="history-item" @click="openHistory(item)">
@@ -202,8 +266,19 @@ import {
   type VoiceInputMode
 } from '@/utils/voiceInput'
 import { message } from 'ant-design-vue'
-import { HomeOutlined, PictureOutlined, AudioOutlined } from '@ant-design/icons-vue'
 import {
+  HomeOutlined,
+  PictureOutlined,
+  AudioOutlined,
+  MenuOutlined,
+  PlusOutlined,
+  FileTextOutlined,
+  UnorderedListOutlined,
+  LogoutOutlined
+} from '@ant-design/icons-vue'
+import { useMediaQuery } from '@/composables/useMediaQuery'
+import {
+  agentWelcome,
   agentCreateSession,
   agentSendMessage,
   agentCommit,
@@ -221,6 +296,7 @@ import { clearB2bToken, getB2bTokenRaw, isB2bTokenExpiredOrInvalid, setB2bToken 
 
 const SESSION_TOKEN_KEY = 'moje_b2b_agent_session_token'
 const SESSION_ID_KEY = 'moje_b2b_agent_session_id'
+const WELCOME_MSG_ID = -1
 
 const OPTIMISTIC_ID_START = -1_000_000_000_000
 let optimisticSeq = 0
@@ -232,6 +308,8 @@ interface PendingPreview {
 }
 
 const b2bToken = ref(!!getB2bTokenRaw())
+const isDesktop = useMediaQuery('(min-width: 1024px)')
+const sidebarOpen = ref(false)
 const session = ref<B2bAgentSession | null>(null)
 const messages = ref<B2bAgentMessage[]>([])
 const draft = ref<B2bAgentDraft | null>(null)
@@ -334,8 +412,12 @@ function pushOptimisticUser(text: string, imageCount: number): number {
 }
 
 function applySession(s: B2bAgentSession) {
+  const welcomeMsg = messages.value.find((m) => m.id === WELCOME_MSG_ID)
   session.value = s
   messages.value = [...(s.messages ?? [])]
+  if (welcomeMsg && !messages.value.some((m) => m.id === WELCOME_MSG_ID)) {
+    messages.value = [welcomeMsg, ...messages.value]
+  }
   draft.value = s.draft ?? null
   showConfirmCard.value = Boolean(s.draft?.readyForConfirm) && !s.readOnly
   localStorage.setItem(SESSION_TOKEN_KEY, s.publicToken)
@@ -351,15 +433,50 @@ function applyChatResponse(res: B2bAgentChatResponse) {
   }
 }
 
-async function initSession() {
+async function showWelcomeOnly() {
+  session.value = null
+  draft.value = null
+  showConfirmCard.value = false
+  pendingOptimisticIds.value.clear()
+  localStorage.removeItem(SESSION_TOKEN_KEY)
+  localStorage.removeItem(SESSION_ID_KEY)
+  try {
+    const { message: welcome } = await agentWelcome()
+    messages.value = [{ id: WELCOME_MSG_ID, role: 'assistant', content: welcome }]
+  } catch {
+    messages.value = [
+      {
+        id: WELCOME_MSG_ID,
+        role: 'assistant',
+        content: '您好！请描述珠宝定制需求，上传参考图后点击发送开始对话。'
+      }
+    ]
+  }
+  scrollBottom()
+}
+
+async function ensureSession(): Promise<B2bAgentSession> {
+  if (session.value && !session.value.readOnly) {
+    return session.value!
+  }
   const s = await agentCreateSession()
-  applySession(s)
   try {
     await agentBindSession(s.sessionId, s.publicToken)
   } catch {
     /* ignore */
   }
+  session.value = { ...s, messages: s.messages ?? [], readOnly: false }
+  localStorage.setItem(SESSION_TOKEN_KEY, s.publicToken)
+  localStorage.setItem(SESSION_ID_KEY, String(s.sessionId))
+  return session.value!
 }
+
+function startNewChat() {
+  if (sending.value) return
+  void showWelcomeOnly()
+  if (isDesktop.value) void loadHistory()
+}
+
 
 function scrollBottom() {
   nextTick(() => {
@@ -411,10 +528,12 @@ function onPickImage(file: File) {
 }
 
 async function sendMessage() {
-  if (!session.value || session.value.readOnly || sending.value) return
+  if (session.value?.readOnly || sending.value) return
   const text = inputText.value.trim()
   const images = [...pendingFiles.value]
   if (!text && images.length === 0) return
+
+  const activeSession = await ensureSession()
 
   const savedText = text
   const savedImages = images
@@ -425,7 +544,7 @@ async function sendMessage() {
   sending.value = true
   try {
     const res = await agentSendMessage(
-      session.value.sessionId,
+      activeSession.sessionId,
       { text: savedText || undefined, images: savedImages.length ? savedImages : undefined },
       sessionHeaders()
     )
@@ -585,7 +704,7 @@ async function doCommit() {
   commitLoading.value = true
   sending.value = true
   try {
-    const res = await agentCommit(session.value.sessionId, sessionHeaders())
+    const res = await agentCommit(session.value!.sessionId, sessionHeaders())
     applyChatResponse(res)
     showConfirmCard.value = false
     confirmOpen.value = false
@@ -604,7 +723,8 @@ async function doLogin() {
     const r = await loginClient(loginForm.value)
     setB2bToken(r.accessToken)
     b2bToken.value = true
-    await initSession()
+    await showWelcomeOnly()
+    void loadHistory()
     message.success('登录成功')
   } catch (e: unknown) {
     message.error(String((e as Error)?.message || e))
@@ -619,7 +739,8 @@ async function doRegister() {
     const r = await registerClient(registerForm.value)
     setB2bToken(r.accessToken)
     b2bToken.value = true
-    await initSession()
+    await showWelcomeOnly()
+    void loadHistory()
     message.success('注册成功')
   } catch (e: unknown) {
     message.error(String((e as Error)?.message || e))
@@ -656,6 +777,7 @@ async function loadHistory() {
 async function openHistory(item: B2bAgentSession) {
   const s = await agentGetSession(item.sessionId, item.publicToken)
   applySession(s)
+  sidebarOpen.value = false
   historyOpen.value = false
 }
 
@@ -665,7 +787,8 @@ onMounted(async () => {
   voiceMimeType.value = voiceCapability.value.mimeType || 'audio/webm'
   syncToken()
   if (b2bToken.value) {
-    await initSession()
+    await showWelcomeOnly()
+    if (isDesktop.value) void loadHistory()
   }
   nextTick(resizeInputArea)
 })
@@ -1054,4 +1177,319 @@ watch(sending, (v) => {
 .order-result-block {
   margin-top: 8px;
 }
+
+/* Kimi 风格：桌面双栏 + 移动单列 */
+.agent-portal-page {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-auth-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.agent-shell {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.agent-shell--desktop {
+  flex-direction: row;
+  max-width: 100%;
+  margin: 0;
+}
+
+.agent-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f7f7f8;
+  border-right: 1px solid #e8e8e8;
+  padding: 16px 12px;
+  min-height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.sidebar-new-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.sidebar-new-chat:hover {
+  border-color: #c9a962;
+  background: #fffdf8;
+}
+
+.sidebar-new-chat--block {
+  margin-bottom: 20px;
+}
+
+.sidebar-section-title {
+  font-size: 12px;
+  color: #888;
+  padding: 0 6px 8px;
+}
+
+.sidebar-history {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 120px;
+  margin-bottom: 12px;
+}
+
+.sidebar-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.sidebar-history-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.history-status {
+  font-size: 13px;
+  color: #333;
+}
+
+.history-time {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.sidebar-empty {
+  font-size: 12px;
+  color: #aaa;
+  padding: 8px 12px;
+}
+
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #444;
+  font-size: 13px;
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.sidebar-link:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1a1a1a;
+}
+
+.sidebar-link--danger {
+  color: #c0392b;
+}
+
+.agent-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+  background: #fff;
+}
+
+.agent-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.topbar-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.topbar-text-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-chat-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px 16px;
+}
+
+.agent-shell--desktop .agent-chat-column {
+  max-width: 820px;
+  padding: 0 24px 24px;
+}
+
+.agent-messages {
+  flex: 1;
+  min-height: 200px;
+  overflow-y: auto;
+  padding: 20px 4px;
+}
+
+.agent-compose-wrap {
+  flex-shrink: 0;
+  padding-top: 8px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.agent-shell--desktop .agent-compose-wrap {
+  max-width: 820px;
+}
+
+/* 桌面：消息气泡浅色主题 */
+.agent-shell--desktop .msg-bubble {
+  background: #f5f5f5;
+  border: 1px solid #ebebeb;
+}
+
+.agent-shell--desktop .msg-row.user .msg-bubble {
+  background: rgba(201, 169, 98, 0.18);
+  border-color: rgba(201, 169, 98, 0.35);
+}
+
+.agent-shell--desktop .confirm-card {
+  background: #fafafa;
+  border-color: #d4af37;
+}
+
+.drawer-footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.drawer-footer-links a {
+  color: #444;
+  text-decoration: none;
+}
+
+@media (max-width: 1023px) {
+  .agent-shell {
+    min-height: 100dvh;
+  }
+
+  .agent-main {
+    min-height: 100dvh;
+  }
+
+  .agent-chat-column {
+    padding: 0 12px 12px;
+  }
+
+  .agent-messages {
+    padding: 12px 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .b2b-portal-background {
+    background: #ececec;
+  }
+
+  .agent-portal-page .agent-auth-wrap {
+    max-width: 520px;
+  }
+}
+
 </style>
