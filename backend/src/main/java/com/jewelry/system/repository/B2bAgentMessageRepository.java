@@ -8,4 +8,6 @@ import java.util.List;
 public interface B2bAgentMessageRepository extends JpaRepository<B2bAgentMessage, Long> {
 
     List<B2bAgentMessage> findBySessionIdOrderByCreatedAtAsc(Long sessionId);
+
+    boolean existsBySessionIdAndRole(Long sessionId, String role);
 }
