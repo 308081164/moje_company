@@ -117,50 +117,60 @@
               当前为历史会话，仅可查看，无法继续发送消息。
             </div>
             <div v-else class="agent-compose">
-              <div v-if="pendingPreviews.length" class="pending-images">
-                <div v-for="p in pendingPreviews" :key="p.id" class="pending-thumb">
-                  <img :src="p.url" alt="待发送" />
-                  <button type="button" class="pending-remove" aria-label="移除" @click="removePending(p.id)">×</button>
+              <div class="agent-compose-box">
+                <div v-if="pendingPreviews.length" class="pending-images compose-pending">
+                  <div v-for="p in pendingPreviews" :key="p.id" class="pending-thumb">
+                    <img :src="p.url" alt="待发送" />
+                    <button type="button" class="pending-remove" aria-label="移除" @click="removePending(p.id)">×</button>
+                  </div>
+                </div>
+                <textarea
+                  ref="inputAreaRef"
+                  v-model="inputText"
+                  class="agent-textarea"
+                  rows="3"
+                  placeholder="描述定制需求；可添加参考图，点击发送后一并提交…"
+                  :disabled="sending"
+                  @input="resizeInputArea"
+                  @keydown.enter.exact.prevent="sendMessage"
+                />
+                <div class="agent-compose-toolbar">
+                  <div class="toolbar-left">
+                    <a-upload
+                      :before-upload="onPickImage"
+                      :show-upload-list="false"
+                      accept="image/*"
+                      multiple
+                    >
+                      <button type="button" class="compose-icon-btn" :disabled="sending" title="添加图片">
+                        <PictureOutlined />
+                      </button>
+                    </a-upload>
+                    <button
+                      type="button"
+                      class="compose-icon-btn"
+                      :class="{ 'compose-icon-btn--active': recording }"
+                      :disabled="sending || !voiceAvailable"
+                      :title="voiceButtonTitle"
+                      @click="onVoiceButtonClick"
+                    >
+                      <AudioOutlined />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    class="compose-send-btn"
+                    :disabled="!canSend"
+                    :aria-busy="sending"
+                    title="发送"
+                    @click="sendMessage"
+                  >
+                    <span v-if="sending" class="send-spinner" />
+                    <span v-else class="send-arrow">↑</span>
+                  </button>
                 </div>
               </div>
-              <div class="agent-input-bar">
-                <a-upload
-                  :before-upload="onPickImage"
-                  :show-upload-list="false"
-                  accept="image/*"
-                  multiple
-                >
-                  <a-button :disabled="sending" title="添加图片"><PictureOutlined /></a-button>
-                </a-upload>
-                <a-button
-                  :disabled="sending || !voiceSupported"
-                  :type="recording ? 'primary' : 'default'"
-                  :danger="recording"
-                  :title="voiceSupported ? '按住说话，松开发送识别' : '当前浏览器不支持语音'"
-                  @mousedown.prevent="startVoice"
-                  @mouseup.prevent="stopVoice"
-                  @mouseleave="stopVoice"
-                  @touchstart.prevent="startVoice"
-                  @touchend.prevent="stopVoice"
-                >
-                  <AudioOutlined />
-                </a-button>
-                <a-input
-                  v-model:value="inputText"
-                  placeholder="描述定制需求；图片会先进入暂存区，点击发送后一并提交…"
-                  :disabled="sending"
-                  @press-enter="sendMessage"
-                />
-                <a-button
-                  type="primary"
-                  :loading="sending"
-                  :disabled="!canSend"
-                  @click="sendMessage"
-                >
-                  发送
-                </a-button>
-              </div>
-              <p v-if="recording" class="voice-hint">正在录音，松开后识别为文字…</p>
+              <p v-if="recording" class="voice-hint">{{ voiceHintText }}</p>
             </div>
           </div>
         </template>
@@ -185,6 +195,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
+import {
+  createSpeechRecognition,
+  detectVoiceInputCapability,
+  extensionForMime,
+  type VoiceInputMode
+} from '@/utils/voiceInput'
 import { message } from 'ant-design-vue'
 import { HomeOutlined, PictureOutlined, AudioOutlined } from '@ant-design/icons-vue'
 import {
@@ -230,18 +246,34 @@ const historyOpen = ref(false)
 const historySessions = ref<B2bAgentSession[]>([])
 const historyLoading = ref(false)
 const msgBoxRef = ref<HTMLElement | null>(null)
+const inputAreaRef = ref<HTMLTextAreaElement | null>(null)
 const pendingFiles = ref<File[]>([])
 const pendingPreviews = ref<PendingPreview[]>([])
 const pendingOptimisticIds = ref<Set<number>>(new Set())
 const recording = ref(false)
-const voiceSupported = ref(
-  typeof window !== 'undefined' &&
-    !!(navigator.mediaDevices?.getUserMedia) &&
-    typeof MediaRecorder !== 'undefined'
+const voiceCapability = ref(detectVoiceInputCapability())
+const voiceMode = ref<VoiceInputMode>(voiceCapability.value.mode)
+const voiceAvailable = computed(() => voiceCapability.value.available)
+const voiceMimeType = ref(voiceCapability.value.mimeType || 'audio/webm')
+
+const voiceButtonTitle = computed(() => {
+  if (!voiceAvailable.value) return '当前浏览器不支持语音输入'
+  if (recording.value) {
+    return voiceMode.value === 'speech-recognition' ? '点击结束聆听' : '点击结束录音'
+  }
+  return voiceMode.value === 'speech-recognition'
+    ? '点击开始语音输入（浏览器识别）'
+    : '点击开始录音，再次点击结束并识别'
+})
+
+const voiceHintText = computed(() =>
+  voiceMode.value === 'speech-recognition' ? '正在聆听，请说话…' : '正在录音，再次点击麦克风结束…'
 )
 
 let mediaRecorder: MediaRecorder | null = null
+let mediaStream: MediaStream | null = null
 let voiceChunks: Blob[] = []
+let speechRecognition: SpeechRecognition | null = null
 
 const loginForm = ref({ contact: '', password: '' })
 const registerForm = ref({ contact: '', password: '' })
@@ -409,58 +441,144 @@ async function sendMessage() {
   }
 }
 
-async function startVoice() {
-  if (!voiceSupported.value || recording.value || sending.value) return
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    voiceChunks = []
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm'
-    mediaRecorder = new MediaRecorder(stream, { mimeType: mime })
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) voiceChunks.push(e.data)
-    }
-    mediaRecorder.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop())
-      void handleVoiceStop()
-    }
-    mediaRecorder.start()
-    recording.value = true
-  } catch {
-    message.error('无法访问麦克风，请检查浏览器权限')
+function resizeInputArea() {
+  const el = inputAreaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  const next = Math.min(Math.max(el.scrollHeight, 72), 200)
+  el.style.height = `${next}px`
+}
+
+function appendVoiceText(text: string) {
+  const t = text.trim()
+  if (!t) return
+  inputText.value = inputText.value ? `${inputText.value} ${t}` : t
+  nextTick(resizeInputArea)
+  message.success('语音识别完成，可编辑后点击发送')
+}
+
+function cleanupMediaStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
   }
 }
 
-function stopVoice() {
-  if (!recording.value || !mediaRecorder) return
-  if (mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop()
+function stopSpeechRecognition() {
+  if (speechRecognition) {
+    try {
+      speechRecognition.stop()
+    } catch {
+      /* ignore */
+    }
+    speechRecognition = null
   }
+}
+
+async function startMediaRecorderVoice() {
+  const mime = voiceMimeType.value
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  mediaStream = stream
+  voiceChunks = []
+  mediaRecorder = new MediaRecorder(stream, { mimeType: mime })
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) voiceChunks.push(e.data)
+  }
+  mediaRecorder.onstop = () => {
+    cleanupMediaStream()
+    mediaRecorder = null
+    void handleVoiceStop()
+  }
+  mediaRecorder.start()
+  recording.value = true
+}
+
+function stopMediaRecorderVoice() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    recording.value = false
+    cleanupMediaStream()
+    return
+  }
+  mediaRecorder.stop()
   recording.value = false
 }
 
+function startBrowserSpeechRecognition() {
+  const recognition = createSpeechRecognition()
+  if (!recognition) {
+    message.error('当前浏览器不支持语音输入')
+    return
+  }
+  speechRecognition = recognition
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    const text = event.results?.[0]?.[0]?.transcript
+    if (text) appendVoiceText(text)
+  }
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    if (event.error !== 'aborted') {
+      message.error(`语音识别失败：${event.error}`)
+    }
+  }
+  recognition.onend = () => {
+    recording.value = false
+    speechRecognition = null
+  }
+  try {
+    recognition.start()
+    recording.value = true
+  } catch {
+    recording.value = false
+    speechRecognition = null
+    message.error('无法启动语音识别，请检查麦克风权限')
+  }
+}
+
+async function onVoiceButtonClick() {
+  if (!voiceAvailable.value || sending.value) return
+  if (recording.value) {
+    if (voiceMode.value === 'speech-recognition') {
+      stopSpeechRecognition()
+      recording.value = false
+    } else {
+      stopMediaRecorderVoice()
+    }
+    return
+  }
+  if (voiceMode.value === 'speech-recognition') {
+    startBrowserSpeechRecognition()
+    return
+  }
+  try {
+    await startMediaRecorderVoice()
+  } catch {
+    message.error('无法访问麦克风，请在浏览器设置中允许麦克风权限')
+  }
+}
+
 async function handleVoiceStop() {
-  if (!voiceChunks.length) return
-  const blob = new Blob(voiceChunks, { type: voiceChunks[0]?.type || 'audio/webm' })
+  if (!voiceChunks.length) {
+    message.warning('未录到有效语音，请重试')
+    return
+  }
+  const mime = voiceChunks[0]?.type || voiceMimeType.value
+  const blob = new Blob(voiceChunks, { type: mime })
   voiceChunks = []
   if (blob.size < 800) {
     message.warning('录音太短，请重试')
     return
   }
+  const ext = extensionForMime(mime)
   sending.value = true
   try {
-    const { text } = await agentSpeechToText(blob)
-    if (text) {
-      inputText.value = inputText.value ? `${inputText.value} ${text}` : text
-      message.success('语音识别完成，可编辑后点击发送')
-    }
+    const { text } = await agentSpeechToText(blob, `voice.${ext}`)
+    if (text) appendVoiceText(text)
   } catch (e: unknown) {
     message.error(String((e as Error)?.message || e))
   } finally {
     sending.value = false
   }
 }
+
 
 async function doCommit() {
   if (!session.value) return
@@ -542,17 +660,23 @@ async function openHistory(item: B2bAgentSession) {
 }
 
 onMounted(async () => {
+  voiceCapability.value = detectVoiceInputCapability()
+  voiceMode.value = voiceCapability.value.mode
+  voiceMimeType.value = voiceCapability.value.mimeType || 'audio/webm'
   syncToken()
   if (b2bToken.value) {
     await initSession()
   }
+  nextTick(resizeInputArea)
 })
 
 onUnmounted(() => {
   clearPending()
+  stopSpeechRecognition()
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop()
   }
+  cleanupMediaStream()
 })
 
 watch(historyOpen, (v) => {
@@ -784,17 +908,132 @@ watch(sending, (v) => {
   background: rgba(0, 0, 0, 0.2);
 }
 
-.agent-input-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.agent-compose-box {
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  background: #f7f7f8;
+  padding: 12px 14px 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.agent-input-bar .ant-input {
-  flex: 1;
+.compose-pending {
+  margin-bottom: 10px;
+}
+
+.agent-textarea {
+  width: 100%;
+  min-height: 72px;
+  max-height: 200px;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #1a1a1a;
+  font-size: 16px;
+  line-height: 1.55;
+  padding: 0;
+  margin-bottom: 10px;
+  font-family: inherit;
+}
+
+.agent-textarea::placeholder {
+  color: #999;
+}
+
+.agent-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.agent-compose-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compose-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #555;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.compose-icon-btn:hover:not(:disabled) {
+  border-color: #c9a962;
+  background: rgba(201, 169, 98, 0.12);
+}
+
+.compose-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.compose-icon-btn--active {
+  border-color: #c9a962;
+  background: rgba(201, 169, 98, 0.2);
+  color: #5c4d2e;
+}
+
+.compose-send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(145deg, #d4af37 0%, #8b7355 100%);
+  color: #1a1814;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.compose-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.send-arrow {
+  display: block;
+  transform: translateY(-1px);
+}
+
+.send-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(26, 24, 20, 0.25);
+  border-top-color: #1a1814;
+  border-radius: 50%;
+  animation: send-spin 0.7s linear infinite;
+}
+
+@keyframes send-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .agent-readonly-hint {
+
   text-align: center;
   color: #999;
   padding: 12px;
