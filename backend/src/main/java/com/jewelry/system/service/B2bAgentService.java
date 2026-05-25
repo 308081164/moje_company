@@ -54,10 +54,7 @@ public class B2bAgentService {
         if (clientId != null) {
             sessionRepository.findByClientIdOrderByCreatedAtDesc(clientId).stream()
                     .filter(s -> s.getStatus() == B2bAgentSessionStatus.ACTIVE)
-                    .forEach(s -> {
-                        s.setStatus(B2bAgentSessionStatus.CLOSED);
-                        sessionRepository.save(s);
-                    });
+                    .forEach(this::closeSession);
         }
         B2bAgentSession session = new B2bAgentSession();
         session.setPublicToken(UUID.randomUUID().toString().replace("-", ""));
@@ -75,10 +72,11 @@ public class B2bAgentService {
         return buildWelcomeMessage(clientId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<B2bAgentSessionDto> listHistory() {
         Long clientId = SecurityUtils.currentB2bClientId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录"));
+        pruneEmptyClosedSessions(clientId);
         return sessionRepository.findByClientIdOrderByCreatedAtDesc(clientId).stream()
                 .map(s -> toSessionDto(s, false))
                 .toList();
@@ -98,6 +96,7 @@ public class B2bAgentService {
         session.setClientId(clientId);
         sessionRepository.closeOtherActiveForClient(clientId, B2bAgentSessionStatus.ACTIVE,
                 B2bAgentSessionStatus.CLOSED, session.getId());
+        pruneEmptyClosedSessions(clientId);
         sessionRepository.save(session);
         return toSessionDto(session, true);
     }
@@ -302,6 +301,29 @@ public class B2bAgentService {
             return ".jpg";
         }
         return name.substring(name.lastIndexOf('.'));
+    }
+
+
+    private void closeSession(B2bAgentSession session) {
+        session.setStatus(B2bAgentSessionStatus.CLOSED);
+        sessionRepository.save(session);
+        deleteIfNoUserMessages(session.getId());
+    }
+
+    private void deleteIfNoUserMessages(long sessionId) {
+        if (!messageRepository.existsBySessionIdAndRole(sessionId, "user")) {
+            sessionRepository.deleteById(sessionId);
+            log.debug("Deleted empty B2B agent session {}", sessionId);
+        }
+    }
+
+    private void pruneEmptyClosedSessions(Long clientId) {
+        if (clientId == null) {
+            return;
+        }
+        sessionRepository.findByClientIdAndStatus(clientId, B2bAgentSessionStatus.CLOSED).stream()
+                .filter(s -> !messageRepository.existsBySessionIdAndRole(s.getId(), "user"))
+                .forEach(s -> sessionRepository.delete(s));
     }
 
     private B2bAgentSession resolveSession(long sessionId, String publicToken) {

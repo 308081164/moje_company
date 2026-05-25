@@ -16,6 +16,8 @@ public interface B2bAgentSessionRepository extends JpaRepository<B2bAgentSession
 
     List<B2bAgentSession> findByClientIdOrderByCreatedAtDesc(Long clientId);
 
+    List<B2bAgentSession> findByClientIdAndStatus(Long clientId, B2bAgentSessionStatus status);
+
     @Modifying
     @Query("UPDATE B2bAgentSession s SET s.status = :closed WHERE s.clientId = :clientId AND s.status = :active AND s.id <> :keepId")
     int closeOtherActiveForClient(
