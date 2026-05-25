@@ -5,8 +5,7 @@
         <div class="logo">
           <img src="/icons/icon-maskable.svg" alt="" class="nav-logo-mark" width="36" height="36" />
           <div class="logo-text-block">
-            <span class="logo-text">MOJE</span>
-            <span class="logo-sub">珠宝定制</span>
+            <span class="logo-text">恒鎏珠宝AI建模平台</span>
           </div>
         </div>
         <nav class="nav">
@@ -244,7 +243,7 @@
         <div class="footer-brand">
           <img src="/icons/icon-maskable.svg" alt="" width="28" height="28" />
           <div>
-            <div class="footer-logo-text">MOJE</div>
+            <div class="footer-logo-text">恒鎏珠宝AI建模平台</div>
             <div class="footer-tagline">匠心定制 · 永恒经典</div>
           </div>
         </div>
@@ -256,7 +255,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>© {{ new Date().getFullYear() }} MOJE 珠宝 · All rights reserved.</p>
+        <p>© {{ new Date().getFullYear() }} 恒鎏珠宝AI建模平台 · All rights reserved.</p>
       </div>
     </footer>
   </div>

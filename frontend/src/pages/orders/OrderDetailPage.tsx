@@ -1052,12 +1052,6 @@ const OrderDetailPage: React.FC = () => {
               保存建模信息
             </Button>
           </Form>
-          <Card size="small" title="镶嵌结构库" style={{ marginTop: 24, maxWidth: 960 }}>
-            <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              浏览、上传与管理常用镶嵌结构归档（与侧边栏「镶嵌结构库」同源）。
-            </Paragraph>
-            <InlayStructureLibraryBrowser compact />
-          </Card>
         </div>
       );
     }

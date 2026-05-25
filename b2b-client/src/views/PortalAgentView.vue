@@ -16,7 +16,7 @@
         <!-- 未登录：登录注册页 -->
         <div v-if="!b2bToken" class="agent-auth-panel">
           <div class="auth-panel-intro">
-            <h2>MOJE 珠宝定制 · 需求录入</h2>
+            <h2>恒鎏珠宝AI建模平台 · 需求录入</h2>
             <p>请先登录或注册 B 端账号，登录后将进入智能助理对话，引导您完成定制需求提交。</p>
           </div>
           <a-tabs v-model:activeKey="loginTab" class="auth-tabs">

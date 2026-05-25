@@ -24,8 +24,7 @@
           <div class="b2b-portal-logo">
             <img src="/icons/icon-maskable.svg" alt="" class="b2b-logo-mark" width="52" height="52" />
             <div class="b2b-logo-text">
-              <h2 class="logo-title">MOJE</h2>
-              <span class="logo-subtitle">珠宝定制服务平台</span>
+              <h2 class="logo-title">恒鎏珠宝AI建模平台</h2>
             </div>
           </div>
           <span class="b2b-portal-tagline">传承匠心工艺 · 定制专属珠宝</span>
