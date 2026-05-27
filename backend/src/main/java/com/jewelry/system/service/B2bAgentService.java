@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -110,14 +111,16 @@ public class B2bAgentService {
 
     @Transactional
     public B2bAgentChatResponse sendMessage(long sessionId, String publicToken, String text,
-                                            MultipartFile image, List<MultipartFile> images) {
-        B2bAgentSession session = resolveSession(sessionId, publicToken);
+                                            MultipartFile image, List<MultipartFile> images,
+                                            Long callerClientId) {
+        B2bAgentSession session = resolveSession(sessionId, publicToken, callerClientId);
         ensureActive(session);
 
         List<MultipartFile> uploads = collectUploads(image, images);
         boolean hasUploads = !uploads.isEmpty();
 
-        boolean loggedIn = SecurityUtils.currentB2bClientId().isPresent();
+        Long effectiveClientId = resolveEffectiveClientId(session, callerClientId);
+        boolean loggedIn = effectiveClientId != null;
         if (!loggedIn && (StringUtils.hasText(text) || hasUploads)) {
             return B2bAgentChatResponse.builder()
                     .session(toSessionDto(session, true))
@@ -186,13 +189,18 @@ public class B2bAgentService {
     }
 
     @Transactional
-    public B2bAgentChatResponse commit(long sessionId, String publicToken) {
-        SecurityUtils.currentB2bClientId()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录后再创建工单"));
-        B2bAgentSession session = resolveSession(sessionId, publicToken);
+    public B2bAgentChatResponse commit(long sessionId, String publicToken, Long callerClientId) {
+        B2bAgentSession session = resolveSession(sessionId, publicToken, callerClientId);
+        Long effectiveClientId = resolveEffectiveClientId(session, callerClientId);
+        if (effectiveClientId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录后再创建工单");
+        }
         ensureActive(session);
         if (session.getClientId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "会话未绑定账号，请重新登录");
+            session.setClientId(effectiveClientId);
+            sessionRepository.save(session);
+        } else if (!session.getClientId().equals(effectiveClientId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作该会话");
         }
 
         B2bAgentDraftDto draft = readDraft(session.getDraftJson());
@@ -327,17 +335,36 @@ public class B2bAgentService {
     }
 
     private B2bAgentSession resolveSession(long sessionId, String publicToken) {
+        return resolveSession(sessionId, publicToken, null);
+    }
+
+    private B2bAgentSession resolveSession(long sessionId, String publicToken, Long callerClientId) {
         B2bAgentSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
         if (publicToken != null && !publicToken.isBlank()
                 && !publicToken.equals(session.getPublicToken())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "会话凭证无效");
         }
-        Long clientId = SecurityUtils.currentB2bClientId().orElse(null);
+        Long clientId = resolveEffectiveClientId(session, callerClientId);
         if (clientId != null && session.getClientId() != null && !clientId.equals(session.getClientId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权访问该会话");
         }
         return session;
+    }
+
+    /**
+     * 异步 Agent 线程可能丢失 SecurityContext：优先用请求线程捕获的 callerClientId，
+     * 其次 SecurityContext，最后会话已绑定的 clientId。
+     */
+    private Long resolveEffectiveClientId(B2bAgentSession session, Long callerClientId) {
+        if (callerClientId != null) {
+            return callerClientId;
+        }
+        Optional<Long> fromSecurity = SecurityUtils.currentB2bClientId();
+        if (fromSecurity.isPresent()) {
+            return fromSecurity.get();
+        }
+        return session.getClientId();
     }
 
     private void ensureActive(B2bAgentSession session) {
