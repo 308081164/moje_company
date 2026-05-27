@@ -426,8 +426,32 @@ function applySession(s: B2bAgentSession) {
   scrollBottom()
 }
 
+function mergeChatMessages(
+  sessionMsgs: B2bAgentMessage[],
+  latest?: B2bAgentMessage | null
+): B2bAgentMessage[] {
+  const merged = [...sessionMsgs]
+  if (!latest?.content) return merged
+  const exists =
+    latest.id != null
+      ? merged.some((m) => m.id === latest.id)
+      : merged.some((m) => m.role === latest.role && m.content === latest.content)
+  if (!exists) merged.push(latest)
+  return merged
+}
+
+async function reloadCurrentSession() {
+  if (!session.value) return
+  const s = await agentGetSession(session.value.sessionId, session.value.publicToken)
+  applySession(s)
+}
+
 function applyChatResponse(res: B2bAgentChatResponse) {
-  applySession(res.session)
+  const merged = mergeChatMessages(res.session.messages ?? [], res.latestAssistantMessage ?? null)
+  applySession({ ...res.session, messages: merged })
+  if (res.needLogin) {
+    message.warning('请先登录后再发送消息')
+  }
   if (res.showConfirmCard !== undefined) {
     showConfirmCard.value = res.showConfirmCard
   }
@@ -549,6 +573,10 @@ async function sendMessage() {
       sessionHeaders()
     )
     applyChatResponse(res)
+    const hasDialogue = messages.value.some((m) => m.id !== WELCOME_MSG_ID && (m.role === 'user' || m.role === 'assistant'))
+    if (!hasDialogue) {
+      await reloadCurrentSession()
+    }
   } catch (e: unknown) {
     pendingOptimisticIds.value.delete(optimisticId)
     messages.value = messages.value.filter((m) => m.id !== optimisticId)
@@ -709,6 +737,8 @@ async function doCommit() {
     showConfirmCard.value = false
     confirmOpen.value = false
     message.success('工单已创建')
+    await reloadCurrentSession()
+    void loadHistory()
   } catch (e: unknown) {
     message.error(String((e as Error)?.message || e))
   } finally {
@@ -783,10 +813,14 @@ async function loadHistory() {
 }
 
 async function openHistory(item: B2bAgentSession) {
-  const s = await agentGetSession(item.sessionId, item.publicToken)
-  applySession(s)
-  sidebarOpen.value = false
-  historyOpen.value = false
+  try {
+    const s = await agentGetSession(item.sessionId, item.publicToken)
+    applySession(s)
+    sidebarOpen.value = false
+    historyOpen.value = false
+  } catch (e: unknown) {
+    message.error(String((e as Error)?.message || '加载历史对话失败'))
+  }
 }
 
 onMounted(async () => {
