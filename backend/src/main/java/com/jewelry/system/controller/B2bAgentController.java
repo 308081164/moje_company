@@ -3,6 +3,7 @@ package com.jewelry.system.controller;
 import com.jewelry.system.dto.b2b.agent.B2bAgentChatResponse;
 import com.jewelry.system.dto.b2b.agent.B2bAgentSessionDto;
 import com.jewelry.system.service.B2bAgentService;
+import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -72,8 +73,9 @@ public class B2bAgentController {
             @RequestPart(value = "text", required = false) String text,
             @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        Long callerClientId = SecurityUtils.currentB2bClientId().orElse(null);
         return CompletableFuture.supplyAsync(
-                () -> ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image, images)),
+                () -> ResponseEntity.ok(agentService.sendMessage(id, publicToken, text, image, images, callerClientId)),
                 b2bAgentExecutor);
     }
 
@@ -89,8 +91,9 @@ public class B2bAgentController {
     public CompletableFuture<ResponseEntity<B2bAgentChatResponse>> commit(
             @PathVariable long id,
             @RequestHeader(value = "X-B2B-Agent-Session-Token", required = false) String publicToken) {
+        Long callerClientId = SecurityUtils.currentB2bClientId().orElse(null);
         return CompletableFuture.supplyAsync(
-                () -> ResponseEntity.ok(agentService.commit(id, publicToken)),
+                () -> ResponseEntity.ok(agentService.commit(id, publicToken, callerClientId)),
                 b2bAgentExecutor);
     }
 }

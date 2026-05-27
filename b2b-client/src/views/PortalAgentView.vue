@@ -446,7 +446,17 @@ async function reloadCurrentSession() {
   applySession(s)
 }
 
-function applyChatResponse(res: B2bAgentChatResponse) {
+async function applyChatResponse(res: B2bAgentChatResponse) {
+  if (res.needLogin && b2bToken.value && session.value) {
+    try {
+      const bound = await agentBindSession(session.value.sessionId, session.value.publicToken)
+      applySession(bound)
+      message.warning('会话已重新绑定账号，请再次发送您的消息')
+      return
+    } catch {
+      /* fall through */
+    }
+  }
   const merged = mergeChatMessages(res.session.messages ?? [], res.latestAssistantMessage ?? null)
   applySession({ ...res.session, messages: merged })
   if (res.needLogin) {
@@ -485,14 +495,13 @@ async function ensureSession(): Promise<B2bAgentSession> {
   }
   const s = await agentCreateSession()
   try {
-    await agentBindSession(s.sessionId, s.publicToken)
+    const bound = await agentBindSession(s.sessionId, s.publicToken)
+    applySession(bound)
+    return session.value!
   } catch {
-    /* ignore */
+    applySession({ ...s, messages: s.messages ?? [], readOnly: false })
+    return session.value!
   }
-  session.value = { ...s, messages: s.messages ?? [], readOnly: false }
-  localStorage.setItem(SESSION_TOKEN_KEY, s.publicToken)
-  localStorage.setItem(SESSION_ID_KEY, String(s.sessionId))
-  return session.value!
 }
 
 function startNewChat() {
@@ -572,7 +581,7 @@ async function sendMessage() {
       { text: savedText || undefined, images: savedImages.length ? savedImages : undefined },
       sessionHeaders()
     )
-    applyChatResponse(res)
+    await applyChatResponse(res)
     const hasDialogue = messages.value.some((m) => m.id !== WELCOME_MSG_ID && (m.role === 'user' || m.role === 'assistant'))
     if (!hasDialogue) {
       await reloadCurrentSession()
@@ -733,7 +742,7 @@ async function doCommit() {
   sending.value = true
   try {
     const res = await agentCommit(session.value!.sessionId, sessionHeaders())
-    applyChatResponse(res)
+    await applyChatResponse(res)
     showConfirmCard.value = false
     confirmOpen.value = false
     message.success('工单已创建')
