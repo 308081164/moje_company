@@ -25,7 +25,7 @@ public class B2BClientService {
         if (!StringUtils.hasText(req.getContact()) || !StringUtils.hasText(req.getPassword())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "联系方式与密码不能为空");
         }
-        String contact = req.getContact().trim();
+        String contact = normalizeContact(req.getContact());
         if (clientRepository.existsByContact(contact)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该联系方式已注册");
         }
@@ -45,21 +45,25 @@ public class B2BClientService {
         return login(loginReq);
     }
 
+    @Transactional
     public B2BClientLoginResponse login(B2BClientLoginRequest req) {
         if (!StringUtils.hasText(req.getContact()) || !StringUtils.hasText(req.getPassword())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "联系方式与密码不能为空");
         }
-        B2BClient client = clientRepository.findByContact(req.getContact().trim())
+        String rawContact = req.getContact().trim();
+        String normalized = normalizeContact(rawContact);
+        String digits = digitsOnly(normalized);
+        B2BClient client = clientRepository.findByContactFlexible(rawContact, normalized, digits)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "联系方式或密码错误"));
-        
-        if (!passwordEncoder.matches(req.getPassword(), client.getPassword())) {
+
+        if (!verifyPassword(req.getPassword(), client)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "联系方式或密码错误");
         }
-        
+
         if (B2BClient.ClientStatus.INACTIVE.equals(client.getStatus())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "账号已禁用");
         }
-        
+
         B2BClientLoginResponse response = new B2BClientLoginResponse();
         response.setId(client.getId());
         response.setContact(client.getContact());
@@ -69,7 +73,7 @@ public class B2BClientService {
         response.setCreatedAt(client.getCreatedAt());
         response.setAccessToken(jwtTokenProvider.createB2BAccessToken(client.getId(), client.getContact()));
         response.setExpiresIn(jwtTokenProvider.getAccessExpirationSeconds());
-        
+
         return response;
     }
 
@@ -81,6 +85,45 @@ public class B2BClientService {
 
     public B2BClient findByContact(String contact) {
         return clientRepository.findByContact(contact).orElse(null);
+    }
+
+    private boolean verifyPassword(String rawPassword, B2BClient client) {
+        String stored = client.getPassword();
+        if (passwordEncoder.matches(rawPassword, stored)) {
+            return true;
+        }
+        // 兼容历史明文密码（导入或未加密数据），验证通过后自动升级为 BCrypt
+        if (stored != null && !stored.startsWith("$2") && stored.equals(rawPassword)) {
+            client.setPassword(passwordEncoder.encode(rawPassword));
+            clientRepository.save(client);
+            return true;
+        }
+        return false;
+    }
+
+    /** 手机号统一为 11 位数字；其他联系方式仅 trim */
+    static String normalizeContact(String contact) {
+        if (!StringUtils.hasText(contact)) {
+            return "";
+        }
+        String trimmed = contact.trim();
+        String digits = digitsOnly(trimmed);
+        if (digits.length() >= 11) {
+            if (digits.startsWith("86") && digits.length() > 11) {
+                return digits.substring(digits.length() - 11);
+            }
+            if (digits.length() == 11) {
+                return digits;
+            }
+        }
+        return trimmed;
+    }
+
+    private static String digitsOnly(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replaceAll("\\D", "");
     }
 
     private B2BClientResponse toDto(B2BClient client) {

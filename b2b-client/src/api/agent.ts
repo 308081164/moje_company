@@ -61,6 +61,11 @@ export interface B2bAgentChatResponse {
   supportWecomFallbackText?: string
 }
 
+
+export function agentWelcome(): Promise<{ message: string }> {
+  return request.get('/b2b/agent/welcome')
+}
+
 function authConfig(extra?: Record<string, string>) {
   const token = getB2bTokenRaw()
   const headers: Record<string, string> = { ...extra }
@@ -70,16 +75,12 @@ function authConfig(extra?: Record<string, string>) {
   return { headers }
 }
 
-export function agentWelcome(): Promise<{ message: string }> {
-  return request.get('/b2b/agent/welcome', authConfig())
-}
-
 export function agentCreateSession(): Promise<B2bAgentSession> {
   return request.post('/b2b/agent/sessions', {}, authConfig())
 }
 
 export function agentListSessions(): Promise<B2bAgentSession[]> {
-  return request.get('/b2b/agent/sessions', authConfig())
+  return request.get('/b2b/agent/sessions', { ...authConfig(), skipGlobalError: true })
 }
 
 export function agentGetSession(sessionId: number, publicToken: string): Promise<B2bAgentSession> {

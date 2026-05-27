@@ -762,6 +762,13 @@ function b2bLogout() {
   message.success('已退出')
 }
 
+function onB2bAuthExpired() {
+  syncToken()
+  if (!b2bToken.value) {
+    void showWelcomeOnly()
+  }
+}
+
 async function loadHistory() {
   if (!b2bToken.value) return
   historyLoading.value = true
@@ -769,6 +776,7 @@ async function loadHistory() {
     historySessions.value = await agentListSessions()
   } catch {
     historySessions.value = []
+    syncToken()
   } finally {
     historyLoading.value = false
   }
@@ -786,6 +794,7 @@ onMounted(async () => {
   voiceMode.value = voiceCapability.value.mode
   voiceMimeType.value = voiceCapability.value.mimeType || 'audio/webm'
   syncToken()
+  window.addEventListener('moje-b2b-auth-expired', onB2bAuthExpired as EventListener)
   if (b2bToken.value) {
     await showWelcomeOnly()
     if (isDesktop.value) void loadHistory()
@@ -794,6 +803,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('moje-b2b-auth-expired', onB2bAuthExpired as EventListener)
   clearPending()
   stopSpeechRecognition()
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {

@@ -144,7 +144,7 @@ export function getClientOrders(params?: {
 }
 
 export function getLastOrderProfile(): Promise<B2BLastOrderProfileDto> {
-  return request.get('/b2b/client/last-order-profile')
+  return request.get('/b2b/client/last-order-profile', { skipGlobalError: true })
 }
 
 export function b2bBindOrder(orderNumber: string, proofToken: string): Promise<void> {
