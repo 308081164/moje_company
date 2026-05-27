@@ -40,9 +40,21 @@ export function readJwtExpMs(token: string): number | null {
 
 export function isB2bTokenExpiredOrInvalid(token: string | null): boolean {
   if (!token) return true
+  if (token.split('.').length !== 3) return true
   const exp = readJwtExpMs(token)
   if (exp == null) return false
   return Date.now() >= exp - 30_000
+}
+
+/** B 端登录/注册：勿附带旧 JWT，401 亦不应清会话 */
+export function urlIsB2bCredentialEndpoint(url: string): boolean {
+  const u = url.split('?')[0] || ''
+  return u.includes('/b2b/client/login') || u.includes('/b2b/client/register')
+}
+
+export function urlIsCPortalCredentialEndpoint(url: string): boolean {
+  const u = url.split('?')[0] || ''
+  return u.includes('/portal/c/account/login') || u.includes('/portal/c/account/register')
 }
 
 /** 请求 URL 是否属于 B2B API（兼容 baseURL 含 /api、绝对地址等） */
