@@ -215,7 +215,7 @@ public class B2bAgentService {
         req.setCompanyName(draft.getCompanyName());
         req.setContactPerson(draft.getContactPerson());
 
-        B2BOrderAccessDto access = b2bOrderService.createOrder(req);
+        B2BOrderAccessDto access = b2bOrderService.createOrder(req, effectiveClientId);
         Long orderId = access.getOrderId();
         Set<String> attachedUrls = new LinkedHashSet<>();
         for (String url : draft.getReferenceImageUrls()) {

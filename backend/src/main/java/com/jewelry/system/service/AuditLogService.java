@@ -8,13 +8,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 @RequiredArgsConstructor
 public class AuditLogService {
 
     private final OperationLogRepository operationLogRepository;
-    private final HttpServletRequest request;
 
     public void log(String type, String target, Long targetId, String details) {
         OperationLog log = new OperationLog();
@@ -27,11 +29,17 @@ public class AuditLogService {
         log.setOperationTarget(target);
         log.setTargetId(targetId);
         log.setOperationDetails(details);
-        String ip = request.getRemoteAddr();
-        log.setIpAddress(ip);
-        String ua = request.getHeader("User-Agent");
-        log.setUserAgent(ua);
+        populateRequestMeta(log);
         operationLogRepository.save(log);
     }
-}
 
+    private void populateRequestMeta(OperationLog log) {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
+            return;
+        }
+        HttpServletRequest request = servletAttrs.getRequest();
+        log.setIpAddress(request.getRemoteAddr());
+        log.setUserAgent(request.getHeader("User-Agent"));
+    }
+}

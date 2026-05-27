@@ -50,11 +50,18 @@ public class B2BOrderService {
 
     @Transactional
     public B2BOrderAccessDto createOrder(B2BOrderCreateRequest req) {
+        return createOrder(req, null);
+    }
+
+    @Transactional
+    public B2BOrderAccessDto createOrder(B2BOrderCreateRequest req, Long explicitClientId) {
         if (!StringUtils.hasText(req.getBasicRequirements())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写订单基础需求");
         }
-        Long clientId = SecurityUtils.currentB2bClientId()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录 B 端账号后再创建订单"));
+        Long clientId = explicitClientId != null
+                ? explicitClientId
+                : SecurityUtils.currentB2bClientId()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录 B 端账号后再创建订单"));
         B2BClient client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "客户账号无效"));
 
