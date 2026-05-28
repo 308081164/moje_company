@@ -3,6 +3,8 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.inlay.*;
 import com.jewelry.system.entity.InlayStructureDeleteLog;
 import com.jewelry.system.repository.InlayStructureDeleteLogRepository;
+import com.jewelry.system.util.ImageUploadSupport;
+import com.jewelry.system.util.ImageUploadSupport.NormalizedUpload;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -178,19 +180,21 @@ public class InlayStructureLibraryService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择文件");
         }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
         String parent = normalizeRelative(parentPath);
-        String name = sanitizeFileName(file.getOriginalFilename());
+        String name = sanitizeFileName(uploadFile.getOriginalFilename());
         String rel = parent.isEmpty() ? name : parent + name;
         String key = toOssKey(rel);
         if (ossService.objectExists(key)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "同名文件已存在");
         }
-        ossService.putObjectStream(key, file.getInputStream(), file.getSize(), file.getContentType());
+        ossService.putObjectStream(key, uploadFile.getInputStream(), uploadFile.getSize(), uploadFile.getContentType());
         InlayStructureEntryDto e = new InlayStructureEntryDto();
         e.setDirectory(false);
         e.setName(name);
         e.setPath(rel);
-        e.setSize(file.getSize());
+        e.setSize(uploadFile.getSize());
         e.setUrl(ossService.publicUrl(key));
         return e;
     }

@@ -85,6 +85,8 @@ public class InlayStructureController {
             contentType = "image/gif";
         } else if (lowerName.endsWith(".webp")) {
             contentType = "image/webp";
+        } else if (lowerName.endsWith(".bmp")) {
+            contentType = "image/bmp";
         }
 
         return ResponseEntity.ok()

@@ -13,6 +13,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.jewelry.system.util.ImageUploadSupport;
+import com.jewelry.system.util.ImageUploadSupport.NormalizedUpload;
+
 import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -77,12 +80,21 @@ public class AliyunOssService {
         if (!isEnabled()) {
             throw new IllegalStateException("Aliyun OSS 未正确配置，无法上传文件");
         }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
+        String key = normalized.convertedFromBmp()
+                ? ImageUploadSupport.replaceBmpExtensionInKey(objectKey)
+                : objectKey;
         OSS ossClient = null;
         try {
             ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
-            ossClient.putObject(bucketName, objectKey, file.getInputStream());
-            // 生成 HTTPS 访问地址（公共读桶时可直接访问）
-            return "https://" + bucketName + "." + endpoint + "/" + objectKey;
+            ObjectMetadata meta = new ObjectMetadata();
+            meta.setContentLength(uploadFile.getSize());
+            if (uploadFile.getContentType() != null && !uploadFile.getContentType().isBlank()) {
+                meta.setContentType(uploadFile.getContentType());
+            }
+            ossClient.putObject(bucketName, key, uploadFile.getInputStream(), meta);
+            return "https://" + bucketName + "." + endpoint + "/" + key;
         } catch (IOException e) {
             log.error("OSS upload failed. key={}", objectKey, e);
             throw e;
