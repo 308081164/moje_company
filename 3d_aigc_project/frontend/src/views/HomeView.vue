@@ -17,7 +17,7 @@
           </h3>
           <FileUpload
             ref="imageUploadRef"
-            accept-types=".jpg,.jpeg,.png"
+            accept-types=".jpg,.jpeg,.png,.bmp"
             :max-size-m-b="20"
             @file-selected="onImageSelected"
             @file-removed="onImageRemoved"

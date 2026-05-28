@@ -3,6 +3,8 @@ package com.jewelry.system.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.OrderDraftFromChatImageResponse;
+import com.jewelry.system.util.ImageUploadSupport;
+import com.jewelry.system.util.ImageUploadSupport.NormalizedUpload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -47,6 +49,11 @@ public class DashScopeChatImageDraftService {
         if (file.getSize() > MAX_IMAGE_BYTES) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片过大，请压缩后上传（最大 8MB）");
         }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
+        if (uploadFile.getSize() > MAX_IMAGE_BYTES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片过大，请压缩后上传（最大 8MB）");
+        }
         String apiKey = integrationSettingsService.requireDashScopeApiKey();
         if (apiKey == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -54,11 +61,8 @@ public class DashScopeChatImageDraftService {
         }
         String model = integrationSettingsService.dashScopeModel();
 
-        String mime = file.getContentType();
-        if (mime == null || mime.isBlank()) {
-            mime = "image/jpeg";
-        }
-        String b64 = Base64.getEncoder().encodeToString(file.getBytes());
+        String mime = ImageUploadSupport.resolveImageMimeType(uploadFile);
+        String b64 = Base64.getEncoder().encodeToString(uploadFile.getBytes());
         String dataUrl = "data:" + mime + ";base64," + b64;
 
         String systemPrompt = """

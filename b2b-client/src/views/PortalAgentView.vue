@@ -551,9 +551,14 @@ function removePending(id: string) {
   pendingFiles.value = pendingPreviews.value.map((p) => p.file)
 }
 
+function isAcceptedImageFile(file: File): boolean {
+  if (file.type.startsWith('image/')) return true
+  return /\.(jpe?g|png|gif|webp|bmp|svg|avif)$/i.test(file.name)
+}
+
 function onPickImage(file: File) {
-  if (!file.type.startsWith('image/')) {
-    message.warning('仅支持图片格式')
+  if (!isAcceptedImageFile(file)) {
+    message.warning('仅支持图片格式（含 BMP）')
     return false
   }
   addPendingFile(file)

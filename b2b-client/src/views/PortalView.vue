@@ -24,7 +24,7 @@
           <div class="b2b-portal-logo">
             <img src="/icons/icon-maskable.svg" alt="" class="b2b-logo-mark" width="52" height="52" />
             <div class="b2b-logo-text">
-              <h2 class="logo-title">恒鎏珠宝</h2>
+              <h2 class="logo-title">MOJE</h2>
               <span class="logo-subtitle">珠宝定制服务平台</span>
             </div>
           </div>
@@ -137,6 +137,7 @@
                   <a-upload
                     v-model:file-list="fileList"
                     action="#"
+                    accept=".jpg,.jpeg,.png,.gif,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.stl,.obj,.jad"
                     :before-upload="beforeUpload"
                     multiple
                     list-type="text"
@@ -147,7 +148,7 @@
                     </a-button>
                     <template #tip>
                       <div class="ant-upload-hint">
-                        支持图片、Word、Excel、PDF等文件，可多选
+                        支持图片（含 BMP）、Word、Excel、PDF 等文件，可多选
                       </div>
                     </template>
                   </a-upload>
@@ -558,7 +559,7 @@ const confirmPasswordRules = computed(() => [
 ])
 
 const beforeUpload: UploadProps['beforeUpload'] = (file) => {
-  const isImageOrDoc = /\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|stl|obj|jad)$/i.test(file.name)
+  const isImageOrDoc = /\.(jpg|jpeg|png|gif|bmp|pdf|doc|docx|xls|xlsx|stl|obj|jad)$/i.test(file.name)
   if (!isImageOrDoc) {
     message.error('仅支持图片、Word、Excel、PDF和建模文件')
     return false

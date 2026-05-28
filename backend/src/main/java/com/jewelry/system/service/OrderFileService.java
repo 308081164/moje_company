@@ -9,6 +9,8 @@ import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.FileEntityRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
+import com.jewelry.system.util.ImageUploadSupport;
+import com.jewelry.system.util.ImageUploadSupport.NormalizedUpload;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -190,11 +192,14 @@ public class OrderFileService {
                             + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
             );
         }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
         String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String uploadName = uploadFile.getOriginalFilename() != null ? uploadFile.getOriginalFilename() : original;
         String ext = "";
-        int dot = original.lastIndexOf('.');
+        int dot = uploadName.lastIndexOf('.');
         if (dot >= 0) {
-            ext = original.substring(dot);
+            ext = uploadName.substring(dot);
         }
         String storedFileName = buildStandardStoredFileName(orderId, fileType, original, ext);
         String objectKey = "order/" + orderId + "/" + subDir + "/" + storedFileName;
@@ -202,7 +207,7 @@ public class OrderFileService {
         // 所有文件强制上传到 OSS，不再保留本地副本
         String url;
         try {
-            url = aliyunOssService.uploadObject(objectKey, file);
+            url = aliyunOssService.uploadObject(objectKey, uploadFile);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", e);
         }
@@ -212,10 +217,10 @@ public class OrderFileService {
         e.setOriginalName(original);
         e.setFilePath(objectKey);
         e.setFileUrl(url);
-        e.setFileSize(file.getSize());
+        e.setFileSize(uploadFile.getSize());
         e.setFileType(fileType);
         if (dot >= 0) {
-            e.setFileExtension(original.substring(dot + 1));
+            e.setFileExtension(uploadName.substring(dot + 1));
         }
         e.setRelatedType(FileRelatedType.ORDER);
         e.setRelatedId(orderId);
@@ -253,11 +258,14 @@ public class OrderFileService {
                             + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
             );
         }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
         String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String uploadName = uploadFile.getOriginalFilename() != null ? uploadFile.getOriginalFilename() : original;
         String ext = "";
-        int dot = original.lastIndexOf('.');
+        int dot = uploadName.lastIndexOf('.');
         if (dot >= 0) {
-            ext = original.substring(dot);
+            ext = uploadName.substring(dot);
         }
         long pseudoOrderId = 0L;
         String storedFileName = buildStandardStoredFileName(pseudoOrderId, fileType, original, ext);
@@ -265,7 +273,7 @@ public class OrderFileService {
 
         String url;
         try {
-            url = aliyunOssService.uploadObject(objectKey, file);
+            url = aliyunOssService.uploadObject(objectKey, uploadFile);
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", ex);
         }
@@ -275,10 +283,10 @@ public class OrderFileService {
         ent.setOriginalName(original);
         ent.setFilePath(objectKey);
         ent.setFileUrl(url);
-        ent.setFileSize(file.getSize());
+        ent.setFileSize(uploadFile.getSize());
         ent.setFileType(fileType);
         if (dot >= 0) {
-            ent.setFileExtension(original.substring(dot + 1));
+            ent.setFileExtension(uploadName.substring(dot + 1));
         }
         ent.setRelatedType(FileRelatedType.PORTAL);
         ent.setRelatedId(0L);

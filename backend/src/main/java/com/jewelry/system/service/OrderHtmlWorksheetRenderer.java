@@ -649,7 +649,9 @@ final class OrderHtmlWorksheetRenderer {
                 || head.startsWith("data:image/jpg;base64,")
                 || head.startsWith("data:image/png;base64,")
                 || head.startsWith("data:image/gif;base64,")
-                || head.startsWith("data:image/webp;base64,");
+                || head.startsWith("data:image/webp;base64,")
+                || head.startsWith("data:image/bmp;base64,")
+                || head.startsWith("data:image/x-ms-bmp;base64,");
     }
 
     private static boolean isLikelyImage(String fileName, String url) {

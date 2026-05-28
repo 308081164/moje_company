@@ -81,7 +81,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  acceptTypes: '.jpg,.jpeg,.png',
+  acceptTypes: '.jpg,.jpeg,.png,.bmp',
   maxSizeMB: 20,
   uploading: false,
   uploadProgress: 0,
@@ -104,7 +104,8 @@ const previewUrl = ref<string>('')
 // 是否为图片文件
 const isImageFile = computed(() => {
   if (!selectedFile.value) return false
-  return selectedFile.value.type.startsWith('image/')
+  if (selectedFile.value.type.startsWith('image/')) return true
+  return /\.(jpe?g|png|gif|webp|bmp)$/i.test(selectedFile.value.name)
 })
 
 // ==========================================
@@ -168,7 +169,7 @@ function handleFile(file: File) {
   selectedFile.value = file
 
   // 生成图片预览URL
-  if (file.type.startsWith('image/')) {
+  if (file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(file.name)) {
     previewUrl.value = URL.createObjectURL(file)
   } else {
     previewUrl.value = ''

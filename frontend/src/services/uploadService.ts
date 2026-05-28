@@ -39,6 +39,19 @@ export interface ChunkUploadParams {
   fileName: string;
 }
 
+
+const RASTER_IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|svg|avif)$/i;
+
+function isAllowedImageMimeOrExtension(file: File, allowedTypes: string[]): boolean {
+  if (allowedTypes.includes(file.type)) {
+    return true;
+  }
+  if (file.type && file.type !== 'application/octet-stream') {
+    return false;
+  }
+  return RASTER_IMAGE_EXT.test(file.name);
+}
+
 // 默认配置
 const DEFAULT_CONFIG: UploadConfig = {
   maxSize: 10 * 1024 * 1024, // 10MB
@@ -47,6 +60,8 @@ const DEFAULT_CONFIG: UploadConfig = {
     'image/png',
     'image/gif',
     'image/webp',
+    'image/bmp',
+    'image/x-ms-bmp',
     'image/svg+xml',
     'application/pdf',
     'application/msword',
@@ -86,10 +101,14 @@ class UploadService {
 
     // 检查文件类型
     if (this.config.allowedTypes && !this.config.allowedTypes.includes(file.type)) {
-      return {
-        valid: false,
-        message: `不支持的文件类型: ${file.type}`,
-      };
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const extAllowed = ext && this.config.allowedTypes.some((t) => t.endsWith('/' + ext) || t === 'image/' + ext || t === 'image/x-ms-' + ext);
+      if (!extAllowed && !RASTER_IMAGE_EXT.test(file.name)) {
+        return {
+          valid: false,
+          message: `不支持的文件类型: ${file.type || file.name}`,
+        };
+      }
     }
 
     return { valid: true };
@@ -343,13 +362,15 @@ class UploadService {
         'image/png',
         'image/gif',
         'image/webp',
+        'image/bmp',
+        'image/x-ms-bmp',
         'image/svg+xml',
       ];
-      
-      if (!allowedTypes.includes(file.type)) {
+
+      if (!isAllowedImageMimeOrExtension(file, allowedTypes)) {
         return {
           success: false,
-          message: '只支持图片文件（JPEG、PNG、GIF、WebP、SVG）',
+          message: '只支持图片文件（JPEG、PNG、GIF、WebP、BMP、SVG）',
         };
       }
 
