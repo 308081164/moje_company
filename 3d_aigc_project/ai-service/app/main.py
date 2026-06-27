@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_config
 from app.routers.generate import router as generate_router
+from app.routers.preprocess import router as preprocess_router
 from app.services.model_manager import get_model_manager
 from app.services.generator import get_generator_service
 from app.models.schemas import HealthResponse
@@ -82,9 +83,13 @@ async def lifespan(app: FastAPI):
     model_manager = get_model_manager()
     model_manager.configure(config.model)
 
-    # 预加载模型（异步，不阻塞启动）
+    # 预加载模型（失败不阻断服务启动）
     logger.info("开始预加载模型...")
-    model_loaded = model_manager.load_model()
+    model_loaded = False
+    try:
+        model_loaded = model_manager.load_model()
+    except Exception as e:
+        logger.error("模型预加载异常: %s", e, exc_info=True)
     if model_loaded:
         logger.info("模型预加载成功")
         # 模型预热
@@ -164,6 +169,7 @@ app.add_middleware(
 # ============================================================
 
 app.include_router(generate_router)
+app.include_router(preprocess_router)
 
 
 # ============================================================

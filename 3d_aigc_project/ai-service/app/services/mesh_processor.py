@@ -378,6 +378,13 @@ class MeshProcessor:
         except Exception:
             stats["is_watertight"] = False
 
+        # 7. 珠宝曲面轻度平滑（去除 AI 网格锯齿/尖刺，保持整体形态）
+        try:
+            mesh = self._apply_jewelry_surface_smooth(mesh)
+            stats["repairs"].append("珠宝曲面平滑")
+        except Exception as e:
+            logger.warning(f"珠宝曲面平滑失败: {e}")
+
         # 保存修复后的网格
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         mesh.export(output_path)
@@ -391,6 +398,123 @@ class MeshProcessor:
         )
 
         return stats
+
+    def _get_generation_smooth_config(self):
+        try:
+            from app.config import get_config
+            return get_config().generation
+        except Exception:
+            return None
+
+    def _remove_spike_faces(self, mesh, min_area_ratio: float, max_aspect_ratio: float):
+        """剔除面积过小或细长三角面（AI 网格常见尖刺/噪点）"""
+        import trimesh
+
+        if not isinstance(mesh, trimesh.Trimesh) or len(mesh.faces) < 8:
+            return mesh
+
+        keep = np.ones(len(mesh.faces), dtype=bool)
+
+        try:
+            areas = mesh.area_faces
+            if len(areas) > 0:
+                median = float(np.median(areas))
+                min_area = max(median * min_area_ratio, 1e-12)
+                keep &= areas >= min_area
+        except Exception:
+            pass
+
+        try:
+            tris = mesh.vertices[mesh.faces]
+            e0 = np.linalg.norm(tris[:, 1] - tris[:, 0], axis=1)
+            e1 = np.linalg.norm(tris[:, 2] - tris[:, 1], axis=1)
+            e2 = np.linalg.norm(tris[:, 0] - tris[:, 2], axis=1)
+            max_e = np.maximum(np.maximum(e0, e1), e2)
+            min_e = np.minimum(np.minimum(e0, e1), e2)
+            aspect = max_e / np.maximum(min_e, 1e-12)
+            keep &= aspect <= max_aspect_ratio
+        except Exception:
+            pass
+
+        if keep.sum() >= 4 and keep.sum() < len(keep):
+            mesh.update_faces(keep)
+        return mesh
+
+    def _apply_jewelry_surface_smooth(self, mesh):
+        """
+        珠宝建模后处理：Taubin 保体积平滑 + 去除尖刺三角面，获得平整顺滑曲面。
+        """
+        import trimesh
+
+        if not isinstance(mesh, trimesh.Trimesh):
+            return mesh
+
+        gen_cfg = self._get_generation_smooth_config()
+        taubin_iter = gen_cfg.jewelry_taubin_iterations if gen_cfg else 10
+        taubin_lambda = gen_cfg.jewelry_taubin_lambda if gen_cfg else 0.5
+        taubin_nu = gen_cfg.jewelry_taubin_nu if gen_cfg else -0.53
+        min_area_ratio = gen_cfg.jewelry_min_face_area_ratio if gen_cfg else 0.0015
+        max_aspect = gen_cfg.jewelry_spike_aspect_ratio if gen_cfg else 40.0
+
+        before_faces = len(mesh.faces)
+        mesh.remove_degenerate_faces()
+        mesh.remove_duplicate_faces()
+        mesh.merge_vertices()
+        mesh = self._remove_spike_faces(mesh, min_area_ratio, max_aspect)
+
+        if taubin_iter > 0:
+            try:
+                import trimesh.smoothing as smoothing
+
+                smoothed = smoothing.filter_taubin(
+                    mesh,
+                    lamb=taubin_lambda,
+                    nu=taubin_nu,
+                    iterations=taubin_iter,
+                )
+                if isinstance(smoothed, trimesh.Trimesh):
+                    mesh = smoothed
+            except Exception:
+                try:
+                    import trimesh.smoothing as smoothing
+
+                    iterations = 2 if len(mesh.faces) < 120_000 else 1
+                    smoothed = smoothing.filter_laplacian(
+                        mesh, lamb=0.35, iterations=iterations
+                    )
+                    if isinstance(smoothed, trimesh.Trimesh):
+                        mesh = smoothed
+                except Exception:
+                    pass
+
+        mesh = self._remove_spike_faces(mesh, min_area_ratio, max_aspect)
+        mesh.remove_degenerate_faces()
+        mesh.merge_vertices()
+        try:
+            mesh.fix_normals()
+        except Exception:
+            pass
+
+        logger.info(
+            "珠宝曲面平滑: %d -> %d 面 (taubin_iter=%d)",
+            before_faces,
+            len(mesh.faces),
+            taubin_iter,
+        )
+        return mesh
+
+    def jewelry_finish_mesh(self, mesh_path: str, output_path: str) -> str:
+        """对生成网格做珠宝级曲面整理（修复 + 平滑）。"""
+        self.repair_mesh(
+            mesh_path,
+            output_path,
+            remove_duplicate_faces=True,
+            remove_degenerate_faces=True,
+            fill_holes=True,
+            fix_normals=True,
+            merge_close_vertices=True,
+        )
+        return output_path
 
     # ============================================================
     # 网格分析

@@ -10,6 +10,15 @@ import threading
 from typing import Optional, Dict, Any
 from pathlib import Path
 
+from app.services.multi_view import (
+    find_local_mv_shape_path,
+    find_local_single_view_shape_path,
+    pipeline_supports_multi_view,
+    shape_dir_has_weights,
+    MV_SHAPE_SUBDIRS,
+    MV_REPO_DIR,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +54,9 @@ class ModelManager:
         self._current_version: Optional[str] = None
         # 配置（延迟设置）
         self._model_config = None
-        # 线程锁
-        self._model_lock = threading.Lock()
+        # 线程锁（load_model 并发等待，需 Condition 支持 wait/notify）
+        self._model_lock = threading.Condition()
+        self._last_load_error: Optional[str] = None
 
         logger.info("模型管理器已初始化（单例）")
 
@@ -57,6 +67,10 @@ class ModelManager:
         """
         self._model_config = model_config
         logger.info(f"模型配置已设置: 版本={model_config.version}, 路径={model_config.model_path}")
+
+    def get_last_load_error(self) -> Optional[str]:
+        """返回最近一次 load_model 失败原因"""
+        return self._last_load_error
 
     def load_model(self, force_reload: bool = False) -> bool:
         """
@@ -69,49 +83,67 @@ class ModelManager:
             是否加载成功
         """
         if self._model_config is None:
-            logger.error("模型配置未设置，请先调用 configure()")
+            self._last_load_error = "模型配置未设置，请先调用 configure()"
+            logger.error(self._last_load_error)
             return False
 
-        # 如果已加载且不强制重载，直接返回
-        if self._loaded and not force_reload:
-            logger.info("模型已加载，跳过重复加载")
-            return True
+        with self._model_lock:
+            if self._loaded and not force_reload:
+                return True
 
-        # 防止并发加载
-        if self._loading:
-            logger.warning("模型正在加载中，请等待...")
-            return False
+            while self._loading:
+                logger.info("模型正在加载中，等待完成...")
+                self._model_lock.wait(timeout=600)
+                if self._loaded and not force_reload:
+                    return True
 
-        self._loading = True
-        try:
-            with self._model_lock:
+            self._loading = True
+            try:
                 logger.info("=" * 50)
                 logger.info(f"开始加载模型: {self._model_config.version}")
                 logger.info("=" * 50)
 
-                # 先卸载已有模型释放显存
                 if self._loaded:
                     self._unload_models()
 
-                # 根据配置加载模型
                 success = self._load_hunyuan3d_model()
 
                 if success:
                     self._loaded = True
                     self._current_version = self._model_config.version
+                    self._last_load_error = None
                     logger.info(f"模型加载成功: {self._current_version}")
                 else:
-                    logger.error("模型加载失败")
+                    self._last_load_error = (
+                        self._last_load_error or "模型权重加载失败，请检查 MODEL_PATH"
+                    )
+                    logger.error("模型加载失败: %s", self._last_load_error)
                     self._loaded = False
 
                 return success
 
-        except Exception as e:
-            logger.error(f"加载模型时发生异常: {e}", exc_info=True)
-            self._loaded = False
-            return False
-        finally:
-            self._loading = False
+            except Exception as e:
+                self._last_load_error = str(e)
+                logger.error(f"加载模型时发生异常: {e}", exc_info=True)
+                self._loaded = False
+                return False
+            finally:
+                self._loading = False
+                self._model_lock.notify_all()
+
+    def _resolve_local_model_base(self) -> Path:
+        """解析并规范化本地 models 根目录"""
+        return Path(self._model_config.model_path).expanduser().resolve()
+
+    def _find_local_shape_path(self) -> Optional[str]:
+        """按当前版本查找已就绪（含权重）的 ShapeGen 目录"""
+        base = str(self._resolve_local_model_base())
+        version = self._model_config.version
+        if version == "mv":
+            return find_local_mv_shape_path(base)
+        if version in ("mini", "turbo", "standard"):
+            return find_local_single_view_shape_path(base)
+        return find_local_single_view_shape_path(base)
 
     def _load_hunyuan3d_model(self) -> bool:
         """
@@ -119,29 +151,51 @@ class ModelManager:
         支持离线模式（从本地路径加载）和在线模式（从HuggingFace下载）
         """
         config = self._model_config
-        model_path = Path(config.model_path)
+        model_path = self._resolve_local_model_base()
+        local_shape = self._find_local_shape_path()
 
-        # 检查本地模型路径是否存在
-        local_model_dir = model_path / f"hunyuan3d-2-{config.version}"
-        has_local_model = local_model_dir.exists() and any(local_model_dir.iterdir())
+        if local_shape:
+            repo_root = str(Path(local_shape).parent)
+            logger.info("检测到本地 ShapeGen 权重: %s", local_shape)
+            return self._load_from_local(repo_root)
 
         if config.offline_mode:
-            if not has_local_model:
-                logger.error(
-                    f"离线模式下未找到本地模型: {local_model_dir}\n"
-                    f"请将模型文件放置到该目录，或设置 OFFLINE_MODE=false 从HuggingFace下载"
-                )
-                return False
-            logger.info(f"从本地路径加载模型: {local_model_dir}")
-            return self._load_from_local(str(local_model_dir))
+            self._last_load_error = (
+                f"离线模式下未找到可用模型权重（MODEL_PATH={model_path}）。"
+                f"请确认存在 hunyuan3d-2mv 或 hunyuan3d-2mini 且含 model.fp16.safetensors。"
+            )
+            logger.error(self._last_load_error)
+            return False
+
+        logger.warning(
+            "本地未找到可用权重，尝试从 HuggingFace 下载（需联网）..."
+        )
+        return self._load_from_huggingface()
+
+    def _resolve_shape_subpath(self, model_path: str) -> str:
+        """解析形状模型子目录（仓库根目录 vs dit 子文件夹）"""
+        config = self._model_config
+        if config.version == "mini":
+            candidates = [
+                os.path.join(model_path, "hunyuan3d-dit-v2-mini"),
+                os.path.join(model_path, "hunyuan3d-dit-v2-mini-turbo"),
+                os.path.join(model_path, "hunyuan3d-dit-v2-mini-fast"),
+            ]
+        elif config.version == "mv":
+            candidates = [os.path.join(model_path, sub) for sub in MV_SHAPE_SUBDIRS]
+        elif config.version == "turbo":
+            candidates = [
+                os.path.join(model_path, "hunyuan3d-dit-v2-0-turbo"),
+                os.path.join(model_path, "hunyuan3d-dit-v2-0"),
+            ]
         else:
-            # 在线模式：优先使用本地，不存在则从HuggingFace下载
-            if has_local_model:
-                logger.info(f"检测到本地模型，从本地加载: {local_model_dir}")
-                return self._load_from_local(str(local_model_dir))
-            else:
-                logger.info("本地模型不存在，从HuggingFace下载...")
-                return self._load_from_huggingface()
+            candidates = [
+                os.path.join(model_path, "hunyuan3d-dit-v2-0"),
+            ]
+        for cand in candidates:
+            if os.path.isfile(os.path.join(cand, "config.yaml")):
+                return cand
+        return model_path
 
     def _load_from_local(self, model_path: str) -> bool:
         """
@@ -149,8 +203,6 @@ class ModelManager:
         """
         try:
             import torch
-            from hy3dgen.text2image import Hunyuan3DPaintPipeline
-            from hy3dgen.texgen import Hunyuan3DTexPipeline
 
             device = "cuda" if torch.cuda.is_available() else "cpu"
             dtype = torch.float16 if (
@@ -159,52 +211,34 @@ class ModelManager:
 
             logger.info(f"加载设备: {device}, 数据类型: {dtype}")
 
-            # 加载图像到3D生成管道
-            logger.info("正在加载 Hunyuan3D-2 Image-to-3D 管道...")
-            try:
-                from hy3dgen.t2i import Hunyuan3DPaintPipeline
-                self._models["paint_pipeline"] = Hunyuan3DPaintPipeline.from_pretrained(
-                    model_path,
-                    torch_dtype=dtype,
-                ).to(device)
-                logger.info("Hunyuan3D Paint Pipeline 加载成功")
-            except Exception as e:
-                logger.warning(f"加载 Paint Pipeline 失败（可能不需要）: {e}")
+            shape_path = self._resolve_shape_subpath(model_path)
+            logger.info(f"形状模型路径: {shape_path}")
 
-            # 加载图像到3D模型
-            logger.info("正在加载 Hunyuan3D-2 Image-to-3D 模型...")
-            try:
-                from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
-                self._models["shape_gen"] = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-                    model_path,
-                    torch_dtype=dtype,
-                ).to(device)
-                logger.info("Hunyuan3D Shape Generation 模型加载成功")
-            except Exception as e:
-                logger.warning(f"加载 ShapeGen 失败: {e}")
-
-            # 加载纹理生成模型
-            logger.info("正在加载 Hunyuan3D-2 纹理生成模型...")
-            try:
-                from hy3dgen.texgen import Hunyuan3DTexPipeline
-                self._models["tex_gen"] = Hunyuan3DTexPipeline.from_pretrained(
-                    model_path,
-                    torch_dtype=dtype,
-                ).to(device)
-                logger.info("Hunyuan3D Texture Generation 模型加载成功")
-            except Exception as e:
-                logger.warning(f"加载 TexGen 失败（将跳过纹理生成）: {e}")
-
-            # 至少需要 shape_gen 模型
-            if "shape_gen" not in self._models:
-                logger.error("核心模型 shape_gen 加载失败，无法继续")
+            if not self._load_shape_gen_from_path(shape_path):
                 return False
+
+            # 纹理模型（可选，mini 仓库无 paint，需完整版仓库）
+            paint_candidates = [
+                os.path.join(model_path, "hunyuan3d-paint-v2-0"),
+                os.path.join(Path(model_path).parent, "hunyuan3d-2", "hunyuan3d-paint-v2-0"),
+            ]
+            for paint_path in paint_candidates:
+                if os.path.isfile(os.path.join(paint_path, "config.yaml")):
+                    try:
+                        from hy3dgen.texgen import Hunyuan3DTexPipeline
+                        self._models["tex_gen"] = Hunyuan3DTexPipeline.from_pretrained(
+                            paint_path,
+                            torch_dtype=dtype,
+                        ).to(device)
+                        logger.info(f"纹理模型加载成功: {paint_path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"加载 TexGen 失败: {e}")
 
             return True
 
         except ImportError as e:
             logger.error(f"缺少必要的依赖库: {e}")
-            logger.error("请确保已安装 hy3dgen: pip install hy3dgen")
             return False
         except Exception as e:
             logger.error(f"从本地加载模型失败: {e}", exc_info=True)
@@ -224,9 +258,10 @@ class ModelManager:
 
             # 根据版本选择HuggingFace模型ID
             model_ids = {
-                "mini": "tencent/Hunyuan3D-2",
+                "mini": "tencent/Hunyuan3D-2mini",
                 "standard": "tencent/Hunyuan3D-2",
                 "turbo": "tencent/Hunyuan3D-2",
+                "mv": "tencent/Hunyuan3D-2mv",
             }
             hf_model_id = model_ids.get(
                 self._model_config.version, "tencent/Hunyuan3D-2"
@@ -306,6 +341,142 @@ class ModelManager:
             logger.warning("模型尚未加载，请先调用 load_model()")
             return None
         return self._models.get(model_name)
+
+    def find_mv_shape_path(self) -> Optional[str]:
+        """查找本地多视图 ShapeGen 权重目录"""
+        if self._model_config is None:
+            return None
+        return find_local_mv_shape_path(self._model_config.model_path)
+
+    def find_single_view_shape_path(self) -> Optional[str]:
+        """查找本地单图 ShapeGen 权重目录"""
+        if self._model_config is None:
+            return None
+        return find_local_single_view_shape_path(self._model_config.model_path)
+
+    def supports_multi_view(self) -> bool:
+        """当前已加载的 ShapeGen 是否支持多视图输入"""
+        if not self._loaded:
+            return False
+        return pipeline_supports_multi_view(self._models.get("shape_gen"))
+
+    def try_switch_to_multi_view_model(self) -> bool:
+        """
+        若本地存在 MV 模型则切换 ShapeGen；已支持多视图时直接返回 True。
+        """
+        if self.supports_multi_view():
+            return True
+        if self._model_config is None:
+            return False
+
+        mv_path = self.find_mv_shape_path()
+        if not mv_path:
+            logger.warning("未找到本地多视图模型目录（hunyuan3d-dit-v2-mv）")
+            return False
+
+        logger.info("检测到多视图模型，正在切换 ShapeGen: %s", mv_path)
+        with self._model_lock:
+            if self.supports_multi_view():
+                return True
+            ok = self._load_shape_gen_from_path(mv_path, replace_existing=True)
+            if ok:
+                self._current_version = "mv"
+            return ok
+
+    def try_switch_to_single_view_model(self) -> bool:
+        """
+        单图任务时若当前为 MV pipeline，则切换至本地单图 ShapeGen。
+        已加载单图模型时直接返回 True。
+        """
+        if not self.supports_multi_view():
+            return True
+        if self._model_config is None:
+            return False
+
+        sv_path = self.find_single_view_shape_path()
+        if not sv_path:
+            logger.warning(
+                "未找到本地单图模型目录（hunyuan3d-dit-v2-0 / hunyuan3d-dit-v2-mini 等）"
+            )
+            return False
+
+        logger.info("单图任务：正在切换 ShapeGen 至单图模型: %s", sv_path)
+        with self._model_lock:
+            if not self.supports_multi_view():
+                return True
+            ok = self._load_shape_gen_from_path(sv_path, replace_existing=True)
+            if ok:
+                self._current_version = self._infer_shape_version_from_path(sv_path)
+            return ok
+
+    @staticmethod
+    def _infer_shape_version_from_path(shape_path: str) -> str:
+        """根据权重目录名推断模型版本标签"""
+        name = os.path.basename(shape_path).lower()
+        if "mini" in name:
+            return "mini"
+        if "turbo" in name:
+            return "turbo"
+        if "mv" in name:
+            return "mv"
+        return "standard"
+
+    def _load_shape_gen_from_path(
+        self, shape_path: str, replace_existing: bool = False
+    ) -> bool:
+        """从指定目录加载 Hunyuan3D ShapeGen pipeline"""
+        try:
+            import torch
+            from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            dtype = torch.float16 if (
+                self._model_config.use_fp16 and device == "cuda"
+            ) else torch.float32
+
+            shape_path = os.path.abspath(shape_path)
+            config_path = os.path.join(shape_path, "config.yaml")
+            safetensors_path = os.path.join(shape_path, "model.fp16.safetensors")
+            ckpt_path = os.path.join(shape_path, "model.fp16.ckpt")
+
+            if os.path.isfile(safetensors_path):
+                load_ckpt, use_safetensors = safetensors_path, True
+            elif os.path.isfile(ckpt_path):
+                load_ckpt, use_safetensors = ckpt_path, False
+            else:
+                raise FileNotFoundError(
+                    f"未找到权重文件: {safetensors_path} 或 {ckpt_path}"
+                )
+
+            if replace_existing and "shape_gen" in self._models:
+                try:
+                    del self._models["shape_gen"]
+                except Exception:
+                    pass
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+            logger.info("正在加载 Hunyuan3D ShapeGen: %s", shape_path)
+            pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_single_file(
+                load_ckpt,
+                config_path,
+                device=device,
+                dtype=dtype,
+                use_safetensors=use_safetensors,
+            )
+
+            self._models["shape_gen"] = pipeline
+            mv_capable = pipeline_supports_multi_view(pipeline)
+            logger.info(
+                "Hunyuan3D ShapeGen 加载成功（多视图=%s）",
+                "是" if mv_capable else "否",
+            )
+            return True
+        except Exception as e:
+            logger.error(f"加载 ShapeGen 失败: {e}")
+            return False
 
     def get_all_models(self) -> Dict[str, Any]:
         """

@@ -40,15 +40,17 @@ router = APIRouter(prefix="/api/generate", tags=["3D生成"])
     "/image-to-3d",
     response_model=GenerateResponse,
     summary="图片生成3D模型",
-    description="将一张图片转换为3D模型，支持可选的底座网格融合",
+    description="轨道A：多视图/单图生成几何白模，可选镶嵌底座 ICP+布尔融合（默认无纹理）",
 )
 async def image_to_3d(request: GenerateRequest):
     """
     图片生成3D模型接口
 
-    - **image_path**: 输入图片路径（本地路径或URL）
+    - **image_path**: 单图路径（单图模式必填）
+    - **multi_view**: 是否启用多视图
+    - **views**: 多视图路径字典 front/back/left/right/top/bottom（至少 2 个）
     - **setting_mesh_path**: 镶嵌底座网格路径（可选）
-    - **prompt**: 生成提示词（可选，辅助描述期望的3D效果）
+    - **prompt**: 生成提示词（可选）
     - **result_format**: 输出格式（glb/obj/stl/ply）
     """
     service = get_generator_service()
@@ -57,6 +59,7 @@ async def image_to_3d(request: GenerateRequest):
     task = service.create_task(
         request_type="image_to_3d",
         params=request.model_dump(),
+        task_id=request.task_id,
     )
 
     # 提交到异步队列
@@ -96,6 +99,7 @@ async def condition_generate(request: ConditionGenerateRequest):
     task = service.create_task(
         request_type="condition_generate",
         params=request.model_dump(),
+        task_id=request.task_id,
     )
 
     # 提交到异步队列
@@ -139,6 +143,7 @@ async def get_task_status(task_id: str):
         progress=task.progress,
         message=task.message,
         current_step=task.current_step,
+        error=task.error,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )

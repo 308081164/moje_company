@@ -2,10 +2,15 @@ package com.moje.jewelry3d.controller;
 
 import com.moje.jewelry3d.common.BusinessException;
 import com.moje.jewelry3d.common.Result;
+import com.moje.jewelry3d.model.dto.InlayCategoryNode;
+import com.moje.jewelry3d.model.dto.InlayPageDto;
+import com.moje.jewelry3d.model.dto.InlayQuery;
 import com.moje.jewelry3d.model.dto.InlayStructureInfo;
+import com.moje.jewelry3d.model.dto.InlayViewDto;
 import com.moje.jewelry3d.service.InlayStructureService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -18,7 +23,11 @@ import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 镶嵌结构管理控制器
@@ -29,6 +38,14 @@ import java.util.List;
 @RequestMapping("/api/inlay")
 public class InlayStructureController {
 
+    private static final byte[] PREVIEW_PLACEHOLDER_SVG = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+              <rect width="64" height="64" rx="8" fill="#ecf5ff"/>
+              <path d="M20 28 L32 20 L44 28 L44 42 L32 50 L20 42 Z" fill="none" stroke="#409eff" stroke-width="2"/>
+              <circle cx="32" cy="32" r="4" fill="#409eff"/>
+            </svg>
+            """.getBytes(StandardCharsets.UTF_8);
+
     private final InlayStructureService inlayStructureService;
 
     @Autowired
@@ -37,14 +54,107 @@ public class InlayStructureController {
     }
 
     /**
-     * 列出所有镶嵌结构
-     *
-     * @return 镶嵌结构信息列表
+     * 列出镶嵌结构（支持关键词、格式、预览状态筛选与分页）
      */
     @GetMapping("/list")
-    public Result<List<InlayStructureInfo>> listStructures() {
-        List<InlayStructureInfo> structures = inlayStructureService.listAllStructures();
-        return Result.success(structures);
+    public Result<InlayPageDto> listStructures(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String format,
+            @RequestParam(required = false) String category,
+            @RequestParam(name = "has_preview", required = false) Boolean hasPreview,
+            @RequestParam(name = "mesh_ready", required = false) Boolean meshReady,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(name = "page_size", defaultValue = "50") int pageSize) {
+
+        InlayQuery query = InlayQuery.builder()
+                .keyword(keyword)
+                .format(format)
+                .category(category)
+                .hasPreview(hasPreview)
+                .meshReady(meshReady)
+                .page(page)
+                .pageSize(pageSize)
+                .build();
+
+        InlayStructureService.QueryResult result = inlayStructureService.queryStructures(query);
+
+        InlayPageDto pageDto = new InlayPageDto();
+        pageDto.setItems(result.items().stream().map(this::toViewDto).collect(Collectors.toList()));
+        pageDto.setTotal(result.total());
+        pageDto.setPage(result.page());
+        pageDto.setPageSize(result.pageSize());
+        pageDto.setFormatCounts(result.formatCounts());
+        return Result.success(pageDto);
+    }
+
+    /**
+     * 获取各文件格式数量统计
+     */
+    @GetMapping("/formats")
+    public Result<Map<String, Long>> getFormatStatistics() {
+        return Result.success(inlayStructureService.getFormatStatistics());
+    }
+
+    /**
+     * 获取目录分类树（按文件层级）
+     */
+    @GetMapping("/categories")
+    public Result<List<InlayCategoryNode>> getCategories() {
+        return Result.success(inlayStructureService.getCategoryTree());
+    }
+
+    /**
+     * 刷新镶嵌结构索引（批量导入预览图后调用）
+     */
+    @PostMapping("/refresh")
+    public Result<Map<String, Object>> refreshIndex(
+            @RequestParam(name = "async", defaultValue = "false") boolean async) {
+        if (async) {
+            if (inlayStructureService.isRefreshInProgress()) {
+                Map<String, Object> stats = new LinkedHashMap<>();
+                stats.put("status", "refreshing");
+                return Result.success("索引刷新进行中", stats);
+            }
+            inlayStructureService.refreshStructureCacheAsync();
+            Map<String, Object> stats = new LinkedHashMap<>();
+            stats.put("status", "started");
+            return Result.success("索引刷新已启动", stats);
+        }
+
+        List<InlayStructureInfo> all = inlayStructureService.refreshStructureCache();
+        long withPreview = all.stream().filter(InlayStructureInfo::isHasPreview).count();
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("status", "completed");
+        stats.put("total", all.size());
+        stats.put("with_preview", withPreview);
+        stats.put("without_preview", all.size() - withPreview);
+        return Result.success("索引已刷新", stats);
+    }
+
+    private InlayViewDto toViewDto(InlayStructureInfo info) {
+        InlayViewDto dto = new InlayViewDto();
+        dto.setId(info.getFilePath());
+        dto.setFilename(info.getFilename());
+        dto.setFileFormat(info.getFormat());
+        dto.setFileSize(info.getFileSize());
+        dto.setCreatedAt(info.getLastModified());
+        dto.setHasPreview(info.isHasPreview());
+        dto.setMeshReady(info.isMeshReady());
+        if (info.isHasPreview()) {
+            dto.setThumbnailUrl(buildPreviewUrl(info.getFilePath()));
+        }
+        return dto;
+    }
+
+    /**
+     * @deprecated 保留兼容，请使用带分页的 /list
+     */
+    @GetMapping("/list-all")
+    public Result<List<InlayViewDto>> listAllStructuresLegacy() {
+        List<InlayViewDto> views = inlayStructureService.listAllStructures().stream()
+                .map(this::toViewDto)
+                .collect(Collectors.toList());
+        return Result.success(views);
     }
 
     /**
@@ -62,15 +172,19 @@ public class InlayStructureController {
     /**
      * 获取镶嵌结构的预览图
      *
-     * @param filename 文件名
+     * @param relativePath 相对路径（支持子目录，如 foo/bar.jcd）
      * @return 预览图文件
      */
-    @GetMapping("/{filename}/preview")
-    public ResponseEntity<Resource> getPreview(@PathVariable String filename) {
-        Path previewPath = inlayStructureService.getPreviewPath(filename);
+    @GetMapping("/preview/{*relativePath}")
+    public ResponseEntity<Resource> getPreview(@PathVariable("relativePath") String relativePath) {
+        String identifier = decodeRelativePath(relativePath);
+        Path previewPath = inlayStructureService.getPreviewPath(identifier);
 
         if (previewPath == null) {
-            throw new BusinessException(404, "该镶嵌结构没有预览图: " + filename);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType("image/svg+xml"))
+                    .header(HttpHeaders.CACHE_CONTROL, "public, max-age=3600")
+                    .body(new ByteArrayResource(PREVIEW_PLACEHOLDER_SVG));
         }
 
         File file = previewPath.toFile();
@@ -92,6 +206,7 @@ public class InlayStructureController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getName() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400, immutable")
                 .body(resource);
     }
 
@@ -133,5 +248,16 @@ public class InlayStructureController {
             log.error("上传镶嵌结构文件失败", e);
             throw new BusinessException("上传文件失败: " + e.getMessage());
         }
+    }
+
+    private static String buildPreviewUrl(String filePath) {
+        String pathPart = Arrays.stream(filePath.split("/"))
+                .map(segment -> URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"))
+                .collect(Collectors.joining("/"));
+        return "/api/inlay/preview/" + pathPart;
+    }
+
+    private static String decodeRelativePath(String relativePath) {
+        return relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
     }
 }

@@ -5,7 +5,7 @@ Pydantic数据模型定义
 
 from typing import Optional, List, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator, field_validator
 from datetime import datetime
 import uuid
 
@@ -54,10 +54,23 @@ class FusionMethod(str, Enum):
 class GenerateRequest(BaseModel):
     """
     图片生成3D请求
+    支持单图或多视图（六视图中的任意 2+ 张）
     """
-    image_path: str = Field(
-        ...,
-        description="输入图片路径（本地路径或URL）"
+    task_id: Optional[str] = Field(
+        None,
+        description="外部指定任务ID（与业务层对齐）"
+    )
+    image_path: Optional[str] = Field(
+        None,
+        description="输入图片路径（单图模式必填；多视图时可选，默认取正视图）"
+    )
+    multi_view: bool = Field(
+        False,
+        description="是否启用多视图生成"
+    )
+    views: Optional[Dict[str, str]] = Field(
+        None,
+        description="多视图图片路径，键为 front/back/left/right/top/bottom"
     )
     setting_mesh_path: Optional[str] = Field(
         None,
@@ -87,12 +100,55 @@ class GenerateRequest(BaseModel):
         None,
         description="回调URL（任务完成后通知）"
     )
+    apply_texture: Optional[bool] = Field(
+        None,
+        description="是否烘焙纹理；None 时由 TRACK_A_GEOMETRY_ONLY 环境变量决定",
+    )
+    inlay_type: Optional[str] = Field(
+        None,
+        description="镶嵌类型（prong/bezel 等，有 setting_mesh_path 时用于 prompt 增强）",
+    )
+    gem_type: Optional[str] = Field(
+        None,
+        description="宝石类型（diamond/ruby 等，有 setting_mesh_path 时用于 prompt 增强）",
+    )
+    enable_icp_alignment: bool = Field(
+        True,
+        description="与镶嵌底座融合前是否 ICP 对齐",
+    )
+    enable_mesh_fusion: bool = Field(
+        True,
+        description="是否将 AI 生成主体与镶嵌底座布尔融合",
+    )
+
+    @field_validator("prompt", "negative_prompt", mode="before")
+    @classmethod
+    def _coerce_optional_text(cls, value):
+        return value or ""
+
+    @model_validator(mode="after")
+    def validate_image_input(self):
+        view_count = len(self.views) if self.views else 0
+        if self.multi_view or view_count > 0:
+            if view_count < 2:
+                raise ValueError("多视图模式至少需要 2 个视角图片")
+            if not self.image_path and self.views:
+                for key in ("front", "left", "back", "right", "top", "bottom"):
+                    if key in self.views:
+                        self.image_path = self.views[key]
+                        break
+        elif not self.image_path:
+            raise ValueError("单图模式必须提供 image_path")
+        return self
 
     class Config:
         json_schema_extra = {
             "example": {
-                "image_path": "./uploads/ring_design.png",
-                "setting_mesh_path": "./uploads/setting_base.obj",
+                "multi_view": True,
+                "views": {
+                    "front": "./uploads/task/views/front.png",
+                    "left": "./uploads/task/views/left.png",
+                },
                 "prompt": "一枚精致的钻石戒指，铂金材质",
                 "result_format": "glb",
             }
@@ -104,6 +160,10 @@ class ConditionGenerateRequest(BaseModel):
     条件生成请求
     设计图 + 镶嵌底座 -> 珠宝3D模型
     """
+    task_id: Optional[str] = Field(
+        None,
+        description="外部指定任务ID（与业务层对齐）"
+    )
     design_image_path: str = Field(
         ...,
         description="设计图路径"
@@ -140,6 +200,11 @@ class ConditionGenerateRequest(BaseModel):
         True,
         description="是否启用网格融合"
     )
+
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def _coerce_optional_text(cls, value):
+        return value or ""
 
     class Config:
         json_schema_extra = {
@@ -246,6 +311,7 @@ class TaskStatusResponse(BaseModel):
     progress: float = Field(0.0, description="进度百分比（0-100）")
     message: str = Field("", description="状态描述")
     current_step: Optional[str] = Field(None, description="当前处理步骤")
+    error: Optional[str] = Field(None, description="失败时的详细错误信息")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
@@ -292,6 +358,37 @@ class SystemInfo(BaseModel):
     recommendation_reason: str = Field("", description="推荐原因")
     model_loaded: bool = Field(False, description="模型是否已加载")
     current_model_version: Optional[str] = Field(None, description="当前加载的模型版本")
+
+
+class RemoveBackgroundResponse(BaseModel):
+    """背景扣除预处理响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="预处理会话 ID")
+    processed_path: str = Field(..., description="处理后图像本地路径")
+    preview_url: str = Field(..., description="预览 URL（AI 服务静态资源）")
+    original_path: Optional[str] = Field(None, description="原始图像路径")
+
+
+class ViewCropItem(BaseModel):
+    """切分出的单个视图区域"""
+    id: str = Field(..., description="crop 标识")
+    x: int = Field(..., description="在原图中的 x")
+    y: int = Field(..., description="在原图中的 y")
+    width: int = Field(..., description="宽")
+    height: int = Field(..., description="高")
+    guess: Optional[str] = Field(None, description="启发式猜测的视角 front/left/...")
+    preview_url: str = Field(..., description="裁剪图预览 URL")
+    processed_path: Optional[str] = Field(None, description="本地路径")
+
+
+class SplitMultiViewResponse(BaseModel):
+    """多视图合一图切分响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="会话 ID")
+    source_width: int = Field(..., description="原图宽")
+    source_height: int = Field(..., description="原图高")
+    original_path: Optional[str] = Field(None, description="原图路径")
+    crops: List[ViewCropItem] = Field(default_factory=list, description="切分结果")
 
 
 class HealthResponse(BaseModel):

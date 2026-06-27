@@ -8,8 +8,10 @@ import uuid
 import shutil
 import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
+
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,18 @@ def validate_file_format(filepath: str, allowed_formats: set) -> bool:
     return ext in allowed_formats
 
 
+def load_image_pil(filepath: str, preserve_alpha: bool = False) -> Image.Image:
+    """
+    以 Unicode 安全方式加载图像（Windows 下 cv2.imread 无法读取中文路径）
+
+    preserve_alpha=True 时保留 RGBA，供 Hunyuan3D ImageProcessorV2 使用 alpha 通道区分主体与背景。
+    """
+    with Image.open(filepath) as img:
+        if preserve_alpha:
+            return img.convert("RGBA")
+        return img.convert("RGB")
+
+
 def validate_image_file(filepath: str) -> bool:
     """
     验证是否为有效的图像文件
@@ -102,7 +116,12 @@ def validate_image_file(filepath: str) -> bool:
     if not validate_file_format(filepath, SUPPORTED_IMAGE_FORMATS):
         logger.error(f"不支持的图像格式: {filepath}")
         return False
-    return True
+    try:
+        load_image_pil(filepath)
+        return True
+    except Exception as e:
+        logger.error(f"图像文件无法解析: {filepath} ({e})")
+        return False
 
 
 def validate_mesh_file(filepath: str) -> bool:

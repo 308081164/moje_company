@@ -2,284 +2,291 @@ package com.moje.jewelry3d.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.moje.jewelry3d.common.BusinessException;
+import com.moje.jewelry3d.config.AiServiceConfig;
+import com.moje.jewelry3d.config.FileStorageConfig;
 import com.moje.jewelry3d.config.InlayDbConfig;
 import com.moje.jewelry3d.model.dto.GenerateResponse;
+import com.moje.jewelry3d.model.dto.TaskViewDto;
 import com.moje.jewelry3d.model.entity.GenerateTask;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 生成业务逻辑服务
- * 管理图片转3D和条件生成的完整生命周期
+ * 管理任务生命周期，与 AI 服务异步协作
  */
 @Slf4j
 @Service
 public class GenerateService {
 
+    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Set<String> MESH_EXTENSIONS = Set.of(".obj", ".glb", ".stl", ".step");
+
     private final AiServiceClient aiServiceClient;
+    private final AiServiceConfig aiServiceConfig;
     private final InlayDbConfig inlayDbConfig;
+    private final InlayStructureService inlayStructureService;
+    private final FileStorageConfig fileStorageConfig;
 
-    /** 上传文件存储目录 */
-    @Value("${file.upload-dir:./uploads}")
-    private String uploadDir;
-
-    /** 输出文件存储目录 */
-    @Value("${file.output-dir:./outputs}")
-    private String outputDir;
-
-    /** 内存任务存储（生产环境应替换为数据库） */
     private final Map<String, GenerateTask> taskStore = new ConcurrentHashMap<>();
 
     @Autowired
-    public GenerateService(AiServiceClient aiServiceClient, InlayDbConfig inlayDbConfig) {
+    public GenerateService(
+            AiServiceClient aiServiceClient,
+            AiServiceConfig aiServiceConfig,
+            InlayDbConfig inlayDbConfig,
+            InlayStructureService inlayStructureService,
+            FileStorageConfig fileStorageConfig
+    ) {
         this.aiServiceClient = aiServiceClient;
+        this.aiServiceConfig = aiServiceConfig;
         this.inlayDbConfig = inlayDbConfig;
+        this.inlayStructureService = inlayStructureService;
+        this.fileStorageConfig = fileStorageConfig;
     }
 
-    /**
-     * 初始化时创建必要的目录
-     */
-    @PostConstruct
-    public void init() {
-        try {
-            Files.createDirectories(Paths.get(uploadDir));
-            Files.createDirectories(Paths.get(outputDir));
-            log.info("文件存储目录初始化完成 - 上传: {}, 输出: {}", uploadDir, outputDir);
-        } catch (IOException e) {
-            log.error("创建文件存储目录失败", e);
-        }
-    }
+    private static final List<String> VIEW_FACE_KEYS = List.of(
+            "front", "back", "left", "right", "top", "bottom"
+    );
 
-    /**
-     * 图片转3D生成
-     *
-     * @param imageFile 上传的设计图
-     * @return 生成响应
-     */
-    public GenerateResponse imageTo3d(MultipartFile imageFile) {
-        // 保存上传文件
+    public GenerateResponse imageTo3d(
+            MultipartFile imageFile,
+            String prompt,
+            String outputFormat,
+            String inlayStructureFilename,
+            boolean multiViewEnabled,
+            Map<String, MultipartFile> viewFiles
+    ) {
         String taskId = UUID.randomUUID().toString();
-        GenerateTask task = createTask(taskId, "image-to-3d", imageFile);
+        GenerateTask task = createTask(
+                taskId, "image-to-3d", imageFile, prompt, outputFormat,
+                null, multiViewEnabled, viewFiles
+        );
 
         try {
-            // 调用AI服务进行生成
-            JsonNode aiResponse = aiServiceClient.callImageTo3d(task.getInputImagePath());
-
-            // 解析AI服务响应
-            handleAiResponse(task, aiResponse);
-        } catch (BusinessException e) {
-            task.setStatus("failed");
-            task.setErrorMessage(e.getMessage());
-            task.setUpdatedAt(LocalDateTime.now());
-            taskStore.put(taskId, task);
-            throw e;
+            String settingPath = resolveInlayMeshPath(inlayStructureFilename);
+            Map<String, String> viewPaths = resolveViewPaths(taskId, viewFiles);
+            String primaryImagePath = task.getInputImagePath();
+            if (primaryImagePath == null && viewPaths.containsKey("front")) {
+                primaryImagePath = viewPaths.get("front");
+            } else if (primaryImagePath == null && !viewPaths.isEmpty()) {
+                primaryImagePath = viewPaths.values().iterator().next();
+            }
+            JsonNode aiResponse = aiServiceClient.callImageTo3d(
+                    taskId,
+                    primaryImagePath,
+                    settingPath,
+                    prompt,
+                    outputFormat,
+                    multiViewEnabled,
+                    viewPaths
+            );
+            applyAiSubmission(task, aiResponse);
         } catch (Exception e) {
-            task.setStatus("failed");
-            task.setErrorMessage("生成失败: " + e.getMessage());
-            task.setUpdatedAt(LocalDateTime.now());
-            taskStore.put(taskId, task);
-            throw new BusinessException("图片转3D生成失败: " + e.getMessage(), e);
+            failTask(task, e.getMessage());
+            throw new BusinessException("图片转3D提交失败: " + e.getMessage(), e);
         }
-
         return buildResponse(task);
     }
 
-    /**
-     * 条件生成（设计图 + 镶嵌底座）
-     *
-     * @param imageFile               上传的设计图
-     * @param inlayStructureFilename  镶嵌底座文件名
-     * @param inlayStructureFile      镶嵌底座文件（可选，直接上传）
-     * @return 生成响应
-     */
-    public GenerateResponse conditionGenerate(MultipartFile imageFile,
-                                              String inlayStructureFilename,
-                                              MultipartFile inlayStructureFile) {
+    public GenerateResponse conditionGenerate(
+            MultipartFile imageFile,
+            String inlayStructureFilename,
+            MultipartFile inlayStructureFile,
+            String prompt,
+            String outputFormat,
+            String inlayType,
+            String gemType
+    ) {
         String taskId = UUID.randomUUID().toString();
-        GenerateTask task = createTask(taskId, "condition-generate", imageFile);
-        task.setInlayStructureFilename(inlayStructureFilename);
+        GenerateTask task = createTask(taskId, "condition-generate", imageFile, prompt, outputFormat, inlayStructureFilename);
 
         try {
-            // 处理镶嵌底座文件
-            File inlayFile = null;
+            String settingPath;
             if (inlayStructureFile != null && !inlayStructureFile.isEmpty()) {
-                // 直接上传了镶嵌底座文件
-                String inlayFilename = inlayStructureFile.getOriginalFilename();
-                Path inlayPath = Paths.get(uploadDir, taskId, inlayFilename);
-                Files.createDirectories(inlayPath.getParent());
-                inlayStructureFile.transferTo(inlayPath.toFile());
-                inlayFile = inlayPath.toFile();
-                task.setInlayStructureFilename(inlayFilename);
+                Path inlayPath = fileStorageConfig.getUploadPath().resolve(taskId).resolve(safeFilename(inlayStructureFile.getOriginalFilename()));
+                saveMultipartFile(inlayStructureFile, inlayPath);
+                settingPath = inlayPath.toString();
+                task.setInlayStructureFilename(inlayStructureFile.getOriginalFilename());
+            } else {
+                settingPath = resolveInlayMeshPath(inlayStructureFilename);
+                task.setInlayStructureFilename(inlayStructureFilename);
             }
 
-            // 调用AI服务
-            JsonNode aiResponse = aiServiceClient.callConditionGenerate(
-                    task.getInputImagePath().toFile(),
-                    inlayFile,
-                    inlayStructureFilename
-            );
+            if (settingPath == null) {
+                throw new BusinessException("无法解析镶嵌底座网格文件，请选择 OBJ/GLB/STL 格式或提供可转换的底座");
+            }
 
-            // 解析AI服务响应
-            handleAiResponse(task, aiResponse);
+            JsonNode aiResponse = aiServiceClient.callConditionGenerate(
+                    taskId,
+                    task.getInputImagePath().toString(),
+                    settingPath,
+                    prompt,
+                    outputFormat,
+                    inlayType,
+                    gemType
+            );
+            applyAiSubmission(task, aiResponse);
         } catch (BusinessException e) {
-            task.setStatus("failed");
-            task.setErrorMessage(e.getMessage());
-            task.setUpdatedAt(LocalDateTime.now());
-            taskStore.put(taskId, task);
+            failTask(task, e.getMessage());
             throw e;
         } catch (Exception e) {
-            task.setStatus("failed");
-            task.setErrorMessage("条件生成失败: " + e.getMessage());
-            task.setUpdatedAt(LocalDateTime.now());
-            taskStore.put(taskId, task);
-            throw new BusinessException("条件生成失败: " + e.getMessage(), e);
+            failTask(task, e.getMessage());
+            throw new BusinessException("条件生成提交失败: " + e.getMessage(), e);
         }
-
         return buildResponse(task);
     }
 
-    /**
-     * 获取所有任务列表
-     *
-     * @return 任务列表
-     */
-    public List<GenerateTask> getAllTasks() {
-        List<GenerateTask> tasks = new ArrayList<>(taskStore.values());
-        // 按创建时间倒序排列
-        tasks.sort((a, b) -> {
-            if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
-            if (a.getCreatedAt() == null) return 1;
-            if (b.getCreatedAt() == null) return -1;
+    public List<TaskViewDto> getAllTaskViews() {
+        refreshProcessingTasks();
+        List<TaskViewDto> views = new ArrayList<>();
+        for (GenerateTask task : taskStore.values()) {
+            views.add(toViewDto(task));
+        }
+        views.sort((a, b) -> {
+            if (a.getCreatedAt() == null || b.getCreatedAt() == null) return 0;
             return b.getCreatedAt().compareTo(a.getCreatedAt());
         });
-        return tasks;
+        return views;
     }
 
-    /**
-     * 获取任务详情
-     *
-     * @param taskId 任务ID
-     * @return 任务实体
-     */
+    public TaskViewDto getTaskView(String taskId) {
+        GenerateTask task = getTask(taskId);
+        return toViewDto(task);
+    }
+
     public GenerateTask getTask(String taskId) {
         GenerateTask task = taskStore.get(taskId);
         if (task == null) {
             throw new BusinessException(404, "任务不存在: " + taskId);
         }
-
-        // 如果任务正在处理中，尝试从AI服务获取最新状态
-        if ("processing".equals(task.getStatus()) || "pending".equals(task.getStatus())) {
-            try {
-                JsonNode aiStatus = aiServiceClient.getTaskStatus(taskId);
-                if (aiStatus != null && aiStatus.has("status")) {
-                    String newStatus = aiStatus.get("status").asText();
-                    if (!task.getStatus().equals(newStatus)) {
-                        task.setStatus(newStatus);
-                        task.setUpdatedAt(LocalDateTime.now());
-                        if ("completed".equals(newStatus) || "failed".equals(newStatus)) {
-                            task.setCompletedAt(LocalDateTime.now());
-                        }
-                        taskStore.put(taskId, task);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("获取任务最新状态失败: {}", taskId, e);
-            }
+        if ("pending".equals(task.getStatus()) || "processing".equals(task.getStatus())) {
+            refreshTaskFromAi(task);
         }
-
         return task;
     }
 
-    /**
-     * 获取任务输出文件路径
-     *
-     * @param taskId 任务ID
-     * @return 输出文件路径
-     */
     public Path getOutputFile(String taskId) {
-        GenerateTask task = getTask(taskId);
-
-        if (!"completed".equals(task.getStatus())) {
-            throw new BusinessException("任务尚未完成，当前状态: " + task.getStatus());
+        GenerateTask task = taskStore.get(taskId);
+        if (task != null) {
+            if (!"completed".equals(task.getStatus())) {
+                throw new BusinessException("任务尚未完成，当前状态: " + task.getStatus());
+            }
+            Path outputPath = resolveStoredOutputPath(task);
+            if (outputPath == null || !Files.exists(outputPath)) {
+                syncOutputFromAi(task);
+                outputPath = resolveStoredOutputPath(task);
+            }
+            if (outputPath != null && Files.exists(outputPath)) {
+                return outputPath;
+            }
         }
 
-        if (task.getOutputPath() == null) {
-            throw new BusinessException("任务输出文件不存在");
+        Path fallback = findOutputOnDisk(taskId);
+        if (fallback != null) {
+            return fallback;
         }
 
-        Path outputPath = Paths.get(task.getOutputPath());
-        if (!Files.exists(outputPath)) {
-            throw new BusinessException(404, "输出文件不存在: " + task.getOutputFilename());
-        }
-
-        return outputPath;
+        String name = task != null && task.getOutputFilename() != null
+                ? task.getOutputFilename() : "generated.glb";
+        throw new BusinessException(404, "输出文件不存在: " + name);
     }
 
-    /**
-     * 删除任务
-     *
-     * @param taskId 任务ID
-     */
+    /** 服务重启后内存任务丢失时，从 AI / 业务 outputs 目录按 taskId 查找 GLB */
+    private Path findOutputOnDisk(String taskId) {
+        for (String filename : List.of("generated.glb", "generated.obj")) {
+            Path business = fileStorageConfig.getOutputPath().resolve(taskId).resolve(filename);
+            if (Files.exists(business)) {
+                return business.normalize();
+            }
+            Path ai = aiServiceConfig.getOutputPath().resolve(taskId).resolve(filename);
+            if (Files.exists(ai)) {
+                return ai.normalize();
+            }
+        }
+        return null;
+    }
+
     public void deleteTask(String taskId) {
         GenerateTask task = taskStore.remove(taskId);
         if (task == null) {
             throw new BusinessException(404, "任务不存在: " + taskId);
         }
-
-        // 清理关联文件
         try {
-            // 删除上传文件
-            if (task.getInputImagePath() != null) {
-                Path inputDir = Paths.get(task.getInputImagePath()).getParent();
-                if (inputDir != null) {
-                    deleteDirectory(inputDir);
-                }
-            }
-            // 删除输出文件
-            if (task.getOutputPath() != null) {
-                Path outputDir = Paths.get(task.getOutputPath()).getParent();
-                if (outputDir != null) {
-                    deleteDirectory(outputDir);
-                }
-            }
-            log.info("任务已删除: {}", taskId);
+            Path inputDir = fileStorageConfig.getUploadPath().resolve(taskId);
+            deleteDirectory(inputDir);
+            Path outputTaskDir = fileStorageConfig.getOutputPath().resolve(taskId);
+            deleteDirectory(outputTaskDir);
         } catch (IOException e) {
             log.warn("清理任务文件失败: {}", taskId, e);
         }
     }
 
-    /**
-     * 创建生成任务
-     */
-    private GenerateTask createTask(String taskId, String taskType, MultipartFile imageFile) {
+    private GenerateTask createTask(
+            String taskId,
+            String taskType,
+            MultipartFile imageFile,
+            String prompt,
+            String outputFormat,
+            String inlayFilename
+    ) {
+        return createTask(taskId, taskType, imageFile, prompt, outputFormat, inlayFilename, false, Map.of());
+    }
+
+    private GenerateTask createTask(
+            String taskId,
+            String taskType,
+            MultipartFile imageFile,
+            String prompt,
+            String outputFormat,
+            String inlayFilename,
+            boolean multiViewEnabled,
+            Map<String, MultipartFile> viewFiles
+    ) {
         GenerateTask task = new GenerateTask();
         task.setTaskId(taskId);
         task.setTaskType(taskType);
         task.setStatus("pending");
         task.setCreatedAt(LocalDateTime.now());
         task.setUpdatedAt(LocalDateTime.now());
+        task.setParams(buildParamsJson(prompt, outputFormat, inlayFilename, multiViewEnabled, viewFiles.keySet()));
 
-        // 保存上传的设计图
         try {
-            String originalFilename = imageFile.getOriginalFilename();
-            Path uploadPath = Paths.get(uploadDir, taskId, originalFilename);
-            Files.createDirectories(uploadPath.getParent());
-            imageFile.transferTo(uploadPath.toFile());
+            if (imageFile != null && !imageFile.isEmpty()) {
+                String displayFilename = displayFilename(imageFile.getOriginalFilename());
+                String storedFilename = toStoredFilename(displayFilename);
+                Path uploadPath = fileStorageConfig.getUploadPath().resolve(taskId).resolve(storedFilename);
+                saveMultipartFile(imageFile, uploadPath);
+                task.setInputImageFilename(displayFilename);
+                task.setInputImagePath(uploadPath.toString());
+            } else if (multiViewEnabled) {
+                task.setInputImageFilename("multi-view(" + viewFiles.size() + " faces)");
+            }
 
-            task.setInputImageFilename(originalFilename);
-            task.setInputImagePath(uploadPath);
-            log.info("设计图已保存: {}", uploadPath);
+            if (multiViewEnabled && !viewFiles.isEmpty()) {
+                Path viewsDir = fileStorageConfig.getUploadPath().resolve(taskId).resolve("views");
+                Files.createDirectories(viewsDir);
+                for (Map.Entry<String, MultipartFile> entry : viewFiles.entrySet()) {
+                    String face = entry.getKey();
+                    MultipartFile file = entry.getValue();
+                    String ext = getExtension(displayFilename(file.getOriginalFilename()));
+                    if (ext.isBlank()) {
+                        ext = ".png";
+                    }
+                    Path viewPath = viewsDir.resolve(face + ext);
+                    saveMultipartFile(file, viewPath);
+                }
+            }
         } catch (IOException e) {
             throw new BusinessException("保存上传文件失败: " + e.getMessage(), e);
         }
@@ -288,88 +295,334 @@ public class GenerateService {
         return task;
     }
 
-    /**
-     * 处理AI服务响应
-     */
-    private void handleAiResponse(GenerateTask task, JsonNode aiResponse) {
-        if (aiResponse.has("task_id")) {
-            // AI服务返回了任务ID，表示异步处理
-            task.setStatus(aiResponse.has("status") ? aiResponse.get("status").asText() : "processing");
-            task.setUpdatedAt(LocalDateTime.now());
-        } else if (aiResponse.has("status") && "completed".equals(aiResponse.get("status").asText())) {
-            // 同步完成
-            task.setStatus("completed");
-            task.setCompletedAt(LocalDateTime.now());
-            task.setUpdatedAt(LocalDateTime.now());
-
-            if (aiResponse.has("output_path")) {
-                task.setOutputPath(aiResponse.get("output_path").asText());
-            }
-            if (aiResponse.has("output_filename")) {
-                task.setOutputFilename(aiResponse.get("output_filename").asText());
-            }
-            if (aiResponse.has("preview_path")) {
-                task.setPreviewPath(aiResponse.get("preview_path").asText());
-            }
-        } else if (aiResponse.has("error")) {
-            task.setStatus("failed");
-            task.setErrorMessage(aiResponse.get("error").asText());
-            task.setCompletedAt(LocalDateTime.now());
-            task.setUpdatedAt(LocalDateTime.now());
-        } else {
-            task.setStatus("processing");
-            task.setUpdatedAt(LocalDateTime.now());
+    private Map<String, String> resolveViewPaths(String taskId, Map<String, MultipartFile> viewFiles) {
+        if (viewFiles == null || viewFiles.isEmpty()) {
+            return Map.of();
         }
+        Map<String, String> paths = new LinkedHashMap<>();
+        Path viewsDir = fileStorageConfig.getUploadPath().resolve(taskId).resolve("views");
+        for (String face : VIEW_FACE_KEYS) {
+            if (!viewFiles.containsKey(face)) {
+                continue;
+            }
+            try (var stream = Files.list(viewsDir)) {
+                stream.filter(Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().startsWith(face + "."))
+                        .findFirst()
+                        .ifPresent(p -> paths.put(face, p.toString()));
+            } catch (IOException e) {
+                log.warn("读取多视图路径失败 {}: {}", face, e.getMessage());
+            }
+        }
+        return paths;
+    }
 
+    private String buildParamsJson(
+            String prompt,
+            String outputFormat,
+            String inlayFilename,
+            boolean multiViewEnabled,
+            Set<String> viewFaces
+    ) {
+        String viewsJson = viewFaces == null || viewFaces.isEmpty()
+                ? "[]"
+                : "[\"" + String.join("\",\"", viewFaces) + "\"]";
+        return String.format(
+                "{\"prompt\":\"%s\",\"output_format\":\"%s\",\"inlay_file\":\"%s\",\"multi_view\":%s,\"views\":%s}",
+                prompt != null ? prompt.replace("\"", "'") : "",
+                outputFormat != null ? outputFormat : "GLB",
+                inlayFilename != null ? inlayFilename : "",
+                multiViewEnabled,
+                viewsJson
+        );
+    }
+
+    private String buildParamsJson(String prompt, String outputFormat, String inlayFilename) {
+        return buildParamsJson(prompt, outputFormat, inlayFilename, false, Set.of());
+    }
+
+    private void applyAiSubmission(GenerateTask task, JsonNode aiResponse) {
+        String status = aiResponse.path("status").asText("processing");
+        task.setStatus(status);
+        task.setUpdatedAt(LocalDateTime.now());
         taskStore.put(task.getTaskId(), task);
     }
 
+    private void refreshProcessingTasks() {
+        taskStore.values().stream()
+                .filter(t -> "pending".equals(t.getStatus()) || "processing".equals(t.getStatus()))
+                .forEach(this::refreshTaskFromAi);
+    }
+
+    private void refreshTaskFromAi(GenerateTask task) {
+        try {
+            JsonNode statusNode = aiServiceClient.getTaskStatus(task.getTaskId());
+            String status = statusNode.path("status").asText(task.getStatus());
+            task.setStatus(status);
+            task.setUpdatedAt(LocalDateTime.now());
+
+            if ("completed".equals(status)) {
+                syncOutputFromAi(task);
+                task.setCompletedAt(LocalDateTime.now());
+            } else if ("failed".equals(status)) {
+                String detail = statusNode.path("error").asText(null);
+                String message = statusNode.path("message").asText("AI生成失败");
+                task.setErrorMessage(detail != null && !detail.isBlank() ? detail : message);
+                task.setCompletedAt(LocalDateTime.now());
+            }
+            taskStore.put(task.getTaskId(), task);
+        } catch (Exception e) {
+            log.warn("刷新任务状态失败 {}: {}", task.getTaskId(), e.getMessage());
+        }
+    }
+
     /**
-     * 构建生成响应DTO
+     * 将 AI 服务生成的模型文件复制到业务服务 outputs 目录，供下载与预览使用。
      */
+    private void syncOutputFromAi(GenerateTask task) {
+        try {
+            JsonNode resultNode = aiServiceClient.getTaskResult(task.getTaskId());
+            String aiPath = extractAiResultFilePath(resultNode);
+            if (aiPath == null) {
+                log.warn("任务 {} 无 AI 结果文件路径", task.getTaskId());
+                return;
+            }
+
+            Path source = resolveAiSourcePath(aiPath, task.getTaskId());
+            if (source == null || !Files.exists(source)) {
+                log.warn("AI 输出文件不存在: taskId={} path={}", task.getTaskId(), aiPath);
+                return;
+            }
+
+            String filename = source.getFileName().toString();
+            Path destDir = fileStorageConfig.getOutputPath().resolve(task.getTaskId());
+            Path dest = destDir.resolve(filename);
+            Files.createDirectories(destDir);
+            Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
+
+            task.setOutputPath(dest.toString());
+            task.setOutputFilename(filename);
+            taskStore.put(task.getTaskId(), task);
+            log.info("已同步 AI 输出: {} -> {}", source, dest);
+        } catch (Exception e) {
+            log.warn("同步 AI 输出失败 {}: {}", task.getTaskId(), e.getMessage());
+        }
+    }
+
+    private String extractAiResultFilePath(JsonNode resultNode) {
+        if (resultNode.has("result_files") && resultNode.get("result_files").isArray()
+                && !resultNode.get("result_files").isEmpty()) {
+            return resultNode.get("result_files").get(0).asText();
+        }
+        String resultUrl = resultNode.path("result_url").asText(null);
+        if (resultUrl != null && !resultUrl.startsWith("/") && !resultUrl.startsWith("http")) {
+            return resultUrl;
+        }
+        return null;
+    }
+
+    private Path resolveAiSourcePath(String aiPath, String taskId) {
+        Path direct = Paths.get(aiPath);
+        if (direct.isAbsolute() && Files.exists(direct)) {
+            return direct.normalize();
+        }
+
+        String normalized = aiPath.replace('\\', '/');
+        if (normalized.startsWith("./")) {
+            normalized = normalized.substring(2);
+        }
+
+        if (normalized.startsWith("outputs/")) {
+            Path underAiOutput = aiServiceConfig.getOutputPath().resolve(normalized.substring("outputs/".length()));
+            if (Files.exists(underAiOutput)) {
+                return underAiOutput.normalize();
+            }
+        }
+
+        Path byTaskDir = aiServiceConfig.getOutputPath().resolve(taskId).resolve(direct.getFileName().toString());
+        if (Files.exists(byTaskDir)) {
+            return byTaskDir.normalize();
+        }
+
+        Path fromAiRoot = aiServiceConfig.getOutputPath().getParent().resolve(normalized).normalize();
+        if (Files.exists(fromAiRoot)) {
+            return fromAiRoot;
+        }
+
+        return direct;
+    }
+
+    private Path resolveStoredOutputPath(GenerateTask task) {
+        if (task.getOutputPath() == null) {
+            return null;
+        }
+        Path stored = Paths.get(task.getOutputPath());
+        if (Files.exists(stored)) {
+            return stored.normalize();
+        }
+        return resolveAiSourcePath(task.getOutputPath(), task.getTaskId());
+    }
+
+    private void failTask(GenerateTask task, String message) {
+        task.setStatus("failed");
+        task.setErrorMessage(message);
+        task.setUpdatedAt(LocalDateTime.now());
+        task.setCompletedAt(LocalDateTime.now());
+        taskStore.put(task.getTaskId(), task);
+    }
+
+    private TaskViewDto toViewDto(GenerateTask task) {
+        TaskViewDto dto = new TaskViewDto();
+        dto.setTaskId(task.getTaskId());
+        dto.setInputFile(task.getInputImageFilename());
+        dto.setStatus(task.getStatus());
+        dto.setInlayFile(task.getInlayStructureFilename());
+        dto.setResultFile(task.getOutputFilename());
+        dto.setErrorMessage(task.getErrorMessage());
+        dto.setCreatedAt(formatTime(task.getCreatedAt()));
+        dto.setUpdatedAt(formatTime(task.getUpdatedAt()));
+
+        if (task.getParams() != null) {
+            if (task.getParams().contains("output_format")) {
+                int i = task.getParams().indexOf("output_format");
+                String sub = task.getParams().substring(i);
+                int start = sub.indexOf('"', sub.indexOf(':')) + 1;
+                int end = sub.indexOf('"', start);
+                if (start > 0 && end > start) {
+                    dto.setOutputFormat(sub.substring(start, end));
+                }
+            }
+            if (task.getParams().contains("prompt")) {
+                int i = task.getParams().indexOf("prompt");
+                String sub = task.getParams().substring(i);
+                int start = sub.indexOf('"', sub.indexOf(':')) + 1;
+                int end = sub.indexOf('"', start);
+                if (start > 0 && end > start) {
+                    dto.setPrompt(sub.substring(start, end));
+                }
+            }
+        }
+        return dto;
+    }
+
+    private String formatTime(LocalDateTime time) {
+        return time == null ? null : time.format(DT_FMT);
+    }
+
+    /**
+     * 从镶嵌库解析可用网格路径；.jcd 会尝试查找同目录下的 obj/glb/stl
+     */
+    private String resolveInlayMeshPath(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return null;
+        }
+        Path dbRoot = Paths.get(inlayDbConfig.getPath()).toAbsolutePath().normalize();
+        Path filePath = findFileByName(dbRoot, filename);
+        if (filePath == null) {
+            throw new BusinessException(404, "镶嵌结构不存在: " + filename);
+        }
+
+        String ext = getExtension(filename).toLowerCase();
+        if (MESH_EXTENSIONS.contains(ext)) {
+            return filePath.toString();
+        }
+
+        // .jcd 等格式：尝试同目录 mesh 伴生文件
+        String baseName = getBaseName(filename);
+        Path parent = filePath.getParent();
+        for (String meshExt : List.of(".obj", ".glb", ".stl")) {
+            Path candidate = parent.resolve(baseName + meshExt);
+            if (Files.exists(candidate)) {
+                log.info("镶嵌文件 {} 使用伴生网格 {}", filename, candidate);
+                return candidate.toString();
+            }
+        }
+        throw new BusinessException("镶嵌文件 " + filename + " 缺少 OBJ/GLB/STL 伴生网格，请先转换格式");
+    }
+
+    private Path findFileByName(Path root, String filename) {
+        Path direct = root.resolve(filename);
+        if (Files.exists(direct)) {
+            return direct;
+        }
+        try (var stream = Files.walk(root, 4)) {
+            return stream.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().equals(filename))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private String getExtension(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return dot >= 0 ? filename.substring(dot) : "";
+    }
+
+    private String getBaseName(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return dot >= 0 ? filename.substring(0, dot) : filename;
+    }
+
     private GenerateResponse buildResponse(GenerateTask task) {
         GenerateResponse response = new GenerateResponse();
         response.setTaskId(task.getTaskId());
         response.setStatus(task.getStatus());
-
-        switch (task.getStatus()) {
-            case "pending":
-                response.setMessage("任务已提交，等待处理");
-                break;
-            case "processing":
-                response.setMessage("任务正在处理中");
-                break;
-            case "completed":
-                response.setMessage("生成完成");
-                response.setDownloadUrl("/api/generate/download/" + task.getTaskId());
-                if (task.getPreviewPath() != null) {
-                    response.setPreviewUrl("/api/generate/preview/" + task.getTaskId());
-                }
-                break;
-            case "failed":
-                response.setMessage("生成失败: " + task.getErrorMessage());
-                break;
-            default:
-                response.setMessage("未知状态");
+        response.setMessage(switch (task.getStatus()) {
+            case "pending" -> "任务已提交，等待处理";
+            case "processing" -> "任务正在处理中";
+            case "completed" -> "生成完成";
+            case "failed" -> "生成失败: " + task.getErrorMessage();
+            default -> "未知状态";
+        });
+        if ("completed".equals(task.getStatus())) {
+            response.setDownloadUrl("/api/generate/download/" + task.getTaskId());
         }
-
         return response;
     }
 
-    /**
-     * 递归删除目录
-     */
     private void deleteDirectory(Path path) throws IOException {
-        if (Files.exists(path)) {
-            Files.walk(path)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try {
-                            Files.delete(p);
-                        } catch (IOException e) {
-                            log.warn("删除文件失败: {}", p);
-                        }
-                    });
+        if (!Files.exists(path)) return;
+        Files.walk(path)
+                .sorted(Comparator.reverseOrder())
+                .forEach(p -> {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException ignored) {
+                    }
+                });
+    }
+
+    private static void saveMultipartFile(MultipartFile file, Path destination) throws IOException {
+        Path parent = destination.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
         }
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, destination, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static String displayFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "upload.bin";
+        }
+        String name = Paths.get(filename).getFileName().toString();
+        return name.isBlank() ? "upload.bin" : name;
+    }
+
+    /** 磁盘存储使用 ASCII 文件名，避免 OpenCV / 部分 AI 库在 Windows 下无法读取中文路径 */
+    private static String toStoredFilename(String displayName) {
+        int dot = displayName.lastIndexOf('.');
+        String ext = dot >= 0 ? displayName.substring(dot).toLowerCase() : "";
+        if (ext.isBlank()) {
+            ext = ".png";
+        }
+        return "input" + ext;
+    }
+
+    private static String safeFilename(String filename) {
+        return displayFilename(filename);
     }
 }

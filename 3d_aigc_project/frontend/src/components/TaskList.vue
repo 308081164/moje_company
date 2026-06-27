@@ -192,7 +192,7 @@ function handleSortChange({ prop, order }: { prop: string; order: string | null 
 /** 获取状态标签类型 */
 function getStatusType(status: string): 'info' | 'warning' | 'success' | 'danger' {
   const map: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
-    waiting: 'info',
+    pending: 'info',
     processing: 'warning',
     completed: 'success',
     failed: 'danger',
@@ -208,7 +208,7 @@ function getStatusClass(status: string): string {
 /** 获取状态中文标签 */
 function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    waiting: '等待中',
+    pending: '等待中',
     processing: '生成中',
     completed: '已完成',
     failed: '失败',

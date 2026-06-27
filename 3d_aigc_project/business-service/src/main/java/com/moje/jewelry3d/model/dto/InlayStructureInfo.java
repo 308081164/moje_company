@@ -32,4 +32,7 @@ public class InlayStructureInfo {
 
     /** 预览图文件名（如果有） */
     private String previewFilename;
+
+    /** 是否可直接用于融合（OBJ/GLB/STL 或 JCD 带伴生 mesh） */
+    private boolean meshReady;
 }

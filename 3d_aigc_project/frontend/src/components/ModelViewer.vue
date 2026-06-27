@@ -38,6 +38,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 
 // ==========================================
 // Props & Emits
@@ -47,7 +48,7 @@ interface Props {
   /** 模型文件URL */
   modelUrl?: string
   /** 模型文件格式 */
-  modelFormat?: 'GLB' | 'OBJ' | 'glb' | 'obj'
+  modelFormat?: 'GLB' | 'OBJ' | 'STL' | 'glb' | 'obj' | 'stl'
   /** 背景颜色 */
   backgroundColor?: string
 }
@@ -191,12 +192,14 @@ async function loadModel(url: string, format: string) {
   try {
     let model: THREE.Group
 
-    if (format.toUpperCase() === 'GLB') {
-      // 加载GLB格式
+    const normalizedFormat = format.toUpperCase()
+
+    if (normalizedFormat === 'GLB') {
       model = await loadGLB(url)
-    } else if (format.toUpperCase() === 'OBJ') {
-      // 加载OBJ格式
+    } else if (normalizedFormat === 'OBJ') {
       model = await loadOBJ(url)
+    } else if (normalizedFormat === 'STL') {
+      model = await loadSTL(url)
     } else {
       throw new Error(`不支持的模型格式: ${format}`)
     }
@@ -241,6 +244,32 @@ function loadGLB(url: string): Promise<THREE.Group> {
       undefined,
       (err) => {
         reject(new Error('GLB模型加载失败: ' + (err.message || '未知错误')))
+      }
+    )
+  })
+}
+
+/** 加载STL模型 */
+function loadSTL(url: string): Promise<THREE.Group> {
+  return new Promise((resolve, reject) => {
+    const loader = new STLLoader()
+    loader.load(
+      url,
+      (geometry) => {
+        geometry.computeVertexNormals()
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xcccccc,
+          metalness: 0.3,
+          roughness: 0.6,
+        })
+        const mesh = new THREE.Mesh(geometry, material)
+        const group = new THREE.Group()
+        group.add(mesh)
+        resolve(group)
+      },
+      undefined,
+      (err) => {
+        reject(new Error('STL模型加载失败: ' + (err.message || '未知错误')))
       }
     )
   })
@@ -296,6 +325,7 @@ onMounted(() => {
   nextTick(() => {
     initScene()
     window.addEventListener('resize', onResize)
+    reloadModel()
   })
 })
 
@@ -304,14 +334,27 @@ onBeforeUnmount(() => {
   dispose()
 })
 
-// 监听模型URL变化
+function detectFormatFromUrl(url: string): string {
+  const match = url.split('?')[0].match(/\.([a-z0-9]+)$/i)
+  return match ? match[1].toUpperCase() : props.modelFormat.toUpperCase()
+}
+
+function reloadModel() {
+  if (!props.modelUrl || !scene) {
+    clearModel()
+    return
+  }
+  const format = props.modelFormat || detectFormatFromUrl(props.modelUrl)
+  loadModel(props.modelUrl, format)
+}
+
+watch(() => props.modelUrl, () => reloadModel())
+
 watch(
-  () => props.modelUrl,
-  (newUrl) => {
-    if (newUrl && scene) {
-      loadModel(newUrl, props.modelFormat)
-    } else {
-      clearModel()
+  () => props.modelFormat,
+  () => {
+    if (props.modelUrl && scene) {
+      reloadModel()
     }
   }
 )

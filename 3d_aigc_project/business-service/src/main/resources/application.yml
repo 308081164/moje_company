@@ -4,16 +4,18 @@ server:
 # AI推理服务配置
 ai-service:
   base-url: http://localhost:8855
+  # AI 服务生成文件的本地目录（与 ai-service 的 OUTPUT_DIR 对应）
+  output-dir: ../ai-service/outputs
   # Docker内部部署时使用: http://ai-service:8855
 
 # 镶嵌结构数据库路径配置
 inlay-db:
   path: ../镶嵌结构数据库
 
-# 文件存储配置
+# 文件存储配置（相对路径基于 business-service 启动目录解析为绝对路径）
 file:
-  upload-dir: ./uploads
-  output-dir: ./outputs
+  upload-dir: uploads
+  output-dir: outputs
 
 # Spring应用配置
 spring:

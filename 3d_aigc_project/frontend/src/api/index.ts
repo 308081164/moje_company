@@ -1,25 +1,17 @@
 /**
  * API请求封装模块
- * 基于axios的HTTP客户端，统一处理后端API接口调用
  */
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
-// ==========================================
-// 类型定义
-// ==========================================
-
-/** 通用API响应结构 */
 export interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
 }
 
-/** 任务状态枚举 */
-export type TaskStatus = 'waiting' | 'processing' | 'completed' | 'failed'
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
-/** 任务信息 */
 export interface TaskInfo {
   task_id: string
   input_file: string
@@ -29,16 +21,13 @@ export interface TaskInfo {
   output_format?: string
   result_file?: string
   error_message?: string
-}
-
-/** 任务详情 */
-export interface TaskDetail extends TaskInfo {
   progress?: number
   prompt?: string
   inlay_file?: string
 }
 
-/** 镶嵌结构信息 */
+export interface TaskDetail extends TaskInfo {}
+
 export interface InlayInfo {
   id: string
   filename: string
@@ -46,51 +35,84 @@ export interface InlayInfo {
   file_format: string
   created_at: string
   thumbnail_url?: string
+  has_preview?: boolean
+  mesh_ready?: boolean
 }
 
-/** 系统信息 */
-export interface SystemInfo {
-  gpu_info: string
-  gpu_memory: string
-  model_version: string
-  cuda_available: boolean
-  status: string
+export interface InlayPageResult {
+  items: InlayInfo[]
+  total: number
+  page: number
+  page_size: number
+  format_counts: Record<string, number>
 }
 
-/** 生成参数 */
+export interface InlayListParams {
+  keyword?: string
+  format?: string
+  category?: string
+  has_preview?: boolean
+  mesh_ready?: boolean
+  page?: number
+  page_size?: number
+}
+
+export interface InlayCategoryNode {
+  label: string
+  value: string
+  count: number
+  children?: InlayCategoryNode[]
+}
+
 export interface GenerateParams {
   prompt?: string
   output_format: 'OBJ' | 'GLB' | 'STL'
+  inlay_structure_filename?: string
+  inlay_type?: string
+  gem_type?: string
+  multi_view_enabled?: boolean
 }
 
-// ==========================================
-// Axios实例创建
-// ==========================================
+export type ViewFace = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
+export type ViewImages = Partial<Record<ViewFace, File>>
+
+export interface PreprocessResult {
+  sessionId: string
+  processedPath: string
+  previewUrl: string
+  originalPath?: string
+}
+
+export interface ViewCropItem {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  guess?: string | null
+  previewUrl: string
+}
+
+export interface SplitMultiViewResult {
+  sessionId: string
+  sourceWidth: number
+  sourceHeight: number
+  sourcePreviewUrl?: string
+  crops: ViewCropItem[]
+}
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 300000, // 5分钟超时（3D生成耗时较长）
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 300000,
 })
 
-// 请求拦截器
-apiClient.interceptors.request.use(
-  (config) => {
-    // 可在此处添加token等认证信息
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-// 响应拦截器
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
+    // Binary responses (preview/download) are not JSON envelopes
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+      return response
+    }
     const { data } = response
-    // 业务状态码检查
     if (data.code !== 0 && data.code !== 200) {
       ElMessage.error(data.message || '请求失败')
       return Promise.reject(new Error(data.message || '请求失败'))
@@ -98,116 +120,136 @@ apiClient.interceptors.response.use(
     return response
   },
   (error) => {
-    // HTTP错误处理
-    let message = '网络错误，请稍后重试'
-    if (error.response) {
-      const status = error.response.status
-      switch (status) {
-        case 400:
-          message = '请求参数错误'
-          break
-        case 401:
-          message = '未授权，请重新登录'
-          break
-        case 404:
-          message = '请求的资源不存在'
-          break
-        case 422:
-          message = error.response.data?.detail || '数据验证失败'
-          break
-        case 500:
-          message = '服务器内部错误'
-          break
-        case 503:
-          message = '服务暂时不可用，请稍后重试'
-          break
-        default:
-          message = `请求失败 (${status})`
-      }
-    } else if (error.code === 'ECONNABORTED') {
-      message = '请求超时，请稍后重试'
-    }
-    ElMessage.error(message)
+    ElMessage.error(error.response?.data?.message || error.message || '网络错误')
     return Promise.reject(error)
   }
 )
 
-// ==========================================
-// API接口定义
-// ==========================================
-
-/**
- * 图片生成3D模型
- * @param imageFile 设计图文件
- * @param params 生成参数（prompt、输出格式等）
- * @returns 任务信息
- */
-export async function generateImageTo3d(
-  imageFile: File,
-  params: GenerateParams
-): Promise<ApiResponse<TaskInfo>> {
+export async function splitMultiViewSheet(
+  imageFile: File
+): Promise<ApiResponse<SplitMultiViewResult>> {
   const formData = new FormData()
   formData.append('image', imageFile)
-  if (params.prompt) {
-    formData.append('prompt', params.prompt)
-  }
-  formData.append('output_format', params.output_format)
+  const response = await apiClient.post<ApiResponse<SplitMultiViewResult>>(
+    '/preprocess/split-multi-view',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+  )
+  return response.data
+}
 
+export async function removeBackground(imageFile: File): Promise<ApiResponse<PreprocessResult>> {
+  const formData = new FormData()
+  formData.append('image', imageFile)
+  const response = await apiClient.post<ApiResponse<PreprocessResult>>(
+    '/preprocess/remove-background',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+  )
+  return response.data
+}
+
+export async function fetchPreprocessPreview(previewUrl: string): Promise<Blob> {
+  const path = previewUrl.startsWith('/api') ? previewUrl.slice(4) : previewUrl
+  const response = await apiClient.get(path, { responseType: 'blob' })
+  return response.data as Blob
+}
+
+export async function savePreprocess(
+  sessionId: string,
+  imageFile: File | Blob
+): Promise<ApiResponse<PreprocessResult>> {
+  const formData = new FormData()
+  const file =
+    imageFile instanceof File
+      ? imageFile
+      : new File([imageFile], 'no_bg.png', { type: 'image/png' })
+  formData.append('image', file)
+  const response = await apiClient.post<ApiResponse<PreprocessResult>>(
+    `/preprocess/save/${sessionId}`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 }
+  )
+  return response.data
+}
+
+export async function generateImageTo3d(
+  imageFile: File | null,
+  params: GenerateParams,
+  viewImages?: ViewImages
+): Promise<ApiResponse<TaskInfo>> {
+  const formData = new FormData()
+  if (imageFile) {
+    formData.append('image', imageFile)
+  }
+  if (params.prompt) formData.append('prompt', params.prompt)
+  formData.append('output_format', params.output_format)
+  if (params.inlay_structure_filename) {
+    formData.append('inlay_structure_filename', params.inlay_structure_filename)
+  }
+  if (params.multi_view_enabled) {
+    formData.append('multi_view_enabled', 'true')
+    if (viewImages) {
+      for (const [face, file] of Object.entries(viewImages)) {
+        if (file) {
+          formData.append(`${face}_image`, file)
+        }
+      }
+    }
+  }
   const response = await apiClient.post<ApiResponse<TaskInfo>>(
     '/generate/image-to-3d',
     formData,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }
+    { headers: { 'Content-Type': 'multipart/form-data' } }
   )
   return response.data
 }
 
-/**
- * 条件生成3D模型（带镶嵌结构）
- * @param imageFile 设计图文件
- * @param inlayFile 镶嵌结构文件
- * @param params 生成参数
- * @returns 任务信息
- */
 export async function conditionGenerate(
   imageFile: File,
-  inlayFile: File,
   params: GenerateParams
 ): Promise<ApiResponse<TaskInfo>> {
   const formData = new FormData()
   formData.append('image', imageFile)
-  formData.append('inlay', inlayFile)
-  if (params.prompt) {
-    formData.append('prompt', params.prompt)
+  if (!params.inlay_structure_filename) {
+    throw new Error('请选择镶嵌结构')
   }
+  formData.append('inlay_structure_filename', params.inlay_structure_filename)
+  if (params.prompt) formData.append('prompt', params.prompt)
   formData.append('output_format', params.output_format)
+  if (params.inlay_type) formData.append('inlay_type', params.inlay_type)
+  if (params.gem_type) formData.append('gem_type', params.gem_type)
 
   const response = await apiClient.post<ApiResponse<TaskInfo>>(
-    '/generate/condition',
+    '/generate/condition-generate',
     formData,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }
+    { headers: { 'Content-Type': 'multipart/form-data' } }
   )
   return response.data
 }
 
-/**
- * 获取镶嵌结构列表
- * @returns 镶嵌结构列表
- */
-export async function getInlayList(): Promise<ApiResponse<InlayInfo[]>> {
-  const response = await apiClient.get<ApiResponse<InlayInfo[]>>('/inlay/list')
+export async function getInlayList(params?: InlayListParams): Promise<ApiResponse<InlayPageResult>> {
+  const response = await apiClient.get<ApiResponse<InlayPageResult>>('/inlay/list', { params })
   return response.data
 }
 
-/**
- * 获取任务列表
- * @param page 页码
- * @param pageSize 每页数量
- * @returns 任务列表（分页）
- */
+export async function getInlayFormats(): Promise<ApiResponse<Record<string, number>>> {
+  const response = await apiClient.get<ApiResponse<Record<string, number>>>('/inlay/formats')
+  return response.data
+}
+
+export async function refreshInlayIndex(): Promise<ApiResponse<{ total: number; with_preview: number; without_preview: number }>> {
+  const response = await apiClient.post<ApiResponse<{ total: number; with_preview: number; without_preview: number }>>(
+    '/inlay/refresh'
+  )
+  return response.data
+}
+
+export async function getInlayCategories(): Promise<ApiResponse<InlayCategoryNode[]>> {
+  const response = await apiClient.get<ApiResponse<InlayCategoryNode[]>>('/inlay/categories')
+  return response.data
+}
+
 export async function getTaskList(
   page: number = 1,
   pageSize: number = 20
@@ -219,51 +261,30 @@ export async function getTaskList(
   return response.data
 }
 
-/**
- * 获取任务详情
- * @param taskId 任务ID
- * @returns 任务详情
- */
-export async function getTaskDetail(
-  taskId: string
-): Promise<ApiResponse<TaskDetail>> {
-  const response = await apiClient.get<ApiResponse<TaskDetail>>(
-    `/tasks/${taskId}`
-  )
+export async function getTaskDetail(taskId: string): Promise<ApiResponse<TaskDetail>> {
+  const response = await apiClient.get<ApiResponse<TaskDetail>>(`/tasks/${taskId}`)
   return response.data
 }
 
-/**
- * 下载任务结果文件
- * @param taskId 任务ID
- * @returns Blob文件数据
- */
 export async function downloadResult(taskId: string): Promise<Blob> {
-  const response = await apiClient.get(`/tasks/${taskId}/download`, {
-    responseType: 'blob',
-  })
+  const response = await apiClient.get(`/tasks/${taskId}/download`, { responseType: 'blob' })
   return response.data as Blob
 }
 
-/**
- * 删除任务
- * @param taskId 任务ID
- */
-export async function deleteTask(
-  taskId: string
-): Promise<ApiResponse<null>> {
-  const response = await apiClient.delete<ApiResponse<null>>(
-    `/tasks/${taskId}`
-  )
+export async function deleteTask(taskId: string): Promise<ApiResponse<null>> {
+  const response = await apiClient.delete<ApiResponse<null>>(`/tasks/${taskId}`)
   return response.data
 }
 
-/**
- * 获取系统信息
- * @returns 系统状态信息
- */
-export async function getSystemInfo(): Promise<ApiResponse<SystemInfo>> {
-  const response = await apiClient.get<ApiResponse<SystemInfo>>('/system/info')
+export interface SystemInfoData {
+  gpu_info?: string
+  model_version?: string
+  ai_service_available?: boolean
+  status?: string
+}
+
+export async function getSystemInfo(): Promise<ApiResponse<SystemInfoData>> {
+  const response = await apiClient.get<ApiResponse<SystemInfoData>>('/system/info')
   return response.data
 }
 

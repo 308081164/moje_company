@@ -8,7 +8,7 @@ import os
 import asyncio
 import logging
 import time
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, Union
 from datetime import datetime
 
 from app.models.schemas import (
@@ -20,8 +20,19 @@ from app.services.mesh_processor import get_mesh_processor
 from app.utils.file_utils import (
     generate_task_id, generate_output_path,
     validate_image_file, validate_mesh_file, ensure_dir,
+    load_image_pil,
 )
 from app.config import get_config
+from app.services.multi_view import (
+    filter_views_for_hy3d,
+    unsupported_view_keys,
+    pick_texture_image_path,
+    pick_best_single_view_path,
+    pipeline_supports_multi_view,
+    multi_view_unavailable_message,
+    single_view_unavailable_message,
+    HY3D_MV_FACES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,18 +74,13 @@ class GeneratorService:
         self,
         request_type: str,
         params: Dict[str, Any],
+        task_id: Optional[str] = None,
     ) -> TaskInfo:
         """
         创建新的生成任务
-
-        Args:
-            request_type: 请求类型 (image_to_3d / condition_generate / mesh_fusion)
-            params: 请求参数
-
-        Returns:
-            TaskInfo 任务信息
         """
-        task_id = generate_task_id()
+        if not task_id:
+            task_id = generate_task_id()
         task = TaskInfo(
             task_id=task_id,
             status=TaskStatus.PENDING,
@@ -252,15 +258,56 @@ class GeneratorService:
         # 步骤1: 验证输入
         self.update_task(task_id, progress=5, current_step="验证输入")
         image_path = params.get("image_path", "")
+        multi_view = params.get("multi_view", False)
+        raw_views = params.get("views") or {}
 
-        if not validate_image_file(image_path):
+        views_for_gen: Dict[str, str] = {}
+        if raw_views:
+            for face, path in raw_views.items():
+                if path and validate_image_file(path):
+                    views_for_gen[face] = path
+                elif path:
+                    return {"success": False, "error": f"无效的视角图像: {face}={path}"}
+
+        use_multi_view = multi_view or len(views_for_gen) >= 2
+
+        if use_multi_view:
+            if len(views_for_gen) < 2:
+                return {"success": False, "error": "多视图模式至少需要 2 个有效视角图片"}
+            hy3d_views = filter_views_for_hy3d(views_for_gen)
+            if len(hy3d_views) < 2:
+                skipped = unsupported_view_keys(views_for_gen)
+                return {
+                    "success": False,
+                    "error": (
+                        f"hy3dgen 多视图至少需要 2 个水平视角"
+                        f"（{', '.join(HY3D_MV_FACES)}），"
+                        f"当前可用 {len(hy3d_views)} 个。"
+                        f"已上传但不参与生成的视角: {', '.join(skipped) or '无'}"
+                    ),
+                }
+            unsupported = unsupported_view_keys(views_for_gen)
+            if unsupported:
+                logger.warning(
+                    "以下视角已上传但 hy3dgen 暂不支持，生成时将忽略: %s",
+                    ", ".join(unsupported),
+                )
+            if not image_path:
+                image_path = pick_texture_image_path(views_for_gen, "")
+        elif not validate_image_file(image_path):
             return {"success": False, "error": f"无效的图像文件: {image_path}"}
 
         # 验证可选的底座网格
         setting_mesh_path = params.get("setting_mesh_path")
         if setting_mesh_path and not validate_mesh_file(setting_mesh_path):
-            logger.warning(f"底座网格无效，将跳过融合: {setting_mesh_path}")
-            setting_mesh_path = None
+            return {
+                "success": False,
+                "error": f"无效的镶嵌底座网格: {setting_mesh_path}",
+            }
+
+        apply_texture = self._resolve_apply_texture(params)
+        enable_fusion = params.get("enable_mesh_fusion", True)
+        enable_icp = params.get("enable_icp_alignment", True)
 
         # 步骤2: 确保模型已加载
         self.update_task(task_id, progress=10, current_step="加载模型")
@@ -271,14 +318,72 @@ class GeneratorService:
             # 在线程池中加载模型（避免阻塞事件循环）
             loaded = await asyncio.to_thread(model_manager.load_model)
             if not loaded:
-                return {"success": False, "error": "模型加载失败"}
+                detail = model_manager.get_last_load_error() or "模型加载失败"
+                return {"success": False, "error": detail}
+
+        hy3d_views: Optional[Dict[str, str]] = None
+        if use_multi_view:
+            hy3d_views = filter_views_for_hy3d(views_for_gen)
+            mv_ready = await asyncio.to_thread(
+                self._ensure_multi_view_pipeline, model_manager
+            )
+            if not mv_ready:
+                fallback_path = pick_best_single_view_path(views_for_gen) or image_path
+                if not fallback_path or not validate_image_file(fallback_path):
+                    return {
+                        "success": False,
+                        "error": multi_view_unavailable_message(fallback_failed=True),
+                    }
+                logger.warning(
+                    "当前 ShapeGen 不支持多视图且未加载 MV 模型，"
+                    "将仅使用视角 [%s] 进行单图生成。"
+                    "如需真正多视图，请下载 Hunyuan3D-2mv 并设置 MODEL_VERSION=mv。",
+                    next(
+                        (k for k, v in views_for_gen.items() if v == fallback_path),
+                        "front",
+                    ),
+                )
+                use_multi_view = False
+                hy3d_views = None
+                image_path = fallback_path
+        else:
+            sv_ready = await asyncio.to_thread(
+                self._ensure_single_view_pipeline, model_manager
+            )
+            if not sv_ready:
+                return {
+                    "success": False,
+                    "error": single_view_unavailable_message(),
+                }
 
         # 步骤3: 调用Hunyuan3D-2生成3D
         self.update_task(task_id, progress=20, current_step="3D模型生成中")
 
-        prompt = params.get("prompt", "")
-        negative_prompt = params.get("negative_prompt", "")
-        result_format = params.get("result_format", "glb")
+        prompt = params.get("prompt") or ""
+        negative_prompt = params.get("negative_prompt") or ""
+        result_format = params.get("result_format") or "glb"
+
+        # 珠宝建模默认：顺滑抛光曲面，抑制 AI 网格坑凹/尖刺/锯齿
+        jewelry_style = (
+            "，高精度珠宝CAD风格，光滑抛光金属与宝石曲面，"
+            "对称规整，大面平整，过渡圆顺，无凹凸噪点无网格坑洞无尖刺"
+        )
+        jewelry_negative = (
+            "rough surface,bumpy,noisy,jagged edges,spikey,thin spikes,wire spikes,"
+            "low poly artifacts,faceted noise,holes,cracks,asymmetric distortion,"
+            "pitted surface,wavy uneven metal,bumps,lumps,cellular noise,micro bumps"
+        )
+        if jewelry_style not in prompt:
+            prompt = (prompt or "珠宝主体装饰结构") + jewelry_style
+        if not negative_prompt.strip():
+            negative_prompt = jewelry_negative
+
+        if setting_mesh_path:
+            self.update_task(task_id, progress=15, current_step="准备镶嵌条件")
+            prompt = await self._prepare_track_a_prompt(
+                params, setting_mesh_path, prompt or "珠宝主体装饰结构"
+            )
+            logger.info("轨道A：已用镶嵌底座点云增强生成 prompt")
 
         # 在线程池中执行模型推理（CPU/GPU密集型任务）
         gen_result = await asyncio.to_thread(
@@ -289,6 +394,8 @@ class GeneratorService:
             output_dir=config.service.output_dir,
             task_id=task_id,
             result_format=result_format,
+            views=hy3d_views if use_multi_view else None,
+            apply_texture=apply_texture,
         )
 
         if not gen_result.get("success"):
@@ -301,8 +408,8 @@ class GeneratorService:
         # 步骤4: 后处理（与底座融合）
         output_files = [generated_mesh]
 
-        if setting_mesh_path:
-            self.update_task(task_id, progress=75, current_step="网格融合")
+        if setting_mesh_path and enable_fusion:
+            self.update_task(task_id, progress=75, current_step="ICP对齐与布尔融合")
             processor = get_mesh_processor()
             process_result = await asyncio.to_thread(
                 processor.process_generated_mesh,
@@ -311,13 +418,20 @@ class GeneratorService:
                 output_dir=config.service.output_dir,
                 task_id=task_id,
                 fusion_method="boolean",
-                enable_icp=True,
+                enable_icp=enable_icp,
                 enable_repair=True,
                 output_format=result_format,
             )
             if process_result.get("success"):
                 generated_mesh = process_result["output_path"]
                 output_files.append(generated_mesh)
+            else:
+                logger.warning(
+                    "镶嵌底座融合失败: %s",
+                    process_result.get("error", "unknown"),
+                )
+        elif setting_mesh_path and not enable_fusion:
+            logger.info("已提供镶嵌底座但 enable_mesh_fusion=false，跳过融合")
 
         self.update_task(task_id, progress=95, current_step="保存结果")
 
@@ -327,6 +441,114 @@ class GeneratorService:
             "output_files": output_files,
         }
 
+    @staticmethod
+    def _resolve_apply_texture(params: Dict[str, Any]) -> bool:
+        """轨道A 默认纯几何；请求可显式覆盖 apply_texture"""
+        if params.get("apply_texture") is not None:
+            return bool(params["apply_texture"])
+        return not get_config().service.track_a_geometry_only
+
+    async def _prepare_track_a_prompt(
+        self,
+        params: Dict[str, Any],
+        setting_mesh_path: str,
+        base_prompt: str,
+    ) -> str:
+        """
+        轨道A：镶嵌底座点云 + 库信息 → 增强 prompt，引导 AI 生成主体而非重复镶嵌爪位
+        """
+        inlay_info = await self._query_inlay_database(params)
+        point_cloud_features = None
+        try:
+            from app.services.pointcloud_conditioner import get_pointcloud_conditioner
+
+            cfg = get_config()
+            conditioner = get_pointcloud_conditioner(cfg.model.point_cloud_density)
+            point_cloud_features = await asyncio.to_thread(
+                conditioner.build_condition_features,
+                setting_mesh_path,
+            )
+            params["point_cloud_features"] = {
+                "bbox": point_cloud_features.get("bbox"),
+                "center": point_cloud_features.get("center"),
+                "num_points": point_cloud_features.get("num_points"),
+            }
+            if inlay_info is None and point_cloud_features:
+                inlay_info = {"type": params.get("inlay_type", "custom")}
+        except Exception as e:
+            logger.warning(f"点云条件生成失败，继续基础 prompt: {e}")
+
+        gem_type = params.get("gem_type", "diamond")
+        inlay_type = params.get("inlay_type", "prong")
+        enhanced = self._build_condition_prompt(
+            prompt=base_prompt,
+            gem_type=gem_type,
+            inlay_type=inlay_type,
+            inlay_info=inlay_info,
+            point_cloud_features=params.get("point_cloud_features"),
+        )
+        suffix = (
+            "。镶嵌底座已由标准库提供，请仅生成与之衔接的珠宝主体与装饰结构，"
+            "不要重复生成爪位、镶口等底座细节。"
+        )
+        return enhanced + suffix
+
+    @staticmethod
+    def _ensure_multi_view_pipeline(model_manager) -> bool:
+        """确保 ShapeGen 支持多视图；必要时尝试加载本地 MV 模型"""
+        if model_manager.supports_multi_view():
+            return True
+        if model_manager.try_switch_to_multi_view_model():
+            return True
+        return False
+
+    @staticmethod
+    def _ensure_single_view_pipeline(model_manager) -> bool:
+        """
+        确保单图任务可执行。
+        MV pipeline 支持 {\"front\": image} 单视角输入，无需切换权重。
+        """
+        if not model_manager.supports_multi_view():
+            return True
+        if model_manager.is_loaded() and model_manager.get_model("shape_gen") is not None:
+            return True
+        return model_manager.try_switch_to_single_view_model()
+
+    @staticmethod
+    def _build_shape_gen_kwargs(gen_cfg) -> Dict[str, Any]:
+        """构建 Hunyuan3D ShapeGen 推理参数（珠宝默认）"""
+        kwargs: Dict[str, Any] = {
+            "num_inference_steps": gen_cfg.num_inference_steps,
+            "guidance_scale": gen_cfg.guidance_scale,
+            "octree_resolution": gen_cfg.octree_resolution,
+            "num_chunks": gen_cfg.num_chunks,
+            "mc_level": gen_cfg.mc_level,
+            "box_v": gen_cfg.box_v,
+            "output_type": "trimesh",
+            "enable_pbar": False,
+        }
+        if gen_cfg.mc_algo:
+            kwargs["mc_algo"] = gen_cfg.mc_algo
+        return kwargs
+
+    @staticmethod
+    def _invoke_shape_gen(shape_gen, image_input, gen_cfg):
+        """调用 ShapeGen，mc_algo 不可用时自动回退"""
+        kwargs = GeneratorService._build_shape_gen_kwargs(gen_cfg)
+        mc_algo = kwargs.get("mc_algo")
+        try:
+            return shape_gen(image=image_input, **kwargs)
+        except Exception as e:
+            if not mc_algo:
+                raise
+            logger.warning(
+                "mc_algo=%s 提取曲面失败，回退默认算法: %s",
+                mc_algo,
+                e,
+            )
+            kwargs.pop("mc_algo", None)
+            return shape_gen(image=image_input, **kwargs)
+
     def _run_hunyuan3d_generation(
         self,
         image_path: str,
@@ -335,6 +557,8 @@ class GeneratorService:
         output_dir: str = "./outputs/",
         task_id: str = "",
         result_format: str = "glb",
+        apply_texture: bool = False,
+        views: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         执行Hunyuan3D-2图片到3D生成
@@ -343,18 +567,27 @@ class GeneratorService:
         """
         model_manager = get_model_manager()
         config = get_config()
+        gen_cfg = config.generation
 
         try:
             from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
             import trimesh
 
-            logger.info(f"开始Hunyuan3D-2生成: image={image_path}")
+            logger.info(
+                f"开始Hunyuan3D-2生成: image={image_path}, "
+                f"multi_view={views is not None and len(views or {}) >= 2}"
+            )
 
             # 获取模型
             shape_gen = model_manager.get_model("shape_gen")
             if shape_gen is None:
                 # 尝试直接使用hy3dgen的便捷API
                 logger.info("使用hy3dgen便捷API进行生成...")
+                if views and len(views) >= 2:
+                    return {
+                        "success": False,
+                        "error": "多视图生成需要加载 Hunyuan3D ShapeGen 模型（便捷 API 不支持多视图）",
+                    }
                 return self._run_hy3dgen_simple(
                     image_path, prompt, output_dir, task_id, result_format
                 )
@@ -364,16 +597,41 @@ class GeneratorService:
                 output_dir, task_id, f"raw_mesh.obj"
             )
 
+            logger.info(
+                "ShapeGen 推理参数: steps=%d guidance=%.2f octree=%d chunks=%d mc_algo=%s",
+                gen_cfg.num_inference_steps,
+                gen_cfg.guidance_scale,
+                gen_cfg.octree_resolution,
+                gen_cfg.num_chunks,
+                gen_cfg.mc_algo or "default",
+            )
+
             # 执行3D生成
             logger.info("正在生成3D网格...")
-            images = [image_path]
+            if views and len(views) >= 2:
+                if not pipeline_supports_multi_view(shape_gen):
+                    return {
+                        "success": False,
+                        "error": multi_view_unavailable_message(),
+                    }
+                image_input = {
+                    face: load_image_pil(path, preserve_alpha=True)
+                    for face, path in views.items()
+                }
+                logger.info("多视图输入: %s", list(image_input.keys()))
+                mesh_outputs = self._invoke_shape_gen(shape_gen, image_input, gen_cfg)
+            else:
+                pil_image = load_image_pil(image_path, preserve_alpha=True)
+                if pipeline_supports_multi_view(shape_gen):
+                    logger.info("单图模式：使用 MV pipeline 的 front 视角输入")
+                    mesh_outputs = self._invoke_shape_gen(
+                        shape_gen, {"front": pil_image}, gen_cfg
+                    )
+                else:
+                    mesh_outputs = self._invoke_shape_gen(shape_gen, pil_image, gen_cfg)
 
-            # 使用模型生成
-            mesh_objects = shape_gen(images)
-
-            if mesh_objects and len(mesh_objects) > 0:
-                mesh = mesh_objects[0]
-
+            mesh = self._extract_first_mesh(mesh_outputs)
+            if mesh is not None:
                 # 保存原始OBJ
                 if hasattr(mesh, 'export'):
                     mesh.export(raw_output_path)
@@ -388,15 +646,36 @@ class GeneratorService:
 
                 logger.info(f"3D网格已生成: {raw_output_path}")
 
-                # 转换为目标格式
+                # 珠宝曲面后处理（去尖刺/锯齿，轻度平滑）
+                try:
+                    processor = get_mesh_processor()
+                    finished_path = generate_output_path(
+                        output_dir, task_id, "finished_raw.obj"
+                    )
+                    processor.jewelry_finish_mesh(raw_output_path, finished_path)
+                    raw_output_path = finished_path
+                    logger.info("珠宝曲面后处理完成: %s", raw_output_path)
+                except Exception as e:
+                    logger.warning("珠宝曲面后处理跳过: %s", e)
+
+                # 轨道A：纹理生成（Hunyuan3D-Paint）
+                textured_path = raw_output_path
+                if apply_texture:
+                    texture_source = pick_texture_image_path(views, image_path)
+                    textured_path = self._apply_texture_generation(
+                        mesh_path=raw_output_path,
+                        image_path=texture_source,
+                        output_dir=output_dir,
+                        task_id=task_id,
+                        result_format=result_format,
+                    ) or raw_output_path
+
                 final_path = generate_output_path(
                     output_dir, task_id, f"generated.{result_format}"
                 )
-                if raw_output_path != final_path:
+                if textured_path != final_path:
                     processor = get_mesh_processor()
-                    final_path = processor.convert_format(
-                        raw_output_path, final_path
-                    )
+                    final_path = processor.convert_format(textured_path, final_path)
 
                 return {
                     "success": True,
@@ -415,6 +694,49 @@ class GeneratorService:
         except Exception as e:
             logger.error(f"Hunyuan3D-2生成失败: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _extract_first_mesh(mesh_outputs):
+        """从 Hunyuan3D pipeline 返回值中提取首个网格（List[List[Trimesh]]）"""
+        if not mesh_outputs:
+            return None
+        first = mesh_outputs[0]
+        if isinstance(first, list):
+            return first[0] if first else None
+        return first
+
+    def _apply_texture_generation(
+        self,
+        mesh_path: str,
+        image_path: str,
+        output_dir: str,
+        task_id: str,
+        result_format: str,
+    ) -> Optional[str]:
+        """调用纹理生成管线为网格烘焙 PBR 纹理"""
+        model_manager = get_model_manager()
+        tex_gen = model_manager.get_model("tex_gen")
+        if tex_gen is None:
+            logger.info("纹理模型未加载，跳过纹理生成")
+            return None
+
+        try:
+            output_path = generate_output_path(
+                output_dir, task_id, f"textured.{result_format}"
+            )
+            logger.info("开始纹理生成...")
+            if callable(tex_gen):
+                result = tex_gen(mesh=mesh_path, image=image_path)
+                if hasattr(result, "export"):
+                    result.export(output_path)
+                    return output_path
+                if isinstance(result, str) and os.path.exists(result):
+                    return result
+            logger.warning("纹理生成未返回有效结果")
+            return None
+        except Exception as e:
+            logger.warning(f"纹理生成失败，使用无纹理网格: {e}")
+            return None
 
     def _run_hy3dgen_simple(
         self,
@@ -440,7 +762,7 @@ class GeneratorService:
 
             # 调用便捷API
             result = image_to_3d(
-                image_path=image_path,
+                image=load_image_pil(image_path, preserve_alpha=True),
                 output_path=output_path,
                 format=result_format,
             )
@@ -469,151 +791,18 @@ class GeneratorService:
 
     async def _process_condition_generate(self, task_id: str) -> Dict[str, Any]:
         """
-        处理条件生成任务
-        设计图 + 镶嵌底座 -> 珠宝3D模型
-
-        流程:
-        1. 验证设计图和底座网格
-        2. 查询镶嵌结构数据库
-        3. 生成宝石/装饰3D模型
-        4. ICP对齐
-        5. 布尔融合
-        6. 拓扑修复
-        7. 保存结果
+        条件生成（兼容旧 API）：归一化为轨道A统一管线 image_to_3d。
+        推荐新调用方直接使用 image-to-3d 并传入 setting_mesh_path + multi_view。
         """
         task = self.get_task(task_id)
-        config = get_config()
-        params = task.params
-
-        # 步骤1: 验证输入
-        self.update_task(task_id, progress=5, current_step="验证输入")
-
-        design_image_path = params.get("design_image_path", "")
-        setting_mesh_path = params.get("setting_mesh_path", "")
-
-        if not validate_image_file(design_image_path):
-            return {"success": False, "error": f"无效的设计图: {design_image_path}"}
-        if not validate_mesh_file(setting_mesh_path):
-            return {"success": False, "error": f"无效的底座网格: {setting_mesh_path}"}
-
-        # 步骤2: 查询镶嵌结构数据库
-        self.update_task(task_id, progress=10, current_step="查询镶嵌数据库")
-        inlay_info = await self._query_inlay_database(params)
-        if inlay_info:
-            logger.info(f"找到镶嵌结构信息: {inlay_info.get('type', 'unknown')}")
-
-        # 步骤3: 确保模型已加载
-        self.update_task(task_id, progress=15, current_step="加载模型")
-        model_manager = get_model_manager()
-
-        if not model_manager.is_loaded():
-            loaded = await asyncio.to_thread(model_manager.load_model)
-            if not loaded:
-                return {"success": False, "error": "模型加载失败"}
-
-        # 步骤4: 生成宝石/装饰3D模型
-        self.update_task(task_id, progress=20, current_step="生成装饰3D模型")
-
-        prompt = params.get("prompt", "珠宝装饰")
-        gem_type = params.get("gem_type", "diamond")
-        inlay_type = params.get("inlay_type", "prong")
-
-        # 构建增强提示词
-        enhanced_prompt = self._build_condition_prompt(
-            prompt=prompt,
-            gem_type=gem_type,
-            inlay_type=inlay_type,
-            inlay_info=inlay_info,
+        params = dict(task.params)
+        params["image_path"] = params.get("design_image_path") or params.get(
+            "image_path", ""
         )
-
-        gen_result = await asyncio.to_thread(
-            self._run_hunyuan3d_generation,
-            image_path=design_image_path,
-            prompt=enhanced_prompt,
-            output_dir=config.service.output_dir,
-            task_id=task_id,
-            result_format=params.get("result_format", "glb"),
-        )
-
-        if not gen_result.get("success"):
-            return gen_result
-
-        generated_mesh = gen_result["output_path"]
-
-        # 步骤5: ICP对齐
-        self.update_task(task_id, progress=60, current_step="ICP点云对齐")
-
-        enable_icp = params.get("enable_icp_alignment", True)
-        processor = get_mesh_processor()
-
-        if enable_icp and processor._open3d_available:
-            try:
-                aligned_path = generate_output_path(
-                    config.service.output_dir, task_id, "aligned.obj"
-                )
-                transform, rmse = await asyncio.to_thread(
-                    processor.icp_align,
-                    generated_mesh, setting_mesh_path,
-                )
-                generated_mesh = await asyncio.to_thread(
-                    processor.apply_icp_transform,
-                    generated_mesh, transform, aligned_path,
-                )
-                logger.info(f"ICP对齐完成, RMSE={rmse:.6f}")
-            except Exception as e:
-                logger.warning(f"ICP对齐失败，跳过: {e}")
-
-        # 步骤6: 布尔融合
-        self.update_task(task_id, progress=75, current_step="布尔融合")
-
-        enable_fusion = params.get("enable_mesh_fusion", True)
-        if enable_fusion:
-            try:
-                fused_path = generate_output_path(
-                    config.service.output_dir, task_id,
-                    f"fused.{params.get('result_format', 'glb')}"
-                )
-                generated_mesh = await asyncio.to_thread(
-                    processor.boolean_union,
-                    setting_mesh_path, generated_mesh, fused_path,
-                )
-            except Exception as e:
-                logger.warning(f"布尔融合失败，使用简单合并: {e}")
-                merged_path = generate_output_path(
-                    config.service.output_dir, task_id, "merged.glb"
-                )
-                import trimesh
-                mesh_a = trimesh.load(setting_mesh_path)
-                mesh_b = trimesh.load(generated_mesh)
-                if isinstance(mesh_a, trimesh.Scene):
-                    mesh_a = mesh_a.dump(concatenate=True)
-                if isinstance(mesh_b, trimesh.Scene):
-                    mesh_b = mesh_b.dump(concatenate=True)
-                merged = processor._simple_merge(mesh_a, mesh_b)
-                merged.export(merged_path)
-                generated_mesh = merged_path
-
-        # 步骤7: 拓扑修复
-        self.update_task(task_id, progress=90, current_step="拓扑修复")
-        try:
-            repaired_path = generate_output_path(
-                config.service.output_dir, task_id,
-                f"final.{params.get('result_format', 'glb')}"
-            )
-            repair_stats = await asyncio.to_thread(
-                processor.repair_mesh, generated_mesh, repaired_path
-            )
-            generated_mesh = repaired_path
-        except Exception as e:
-            logger.warning(f"拓扑修复失败: {e}")
-
-        self.update_task(task_id, progress=95, current_step="保存结果")
-
-        return {
-            "success": True,
-            "output_path": generated_mesh,
-            "output_files": [generated_mesh],
-        }
+        params.setdefault("multi_view", False)
+        params.setdefault("views", params.get("views") or {})
+        task.params = params
+        return await self._process_image_to_3d(task_id)
 
     def _build_condition_prompt(
         self,
@@ -621,6 +810,7 @@ class GeneratorService:
         gem_type: str,
         inlay_type: str,
         inlay_info: Optional[Dict] = None,
+        point_cloud_features: Optional[Dict] = None,
     ) -> str:
         """
         构建条件生成的增强提示词
@@ -660,6 +850,14 @@ class GeneratorService:
                 enhanced += f"，{inlay_info['prong_count']}爪"
             if inlay_info.get("setting_style"):
                 enhanced += f"，{inlay_info['setting_style']}风格"
+
+        if point_cloud_features:
+            bbox = point_cloud_features.get("bbox")
+            if bbox:
+                enhanced += f"，底座尺寸约 {bbox[0]:.2f}x{bbox[1]:.2f}x{bbox[2]:.2f} 毫米"
+            center = point_cloud_features.get("center")
+            if center:
+                enhanced += f"，底座中心 ({center[0]:.2f},{center[1]:.2f},{center[2]:.2f})"
 
         return enhanced
 

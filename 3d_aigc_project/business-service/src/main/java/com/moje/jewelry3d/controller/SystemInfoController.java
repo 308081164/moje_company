@@ -52,26 +52,22 @@ public class SystemInfoController {
             try {
                 JsonNode aiInfo = aiServiceClient.getSystemInfo();
                 if (aiInfo != null) {
-                    // 解析GPU信息
-                    if (aiInfo.has("gpu_info")) {
-                        List<Map<String, Object>> gpuList = new ArrayList<>();
-                        JsonNode gpuArray = aiInfo.get("gpu_info");
-                        if (gpuArray.isArray()) {
-                            for (JsonNode gpu : gpuArray) {
-                                Map<String, Object> gpuMap = new HashMap<>();
-                                gpu.forEach(field -> gpuMap.put(field.getKey(), field.getValueAsText()));
-                                gpuList.add(gpuMap);
-                            }
-                        }
-                        info.setGpuInfo(gpuList);
+                    List<Map<String, Object>> gpuList = new ArrayList<>();
+                    Map<String, Object> gpuMap = new HashMap<>();
+                    if (aiInfo.has("gpu_name")) {
+                        gpuMap.put("name", aiInfo.get("gpu_name").asText());
                     }
+                    if (aiInfo.has("vram_gb")) {
+                        gpuMap.put("vram_gb", aiInfo.get("vram_gb").asText());
+                    }
+                    if (aiInfo.has("recommended_model")) {
+                        gpuMap.put("recommended_model", aiInfo.get("recommended_model").asText());
+                    }
+                    gpuList.add(gpuMap);
+                    info.setGpuInfo(gpuList);
 
-                    // 解析内存信息
-                    if (aiInfo.has("available_memory_mb")) {
-                        info.setAvailableMemoryMb(aiInfo.get("available_memory_mb").asLong());
-                    }
-                    if (aiInfo.has("used_memory_mb")) {
-                        info.setUsedMemoryMb(aiInfo.get("used_memory_mb").asLong());
+                    if (aiInfo.has("memory_usage_mb")) {
+                        info.setUsedMemoryMb(aiInfo.get("memory_usage_mb").asLong());
                     }
                 }
             } catch (Exception e) {

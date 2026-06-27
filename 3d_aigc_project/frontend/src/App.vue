@@ -5,9 +5,9 @@
       <div class="header-left">
         <h1 class="app-title">
           <el-icon><Box /></el-icon>
-          3D AIGC
+          {{ APP_NAME }}
         </h1>
-        <span class="app-subtitle">图片生成3D模型平台</span>
+        <span class="app-subtitle">{{ APP_SUBTITLE }}</span>
       </div>
       <el-menu
         :default-active="activeMenu"
@@ -48,6 +48,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Box, MagicStick, List, Monitor } from '@element-plus/icons-vue'
 import { getSystemInfo } from '@/api'
+import { APP_NAME, APP_SUBTITLE } from '@/constants/brand'
 
 const route = useRoute()
 
@@ -63,7 +64,13 @@ onMounted(async () => {
   try {
     const res = await getSystemInfo()
     systemOnline.value = true
-    systemStatus.value = `GPU: ${res.data.gpu_info || '未知'} | 模型: ${res.data.model_version || '未知'}`
+    const gpuInfo = (res.data as any).gpuInfo?.[0]?.name
+      || (res.data as any).gpu_info
+      || '未知'
+    const model = (res.data as any).recommended_model
+      || (res.data as any).model_version
+      || '未知'
+    systemStatus.value = `GPU: ${gpuInfo} | 模型: ${model}`
   } catch {
     systemOnline.value = false
     systemStatus.value = '无法连接到后端服务'
@@ -146,5 +153,7 @@ onMounted(async () => {
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
+  min-width: 0;
+  overflow-x: hidden;
 }
 </style>

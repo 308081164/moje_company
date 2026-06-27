@@ -1,15 +1,12 @@
 package com.moje.jewelry3d.model.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
-/**
- * 3D生成响应DTO
- * 返回生成任务的结果信息
- */
 @Data
 public class GenerateResponse {
 
-    /** 任务ID */
+    @JsonProperty("task_id")
     private String taskId;
 
     /** 任务状态：pending-等待中, processing-处理中, completed-已完成, failed-失败 */

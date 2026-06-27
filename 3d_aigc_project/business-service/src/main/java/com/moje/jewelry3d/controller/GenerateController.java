@@ -3,7 +3,7 @@ package com.moje.jewelry3d.controller;
 import com.moje.jewelry3d.common.BusinessException;
 import com.moje.jewelry3d.common.Result;
 import com.moje.jewelry3d.model.dto.GenerateResponse;
-import com.moje.jewelry3d.model.entity.GenerateTask;
+import com.moje.jewelry3d.model.dto.TaskViewDto;
 import com.moje.jewelry3d.service.GenerateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,16 +19,12 @@ import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-/**
- * 3D生成控制器
- * 提供图片转3D、条件生成、任务管理等REST API
- * 服务端口: 8854
- */
 @Slf4j
 @RestController
-@RequestMapping("/api/generate")
 public class GenerateController {
 
     private final GenerateService generateService;
@@ -38,112 +34,135 @@ public class GenerateController {
         this.generateService = generateService;
     }
 
-    /**
-     * 图片转3D生成
-     * 上传设计图，调用AI服务生成3D模型
-     *
-     * @param image 设计图文件
-     * @return 生成任务响应
-     */
-    @PostMapping("/image-to-3d")
+    @PostMapping("/api/generate/image-to-3d")
     public Result<GenerateResponse> imageTo3d(
-            @RequestParam("image") MultipartFile image) {
+            @RequestParam(value = "image", required = false) MultipartFile image,
+            @RequestParam(value = "prompt", required = false) String prompt,
+            @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat,
+            @RequestParam(value = "inlay_structure_filename", required = false) String inlayStructureFilename,
+            @RequestParam(value = "multi_view_enabled", required = false, defaultValue = "false") boolean multiViewEnabled,
+            @RequestParam(value = "front_image", required = false) MultipartFile frontImage,
+            @RequestParam(value = "back_image", required = false) MultipartFile backImage,
+            @RequestParam(value = "left_image", required = false) MultipartFile leftImage,
+            @RequestParam(value = "right_image", required = false) MultipartFile rightImage,
+            @RequestParam(value = "top_image", required = false) MultipartFile topImage,
+            @RequestParam(value = "bottom_image", required = false) MultipartFile bottomImage
+    ) {
+        Map<String, MultipartFile> viewFiles = new HashMap<>();
+        putViewIfPresent(viewFiles, "front", frontImage);
+        putViewIfPresent(viewFiles, "back", backImage);
+        putViewIfPresent(viewFiles, "left", leftImage);
+        putViewIfPresent(viewFiles, "right", rightImage);
+        putViewIfPresent(viewFiles, "top", topImage);
+        putViewIfPresent(viewFiles, "bottom", bottomImage);
 
-        if (image.isEmpty()) {
+        if (multiViewEnabled) {
+            if (viewFiles.size() < 2) {
+                throw new BusinessException("多视图模式下至少需要上传 2 个视角图片");
+            }
+        } else if (image == null || image.isEmpty()) {
             throw new BusinessException("请上传设计图文件");
         }
 
-        log.info("收到图片转3D请求，文件名: {}, 大小: {} bytes",
-                image.getOriginalFilename(), image.getSize());
-
-        GenerateResponse response = generateService.imageTo3d(image);
+        GenerateResponse response = generateService.imageTo3d(
+                image, prompt, outputFormat, inlayStructureFilename,
+                multiViewEnabled, viewFiles
+        );
         return Result.success("生成任务已提交", response);
     }
 
-    /**
-     * 条件生成
-     * 上传设计图并选择镶嵌底座，进行条件生成
-     *
-     * @param image                  设计图文件
-     * @param inlayStructureFilename 镶嵌底座文件名（从数据库中选择）
-     * @param inlayStructureFile     镶嵌底座文件（直接上传，可选）
-     * @return 生成任务响应
-     */
-    @PostMapping("/condition-generate")
+    private static void putViewIfPresent(Map<String, MultipartFile> map, String key, MultipartFile file) {
+        if (file != null && !file.isEmpty()) {
+            map.put(key, file);
+        }
+    }
+
+    @PostMapping("/api/generate/condition-generate")
     public Result<GenerateResponse> conditionGenerate(
             @RequestParam("image") MultipartFile image,
             @RequestParam(value = "inlay_structure_filename", required = false) String inlayStructureFilename,
-            @RequestParam(value = "inlay_structure_file", required = false) MultipartFile inlayStructureFile) {
-
+            @RequestParam(value = "inlay_structure_file", required = false) MultipartFile inlayStructureFile,
+            @RequestParam(value = "prompt", required = false) String prompt,
+            @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat,
+            @RequestParam(value = "inlay_type", required = false) String inlayType,
+            @RequestParam(value = "gem_type", required = false) String gemType
+    ) {
         if (image.isEmpty()) {
             throw new BusinessException("请上传设计图文件");
         }
-
         if ((inlayStructureFilename == null || inlayStructureFilename.isEmpty())
                 && (inlayStructureFile == null || inlayStructureFile.isEmpty())) {
             throw new BusinessException("请选择或上传镶嵌底座");
         }
-
-        log.info("收到条件生成请求，设计图: {}, 镶嵌底座: {}",
-                image.getOriginalFilename(),
-                inlayStructureFilename != null ? inlayStructureFilename : inlayStructureFile.getOriginalFilename());
-
-        GenerateResponse response = generateService.conditionGenerate(image, inlayStructureFilename, inlayStructureFile);
+        GenerateResponse response = generateService.conditionGenerate(
+                image, inlayStructureFilename, inlayStructureFile,
+                prompt, outputFormat, inlayType, gemType
+        );
         return Result.success("条件生成任务已提交", response);
     }
 
-    /**
-     * 获取任务列表
-     *
-     * @return 所有生成任务列表
-     */
-    @GetMapping("/tasks")
-    public Result<List<GenerateTask>> getTasks() {
-        List<GenerateTask> tasks = generateService.getAllTasks();
-        return Result.success(tasks);
+    /** 前端兼容：条件生成别名 */
+    @PostMapping("/api/generate/condition")
+    public Result<GenerateResponse> conditionGenerateAlias(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(value = "inlay_structure_filename", required = false) String inlayStructureFilename,
+            @RequestParam(value = "inlay", required = false) MultipartFile inlay,
+            @RequestParam(value = "prompt", required = false) String prompt,
+            @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat
+    ) {
+        return conditionGenerate(image, inlayStructureFilename, inlay, prompt, outputFormat, null, null);
     }
 
-    /**
-     * 获取任务详情
-     *
-     * @param taskId 任务ID
-     * @return 任务详细信息
-     */
-    @GetMapping("/tasks/{taskId}")
-    public Result<GenerateTask> getTaskDetail(@PathVariable String taskId) {
-        GenerateTask task = generateService.getTask(taskId);
-        return Result.success(task);
+    @GetMapping("/api/generate/tasks")
+    public Result<List<TaskViewDto>> getTasks() {
+        return Result.success(generateService.getAllTaskViews());
     }
 
-    /**
-     * 下载生成结果
-     *
-     * @param taskId 任务ID
-     * @return 生成结果文件
-     */
-    @GetMapping("/download/{taskId}")
+    /** 前端兼容：/api/tasks */
+    @GetMapping("/api/tasks")
+    public Result<Map<String, Object>> getTasksAlias(
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "page_size", defaultValue = "20") int pageSize
+    ) {
+        List<TaskViewDto> all = generateService.getAllTaskViews();
+        int from = Math.max(0, (page - 1) * pageSize);
+        int to = Math.min(all.size(), from + pageSize);
+        List<TaskViewDto> slice = from < all.size() ? all.subList(from, to) : List.of();
+        Map<String, Object> body = new HashMap<>();
+        body.put("tasks", slice);
+        body.put("total", all.size());
+        return Result.success(body);
+    }
+
+    @GetMapping({"/api/generate/tasks/{taskId}", "/api/tasks/{taskId}"})
+    public Result<TaskViewDto> getTaskDetail(@PathVariable String taskId) {
+        return Result.success(generateService.getTaskView(taskId));
+    }
+
+    @GetMapping({"/api/generate/download/{taskId}", "/api/tasks/{taskId}/download"})
     public ResponseEntity<Resource> downloadResult(@PathVariable String taskId) {
         Path outputPath = generateService.getOutputFile(taskId);
         File file = outputPath.toFile();
-
         Resource resource = new FileSystemResource(file);
-        String encodedFilename = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8)
-                .replace("+", "%20");
-
+        String encodedFilename = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename*=UTF-8''" + encodedFilename)
+                .contentType(resolveDownloadMediaType(file.getName()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
                 .body(resource);
     }
 
-    /**
-     * 删除任务
-     *
-     * @param taskId 任务ID
-     * @return 操作结果
-     */
-    @DeleteMapping("/tasks/{taskId}")
+    private MediaType resolveDownloadMediaType(String filename) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".glb")) {
+            return MediaType.parseMediaType("model/gltf-binary");
+        }
+        if (lower.endsWith(".gltf")) {
+            return MediaType.parseMediaType("model/gltf+json");
+        }
+        return MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    @DeleteMapping({"/api/generate/tasks/{taskId}", "/api/tasks/{taskId}"})
     public Result<Void> deleteTask(@PathVariable String taskId) {
         generateService.deleteTask(taskId);
         return Result.success("任务已删除", null);

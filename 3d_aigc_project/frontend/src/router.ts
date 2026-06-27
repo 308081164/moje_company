@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { APP_NAME } from '@/constants/brand'
 
 // 路由配置
 const router = createRouter({
@@ -21,7 +22,7 @@ const router = createRouter({
 
 // 路由守卫：更新页面标题
 router.beforeEach((to, _from, next) => {
-  document.title = `${to.meta.title || '3D AIGC'} - 3D AIGC`
+  document.title = `${to.meta.title || APP_NAME} - ${APP_NAME}`
   next()
 })
 
