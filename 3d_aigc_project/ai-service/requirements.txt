@@ -10,9 +10,7 @@ python-multipart>=0.0.6
 # Pydantic数据验证
 pydantic>=2.5.0
 
-# 深度学习框架
-torch>=2.1.0
-torchvision>=0.16.0
+# 深度学习框架（torch/torchvision 由 Dockerfile 从 cu121 索引单独安装，勿在此重复）
 
 # Hunyuan3D-2 3D生成模型
 hy3dgen>=0.1.0
@@ -30,8 +28,21 @@ opencv-python-headless>=4.8.0
 rembg>=2.0.50
 onnxruntime>=1.16.0
 
+# SAM 点选宝石分割（可选，见 scripts/download-sam-model.ps1）
+segment-anything>=1.0
+# SAM2（优先）: pip install git+https://github.com/facebookresearch/sam2.git
+
 # 布尔运算（可选，提升融合质量）
 manifold3d>=2.0.0
+
+# 网格水密修复（marching cubes / 平滑后补洞）
+pymeshfix>=0.16.0
+
+# 宝石去反光 AI 重绘（InstructPix2Pix）
+diffusers>=0.27.0
+transformers>=4.38.0
+accelerate>=0.27.0
+safetensors>=0.4.0
 
 # HTTP客户端（用于回调通知）
 httpx>=0.25.0

@@ -31,6 +31,7 @@ PREVIEW_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 HEADER_MARKERS = (b"SILKIDEASIGN0100:", b"SILKIDEASIGN")
 MIN_QUALITY = 0.035  # 非背景像素占比下限（约 3.5%）
 THUMB_SIZE = 256
+MIN_POINTS = 24  # 点云最少点数（与 convert_jcd_to_mesh 一致）
 
 
 def has_preview_file(jcd_path: Path) -> bool:
@@ -106,6 +107,7 @@ def _points_spread_ok(pts: np.ndarray) -> bool:
 
 
 def extract_points(data: bytes, max_points: int = 8000) -> np.ndarray | None:
+    """从 JCD 二进制提取 float32 点云（header 后 sliding window，避免全文件 O(n²) 扫描）。"""
     base = 0
     for marker in HEADER_MARKERS:
         idx = data.find(marker)
@@ -113,15 +115,28 @@ def extract_points(data: bytes, max_points: int = 8000) -> np.ndarray | None:
             base = idx + len(marker)
             break
 
+    file_len = len(data)
     best: list[tuple[float, float, float]] = []
-    scan_window = 65536
-    scan_end = min(len(data) - 12, base + scan_window)
-    for start in range(base, scan_end, 4):
-        pts = _scan_float32_triplets(data, start, max_points)
-        if len(pts) > len(best):
-            best = pts
 
-    if len(best) < 24:
+    # 小文件：header 后 + 文件前半段各扫一次宽窗口
+    scan_starts: list[int] = [base]
+    if file_len <= 524288:
+        scan_starts.extend([0, max(0, file_len // 4), max(0, file_len // 2)])
+
+    seen: set[int] = set()
+    for start in scan_starts:
+        if start in seen or start >= file_len - 12:
+            continue
+        seen.add(start)
+        window = min(131072, file_len - start)
+        for offset in range(start, min(file_len - 12, start + min(window, 65536)), 4):
+            pts = _scan_float32_triplets(data, offset, max_points, window=min(65536, file_len - offset))
+            if len(pts) > len(best):
+                best = pts
+            if len(best) >= max_points // 2:
+                break
+
+    if len(best) < MIN_POINTS:
         return None
     arr = np.asarray(best, dtype=np.float64)
     return arr if _points_spread_ok(arr) else None

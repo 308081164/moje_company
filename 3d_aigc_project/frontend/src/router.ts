@@ -17,6 +17,24 @@ const router = createRouter({
       component: () => import('@/views/TasksView.vue'),
       meta: { title: '任务管理' },
     },
+    {
+      path: '/inlay-library',
+      name: 'inlay-library',
+      component: () => import('@/views/InlayLibraryView.vue'),
+      meta: { title: '镶嵌结构库' },
+    },
+    {
+      path: '/inlay-library/:id/mesh-edit',
+      name: 'inlay-mesh-edit',
+      component: () => import('@/views/InlayMeshEditorView.vue'),
+      meta: { title: '网格裁剪' },
+    },
+    {
+      path: '/mesh-convert',
+      name: 'mesh-convert',
+      component: () => import('@/views/MeshConvertView.vue'),
+      meta: { title: '格式转换' },
+    },
   ],
 })
 

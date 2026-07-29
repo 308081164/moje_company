@@ -30,9 +30,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 镶嵌结构管理控制器
- * 提供镶嵌结构数据库的查询、预览和上传功能
+ * 镶嵌结构管理控制器（v1 legacy）
+ * @deprecated 请迁移至 /api/inlay/v2；可通过 inlay-v2.v1-index-enabled=false 下线
  */
+@Deprecated
 @Slf4j
 @RestController
 @RequestMapping("/api/inlay")
@@ -63,6 +64,7 @@ public class InlayStructureController {
             @RequestParam(required = false) String category,
             @RequestParam(name = "has_preview", required = false) Boolean hasPreview,
             @RequestParam(name = "mesh_ready", required = false) Boolean meshReady,
+            @RequestParam(name = "primary_only", defaultValue = "false") boolean primaryOnly,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(name = "page_size", defaultValue = "50") int pageSize) {
 
@@ -72,6 +74,7 @@ public class InlayStructureController {
                 .category(category)
                 .hasPreview(hasPreview)
                 .meshReady(meshReady)
+                .primaryOnly(primaryOnly)
                 .page(page)
                 .pageSize(pageSize)
                 .build();

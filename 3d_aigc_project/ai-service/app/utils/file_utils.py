@@ -124,17 +124,72 @@ def validate_image_file(filepath: str) -> bool:
         return False
 
 
+def sniff_mesh_file_type(filepath: str) -> Optional[str]:
+    """
+    按文件头识别网格格式，避免 inlay_cache 中 GLB 被误存为 .obj 导致加载失败。
+    返回 trimesh.load 可用的 file_type：glb/gltf/obj/stl/ply/off 等；无法识别时返回 None。
+    """
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(512)
+    except OSError as e:
+        logger.debug("无法读取网格文件头 %s: %s", filepath, e)
+        return None
+
+    if len(header) >= 4 and header[:4] == b"glTF":
+        return "glb"
+    head = header.lstrip()
+    if head.startswith(b"solid") or (len(head) >= 5 and head[:5] == b"solid"):
+        return "stl"
+    try:
+        text_head = head[:256].decode("utf-8", errors="ignore").lstrip()
+    except Exception:
+        text_head = ""
+    if text_head.startswith("v ") or text_head.startswith("#") or text_head.startswith("o "):
+        return "obj"
+    if text_head.startswith("ply") or text_head.startswith("comment"):
+        return "ply"
+    if text_head.startswith("OFF") or text_head.startswith("COOFF"):
+        return "off"
+    ext = Path(filepath).suffix.lower().lstrip(".")
+    if ext in {"glb", "gltf", "obj", "stl", "ply", "off"}:
+        return ext if ext != "gltf" else "gltf"
+    return None
+
+
 def validate_mesh_file(filepath: str) -> bool:
     """
-    验证是否为有效的3D网格文件
+    验证是否为有效的3D网格文件（含可读顶点）
     """
     if not validate_file_exists(filepath):
         logger.error(f"网格文件不存在: {filepath}")
         return False
-    if not validate_file_format(filepath, SUPPORTED_3D_FORMATS):
+    sniffed = sniff_mesh_file_type(filepath)
+    if sniffed is None and not validate_file_format(filepath, SUPPORTED_3D_FORMATS):
         logger.error(f"不支持的网格格式: {filepath}")
         return False
-    return True
+    try:
+        import trimesh
+
+        load_kwargs = {"force": "mesh", "process": False}
+        if sniffed:
+            load_kwargs["file_type"] = sniffed
+        loaded = trimesh.load(filepath, **load_kwargs)
+        if isinstance(loaded, trimesh.Scene):
+            verts = sum(
+                len(getattr(g, "vertices", []))
+                for g in loaded.geometry.values()
+                if hasattr(g, "vertices")
+            )
+        else:
+            verts = len(getattr(loaded, "vertices", []))
+        if verts <= 0:
+            logger.error("网格文件无有效顶点: %s (sniffed=%s)", filepath, sniffed)
+            return False
+        return True
+    except Exception as e:
+        logger.error("网格文件无法解析: %s (%s)", filepath, e)
+        return False
 
 
 def copy_file(src: str, dst: str) -> str:

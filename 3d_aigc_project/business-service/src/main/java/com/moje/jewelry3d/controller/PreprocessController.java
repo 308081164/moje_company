@@ -1,6 +1,7 @@
 package com.moje.jewelry3d.controller;
 
 import com.moje.jewelry3d.common.Result;
+import com.moje.jewelry3d.model.dto.GemSegmentResponse;
 import com.moje.jewelry3d.model.dto.PreprocessResponse;
 import com.moje.jewelry3d.model.dto.SplitMultiViewResponse;
 import com.moje.jewelry3d.service.PreprocessService;
@@ -36,6 +37,87 @@ public class PreprocessController {
     ) {
         PreprocessResponse response = preprocessService.removeBackground(image);
         return Result.success("背景扣除完成", response);
+    }
+
+    @PostMapping("/gem-flatten")
+    public Result<PreprocessResponse> gemFlatten(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(value = "gem_preset", defaultValue = "ruby") String gemPreset,
+            @RequestParam(value = "custom_color", required = false) String customColor,
+            @RequestParam(value = "sensitivity", required = false) Double sensitivity,
+            @RequestParam(value = "preserve_edges", defaultValue = "true") Boolean preserveEdges
+    ) {
+        PreprocessResponse response = preprocessService.gemFlatten(
+                image, gemPreset, customColor, sensitivity, preserveEdges
+        );
+        String ratio = response.getGemCoverageRatio() != null
+                ? String.format("，覆盖约 %.1f%% 前景", response.getGemCoverageRatio() * 100)
+                : "";
+        return Result.success("宝石占位色完成" + ratio, response);
+    }
+
+    @PostMapping("/gem-segment-sam")
+    public Result<GemSegmentResponse> gemSegmentSam(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam("points_json") String pointsJson,
+            @RequestParam(value = "session_id", required = false) String sessionId
+    ) {
+        GemSegmentResponse response = preprocessService.gemSegmentSam(image, pointsJson, sessionId);
+        String ratio = response.getGemCoverageRatio() != null
+                ? String.format("，覆盖约 %.1f%% 前景", response.getGemCoverageRatio() * 100)
+                : "";
+        return Result.success("蒙版预览完成" + ratio, response);
+    }
+
+    @PostMapping("/gem-flatten-sam")
+    public Result<PreprocessResponse> gemFlattenSam(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam("points_json") String pointsJson,
+            @RequestParam(value = "session_id", required = false) String sessionId,
+            @RequestParam(value = "gem_preset", defaultValue = "ruby") String gemPreset,
+            @RequestParam(value = "custom_color", required = false) String customColor,
+            @RequestParam(value = "preserve_edges", defaultValue = "true") Boolean preserveEdges
+    ) {
+        PreprocessResponse response = preprocessService.gemFlattenSam(
+                image, pointsJson, sessionId, gemPreset, customColor, preserveEdges
+        );
+        String ratio = response.getGemCoverageRatio() != null
+                ? String.format("，覆盖约 %.1f%% 前景", response.getGemCoverageRatio() * 100)
+                : "";
+        return Result.success("SAM 宝石占位色完成" + ratio, response);
+    }
+
+    @PostMapping("/gem-repaint")
+    public Result<PreprocessResponse> gemRepaint(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam(value = "mask", required = false) MultipartFile mask,
+            @RequestParam(value = "use_mask", defaultValue = "true") Boolean useMask,
+            @RequestParam(value = "points_json", required = false) String pointsJson,
+            @RequestParam(value = "session_id", required = false) String sessionId,
+            @RequestParam(value = "prompt", required = false) String prompt,
+            @RequestParam(value = "strength", defaultValue = "0.20") Double strength,
+            @RequestParam(value = "mask_dilate_px", defaultValue = "8") Integer maskDilatePx,
+            @RequestParam(value = "preserve_edges", defaultValue = "true") Boolean preserveEdges,
+            @RequestParam(value = "seed", required = false) Integer seed,
+            @RequestParam(value = "sensitivity", required = false) Double sensitivity
+    ) {
+        PreprocessResponse response = preprocessService.gemRepaintSam(
+                image, mask, useMask, pointsJson, sessionId, prompt, strength, maskDilatePx, preserveEdges, seed, sensitivity
+        );
+        String ratio = response.getGemCoverageRatio() != null
+                ? String.format("，宝石区域约 %.1f%%", response.getGemCoverageRatio() * 100)
+                : "";
+        String mode = "wanx_mask".equals(response.getSegmentMethod()) ? "蒙版" : "整图";
+        return Result.success("AI 去反光" + mode + "重绘完成" + ratio, response);
+    }
+
+    @GetMapping("/gem-mask/{sessionId}")
+    public ResponseEntity<Resource> gemMaskPreview(@PathVariable String sessionId) {
+        Path file = preprocessService.getGemMaskPreviewFile(sessionId);
+        Resource resource = new FileSystemResource(file.toFile());
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .body(resource);
     }
 
     @GetMapping("/preview/{sessionId}")

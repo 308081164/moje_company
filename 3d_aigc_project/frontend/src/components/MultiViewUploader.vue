@@ -3,10 +3,11 @@
     <div class="mv-layout">
       <!-- 交互立方体 -->
       <div class="cube-panel">
-        <p class="cube-hint">拖动旋转立方体，点击面片上传对应视角图片</p>
+        <p class="cube-hint">按住空格拖动旋转立方体，点击面片上传对应视角图片</p>
         <div
           ref="cubeContainerRef"
           class="cube-container"
+          :class="{ 'is-space-held': spaceHeld, 'is-dragging': dragging }"
           @mousedown="onDragStart"
           @touchstart.passive="onTouchStart"
         >
@@ -67,6 +68,15 @@
             <el-button
               v-if="modelValue[face]"
               size="small"
+              type="primary"
+              plain
+              @click="openCopyTarget(face)"
+            >
+              复制
+            </el-button>
+            <el-button
+              v-if="modelValue[face]"
+              size="small"
               type="danger"
               plain
               :icon="Delete"
@@ -84,6 +94,31 @@
       style="display: none"
       @change="onFileChange"
     />
+
+    <el-dialog
+      v-model="copyDialogVisible"
+      title="复制到其他视角"
+      width="360px"
+      append-to-body
+    >
+      <p class="copy-dialog-hint">
+        将「{{ copySourceFace ? VIEW_LABELS[copySourceFace] : '' }}」复制到：
+      </p>
+      <el-select v-model="copyTargetFace" placeholder="选择目标视角" style="width: 100%">
+        <el-option
+          v-for="face in copyTargetOptions"
+          :key="face"
+          :label="VIEW_LABELS[face]"
+          :value="face"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="copyDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!copyTargetFace" @click="confirmCopyFace">
+          确认复制
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -117,10 +152,20 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const cubeContainerRef = ref<HTMLElement | null>(null)
 const activeFace = ref<ViewFace | null>(null)
 const previewUrls = ref<Partial<Record<ViewFace, string>>>({})
+const copyDialogVisible = ref(false)
+const copySourceFace = ref<ViewFace | null>(null)
+const copyTargetFace = ref<ViewFace | ''>('')
+
+const copyTargetOptions = computed(() => {
+  if (!copySourceFace.value) return []
+  return VIEW_FACES.filter((f) => f !== copySourceFace.value && !props.modelValue[f])
+})
 
 const rotateX = ref(-18)
 const rotateY = ref(-28)
 const dragging = ref(false)
+const spaceHeld = ref(false)
+const suppressFaceClick = ref(false)
 const lastPointer = ref({ x: 0, y: 0 })
 
 const filledCount = computed(() => countViewImages(props.modelValue))
@@ -165,6 +210,10 @@ watch(
 )
 
 function selectFace(face: ViewFace) {
+  if (suppressFaceClick.value || spaceHeld.value) {
+    suppressFaceClick.value = false
+    return
+  }
   activeFace.value = face
   fileInputRef.value?.click()
 }
@@ -207,18 +256,50 @@ function removeFace(face: ViewFace) {
   const next = { ...props.modelValue }
   delete next[face]
   emit('update:modelValue', next)
+  ElMessage.success(`已删除${VIEW_LABELS[face]}`)
+}
+
+function openCopyTarget(from: ViewFace) {
+  if (!props.modelValue[from]) return
+  const targets = VIEW_FACES.filter((f) => f !== from && !props.modelValue[f])
+  if (!targets.length) {
+    ElMessage.warning('没有空闲视角槽位')
+    return
+  }
+  copySourceFace.value = from
+  copyTargetFace.value = targets.find((f) => HY3D_SUPPORTED_FACES.includes(f)) ?? targets[0]
+  copyDialogVisible.value = true
+}
+
+function confirmCopyFace() {
+  const from = copySourceFace.value
+  const to = copyTargetFace.value
+  if (!from || !to) return
+  const file = props.modelValue[from]
+  if (!file) return
+
+  const copy = new File([file], `${to}_${file.name}`, { type: file.type || 'image/png' })
+  previewUrls.value[to] = URL.createObjectURL(copy)
+  emit('update:modelValue', {
+    ...props.modelValue,
+    [to]: copy,
+  })
+  copyDialogVisible.value = false
+  ElMessage.success(`已复制到${VIEW_LABELS[to]}`)
 }
 
 function onDragStart(e: MouseEvent) {
-  if ((e.target as HTMLElement).closest('.cube-face')) return
+  if (!spaceHeld.value || e.button !== 0) return
   dragging.value = true
+  suppressFaceClick.value = false
   lastPointer.value = { x: e.clientX, y: e.clientY }
+  e.preventDefault()
   window.addEventListener('mousemove', onDragMove)
   window.addEventListener('mouseup', onDragEnd)
 }
 
 function onTouchStart(e: TouchEvent) {
-  if (e.touches.length !== 1) return
+  if (!spaceHeld.value || e.touches.length !== 1) return
   dragging.value = true
   lastPointer.value = { x: e.touches[0].clientX, y: e.touches[0].clientY }
   window.addEventListener('touchmove', onTouchMove, { passive: false })
@@ -229,6 +310,9 @@ function onDragMove(e: MouseEvent) {
   if (!dragging.value) return
   const dx = e.clientX - lastPointer.value.x
   const dy = e.clientY - lastPointer.value.y
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+    suppressFaceClick.value = true
+  }
   rotateY.value += dx * 0.4
   rotateX.value -= dy * 0.4
   lastPointer.value = { x: e.clientX, y: e.clientY }
@@ -239,6 +323,9 @@ function onTouchMove(e: TouchEvent) {
   e.preventDefault()
   const dx = e.touches[0].clientX - lastPointer.value.x
   const dy = e.touches[0].clientY - lastPointer.value.y
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+    suppressFaceClick.value = true
+  }
   rotateY.value += dx * 0.4
   rotateX.value -= dy * 0.4
   lastPointer.value = { x: e.touches[0].clientX, y: e.touches[0].clientY }
@@ -252,12 +339,47 @@ function onDragEnd() {
   window.removeEventListener('touchend', onDragEnd)
 }
 
+function isTextInputTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.code !== 'Space' && e.key !== ' ') return
+  if (isTextInputTarget(e.target)) return
+  // 按住空格时浏览器会重复触发 keydown；每次都需 preventDefault，否则页面仍会滚动
+  e.preventDefault()
+  if (!spaceHeld.value) {
+    spaceHeld.value = true
+  }
+}
+
+function onKeyUp(e: KeyboardEvent) {
+  if (e.code !== 'Space' && e.key !== ' ') return
+  if (isTextInputTarget(e.target)) return
+  e.preventDefault()
+  spaceHeld.value = false
+  onDragEnd()
+}
+
+function onWindowBlur() {
+  spaceHeld.value = false
+  onDragEnd()
+}
+
 onMounted(() => {
   syncPreviewUrls(props.modelValue)
+  window.addEventListener('keydown', onKeyDown, { capture: true })
+  window.addEventListener('keyup', onKeyUp, { capture: true })
+  window.addEventListener('blur', onWindowBlur)
 })
 
 onBeforeUnmount(() => {
   onDragEnd()
+  window.removeEventListener('keydown', onKeyDown, { capture: true })
+  window.removeEventListener('keyup', onKeyUp, { capture: true })
+  window.removeEventListener('blur', onWindowBlur)
   for (const face of VIEW_FACES) {
     revokeUrl(face)
   }
@@ -272,13 +394,21 @@ defineExpose({
 <style scoped>
 .multi-view-uploader {
   width: 100%;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: mv-uploader;
+
+  --cube-size: 200px;
+  --cube-face: 128px;
+  --cube-depth: 64px;
 }
 
 .mv-layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 20px;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
+  min-width: 0;
 }
 
 .cube-panel {
@@ -286,6 +416,7 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .cube-hint {
@@ -296,15 +427,19 @@ defineExpose({
 }
 
 .cube-container {
-  width: 220px;
-  height: 220px;
+  width: var(--cube-size);
+  height: var(--cube-size);
   perspective: 600px;
-  cursor: grab;
   user-select: none;
   touch-action: none;
+  flex-shrink: 0;
 }
 
-.cube-container:active {
+.cube-container.is-space-held {
+  cursor: grab;
+}
+
+.cube-container.is-space-held.is-dragging {
   cursor: grabbing;
 }
 
@@ -318,12 +453,12 @@ defineExpose({
 
 .cube-face {
   position: absolute;
-  width: 140px;
-  height: 140px;
+  width: var(--cube-face);
+  height: var(--cube-face);
   left: 50%;
   top: 50%;
-  margin-left: -70px;
-  margin-top: -70px;
+  margin-left: calc(var(--cube-face) / -2);
+  margin-top: calc(var(--cube-face) / -2);
   border: 2px solid #409eff;
   border-radius: 6px;
   background: rgba(240, 247, 255, 0.95);
@@ -378,12 +513,12 @@ defineExpose({
   margin-left: 4px;
 }
 
-.face-front  { transform: rotateY(0deg) translateZ(70px); }
-.face-back   { transform: rotateY(180deg) translateZ(70px); }
-.face-left   { transform: rotateY(-90deg) translateZ(70px); }
-.face-right  { transform: rotateY(90deg) translateZ(70px); }
-.face-top    { transform: rotateX(90deg) translateZ(70px); }
-.face-bottom { transform: rotateX(-90deg) translateZ(70px); }
+.face-front  { transform: rotateY(0deg) translateZ(var(--cube-depth)); }
+.face-back   { transform: rotateY(180deg) translateZ(var(--cube-depth)); }
+.face-left   { transform: rotateY(-90deg) translateZ(var(--cube-depth)); }
+.face-right  { transform: rotateY(90deg) translateZ(var(--cube-depth)); }
+.face-top    { transform: rotateX(90deg) translateZ(var(--cube-depth)); }
+.face-bottom { transform: rotateX(-90deg) translateZ(var(--cube-depth)); }
 
 .view-count {
   margin: 0;
@@ -400,18 +535,23 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .sidebar-item {
   display: grid;
-  grid-template-columns: 1fr 48px auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  grid-template-areas:
+    'info preview'
+    'actions actions';
+  gap: 6px 8px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: #fafbfc;
   transition: border-color 0.2s, background 0.2s;
+  min-width: 0;
 }
 
 .sidebar-item.filled {
@@ -424,6 +564,7 @@ defineExpose({
 }
 
 .sidebar-info {
+  grid-area: info;
   cursor: pointer;
   min-width: 0;
 }
@@ -446,8 +587,9 @@ defineExpose({
 }
 
 .sidebar-preview {
-  width: 48px;
-  height: 48px;
+  grid-area: preview;
+  width: 40px;
+  height: 40px;
   border-radius: 4px;
   border: 1px solid var(--border-color);
   overflow: hidden;
@@ -457,6 +599,7 @@ defineExpose({
   background: #fff;
   cursor: pointer;
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .sidebar-preview img {
@@ -466,14 +609,46 @@ defineExpose({
 }
 
 .sidebar-actions {
+  grid-area: actions;
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
 }
 
-@media (max-width: 768px) {
+.sidebar-actions :deep(.el-button) {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.copy-dialog-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 侧栏约 420px 时容器宽度不足，改为上下堆叠 */
+@container mv-uploader (max-width: 540px) {
   .mv-layout {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .multi-view-uploader {
+    --cube-size: 180px;
+    --cube-face: 115px;
+    --cube-depth: 57.5px;
+  }
+
+  .sidebar-item {
+    grid-template-columns: minmax(0, 1fr) 40px auto;
+    grid-template-areas: 'info preview actions';
+    gap: 8px;
+  }
+
+  .sidebar-preview {
+    justify-self: center;
   }
 }
 </style>

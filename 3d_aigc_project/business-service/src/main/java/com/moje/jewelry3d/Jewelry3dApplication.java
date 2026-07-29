@@ -5,6 +5,7 @@ import com.moje.jewelry3d.common.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @SpringBootApplication
 @RestControllerAdvice
+@EnableScheduling
 public class Jewelry3dApplication {
 
     public static void main(String[] args) {

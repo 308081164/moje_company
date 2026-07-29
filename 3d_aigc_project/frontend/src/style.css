@@ -1,21 +1,34 @@
 /* ==========================================
-   全局样式 - 3D AIGC平台
+   全局样式 - 恒鎏珠宝 3D 生成平台
    ========================================== */
 
-/* CSS变量定义 */
+/* CSS变量 — 珠宝/奢侈品 SaaS 调色板 */
 :root {
-  --bg-color: #f0f2f5;
+  --bg-color: #f4f2ef;
+  --bg-subtle: #ebe8e3;
   --card-bg: #ffffff;
-  --text-primary: #303133;
-  --text-secondary: #606266;
-  --text-muted: #909399;
-  --border-color: #e4e7ed;
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+  --border-color: rgba(28, 25, 23, 0.08);
+  --border-strong: rgba(28, 25, 23, 0.14);
+  --accent: #b8956a;
+  --accent-hover: #a07d52;
+  --accent-light: rgba(184, 149, 106, 0.12);
+  --accent-glow: rgba(184, 149, 106, 0.25);
+  --primary: #409eff;
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.06);
+  --shadow-lg: 0 12px 40px rgba(28, 25, 23, 0.08);
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
+  --app-max-width: 2400px;
+  --app-padding-x: clamp(20px, 2.5vw, 48px);
+  --sidebar-width: clamp(400px, 22vw, 560px);
+  --header-height: 64px;
+  --action-bar-height: 72px;
 }
 
 /* 全局重置 */
@@ -44,12 +57,12 @@ html, body {
 
 /* 链接样式 */
 a {
-  color: #409eff;
+  color: var(--accent);
   text-decoration: none;
 }
 
 a:hover {
-  color: #66b1ff;
+  color: var(--accent-hover);
 }
 
 /* 滚动条样式 */
@@ -63,52 +76,57 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
+  background: #d6d3d1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #909399;
+  background: #a8a29e;
 }
 
-/* 通用卡片样式 */
+/* 通用卡片 — 轻边框、弱阴影 */
 .page-card {
   background: var(--card-bg);
   border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
-  padding: 24px;
-  margin-bottom: 20px;
-  transition: box-shadow 0.3s ease;
+  padding: 20px;
+  margin-bottom: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .page-card:hover {
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
 }
 
 /* 卡片标题 */
 .card-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: 0.01em;
 }
 
 .card-title .el-icon {
-  color: #409eff;
+  color: var(--accent);
+  font-size: 17px;
 }
 
 /* 页面标题 */
 .page-title {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 24px;
+  margin-bottom: 0;
   display: flex;
   align-items: center;
   gap: 10px;
+  letter-spacing: -0.01em;
 }
 
 /* 通用按钮间距 */
@@ -116,6 +134,65 @@ a:hover {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+/* 侧边栏分区 */
+.sidebar-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  transition: border-color 0.2s ease;
+}
+
+.sidebar-section:hover {
+  border-color: var(--border-strong);
+}
+
+.sidebar-section.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-light);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sidebar-section.is-active .section-step,
+.sidebar-section.is-completed .section-step {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sidebar-section.is-completed .section-step {
+  background: #22c55e;
 }
 
 /* 状态标签颜色 */
@@ -154,13 +231,24 @@ a:hover {
   opacity: 0;
 }
 
+/* Element Plus 主题微调 */
+.el-button--primary {
+  --el-button-bg-color: var(--accent);
+  --el-button-border-color: var(--accent);
+  --el-button-hover-bg-color: var(--accent-hover);
+  --el-button-hover-border-color: var(--accent-hover);
+  --el-button-active-bg-color: var(--accent-hover);
+  --el-button-active-border-color: var(--accent-hover);
+}
+
 /* 响应式布局 */
 @media (max-width: 768px) {
   .app-main {
-    padding: 12px;
+    padding: 12px var(--app-padding-x) 0;
   }
 
-  .page-card {
-    padding: 16px;
+  .page-card,
+  .sidebar-section {
+    padding: 14px;
   }
 }

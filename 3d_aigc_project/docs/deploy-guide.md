@@ -73,22 +73,26 @@ python scripts/check-hardware.py
 
 #### 开发环境（Docker Compose）
 ```bash
-# 构建并启动所有服务
-docker-compose up --build
+# 推荐：一键启动（强制 GPU，需 NVIDIA Container Toolkit）
+./start.sh          # Windows: start.bat
 
-# 后台运行
-docker-compose up -d --build
+# 紧急 CPU（极慢，仅无 GPU 时；见 docker-compose.cpu.yml）
+./start.sh --cpu    # Windows: start.bat --cpu
 
-# 查看日志
-docker-compose logs -f
+# 裸跑亦可（主 docker-compose.yml 已内置 GPU + REQUIRE_GPU=1）
+docker compose up -d --build
+
+# 查看日志 / 健康（应 gpu_available=true）
+docker compose logs -f ai-service
+curl http://localhost:8855/health
 
 # 停止服务
-docker-compose down
+./stop.sh           # Windows: stop.bat
 ```
 
 #### 生产环境
 ```bash
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 #### 本地开发（不使用Docker）

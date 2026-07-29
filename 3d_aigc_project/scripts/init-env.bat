@@ -111,8 +111,10 @@ echo.
 echo   2. 下载AI模型:
 echo      python scripts/download-models.py
 echo.
-echo   3. 启动服务（Docker方式）:
-echo      docker compose up --build
+echo   3. 启动服务（Docker，默认强制 GPU）:
+echo      start.bat
+echo      或: docker compose up -d --build
+echo      （主 compose 已含 GPU；紧急 CPU 才用 start.bat --cpu）
 echo.
 echo   4. 启动服务（开发模式）:
 echo      cd frontend ^&^& npm install ^&^& npm run dev

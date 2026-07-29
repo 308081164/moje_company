@@ -3,7 +3,7 @@
     <div class="selector-header">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索镶嵌结构..."
+        placeholder="搜索名称/路径..."
         :prefix-icon="Search"
         clearable
         size="default"
@@ -22,31 +22,18 @@
         @visible-change="onCategoryVisibleChange"
       />
       <el-select
-        v-model="formatFilter"
-        placeholder="文件类型"
-        clearable
+        v-model="selectedTags"
+        multiple
+        filterable
+        collapse-tags
+        collapse-tags-tooltip
+        placeholder="标签筛选"
         size="default"
-        class="format-select"
-        @change="onFormatChange"
+        class="tag-select"
+        @change="onFilterChange"
+        @visible-change="onTagsVisibleChange"
       >
-        <el-option label="全部类型" value="" />
-        <el-option
-          v-if="meshFormatCount > 0"
-          :label="`可用网格 OBJ/GLB/STL (${meshFormatCount})`"
-          value="MESH"
-        />
-        <el-option
-          v-for="fmt in meshFormatList"
-          :key="fmt"
-          :label="`${fmt} (${formatOptions[fmt] || 0})`"
-          :value="fmt"
-        />
-        <el-option
-          v-for="fmt in otherFormatList"
-          :key="fmt"
-          :label="`${fmt} (${formatOptions[fmt] || 0})`"
-          :value="fmt"
-        />
+        <el-option v-for="tag in allTags" :key="tag.id" :label="tag.name" :value="tag.name" />
       </el-select>
       <el-checkbox v-model="onlyMeshReady" @change="onFilterChange">
         仅可融合
@@ -55,11 +42,20 @@
         仅有预览
       </el-checkbox>
       <el-button
+        type="primary"
+        plain
+        :icon="Upload"
+        size="default"
+        @click="openUploadDialog"
+      >
+        临时上传
+      </el-button>
+      <el-button
         :icon="Refresh"
         size="default"
-        title="刷新镶嵌库索引（批量转换 mesh 后使用）"
+        title="刷新镶嵌库列表"
         :loading="refreshing"
-        @click="refreshIndex"
+        @click="refreshList"
       />
       <el-button
         v-if="selectedInlay"
@@ -73,12 +69,12 @@
     </div>
 
     <div v-if="!loading" class="selector-stats">
-      共 {{ total }} 项
+      共 {{ stats?.total ?? total }} 项
+      <span v-if="stats">· 可融合 {{ stats.mesh_ready }} · 有预览 {{ stats.has_preview }}</span>
       <span v-if="categoryFilter">· {{ categoryLabel }}</span>
-      <span v-if="formatFilter">· {{ formatFilterLabel }}</span>
+      <span v-if="selectedTags.length">· 标签 {{ selectedTags.length }}</span>
       <span v-if="onlyMeshReady">· 可融合</span>
       <span v-if="onlyWithPreview">· 有预览</span>
-      <span v-if="meshReadyCount > 0" class="mesh-ready-hint">· 库内可融合 {{ meshReadyCount }} 项</span>
     </div>
 
     <div v-if="loading" class="loading-wrapper">
@@ -87,9 +83,13 @@
 
     <div v-else-if="inlayList.length === 0" class="empty-wrapper">
       <el-empty
-        :description="hasActiveFilter ? '未找到匹配的镶嵌结构' : '暂无镶嵌结构数据'"
+        :description="emptyDescription"
         :image-size="80"
-      />
+      >
+        <el-button v-if="!hasActiveFilter" type="primary" :icon="Upload" @click="openUploadDialog">
+          临时上传
+        </el-button>
+      </el-empty>
     </div>
 
     <div v-else class="inlay-grid">
@@ -118,8 +118,10 @@
         </div>
 
         <div class="card-info">
-          <p class="card-name" :title="item.id">{{ item.filename }}</p>
-          <p class="card-path" :title="item.id">{{ item.id }}</p>
+          <p class="card-name" :title="item.filename">{{ item.filename }}</p>
+          <p class="card-path" :title="item.legacy_path || item.id">
+            {{ item.legacy_path || item.id }}
+          </p>
           <p class="card-meta">
             <span class="card-format" :class="{ 'is-mesh': isMeshFormat(item.file_format) }">
               {{ item.file_format }}
@@ -146,28 +148,101 @@
         @current-change="loadInlayList"
       />
     </div>
+
+    <el-dialog
+      v-model="uploadDialogOpen"
+      title="临时上传镶嵌结构"
+      width="520px"
+      destroy-on-close
+      append-to-body
+      @closed="resetUploadForm"
+    >
+      <p class="upload-intro">
+        快速上传并保存到镶嵌库，上传后可直接用于本次生成。支持 JCD / OBJ / GLB / STL。
+      </p>
+      <el-form label-width="96px" size="default">
+        <el-form-item label="源文件" required>
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            accept=".jcd,.obj,.glb,.stl"
+            :on-change="(f: UploadFile) => onUploadFileChange('source', f)"
+            :on-remove="() => (uploadSource = null)"
+          >
+            <el-button type="primary" plain>选择 JCD / OBJ / GLB / STL</el-button>
+            <template #tip>
+              <div class="upload-tip">
+                必填。OBJ / GLB / STL 可直接用于融合；JCD 建议同时提供 Mesh 文件。
+              </div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="预览图">
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            accept=".png,.jpg,.jpeg,.webp,.bmp"
+            :on-change="(f: UploadFile) => onUploadFileChange('preview', f)"
+            :on-remove="onUploadPreviewRemove"
+          >
+            <el-button plain>选择 PNG / JPG / BMP</el-button>
+          </el-upload>
+          <div v-if="uploadPreviewUrl" class="upload-preview">
+            <img :src="uploadPreviewUrl" alt="预览图" />
+          </div>
+        </el-form-item>
+        <el-form-item v-if="uploadSourceIsJcd" label="Mesh 文件">
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            accept=".obj,.glb,.stl"
+            :on-change="(f: UploadFile) => onUploadFileChange('mesh', f)"
+            :on-remove="() => (uploadMesh = null)"
+          >
+            <el-button plain>选择 OBJ / GLB / STL（可选）</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="显示名称">
+          <el-input v-model="uploadForm.display_name" placeholder="默认同文件名（不含扩展名）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="uploadDialogOpen = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="uploading"
+          :disabled="!uploadSource"
+          @click="submitTempUpload"
+        >
+          上传并使用
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { Search, Box, CircleCheckFilled, Refresh } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { Search, Box, CircleCheckFilled, Refresh, Upload } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import {
-  getInlayList,
-  getInlayCategories,
-  refreshInlayIndex,
+  getInlayListUnified,
+  getInlayV2Categories,
+  getInlayV2Stats,
+  getInlayV2Tags,
+  createInlayV2Item,
+  mapV2ItemToInlayInfo,
   type InlayInfo,
   type InlayCategoryNode,
+  type InlayTag,
+  type InlayV2Stats,
 } from '@/api'
 
 const MESH_FORMATS = ['OBJ', 'GLB', 'STL'] as const
-const SYNTHETIC_FORMAT_KEYS = new Set(['MESH', 'MESH_READY'])
 
 interface Props {
   modelValue?: InlayInfo | null
-  /** 初始文件类型筛选：MESH / OBJ / JCD 等 */
-  defaultFormatFilter?: string
   /** 初始勾选「仅可融合」 */
   defaultMeshReadyOnly?: boolean
 }
@@ -183,11 +258,12 @@ const inlayList = ref<InlayInfo[]>([])
 const loading = ref(false)
 const searchKeyword = ref('')
 const categoryFilter = ref('')
-const formatFilter = ref(props.defaultFormatFilter || '')
+const selectedTags = ref<string[]>([])
 const onlyWithPreview = ref(false)
 const onlyMeshReady = ref(props.defaultMeshReadyOnly ?? false)
-const formatOptions = ref<Record<string, number>>({})
 const categoryOptions = ref<InlayCategoryNode[]>([])
+const allTags = ref<InlayTag[]>([])
+const stats = ref<InlayV2Stats | null>(null)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = 50
@@ -196,6 +272,16 @@ const failedThumbnails = ref(new Set<string>())
 const refreshing = ref(false)
 const categoriesLoaded = ref(false)
 const categoriesLoading = ref(false)
+const tagsLoaded = ref(false)
+const tagsLoading = ref(false)
+
+const uploadDialogOpen = ref(false)
+const uploading = ref(false)
+const uploadSource = ref<File | null>(null)
+const uploadPreview = ref<File | null>(null)
+const uploadMesh = ref<File | null>(null)
+const uploadPreviewUrl = ref('')
+const uploadForm = ref({ display_name: '' })
 
 const cascaderProps = {
   checkStrictly: true,
@@ -211,37 +297,26 @@ const hasActiveFilter = computed(
   () =>
     !!searchKeyword.value ||
     !!categoryFilter.value ||
-    !!formatFilter.value ||
+    selectedTags.value.length > 0 ||
     onlyMeshReady.value ||
     onlyWithPreview.value
 )
-
-const meshFormatCount = computed(() =>
-  MESH_FORMATS.reduce((sum, fmt) => sum + (formatOptions.value[fmt] || 0), 0)
-)
-
-const meshReadyCount = computed(() => formatOptions.value.MESH_READY || 0)
-
-const meshFormatList = computed(() =>
-  MESH_FORMATS.filter((fmt) => (formatOptions.value[fmt] || 0) > 0)
-)
-
-const otherFormatList = computed(() =>
-  Object.keys(formatOptions.value)
-    .filter((fmt) => !SYNTHETIC_FORMAT_KEYS.has(fmt) && !MESH_FORMATS.includes(fmt as (typeof MESH_FORMATS)[number]))
-    .sort()
-)
-
-const formatFilterLabel = computed(() => {
-  if (!formatFilter.value) return ''
-  if (formatFilter.value === 'MESH') return '可用网格'
-  return formatFilter.value
-})
 
 const categoryLabel = computed(() => {
   if (!categoryFilter.value) return ''
   const parts = categoryFilter.value.split('/')
   return parts[parts.length - 1] || categoryFilter.value
+})
+
+const emptyDescription = computed(() =>
+  hasActiveFilter.value
+    ? '未找到匹配的镶嵌结构'
+    : '镶嵌库暂无数据，可「临时上传」快速导入，或到「镶嵌结构库」批量管理'
+)
+
+const uploadSourceIsJcd = computed(() => {
+  const name = uploadSource.value?.name?.toLowerCase() || ''
+  return name.endsWith('.jcd')
 })
 
 watch(
@@ -255,7 +330,7 @@ async function loadCategoryOptions() {
   if (categoriesLoading.value) return
   categoriesLoading.value = true
   try {
-    const res = await getInlayCategories()
+    const res = await getInlayV2Categories()
     categoryOptions.value = res.data || []
     categoriesLoaded.value = true
   } catch {
@@ -265,29 +340,50 @@ async function loadCategoryOptions() {
   }
 }
 
+async function loadTagOptions() {
+  if (tagsLoading.value) return
+  tagsLoading.value = true
+  try {
+    const res = await getInlayV2Tags()
+    allTags.value = res.data || []
+    tagsLoaded.value = true
+  } catch {
+    allTags.value = []
+  } finally {
+    tagsLoading.value = false
+  }
+}
+
 function onCategoryVisibleChange(visible: boolean) {
   if (visible && !categoriesLoaded.value) {
     loadCategoryOptions()
   }
 }
 
+function onTagsVisibleChange(visible: boolean) {
+  if (visible && !tagsLoaded.value) {
+    loadTagOptions()
+  }
+}
+
 async function loadInlayList() {
   loading.value = true
   try {
-    const res = await getInlayList({
-      keyword: searchKeyword.value || undefined,
-      category: categoryFilter.value || undefined,
-      format: formatFilter.value || undefined,
-      has_preview: onlyWithPreview.value || undefined,
-      mesh_ready: onlyMeshReady.value || undefined,
-      page: currentPage.value,
-      page_size: pageSize,
-    })
-    inlayList.value = res.data?.items || []
-    total.value = res.data?.total || 0
-    if (res.data?.format_counts) {
-      formatOptions.value = res.data.format_counts
-    }
+    const [listRes, statsRes] = await Promise.all([
+      getInlayListUnified({
+        keyword: searchKeyword.value || undefined,
+        category: categoryFilter.value || undefined,
+        tags: selectedTags.value.length ? selectedTags.value.join(',') : undefined,
+        has_preview: onlyWithPreview.value || undefined,
+        mesh_ready: onlyMeshReady.value || undefined,
+        page: currentPage.value,
+        page_size: pageSize,
+      }),
+      getInlayV2Stats().catch(() => null),
+    ])
+    inlayList.value = listRes.data?.items || []
+    total.value = listRes.data?.total || 0
+    stats.value = statsRes?.data || null
   } catch (err) {
     console.error('加载镶嵌结构列表失败:', err)
     ElMessage.warning('加载镶嵌结构列表失败')
@@ -296,26 +392,19 @@ async function loadInlayList() {
   }
 }
 
-async function refreshIndex() {
+async function refreshList() {
   refreshing.value = true
   try {
-    const res = await refreshInlayIndex()
     categoriesLoaded.value = false
-    await loadInlayList()
-    ElMessage.success(`索引已刷新，共 ${res.data?.total ?? 0} 项`)
+    tagsLoaded.value = false
+    await Promise.all([loadCategoryOptions(), loadTagOptions(), loadInlayList()])
+    ElMessage.success(`已刷新，共 ${total.value} 项`)
   } catch (err) {
-    console.error('刷新镶嵌库索引失败:', err)
-    ElMessage.warning('刷新镶嵌库索引失败')
+    console.error('刷新镶嵌库失败:', err)
+    ElMessage.warning('刷新镶嵌库失败')
   } finally {
     refreshing.value = false
   }
-}
-
-function onFormatChange() {
-  if (formatFilter.value === 'MESH' || MESH_FORMATS.includes(formatFilter.value as (typeof MESH_FORMATS)[number])) {
-    onlyMeshReady.value = false
-  }
-  onFilterChange()
 }
 
 function isMeshFormat(format: string): boolean {
@@ -359,8 +448,97 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+function revokeUploadPreviewUrl() {
+  if (uploadPreviewUrl.value) {
+    URL.revokeObjectURL(uploadPreviewUrl.value)
+    uploadPreviewUrl.value = ''
+  }
+}
+
+function openUploadDialog() {
+  resetUploadForm()
+  uploadDialogOpen.value = true
+}
+
+function resetUploadForm() {
+  uploadSource.value = null
+  uploadPreview.value = null
+  uploadMesh.value = null
+  uploadForm.value = { display_name: '' }
+  revokeUploadPreviewUrl()
+}
+
+function onUploadFileChange(kind: 'source' | 'preview' | 'mesh', uploadFile: UploadFile) {
+  const raw = uploadFile.raw
+  if (!raw) return
+  if (kind === 'source') {
+    uploadSource.value = raw
+    if (!uploadForm.value.display_name) {
+      uploadForm.value.display_name = raw.name.replace(/\.[^.]+$/, '')
+    }
+    if (!raw.name.toLowerCase().endsWith('.jcd')) {
+      uploadMesh.value = null
+    }
+  } else if (kind === 'preview') {
+    uploadPreview.value = raw
+    revokeUploadPreviewUrl()
+    uploadPreviewUrl.value = URL.createObjectURL(raw)
+  } else {
+    uploadMesh.value = raw
+  }
+}
+
+function onUploadPreviewRemove() {
+  uploadPreview.value = null
+  revokeUploadPreviewUrl()
+}
+
+async function submitTempUpload() {
+  if (!uploadSource.value) {
+    ElMessage.warning('请选择源文件')
+    return
+  }
+  uploading.value = true
+  try {
+    const res = await createInlayV2Item({
+      source: uploadSource.value,
+      preview: uploadPreview.value || undefined,
+      mesh: uploadMesh.value || undefined,
+      display_name: uploadForm.value.display_name || undefined,
+    })
+    const item = mapV2ItemToInlayInfo(res.data as unknown as Record<string, unknown>)
+    uploadDialogOpen.value = false
+
+    searchKeyword.value = ''
+    categoryFilter.value = ''
+    selectedTags.value = []
+    onlyMeshReady.value = false
+    onlyWithPreview.value = false
+    currentPage.value = 1
+
+    await loadInlayList()
+    selectInlay(item)
+
+    if (item.mesh_ready) {
+      ElMessage.success(res.message || '临时上传成功，已自动选中')
+    } else {
+      ElMessage.success('临时上传成功，已自动选中')
+      ElMessage.info('当前文件尚未就绪融合，OBJ/GLB/STL 可直接融合；JCD 需补充 Mesh 或在镶嵌结构库转换')
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '临时上传失败'
+    ElMessage.error(msg)
+  } finally {
+    uploading.value = false
+  }
+}
+
 onMounted(() => {
   loadInlayList()
+})
+
+onBeforeUnmount(() => {
+  revokeUploadPreviewUrl()
 })
 
 defineExpose({
@@ -391,26 +569,8 @@ defineExpose({
   width: 180px;
 }
 
-.format-select {
-  width: 200px;
-}
-
-.mesh-ready-hint {
-  color: #67c23a;
-}
-
-.card-format.is-mesh {
-  background: #e1f3d8;
-  color: #529b2e;
-}
-
-.card-mesh-ready {
-  background: #f0f9eb;
-  color: #67c23a;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 500;
+.tag-select {
+  width: 180px;
 }
 
 .selector-stats {
@@ -528,6 +688,20 @@ defineExpose({
   font-weight: 500;
 }
 
+.card-format.is-mesh {
+  background: #e1f3d8;
+  color: #529b2e;
+}
+
+.card-mesh-ready {
+  background: #f0f9eb;
+  color: #67c23a;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .card-check {
   flex-shrink: 0;
 }
@@ -536,5 +710,35 @@ defineExpose({
   display: flex;
   justify-content: center;
   padding-top: 4px;
+}
+
+.upload-intro {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.upload-preview {
+  margin-top: 8px;
+  width: 120px;
+  height: 120px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #f5f7fa;
+}
+
+.upload-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 </style>

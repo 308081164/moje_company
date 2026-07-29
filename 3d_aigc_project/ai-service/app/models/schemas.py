@@ -16,8 +16,9 @@ import uuid
 
 class TaskStatus(str, Enum):
     """任务状态枚举"""
-    PENDING = "pending"           # 等待处理
-    PROCESSING = "processing"     # 处理中
+    PENDING = "pending"           # 已创建，尚未进入执行队列
+    QUEUED = "queued"             # 排队等待 GPU 推理槽位
+    PROCESSING = "processing"     # 处理中（含 GPU 推理与后处理）
     COMPLETED = "completed"       # 已完成
     FAILED = "failed"             # 失败
     CANCELLED = "cancelled"       # 已取消
@@ -42,9 +43,16 @@ class ModelVersion(str, Enum):
 
 class FusionMethod(str, Enum):
     """网格融合方法"""
+    COLORED_MERGE = "colored_merge"  # 分色双网格（镶嵌底座 + AI 主体，默认）
     BOOLEAN = "boolean"           # 布尔融合（SDF）
     ICP_MERGE = "icp_merge"       # ICP对齐后合并
     SIMPLE = "simple"             # 简单合并（无对齐）
+
+
+class GenerationMode(str, Enum):
+    """3D 生成质量模式"""
+    FAST = "fast"                 # 急速模式（旧版默认，更快）
+    QUALITY = "quality"           # 高质量模式（当前珠宝优化默认）
 
 
 # ============================================================
@@ -118,7 +126,15 @@ class GenerateRequest(BaseModel):
     )
     enable_mesh_fusion: bool = Field(
         True,
-        description="是否将 AI 生成主体与镶嵌底座布尔融合",
+        description="是否将 AI 生成主体与镶嵌底座融合（默认分色双网格）",
+    )
+    fusion_method: FusionMethod = Field(
+        FusionMethod.COLORED_MERGE,
+        description="与镶嵌底座的融合方法；默认 colored_merge 以支持分色预览",
+    )
+    generation_mode: GenerationMode = Field(
+        GenerationMode.QUALITY,
+        description="生成模式: fast=急速(旧版默认) / quality=高质量(珠宝优化)",
     )
 
     @field_validator("prompt", "negative_prompt", mode="before")
@@ -200,6 +216,14 @@ class ConditionGenerateRequest(BaseModel):
         True,
         description="是否启用网格融合"
     )
+    fusion_method: FusionMethod = Field(
+        FusionMethod.COLORED_MERGE,
+        description="融合方法；默认 colored_merge 以支持分色预览",
+    )
+    generation_mode: GenerationMode = Field(
+        GenerationMode.QUALITY,
+        description="生成模式: fast=急速(旧版默认) / quality=高质量(珠宝优化)",
+    )
 
     @field_validator("prompt", mode="before")
     @classmethod
@@ -233,8 +257,8 @@ class MeshFusionRequest(BaseModel):
         description="生成的网格文件路径"
     )
     fusion_method: FusionMethod = Field(
-        FusionMethod.BOOLEAN,
-        description="融合方法"
+        FusionMethod.COLORED_MERGE,
+        description="融合方法（默认 colored_merge 分色双网格）"
     )
     output_format: ResultFormat = Field(
         ResultFormat.GLB,
@@ -254,7 +278,7 @@ class MeshFusionRequest(BaseModel):
             "example": {
                 "base_mesh_path": "./outputs/setting_base.obj",
                 "generated_mesh_path": "./outputs/generated_gem.obj",
-                "fusion_method": "boolean",
+                "fusion_method": "colored_merge",
                 "output_format": "glb",
             }
         }
@@ -360,6 +384,43 @@ class SystemInfo(BaseModel):
     current_model_version: Optional[str] = Field(None, description="当前加载的模型版本")
 
 
+class GemFlattenResponse(BaseModel):
+    """宝石占位色预处理响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="预处理会话 ID")
+    processed_path: str = Field(..., description="处理后图像本地路径")
+    preview_url: str = Field(..., description="预览 URL")
+    original_path: Optional[str] = Field(None, description="原始图像路径")
+    gem_coverage_ratio: float = Field(0.0, description="宝石区域占前景比例 0~1")
+    gem_preset: str = Field("ruby", description="使用的占位色预设")
+    segment_method: Optional[str] = Field(None, description="分割方式: hsv / sam2 / sam1")
+    mask_preview_url: Optional[str] = Field(None, description="蒙版叠加预览 URL")
+
+
+class GemRepaintResponse(BaseModel):
+    """宝石去反光 AI 重绘响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="预处理会话 ID")
+    processed_path: str = Field(..., description="处理后图像本地路径")
+    preview_url: str = Field(..., description="预览 URL")
+    original_path: Optional[str] = Field(None, description="原始图像路径")
+    gem_coverage_ratio: float = Field(0.0, description="宝石区域占前景比例 0~1")
+    segment_method: Optional[str] = Field(None, description="分割方式: sam2 / sam1")
+    repaint_method: str = Field("ip2p", description="重绘引擎: ip2p")
+    mask_preview_url: Optional[str] = Field(None, description="蒙版叠加预览 URL")
+
+
+class GemSegmentSamResponse(BaseModel):
+    """SAM 点选宝石蒙版预览响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="预处理会话 ID")
+    gem_coverage_ratio: float = Field(0.0, description="蒙版占前景比例 0~1")
+    mask_preview_url: str = Field(..., description="蒙版叠加预览 URL")
+    mask_path: Optional[str] = Field(None, description="蒙版 PNG 本地路径（白=编辑区）")
+    segment_engine: str = Field("sam2", description="分割引擎 sam2 / sam1")
+    original_path: Optional[str] = Field(None, description="原始图像路径")
+
+
 class RemoveBackgroundResponse(BaseModel):
     """背景扣除预处理响应"""
     success: bool = Field(True, description="是否成功")
@@ -391,16 +452,33 @@ class SplitMultiViewResponse(BaseModel):
     crops: List[ViewCropItem] = Field(default_factory=list, description="切分结果")
 
 
+class MeshConvertResponse(BaseModel):
+    """网格格式转换响应"""
+    success: bool = Field(True, description="是否成功")
+    session_id: str = Field(..., description="会话 ID")
+    input_path: str = Field(..., description="输入文件路径")
+    output_path: str = Field(..., description="输出文件路径")
+    output_format: str = Field(..., description="输出格式")
+    vertex_count: int = Field(0, description="顶点数")
+    face_count: int = Field(0, description="面数")
+
+
 class HealthResponse(BaseModel):
     """
     健康检查响应
     """
-    status: str = Field("ok", description="服务状态")
+    status: str = Field("ok", description="服务状态: ok / ok_cpu / error")
     version: str = Field("1.0.0", description="服务版本")
     uptime: float = Field(0.0, description="运行时间（秒）")
-    gpu_available: bool = Field(False, description="GPU是否可用")
+    gpu_available: bool = Field(False, description="GPU/CUDA是否可用")
+    require_gpu: bool = Field(True, description="是否强制要求GPU（REQUIRE_GPU）")
+    device: str = Field("cpu", description="当前推理设备: cuda / cpu")
     model_loaded: bool = Field(False, description="模型是否已加载")
-    active_tasks: int = Field(0, description="活跃任务数")
+    active_tasks: int = Field(0, description="活跃任务数（processing）")
+    queued_tasks: int = Field(0, description="排队等待 GPU 的任务数")
+    gpu_active_task_id: Optional[str] = Field(None, description="当前占用 GPU 的任务 ID")
+    max_concurrent_tasks: int = Field(8, description="允许的最大并行任务数")
+    max_concurrent_gpu_jobs: int = Field(1, description="GPU 推理并发上限（实际为 1）")
 
 
 class ErrorResponse(BaseModel):

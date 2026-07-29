@@ -1,0 +1,20 @@
+# 紧急 CPU 覆盖（仅 start.bat --cpu / start.sh --cpu）
+# 警告：CPU 推理极慢（FAST 模式也可能接近 1 小时），禁止用于日常/自动化重启
+# 用法：docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build
+
+services:
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cpu
+    environment:
+      REQUIRE_GPU: "0"
+      # 显式屏蔽 GPU，避免误用宿主机 CUDA
+      CUDA_VISIBLE_DEVICES: ""
+    deploy:
+      resources:
+        reservations:
+          # 清除主 compose 中的 NVIDIA device reservation（Compose Spec !reset）
+          devices: !reset []

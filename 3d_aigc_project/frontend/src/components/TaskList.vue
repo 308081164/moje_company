@@ -33,9 +33,17 @@
       <el-table-column
         prop="input_file"
         label="输入文件"
-        min-width="180"
-        show-overflow-tooltip
-      />
+        min-width="240"
+      >
+        <template #default="{ row }">
+          <div class="input-file-cell">
+            <TaskListThumbnail :preview-url="row.input_preview_url" />
+            <span class="input-file-name" :title="row.input_file || '-'">
+              {{ row.input_file || '-' }}
+            </span>
+          </div>
+        </template>
+      </el-table-column>
 
       <!-- 状态 -->
       <el-table-column
@@ -99,23 +107,15 @@
             </el-button>
 
             <!-- 删除任务 -->
-            <el-popconfirm
-              title="确定要删除该任务吗？"
-              confirm-button-text="确定"
-              cancel-button-text="取消"
-              @confirm="$emit('delete', row.task_id)"
+            <el-button
+              type="danger"
+              link
+              size="small"
+              :icon="Delete"
+              @click="$emit('delete', row.task_id)"
             >
-              <template #reference>
-                <el-button
-                  type="danger"
-                  link
-                  size="small"
-                  :icon="Delete"
-                >
-                  删除
-                </el-button>
-              </template>
-            </el-popconfirm>
+              删除
+            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -138,10 +138,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Refresh, View, Download, Delete } from '@element-plus/icons-vue'
 import { getTaskList, type TaskInfo } from '@/api'
-
+import { isActiveTaskStatus } from '@/composables/useActiveGeneration'
+import TaskListThumbnail from '@/components/TaskListThumbnail.vue'
 // ==========================================
 // Props & Emits
 // ==========================================
@@ -163,25 +164,57 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const sortField = ref('created_at')
 const sortOrder = ref('descending')
+let listPollTimer: ReturnType<typeof setInterval> | null = null
+const LIST_POLL_INTERVAL_MS = 5000
 
+const hasActiveTasks = computed(() =>
+  tasks.value.some((task) => isActiveTaskStatus(task.status))
+)
+
+function stopListPolling() {
+  if (listPollTimer) {
+    clearInterval(listPollTimer)
+    listPollTimer = null
+  }
+}
+
+function syncListPolling() {
+  if (hasActiveTasks.value) {
+    if (!listPollTimer) {
+      listPollTimer = setInterval(() => {
+        if (hasActiveTasks.value) {
+          void fetchTasks({ silent: true })
+        } else {
+          stopListPolling()
+        }
+      }, LIST_POLL_INTERVAL_MS)
+    }
+  } else {
+    stopListPolling()
+  }
+}
 // ==========================================
 // 方法
 // ==========================================
 
 /** 获取任务列表 */
-async function fetchTasks() {
-  loading.value = true
+async function fetchTasks(options?: { silent?: boolean }) {
+  if (!options?.silent) {
+    loading.value = true
+  }
   try {
     const res = await getTaskList(currentPage.value, pageSize.value)
     tasks.value = res.data?.tasks || []
     total.value = res.data?.total || 0
+    syncListPolling()
   } catch (err) {
     console.error('获取任务列表失败:', err)
   } finally {
-    loading.value = false
+    if (!options?.silent) {
+      loading.value = false
+    }
   }
 }
-
 /** 排序变更 */
 function handleSortChange({ prop, order }: { prop: string; order: string | null }) {
   sortField.value = prop || 'created_at'
@@ -193,6 +226,7 @@ function handleSortChange({ prop, order }: { prop: string; order: string | null 
 function getStatusType(status: string): 'info' | 'warning' | 'success' | 'danger' {
   const map: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
     pending: 'info',
+    queued: 'info',
     processing: 'warning',
     completed: 'success',
     failed: 'danger',
@@ -209,6 +243,7 @@ function getStatusClass(status: string): string {
 function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
     pending: '等待中',
+    queued: '排队中',
     processing: '生成中',
     completed: '已完成',
     failed: '失败',
@@ -234,9 +269,17 @@ onMounted(() => {
   fetchTasks()
 })
 
-// 暴露刷新方法
+onBeforeUnmount(() => {
+  stopListPolling()
+})
+/** 当前页任务 ID 列表（与表格顺序一致，供详情弹窗翻页） */
+function getCurrentPageTaskIds(): string[] {
+  return tasks.value.map((task) => task.task_id)
+}
+
 defineExpose({
   refresh: fetchTasks,
+  getCurrentPageTaskIds,
 })
 </script>
 
@@ -260,6 +303,23 @@ defineExpose({
 
 .task-id {
   font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.input-file-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.input-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
   color: var(--text-secondary);
 }

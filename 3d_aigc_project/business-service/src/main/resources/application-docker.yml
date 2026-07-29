@@ -1,0 +1,96 @@
+# Docker 默认配置（SQLite + 本地存储 + 内存队列）
+# 激活方式：SPRING_PROFILES_ACTIVE=docker
+# 完整栈（PostgreSQL + MinIO + Redis）额外激活 profile：docker-full
+
+server:
+  port: 8854
+
+ai-service:
+  base-url: http://ai-service:8855
+  output-dir: /app/outputs
+
+gem:
+  repaint:
+    provider: ${GEM_REPAINT_PROVIDER:wanx}
+    primary-model: ${GEM_REPAINT_PRIMARY_MODEL:wanx2.1-imageedit}
+    fallback-enabled: ${GEM_REPAINT_FALLBACK_ENABLED:false}
+    timeout-seconds: ${GEM_REPAINT_TIMEOUT_SECONDS:90}
+    default-strength: ${GEM_REPAINT_STRENGTH:0.20}
+    default-mask-dilate-px: ${GEM_REPAINT_MASK_DILATE:8}
+    default-prompt: "${GEM_REPAINT_DEFAULT_PROMPT:修改戒指主石宝石的表面光影：将镜面反光和过曝高光改为柔和自然的哑光漫反射（matte, non-reflective, diffuse gem surface, jewelry product photo style）；禁止生成镜面高光、玻璃质感、强烈镜面反射（no mirror highlights, no glass reflection, no specular shine）；宝石必须完整保留在原位置，保持原有形状、体积、颜色、透明度和切面结构；严禁删除、擦除、镂空或移除宝石；金属爪镶、戒圈与背景完全不变。}"
+    default-mask-prompt: "${GEM_REPAINT_DEFAULT_MASK_PROMPT:在蒙版区域内，将宝石表面镜面反光和过曝高光改为柔和自然的哑光漫反射（matte, non-reflective, diffuse gem surface, jewelry product photo style）；禁止生成镜面高光、玻璃质感、强烈镜面反射（no mirror highlights, no glass reflection, no specular shine）；保持宝石原有颜色、透明度、切面结构与形状，不要生成空白或镂空。}"
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
+
+inlay-db:
+  path: /app/inlay_db
+
+inlay-v2:
+  enabled: true
+  mesh-crop-jcd-enabled: true
+  legacy-fallback: false
+  v1-index-enabled: false
+  cache-dir: /app/inlay_cache
+  storage:
+    mode: local
+    local-root: /app/inlay-storage
+    endpoint: http://minio:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    source-bucket: inlay-source
+    mesh-bucket: inlay-mesh
+    preview-bucket: inlay-preview
+  queue:
+    type: memory
+    worker-threads: 2
+  cache:
+    thumbnail-max-age: 86400
+    mesh-max-age: 3600
+    immutable-thumbnails: true
+
+file:
+  upload-dir: /app/uploads
+  output-dir: /app/outputs
+
+generate:
+  storage:
+    mode: local
+    local-root: /app/generate-storage
+    endpoint: http://minio:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    input-bucket: generate-input
+    output-bucket: generate-output
+
+spring:
+  application:
+    name: jewelry3d-business-service
+  datasource:
+    url: jdbc:sqlite:/app/data/inlay-catalog.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+logging:
+  level:
+    com.moje.jewelry3d: INFO
+    org.springframework.web: INFO

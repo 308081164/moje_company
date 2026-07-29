@@ -25,6 +25,9 @@ public class InlayQuery {
     /** 目录分类（相对路径前缀，如 配件资料库/微虎爪） */
     private String category;
 
+    /** 仅返回主记录（JCD 或无伴生 JCD 的 mesh），过滤伴生 OBJ 重复项 */
+    private Boolean primaryOnly;
+
     private int page;
 
     private int pageSize;

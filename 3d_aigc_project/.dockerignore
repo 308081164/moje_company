@@ -1,58 +1,55 @@
 # ==========================================
-# Docker忽略文件
+# Docker 忽略文件（构建上下文根目录）
 # ==========================================
 
-# Git相关
 .git
 .gitignore
-
-# IDE配置
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# 操作系统文件
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# 环境变量文件
 .env
 .env.local
 .env.*.local
 
-# Python相关
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
-*.egg
 
-# Node.js相关
-node_modules/
+# Node
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 
-# 前端构建产物（Docker内构建，不需要复制）
-frontend/dist/
-frontend/node_modules/
+# 构建产物
+**/dist/
+**/target/
 
-# 模型文件（体积过大，通过volume挂载）
+# 大体积数据（通过 volume 挂载，不 COPY 进镜像）
 models/
-
-# 输出和上传文件
 outputs/
 uploads/
+镶嵌结构数据库/
 
-# 文档
+# 文档与脚本（非运行时必需）
+docs/
+scripts/
 *.md
 LICENSE
 
-# Docker相关
+# Docker 编排文件本身
 docker-compose*.yml
 .dockerignore
+start.bat
+start.sh
+stop.bat
+stop.sh

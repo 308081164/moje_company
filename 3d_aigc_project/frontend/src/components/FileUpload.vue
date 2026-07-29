@@ -198,42 +198,61 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+/** 静默设置文件（恢复草稿时使用，不触发 file-selected） */
+function setFileSilent(file: File) {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+  selectedFile.value = file
+  if (file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|bmp)$/i.test(file.name)) {
+    previewUrl.value = URL.createObjectURL(file)
+  } else {
+    previewUrl.value = ''
+  }
+}
+
 // 暴露方法供父组件调用
 defineExpose({
   getSelectedFile: () => selectedFile.value,
   removeFile,
+  setFileSilent,
 })
 </script>
 
 <style scoped>
 .file-upload {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 32px 24px;
+  padding: 40px 24px;
+  min-height: 180px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s ease;
-  background-color: #fafbfc;
+  transition: all 0.25s ease;
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--card-bg) 100%);
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .file-upload:hover {
-  border-color: #409eff;
-  background-color: #f0f7ff;
+  border-color: var(--accent);
+  background: var(--accent-light);
 }
 
 .file-upload.is-dragover {
-  border-color: #409eff;
-  background-color: #e6f1ff;
-  transform: scale(1.01);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  transform: scale(1.005);
 }
 
 .file-upload.has-file {
   border-style: solid;
-  border-color: #c6e2ff;
-  background-color: #f0f7ff;
+  border-color: var(--accent);
+  background: var(--accent-light);
   cursor: default;
   padding: 16px 20px;
+  min-height: auto;
 }
 
 .upload-placeholder {
@@ -244,13 +263,13 @@ defineExpose({
 }
 
 .upload-icon {
-  font-size: 48px;
-  color: #c0c4cc;
-  transition: color 0.3s;
+  font-size: 52px;
+  color: var(--text-muted);
+  transition: color 0.25s;
 }
 
 .file-upload:hover .upload-icon {
-  color: #409eff;
+  color: var(--accent);
 }
 
 .upload-title {
@@ -273,8 +292,8 @@ defineExpose({
 }
 
 .image-preview {
-  width: 80px;
-  height: 80px;
+  width: 96px;
+  height: 96px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   flex-shrink: 0;

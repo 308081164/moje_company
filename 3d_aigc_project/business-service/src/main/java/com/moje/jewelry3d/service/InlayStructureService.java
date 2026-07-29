@@ -3,6 +3,7 @@ package com.moje.jewelry3d.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moje.jewelry3d.common.BusinessException;
 import com.moje.jewelry3d.config.InlayDbConfig;
+import com.moje.jewelry3d.config.InlayV2Config;
 import com.moje.jewelry3d.model.dto.InlayCategoryNode;
 import com.moje.jewelry3d.model.dto.InlayQuery;
 import com.moje.jewelry3d.model.dto.InlayStructureInfo;
@@ -55,6 +56,7 @@ public class InlayStructureService {
 
     private final InlayDbConfig inlayDbConfig;
     private final ObjectMapper objectMapper;
+    private final InlayV2Config inlayV2Config;
 
     /** 索引快照（结构列表 + 预计算的统计/分类树） */
     private final AtomicReference<IndexSnapshot> indexSnapshot = new AtomicReference<>();
@@ -62,13 +64,22 @@ public class InlayStructureService {
     private final AtomicBoolean refreshInProgress = new AtomicBoolean(false);
 
     @Autowired
-    public InlayStructureService(InlayDbConfig inlayDbConfig, ObjectMapper objectMapper) {
+    public InlayStructureService(
+            InlayDbConfig inlayDbConfig,
+            ObjectMapper objectMapper,
+            InlayV2Config inlayV2Config
+    ) {
         this.inlayDbConfig = inlayDbConfig;
         this.objectMapper = objectMapper;
+        this.inlayV2Config = inlayV2Config;
     }
 
     @PostConstruct
     void warmIndexOnStartup() {
+        if (!inlayV2Config.isV1IndexEnabled()) {
+            log.info("v1 镶嵌结构内存索引已禁用（inlay-v2.v1-index-enabled=false）");
+            return;
+        }
         if (tryLoadIndexFromDisk()) {
             IndexSnapshot snapshot = indexSnapshot.get();
             log.info("镶嵌结构索引已从磁盘加载，共 {} 条", snapshot.structures().size());
@@ -94,6 +105,9 @@ public class InlayStructureService {
      * 列出所有镶嵌结构文件（带缓存）
      */
     public List<InlayStructureInfo> listAllStructures() {
+        if (!inlayV2Config.isV1IndexEnabled()) {
+            throw new BusinessException(503, "v1 镶嵌库索引已禁用，请使用 /api/inlay/v2");
+        }
         IndexSnapshot snapshot = indexSnapshot.get();
         if (snapshot != null) {
             return snapshot.structures();
@@ -174,10 +188,14 @@ public class InlayStructureService {
         String category = normalizeCategory(query.getCategory());
         Boolean hasPreview = query.getHasPreview();
         Boolean meshReady = query.getMeshReady();
+        Boolean primaryOnly = query.getPrimaryOnly();
 
         List<InlayStructureInfo> filtered = new ArrayList<>();
 
         for (InlayStructureInfo info : all) {
+            if (Boolean.TRUE.equals(primaryOnly) && !info.isPrimaryRecord()) {
+                continue;
+            }
             if (!matchesFormatFilter(info, format)) {
                 continue;
             }
@@ -640,8 +658,24 @@ public class InlayStructureService {
         }
 
         info.setMeshReady(computeMeshReady(info.getFormat(), parentRel, baseName, allRelativePaths));
+        info.setPrimaryRecord(computePrimaryRecord(info.getFormat(), parentRel, baseName, allRelativePaths));
 
         return info;
+    }
+
+    private static boolean computePrimaryRecord(
+            String format,
+            String parentRel,
+            String baseName,
+            Set<String> allRelativePaths
+    ) {
+        if ("JCD".equalsIgnoreCase(format)) {
+            return true;
+        }
+        if (MESH_FORMATS.contains(format.toUpperCase())) {
+            return !allRelativePaths.contains(joinRelativePath(parentRel, baseName + ".jcd"));
+        }
+        return true;
     }
 
     private static String parentRelativePath(String relativePath) {

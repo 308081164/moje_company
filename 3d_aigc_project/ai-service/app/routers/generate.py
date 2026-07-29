@@ -24,12 +24,31 @@ from app.models.schemas import (
 from app.services.generator import get_generator_service
 from app.services.model_manager import get_model_manager
 from app.utils.hardware import get_system_info
-from app.config import get_config
+from app.config import get_config, is_require_gpu
 
 logger = logging.getLogger(__name__)
 
 # 创建路由器
 router = APIRouter(prefix="/api/generate", tags=["3D生成"])
+
+
+def _refuse_cpu_generation_if_required() -> None:
+    """REQUIRE_GPU=1 且 CUDA 不可用时拒绝提交生成任务。"""
+    if not is_require_gpu():
+        return
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return
+    except Exception:
+        pass
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "REQUIRE_GPU=1 但 CUDA 不可用，已拒绝生成（禁止静默 CPU）。"
+            "请检查 Docker GPU 分配，或紧急使用 start.bat --cpu。"
+        ),
+    )
 
 
 # ============================================================
@@ -53,6 +72,7 @@ async def image_to_3d(request: GenerateRequest):
     - **prompt**: 生成提示词（可选）
     - **result_format**: 输出格式（glb/obj/stl/ply）
     """
+    _refuse_cpu_generation_if_required()
     service = get_generator_service()
 
     # 创建任务
@@ -68,7 +88,7 @@ async def image_to_3d(request: GenerateRequest):
     return GenerateResponse(
         task_id=task.task_id,
         status=task.status,
-        message="任务已提交，正在处理中",
+        message="任务已提交，等待处理",
     )
 
 
@@ -93,6 +113,7 @@ async def condition_generate(request: ConditionGenerateRequest):
     - **prompt**: 生成提示词
     - **result_format**: 输出格式
     """
+    _refuse_cpu_generation_if_required()
     service = get_generator_service()
 
     # 创建任务
@@ -306,7 +327,7 @@ async def list_tasks(
     """
     获取任务列表
 
-    - **status**: 按状态筛选（pending/processing/completed/failed）
+    - **status**: 按状态筛选（pending/queued/processing/completed/failed）
     - **limit**: 返回数量限制
     """
     service = get_generator_service()

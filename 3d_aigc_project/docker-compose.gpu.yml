@@ -1,0 +1,22 @@
+# GPU 覆盖（现已冗余，可安全叠加）
+# 主文件 docker-compose.yml 已内置 NVIDIA device reservation + CUDA PyTorch + REQUIRE_GPU=1
+# 保留本文件是为了兼容旧文档/脚本：
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# 紧急 CPU：请用 start.bat --cpu（叠加 docker-compose.cpu.yml），不要省略 GPU 配置裸跑
+
+services:
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+    environment:
+      REQUIRE_GPU: ${REQUIRE_GPU:-1}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]

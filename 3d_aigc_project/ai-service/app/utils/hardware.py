@@ -3,6 +3,7 @@ GPU硬件检测模块
 检测NVIDIA GPU型号、显存大小，返回推荐的模型配置
 """
 
+import os
 import subprocess
 import re
 import logging
@@ -32,6 +33,33 @@ class ModelRecommendation:
     reason: str = ""
 
 
+def _run_nvidia_smi_query(query: str) -> Optional[str]:
+    """执行 nvidia-smi --query-gpu 获取结构化 CSV 输出。"""
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                f"--query-gpu={query}",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        return None
+    except FileNotFoundError:
+        logger.warning("nvidia-smi 未找到，可能未安装NVIDIA驱动")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("nvidia-smi 执行超时")
+        return None
+    except Exception as e:
+        logger.error(f"执行 nvidia-smi query 时出错: {e}")
+        return None
+
+
 def _run_nvidia_smi() -> Optional[str]:
     """
     执行 nvidia-smi 命令获取GPU信息
@@ -58,6 +86,34 @@ def _run_nvidia_smi() -> Optional[str]:
         return None
 
 
+def _parse_nvidia_smi_query() -> Optional[GPUInfo]:
+    """
+    通过 nvidia-smi --query-gpu 解析（Docker/WDDM 下比表格正则更可靠）。
+    """
+    csv_line = _run_nvidia_smi_query(
+        "name,memory.total,driver_version"
+    )
+    if not csv_line:
+        return None
+
+    first_line = csv_line.splitlines()[0].strip()
+    parts = [p.strip() for p in first_line.split(",")]
+    if len(parts) < 2:
+        return None
+
+    info = GPUInfo(is_available=True)
+    info.gpu_name = parts[0]
+    try:
+        total_mib = float(parts[1])
+        if total_mib > 0:
+            info.vram_gb = round(total_mib / 1024, 2)
+    except ValueError:
+        pass
+    if len(parts) >= 3 and parts[2]:
+        info.driver_version = parts[2]
+    return info
+
+
 def _parse_nvidia_smi(output: str) -> GPUInfo:
     """
     解析 nvidia-smi 输出，提取GPU信息
@@ -77,16 +133,19 @@ def _parse_nvidia_smi(output: str) -> GPUInfo:
     )
     if gpu_match:
         info.gpu_name = gpu_match.group(1).strip()
+        info.gpu_name = re.sub(r"\s+On\s*$", "", info.gpu_name, flags=re.IGNORECASE).strip()
 
-    # 提取显存大小（取第一张GPU的显存）
-    # 匹配格式如 "8192 MiB" 或 "24576 MiB"
-    vram_match = re.search(
+    # 提取显存总量（优先匹配 "16380MiB / 16380MiB" 或 "8192 MiB" 格式）
+    vram_patterns = (
+        r"(\d+)\s*MiB\s*/\s*(\d+)\s*MiB",
         r"\|\s+\d+\s+MiB\s+\|\s+\d+\s+MiB\s+\|\s+(\d+)\s+MiB",
-        output
     )
-    if vram_match:
-        vram_mib = int(vram_match.group(1))
-        info.vram_gb = round(vram_mib / 1024, 2)
+    for pattern in vram_patterns:
+        vram_match = re.search(pattern, output)
+        if vram_match:
+            vram_mib = int(vram_match.groups()[-1])
+            info.vram_gb = round(vram_mib / 1024, 2)
+            break
 
     # 提取驱动版本
     driver_match = re.search(
@@ -133,16 +192,46 @@ def _check_torch_cuda() -> Dict[str, Any]:
     return result
 
 
+def _vram_from_torch() -> float:
+    """通过 PyTorch 读取 GPU 总显存（MiB）。"""
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return 0.0
+        props = torch.cuda.get_device_properties(0)
+        return round(props.total_memory / (1024 ** 3), 2)
+    except Exception:
+        return 0.0
+
+
 def detect_gpu() -> GPUInfo:
     """
     检测GPU信息
-    优先使用 nvidia-smi，辅以 PyTorch 检测
+    优先使用 nvidia-smi query，辅以表格解析与 PyTorch 检测
     """
-    # 方法1: 通过 nvidia-smi 检测
+    # 方法1: nvidia-smi --query-gpu（Docker 最可靠）
+    query_info = _parse_nvidia_smi_query()
+    if query_info and query_info.is_available:
+        if query_info.vram_gb <= 0:
+            query_info.vram_gb = _vram_from_torch() or _estimate_vram_from_name(
+                query_info.gpu_name
+            )
+        logger.info(
+            f"GPU检测成功(query): {query_info.gpu_name}, "
+            f"显存: {query_info.vram_gb}GB, "
+            f"驱动: {query_info.driver_version}"
+        )
+        return query_info
+
+    # 方法2: 通过 nvidia-smi 表格输出
     smi_output = _run_nvidia_smi()
     if smi_output:
         info = _parse_nvidia_smi(smi_output)
         if info.is_available:
+            if info.vram_gb <= 0:
+                info.vram_gb = _vram_from_torch() or _estimate_vram_from_name(
+                    info.gpu_name
+                )
             logger.info(
                 f"GPU检测成功: {info.gpu_name}, "
                 f"显存: {info.vram_gb}GB, "
@@ -151,7 +240,7 @@ def detect_gpu() -> GPUInfo:
             )
             return info
 
-    # 方法2: 通过 PyTorch 检测
+    # 方法3: 通过 PyTorch 检测
     torch_info = _check_torch_cuda()
     if torch_info["cuda_available"]:
         info = GPUInfo(
@@ -159,15 +248,25 @@ def detect_gpu() -> GPUInfo:
             is_available=True,
             cuda_version=torch_info["torch_cuda_version"] or "Unknown",
         )
-        # PyTorch检测不到显存大小，尝试从GPU名称推断
-        info.vram_gb = _estimate_vram_from_name(info.gpu_name)
+        info.vram_gb = _vram_from_torch() or _estimate_vram_from_name(info.gpu_name)
         logger.info(
             f"通过PyTorch检测到GPU: {info.gpu_name}, "
             f"预估显存: {info.vram_gb}GB"
         )
         return info
 
-    logger.warning("未检测到可用的GPU，将使用CPU模式（性能较低）")
+    # 避免与 app.config 循环导入，直接读环境变量
+    require_gpu = os.environ.get("REQUIRE_GPU", "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+    if require_gpu:
+        logger.error(
+            "未检测到可用的GPU，且 REQUIRE_GPU=1；服务将拒绝以 CPU 启动"
+        )
+    else:
+        logger.warning(
+            "未检测到可用的GPU，REQUIRE_GPU=0，将使用CPU模式（极慢，仅应急）"
+        )
     return GPUInfo()
 
 

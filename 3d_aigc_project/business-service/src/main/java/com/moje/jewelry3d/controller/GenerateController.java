@@ -7,6 +7,7 @@ import com.moje.jewelry3d.model.dto.TaskViewDto;
 import com.moje.jewelry3d.service.GenerateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -46,7 +47,8 @@ public class GenerateController {
             @RequestParam(value = "left_image", required = false) MultipartFile leftImage,
             @RequestParam(value = "right_image", required = false) MultipartFile rightImage,
             @RequestParam(value = "top_image", required = false) MultipartFile topImage,
-            @RequestParam(value = "bottom_image", required = false) MultipartFile bottomImage
+            @RequestParam(value = "bottom_image", required = false) MultipartFile bottomImage,
+            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode
     ) {
         Map<String, MultipartFile> viewFiles = new HashMap<>();
         putViewIfPresent(viewFiles, "front", frontImage);
@@ -66,7 +68,7 @@ public class GenerateController {
 
         GenerateResponse response = generateService.imageTo3d(
                 image, prompt, outputFormat, inlayStructureFilename,
-                multiViewEnabled, viewFiles
+                multiViewEnabled, viewFiles, generationMode
         );
         return Result.success("生成任务已提交", response);
     }
@@ -85,7 +87,8 @@ public class GenerateController {
             @RequestParam(value = "prompt", required = false) String prompt,
             @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat,
             @RequestParam(value = "inlay_type", required = false) String inlayType,
-            @RequestParam(value = "gem_type", required = false) String gemType
+            @RequestParam(value = "gem_type", required = false) String gemType,
+            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode
     ) {
         if (image.isEmpty()) {
             throw new BusinessException("请上传设计图文件");
@@ -96,7 +99,7 @@ public class GenerateController {
         }
         GenerateResponse response = generateService.conditionGenerate(
                 image, inlayStructureFilename, inlayStructureFile,
-                prompt, outputFormat, inlayType, gemType
+                prompt, outputFormat, inlayType, gemType, generationMode
         );
         return Result.success("条件生成任务已提交", response);
     }
@@ -110,7 +113,7 @@ public class GenerateController {
             @RequestParam(value = "prompt", required = false) String prompt,
             @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat
     ) {
-        return conditionGenerate(image, inlayStructureFilename, inlay, prompt, outputFormat, null, null);
+        return conditionGenerate(image, inlayStructureFilename, inlay, prompt, outputFormat, null, null, "quality");
     }
 
     @GetMapping("/api/generate/tasks")
@@ -124,13 +127,10 @@ public class GenerateController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "page_size", defaultValue = "20") int pageSize
     ) {
-        List<TaskViewDto> all = generateService.getAllTaskViews();
-        int from = Math.max(0, (page - 1) * pageSize);
-        int to = Math.min(all.size(), from + pageSize);
-        List<TaskViewDto> slice = from < all.size() ? all.subList(from, to) : List.of();
+        Page<TaskViewDto> taskPage = generateService.getTaskViews(page, pageSize);
         Map<String, Object> body = new HashMap<>();
-        body.put("tasks", slice);
-        body.put("total", all.size());
+        body.put("tasks", taskPage.getContent());
+        body.put("total", taskPage.getTotalElements());
         return Result.success(body);
     }
 
@@ -149,6 +149,50 @@ public class GenerateController {
                 .contentType(resolveDownloadMediaType(file.getName()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
                 .body(resource);
+    }
+
+    @GetMapping({"/api/generate/preview/{taskId}", "/api/tasks/{taskId}/preview"})
+    public ResponseEntity<Resource> previewResult(@PathVariable String taskId) {
+        final Path previewPath;
+        try {
+            previewPath = generateService.getPreviewFile(taskId);
+        } catch (BusinessException e) {
+            int status = e.getCode() >= 400 && e.getCode() < 600 ? e.getCode() : 404;
+            return ResponseEntity.status(status).build();
+        }
+        File file = previewPath.toFile();
+        Resource resource = new FileSystemResource(file);
+        return ResponseEntity.ok()
+                .contentType(resolveDownloadMediaType(file.getName()))
+                .contentLength(file.length())
+                .cacheControl(org.springframework.http.CacheControl.maxAge(7, java.util.concurrent.TimeUnit.DAYS).cachePublic())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''" + URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20"))
+                .body(resource);
+    }
+
+    @GetMapping({"/api/generate/input-preview/{taskId}", "/api/tasks/{taskId}/input-preview"})
+    public ResponseEntity<Resource> previewInput(@PathVariable String taskId) {
+        Path inputPath = generateService.getInputImageFile(taskId);
+        File file = inputPath.toFile();
+        Resource resource = new FileSystemResource(file);
+        return ResponseEntity.ok()
+                .contentType(resolveImageMediaType(file.getName()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''" + URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20"))
+                .body(resource);
+    }
+
+    private MediaType resolveImageMediaType(String filename) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".png")) {
+            return MediaType.IMAGE_PNG;
+        }
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return MediaType.IMAGE_JPEG;
+        }
+        if (lower.endsWith(".webp")) {
+            return MediaType.parseMediaType("image/webp");
+        }
+        return MediaType.APPLICATION_OCTET_STREAM;
     }
 
     private MediaType resolveDownloadMediaType(String filename) {

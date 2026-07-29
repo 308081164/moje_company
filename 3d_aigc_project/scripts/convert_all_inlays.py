@@ -45,6 +45,7 @@ class InlayEntry:
     size_bytes: int
     has_bmp: bool
     has_obj: bool
+    obj_is_proxy: bool
     has_png: bool
     png_quality: float
     png_is_placeholder: bool
@@ -80,7 +81,8 @@ def scan_entry(jcd_path: Path, db_dir: Path, skip_good_preview: bool) -> InlayEn
     quality = jcd_gp.preview_quality(png_path) if has_png else 0.0
     placeholder = mesh_prev.is_jcd_placeholder_png(png_path) if has_png else True
     has_obj = obj_path.is_file()
-    need_mesh = not has_obj
+    obj_is_proxy = mesh_conv.is_known_proxy_obj(obj_path) if has_obj else False
+    need_mesh = not has_obj or obj_is_proxy
     need_preview = True
     if skip_good_preview and has_png and not placeholder and quality >= jcd_gp.MIN_QUALITY:
         need_preview = False
@@ -90,6 +92,7 @@ def scan_entry(jcd_path: Path, db_dir: Path, skip_good_preview: bool) -> InlayEn
         size_bytes=jcd_path.stat().st_size,
         has_bmp=jcd_path.with_suffix(".bmp").is_file(),
         has_obj=has_obj,
+        obj_is_proxy=obj_is_proxy,
         has_png=has_png,
         png_quality=round(quality, 4),
         png_is_placeholder=placeholder,
@@ -140,19 +143,33 @@ def refresh_preview_full(jcd_path: Path, force: bool = False) -> dict:
     method, ok, quality = refresh_preview_for_jcd(jcd_path, force=force)
 
     if (not ok or mesh_prev.is_jcd_placeholder_png(png_path)) and jcd_path.with_suffix(".obj").is_file():
-        try:
-            method = mesh_prev.generate_preview_for_mesh(jcd_path.with_suffix(".obj"), png_path)
-            quality = jcd_gp.preview_quality(png_path)
-            ok = quality >= MIN_PREVIEW_QUALITY and png_path.stat().st_size >= 1200
-        except Exception as exc:
-            return {
-                "path": str(jcd_path),
-                "phase": "preview",
-                "status": "fail",
-                "method": method,
-                "error": str(exc),
-                "ms": int((time.perf_counter() - t0) * 1000),
-            }
+        obj_path = jcd_path.with_suffix(".obj")
+        if mesh_conv.is_known_proxy_obj(obj_path):
+            pass  # 不用 proxy mesh 渲染 2D
+        else:
+            try:
+                method = mesh_prev.generate_preview_for_mesh(obj_path, png_path)
+                quality = jcd_gp.preview_quality(png_path)
+                ok = quality >= MIN_PREVIEW_QUALITY and png_path.stat().st_size >= 1200
+            except Exception as exc:
+                return {
+                    "path": str(jcd_path),
+                    "phase": "preview",
+                    "status": "fail",
+                    "method": method,
+                    "error": str(exc),
+                    "ms": int((time.perf_counter() - t0) * 1000),
+                }
+            if ok:
+                return {
+                    "path": str(jcd_path),
+                    "phase": "preview",
+                    "status": "ok",
+                    "method": method,
+                    "quality": round(quality, 4),
+                    "bytes": png_path.stat().st_size if png_path.is_file() else 0,
+                    "ms": int((time.perf_counter() - t0) * 1000),
+                }
 
     if ok:
         return {
@@ -190,7 +207,7 @@ def process_one_jcd(
     if do_mesh:
         t0 = time.perf_counter()
         try:
-            rec = mesh_conv.convert_one(jcd_path, force=mesh_force, dry_run=dry_run)
+            rec = mesh_conv.convert_one(jcd_path, force=mesh_force, dry_run=dry_run, allow_proxy=False)
             rec["phase"] = "mesh"
             records.append(rec)
         except Exception as exc:

@@ -1,49 +1,132 @@
 # ==========================================
-# Docker Compose - 开发环境
-# 3D AIGC 平台服务编排
+# 3D AIGC 平台 - 统一 Docker Compose
+# 【强制 GPU】裸跑 `docker compose up` 也会给 ai-service 分配 NVIDIA GPU
+# 推荐：start.bat / start.sh（启动后校验 /health.gpu_available）
+# 紧急 CPU：start.bat --cpu  （叠加 docker-compose.cpu.yml，REQUIRE_GPU=0）
+# 完整栈：  docker compose --profile full up -d --build
+# 开发前端：叠加 docker-compose.dev.yml（start.bat --dev）
+# 注意：需 NVIDIA Container Toolkit；CPU 仅应急，生成极慢
+# Agents：禁止用不带 GPU 的 compose 重启 ai-service；见 AGENTS.md
 # ==========================================
 
-version: '3.8'
+name: 3d-aigc
 
 services:
-  # ==========================================
-  # AI服务 - 3D模型生成核心服务
-  # ==========================================
+  # ---------- 基础设施（profile: full）----------
+  postgres:
+    profiles: [full]
+    image: postgres:16-alpine
+    container_name: 3d-aigc-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: jewelry3d
+      POSTGRES_USER: jewelry
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jewelry}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jewelry -d jewelry3d"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - 3d-aigc-network
+
+  minio:
+    profiles: [full]
+    image: minio/minio:latest
+    container_name: 3d-aigc-minio
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - 3d-aigc-network
+
+  redis:
+    profiles: [full]
+    image: redis:7-alpine
+    container_name: 3d-aigc-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - 3d-aigc-network
+
+  # ---------- AI 推理服务（默认强制 GPU）----------
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
+      args:
+        # 默认 CUDA PyTorch；紧急 CPU 见 docker-compose.cpu.yml
+        TORCH_INDEX: https://download.pytorch.org/whl/cu121
     container_name: 3d-aigc-ai-service
     ports:
       - "${AI_SERVICE_PORT:-8855}:8855"
     environment:
-      - GPU_MEMORY_GB=${GPU_MEMORY_GB:-8}
-      - MODEL_VERSION=${MODEL_VERSION:-auto}
-      - CUDA_VISIBLE_DEVICES=0
-      - PYTHONUNBUFFERED=1
+      GPU_MEMORY_GB: ${GPU_MEMORY_GB:-8}
+      MODEL_VERSION: ${MODEL_VERSION:-auto}
+      MODEL_PATH: /app/models
+      INLAY_DB_PATH: /app/inlay_db
+      OUTPUT_DIR: /app/outputs
+      OFFLINE_MODE: ${OFFLINE_MODE:-true}
+      TRACK_A_GEOMETRY_ONLY: ${TRACK_A_GEOMETRY_ONLY:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: "8855"
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      # 默认强制 GPU：CUDA 不可用时进程以非零退出，禁止静默 CPU 推理
+      REQUIRE_GPU: ${REQUIRE_GPU:-1}
+      MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-8}
+      MAX_CONCURRENT_GPU_JOBS: ${MAX_CONCURRENT_GPU_JOBS:-1}
+      ENABLE_GEM_REPAINT: ${ENABLE_GEM_REPAINT:-0}
+      PYTHONUNBUFFERED: "1"
     volumes:
-      # 模型文件目录
-      - ./models:/app/models:ro
-      # 镶嵌结构数据库
+      - ${MODELS_PATH:-./models}:/app/models:ro
       - ${INLAY_DB_PATH:-./镶嵌结构数据库}:/app/inlay_db:ro
-      # 输出文件目录
-      - ./outputs:/app/outputs
-      # 上传文件目录
-      - ./uploads:/app/uploads
+      - ${OUTPUTS_PATH:-./outputs}:/app/outputs
+      - ${UPLOADS_PATH:-./uploads}:/app/uploads
+      - inlay-cache:/app/inlay_cache
+      - inlay-storage:/app/inlay-storage:ro
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: ${GPU_COUNT:-1}
               capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8855/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
     restart: unless-stopped
     networks:
       - 3d-aigc-network
 
-  # ==========================================
-  # 业务服务 - API网关和任务管理
-  # ==========================================
+  # ---------- 业务服务 ----------
   business-service:
     build:
       context: ./business-service
@@ -52,29 +135,50 @@ services:
     ports:
       - "${BUSINESS_SERVICE_PORT:-8854}:8854"
     environment:
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-http://ai-service:8855}
-      - INLAY_DB_PATH=/app/inlay_db
-      - UPLOAD_DIR=/app/uploads
-      - OUTPUT_DIR=/app/outputs
-      - DATABASE_URL=sqlite:///./data/tasks.db
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jewelry}
+      AI_SERVICE_BASE_URL: http://ai-service:8855
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
+      GEM_REPAINT_PROVIDER: ${GEM_REPAINT_PROVIDER:-wanx}
+      GEM_REPAINT_PRIMARY_MODEL: ${GEM_REPAINT_PRIMARY_MODEL:-wanx2.1-imageedit}
+      GEM_REPAINT_FALLBACK_ENABLED: ${GEM_REPAINT_FALLBACK_ENABLED:-true}
+      GEM_REPAINT_TIMEOUT_SECONDS: ${GEM_REPAINT_TIMEOUT_SECONDS:-90}
+      GEM_REPAINT_STRENGTH: ${GEM_REPAINT_STRENGTH:-0.20}
+      GEM_REPAINT_MASK_DILATE: ${GEM_REPAINT_MASK_DILATE:-8}
+      GEM_REPAINT_DEFAULT_PROMPT: ${GEM_REPAINT_DEFAULT_PROMPT:-去除宝石表面的镜面反光和过曝高光，使宝石呈现柔和漫反射效果，保持原有颜色、透明度和切面结构，不要改变金属爪镶、戒圈和背景。}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseContainerSupport}
     volumes:
-      # 镶嵌结构数据库（只读）
-      - ${INLAY_DB_PATH:-./镶嵌结构数据库}:/app/inlay_db:ro
-      # 上传和输出目录（与AI服务共享）
-      - ./uploads:/app/uploads
-      - ./outputs:/app/outputs
-      # 数据持久化
+      # 解耦后 business-service 不再挂载 legacy 文件夹；迁移时临时启用 profile legacy-mount
+      - ${UPLOADS_PATH:-./uploads}:/app/uploads
+      - ${OUTPUTS_PATH:-./outputs}:/app/outputs
       - business-data:/app/data
+      - inlay-storage:/app/inlay-storage
+      - generate-storage:/app/generate-storage
+      - inlay-cache:/app/inlay_cache
     depends_on:
       ai-service:
-        condition: service_started
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8854/api/system/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
     restart: unless-stopped
     networks:
       - 3d-aigc-network
 
-  # ==========================================
-  # 前端服务 - Vue应用
-  # ==========================================
+  # ---------- 前端（Nginx 生产模式）----------
   frontend:
     build:
       context: ./frontend
@@ -84,21 +188,31 @@ services:
       - "${FRONTEND_PORT:-8853}:8853"
     depends_on:
       business-service:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8853/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
     networks:
       - 3d-aigc-network
 
-# ==========================================
-# 数据卷
-# ==========================================
 volumes:
   business-data:
     driver: local
+  pg-data:
+    driver: local
+  minio-data:
+    driver: local
+  inlay-storage:
+    driver: local
+  generate-storage:
+    driver: local
+  inlay-cache:
+    driver: local
 
-# ==========================================
-# 网络
-# ==========================================
 networks:
   3d-aigc-network:
     driver: bridge

@@ -12,8 +12,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.config import get_config
+from app.config import get_config, is_require_gpu, assert_cuda_available
 from app.routers.generate import router as generate_router
+from app.routers.mesh import router as mesh_router
+from app.routers.mesh_edit import router as mesh_edit_router
 from app.routers.preprocess import router as preprocess_router
 from app.services.model_manager import get_model_manager
 from app.services.generator import get_generator_service
@@ -67,10 +69,13 @@ async def lifespan(app: FastAPI):
     logger.info("3D AIGC 推理服务启动中...")
     logger.info("=" * 60)
 
-    # 加载配置
+    # 加载配置（内含 REQUIRE_GPU / CUDA 硬失败）
     config = get_config()
     setup_logging(config.service.log_level)
     logger = logging.getLogger(__name__)
+
+    # 启动时再次确认：禁止静默落到 CPU
+    assert_cuda_available("lifespan")
 
     # 确保输出目录存在
     os.makedirs(config.service.output_dir, exist_ok=True)
@@ -169,6 +174,8 @@ app.add_middleware(
 # ============================================================
 
 app.include_router(generate_router)
+app.include_router(mesh_router)
+app.include_router(mesh_edit_router)
 app.include_router(preprocess_router)
 
 
@@ -190,17 +197,35 @@ async def health_check():
     global _start_time
     model_manager = get_model_manager()
     generator_service = get_generator_service()
+    concurrency = generator_service.get_concurrency_stats()
+    config = get_config()
+
+    info = model_manager.get_model_info()
+    gpu_available = info.get("device") == "cuda"
+    require_gpu = is_require_gpu()
+    device = info.get("device", "cpu")
+
+    # REQUIRE_GPU 开启但 CUDA 丢失时标记 error（正常应已在启动时退出）
+    if require_gpu and not gpu_available:
+        status = "error"
+    elif gpu_available:
+        status = "ok"
+    else:
+        status = "ok_cpu"
 
     return HealthResponse(
-        status="ok",
+        status=status,
         version="1.0.0",
         uptime=round(time.time() - _start_time, 2),
-        gpu_available=model_manager.get_model_info().get("device") == "cuda",
+        gpu_available=gpu_available,
+        require_gpu=require_gpu,
+        device=device,
         model_loaded=model_manager.is_loaded(),
-        active_tasks=len([
-            t for t in generator_service.list_tasks()
-            if t.status.value == "processing"
-        ]),
+        active_tasks=concurrency["active_tasks"],
+        queued_tasks=concurrency["queued_tasks"],
+        gpu_active_task_id=concurrency["gpu_queue"].get("active_task_id"),
+        max_concurrent_tasks=concurrency["max_concurrent_tasks"],
+        max_concurrent_gpu_jobs=config.service.max_concurrent_gpu_jobs,
     )
 
 

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+models/
+outputs/
+uploads/
+.git/
+.gitignore
+*.md
+.env
+.env.*
+tests/

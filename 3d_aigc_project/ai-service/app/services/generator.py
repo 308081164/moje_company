@@ -22,7 +22,13 @@ from app.utils.file_utils import (
     validate_image_file, validate_mesh_file, ensure_dir,
     load_image_pil,
 )
-from app.config import get_config
+from app.config import get_config, resolve_generation_mode, GenerationModeSettings
+from app.services.inference_queue import (
+    configure_max_gpu_jobs,
+    get_gpu_queue_stats,
+    is_gpu_busy,
+    run_in_gpu_slot,
+)
 from app.services.multi_view import (
     filter_views_for_hy3d,
     unsupported_view_keys,
@@ -49,10 +55,11 @@ class GeneratorService:
         self._tasks: Dict[str, TaskInfo] = {}
         # 任务回调函数
         self._callbacks: Dict[str, Callable] = {}
-        # 信号量控制并发数
+        # 信号量：限制同时处于生命周期内的任务数（验证/后处理可并行）
         self._semaphore: Optional[asyncio.Semaphore] = None
         # 是否已初始化
         self._initialized = False
+        self._max_concurrent_tasks: int = 1
 
     def initialize(self):
         """
@@ -60,10 +67,15 @@ class GeneratorService:
         在应用启动时调用
         """
         config = get_config()
+        self._max_concurrent_tasks = config.service.max_concurrent_tasks
+        configure_max_gpu_jobs(config.service.max_concurrent_gpu_jobs)
         self._semaphore = asyncio.Semaphore(config.service.max_concurrent_tasks)
         self._initialized = True
         logger.info(
-            f"生成服务已初始化，最大并发任务数: {config.service.max_concurrent_tasks}"
+            "生成服务已初始化: max_concurrent_tasks=%d, max_concurrent_gpu_jobs=%d "
+            "(GPU 推理实际串行 FIFO)",
+            config.service.max_concurrent_tasks,
+            config.service.max_concurrent_gpu_jobs,
         )
 
     # ============================================================
@@ -151,14 +163,32 @@ class GeneratorService:
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         return tasks[:limit]
 
+    def get_concurrency_stats(self) -> Dict[str, Any]:
+        """任务与 GPU 队列指标（供 /health）"""
+        tasks = list(self._tasks.values())
+        gpu_stats = get_gpu_queue_stats()
+        return {
+            "active_tasks": sum(
+                1 for t in tasks if t.status == TaskStatus.PROCESSING
+            ),
+            "queued_tasks": sum(
+                1 for t in tasks if t.status == TaskStatus.QUEUED
+            ),
+            "pending_tasks": sum(
+                1 for t in tasks if t.status == TaskStatus.PENDING
+            ),
+            "max_concurrent_tasks": self._max_concurrent_tasks,
+            "gpu_queue": gpu_stats,
+        }
+
     # ============================================================
     # 异步任务执行
     # ============================================================
 
     async def submit_task(self, task_id: str):
         """
-        提交任务到异步队列
-        使用信号量控制并发数
+        提交任务到异步执行队列。
+        任务先 PENDING，获槽位后 QUEUED/PROCESSING；GPU 阶段 FIFO 串行。
         """
         if not self._initialized:
             logger.error("生成服务未初始化")
@@ -172,27 +202,49 @@ class GeneratorService:
             logger.error("并发信号量未初始化")
             return
 
-        # 在后台执行任务
         asyncio.create_task(self._execute_task(task_id))
+
+    async def _run_gpu_phase(self, task_id: str, fn):
+        """
+        在专用 GPU 推理队列中执行 fn（阻塞部分在线程池，不卡事件循环）。
+        等待期间将任务标为 QUEUED；获得槽位后标为 PROCESSING。
+        """
+        if is_gpu_busy():
+            self.update_task(
+                task_id,
+                status=TaskStatus.QUEUED,
+                message="排队等待 GPU 推理（前方有任务进行中）",
+            )
+
+        def _on_active():
+            self.update_task(
+                task_id,
+                status=TaskStatus.PROCESSING,
+                message="GPU 推理中",
+                current_step="3D模型生成中",
+            )
+
+        return await asyncio.to_thread(
+            run_in_gpu_slot, task_id, fn, on_active=_on_active
+        )
 
     async def _execute_task(self, task_id: str):
         """
-        执行任务（带并发控制）
+        执行任务（任务级并发 + GPU 推理 FIFO 串行）
         """
         async with self._semaphore:
             task = self.get_task(task_id)
             if task is None:
                 return
 
-            start_time = time.time()
-
             try:
-                self.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=0,
-                    message="任务开始处理",
-                )
+                if task.status == TaskStatus.PENDING:
+                    self.update_task(
+                        task_id,
+                        status=TaskStatus.PROCESSING,
+                        progress=0,
+                        message="任务开始处理",
+                    )
 
                 # 根据请求类型分发到不同的处理函数
                 if task.request_type == "image_to_3d":
@@ -308,123 +360,145 @@ class GeneratorService:
         apply_texture = self._resolve_apply_texture(params)
         enable_fusion = params.get("enable_mesh_fusion", True)
         enable_icp = params.get("enable_icp_alignment", True)
-
-        # 步骤2: 确保模型已加载
-        self.update_task(task_id, progress=10, current_step="加载模型")
-        model_manager = get_model_manager()
-
-        if not model_manager.is_loaded():
-            logger.info("模型未加载，开始加载...")
-            # 在线程池中加载模型（避免阻塞事件循环）
-            loaded = await asyncio.to_thread(model_manager.load_model)
-            if not loaded:
-                detail = model_manager.get_last_load_error() or "模型加载失败"
-                return {"success": False, "error": detail}
-
-        hy3d_views: Optional[Dict[str, str]] = None
-        if use_multi_view:
-            hy3d_views = filter_views_for_hy3d(views_for_gen)
-            mv_ready = await asyncio.to_thread(
-                self._ensure_multi_view_pipeline, model_manager
-            )
-            if not mv_ready:
-                fallback_path = pick_best_single_view_path(views_for_gen) or image_path
-                if not fallback_path or not validate_image_file(fallback_path):
-                    return {
-                        "success": False,
-                        "error": multi_view_unavailable_message(fallback_failed=True),
-                    }
-                logger.warning(
-                    "当前 ShapeGen 不支持多视图且未加载 MV 模型，"
-                    "将仅使用视角 [%s] 进行单图生成。"
-                    "如需真正多视图，请下载 Hunyuan3D-2mv 并设置 MODEL_VERSION=mv。",
-                    next(
-                        (k for k, v in views_for_gen.items() if v == fallback_path),
-                        "front",
-                    ),
-                )
-                use_multi_view = False
-                hy3d_views = None
-                image_path = fallback_path
-        else:
-            sv_ready = await asyncio.to_thread(
-                self._ensure_single_view_pipeline, model_manager
-            )
-            if not sv_ready:
-                return {
-                    "success": False,
-                    "error": single_view_unavailable_message(),
-                }
-
-        # 步骤3: 调用Hunyuan3D-2生成3D
-        self.update_task(task_id, progress=20, current_step="3D模型生成中")
-
-        prompt = params.get("prompt") or ""
-        negative_prompt = params.get("negative_prompt") or ""
         result_format = params.get("result_format") or "glb"
-
-        # 珠宝建模默认：顺滑抛光曲面，抑制 AI 网格坑凹/尖刺/锯齿
-        jewelry_style = (
-            "，高精度珠宝CAD风格，光滑抛光金属与宝石曲面，"
-            "对称规整，大面平整，过渡圆顺，无凹凸噪点无网格坑洞无尖刺"
+        mode_settings = resolve_generation_mode(params.get("generation_mode"))
+        hy3d_views: Optional[Dict[str, str]] = None
+        logger.info(
+            "生成模式: %s (steps=%d octree=%d taubin=%d jewelry_finish=%s)",
+            params.get("generation_mode", "quality"),
+            mode_settings.config.num_inference_steps,
+            mode_settings.config.octree_resolution,
+            mode_settings.config.jewelry_taubin_iterations,
+            mode_settings.apply_jewelry_mesh_finish,
         )
-        jewelry_negative = (
-            "rough surface,bumpy,noisy,jagged edges,spikey,thin spikes,wire spikes,"
-            "low poly artifacts,faceted noise,holes,cracks,asymmetric distortion,"
-            "pitted surface,wavy uneven metal,bumps,lumps,cellular noise,micro bumps"
-        )
-        if jewelry_style not in prompt:
-            prompt = (prompt or "珠宝主体装饰结构") + jewelry_style
-        if not negative_prompt.strip():
-            negative_prompt = jewelry_negative
 
         if setting_mesh_path:
             self.update_task(task_id, progress=15, current_step="准备镶嵌条件")
-            prompt = await self._prepare_track_a_prompt(
-                params, setting_mesh_path, prompt or "珠宝主体装饰结构"
+            params["prompt"] = await self._prepare_track_a_prompt(
+                params, setting_mesh_path, params.get("prompt") or "珠宝主体装饰结构"
             )
             logger.info("轨道A：已用镶嵌底座点云增强生成 prompt")
 
-        # 在线程池中执行模型推理（CPU/GPU密集型任务）
-        gen_result = await asyncio.to_thread(
-            self._run_hunyuan3d_generation,
-            image_path=image_path,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            output_dir=config.service.output_dir,
-            task_id=task_id,
-            result_format=result_format,
-            views=hy3d_views if use_multi_view else None,
-            apply_texture=apply_texture,
+        # 步骤2-3: 模型加载 + Hunyuan3D 推理（GPU 阶段，FIFO 串行）
+        self.update_task(task_id, progress=10, current_step="加载模型")
+
+        def _gpu_load_and_generate():
+            model_manager = get_model_manager()
+            from app.services.repaint_model_manager import get_repaint_model_manager
+            repaint_mm = get_repaint_model_manager()
+            if repaint_mm.is_loaded():
+                repaint_mm.unload()
+
+            if not model_manager.is_loaded():
+                logger.info("模型未加载，开始加载...")
+                if not model_manager.load_model():
+                    detail = model_manager.get_last_load_error() or "模型加载失败"
+                    return {"success": False, "error": detail}
+
+            nonlocal use_multi_view, hy3d_views, image_path
+
+            if use_multi_view:
+                hy3d_views = filter_views_for_hy3d(views_for_gen)
+                if not self._ensure_multi_view_pipeline(model_manager):
+                    fallback_path = pick_best_single_view_path(views_for_gen) or image_path
+                    if not fallback_path or not validate_image_file(fallback_path):
+                        return {
+                            "success": False,
+                            "error": multi_view_unavailable_message(fallback_failed=True),
+                        }
+                    logger.warning(
+                        "当前 ShapeGen 不支持多视图且未加载 MV 模型，"
+                        "将仅使用视角 [%s] 进行单图生成。",
+                        next(
+                            (k for k, v in views_for_gen.items() if v == fallback_path),
+                            "front",
+                        ),
+                    )
+                    use_multi_view = False
+                    hy3d_views = None
+                    image_path = fallback_path
+            else:
+                if not self._ensure_single_view_pipeline(model_manager):
+                    return {
+                        "success": False,
+                        "error": single_view_unavailable_message(),
+                    }
+
+            prompt_local = params.get("prompt") or ""
+            negative_prompt = params.get("negative_prompt") or ""
+
+            if mode_settings.apply_jewelry_prompt:
+                jewelry_style = (
+                    "，高精度珠宝CAD风格，光滑抛光金属与宝石曲面，"
+                    "对称规整，大面平整，过渡圆顺，无凹凸噪点无网格坑洞无尖刺"
+                )
+                jewelry_negative = (
+                    "rough surface,bumpy,noisy,jagged edges,spikey,thin spikes,wire spikes,"
+                    "low poly artifacts,faceted noise,holes,cracks,asymmetric distortion,"
+                    "pitted surface,wavy uneven metal,bumps,lumps,cellular noise,micro bumps"
+                )
+                if jewelry_style not in prompt_local:
+                    prompt_local = (prompt_local or "珠宝主体装饰结构") + jewelry_style
+                if not negative_prompt.strip():
+                    negative_prompt = jewelry_negative
+
+            return self._run_hunyuan3d_generation(
+                image_path=image_path,
+                prompt=prompt_local,
+                negative_prompt=negative_prompt,
+                output_dir=config.service.output_dir,
+                task_id=task_id,
+                result_format=result_format,
+                views=hy3d_views if use_multi_view else None,
+                apply_texture=apply_texture,
+                mode_settings=mode_settings,
+            )
+
+        self.update_task(
+            task_id,
+            progress=20,
+            current_step="3D模型生成中",
+            message="GPU 推理中",
         )
+        gen_result = await self._run_gpu_phase(task_id, _gpu_load_and_generate)
+
+        if gen_result.get("success"):
+            self.update_task(
+                task_id,
+                status=TaskStatus.PROCESSING,
+                message="GPU 推理完成，后处理中",
+            )
 
         if not gen_result.get("success"):
             return gen_result
 
         self.update_task(task_id, progress=70, current_step="后处理")
 
-        generated_mesh = gen_result["output_path"]
+        # 融合阶段优先使用 raw OBJ，避免 STL 往返导致 Open3D 写出空网格
+        generated_mesh = gen_result.get("raw_path") or gen_result["output_path"]
+        preview_mesh_path: Optional[str] = None
 
         # 步骤4: 后处理（与底座融合）
-        output_files = [generated_mesh]
-
         if setting_mesh_path and enable_fusion:
-            self.update_task(task_id, progress=75, current_step="ICP对齐与布尔融合")
+            self.update_task(task_id, progress=75, current_step="ICP对齐与分色合并")
             processor = get_mesh_processor()
+            fusion_method = params.get("fusion_method") or "colored_merge"
             process_result = await asyncio.to_thread(
                 processor.process_generated_mesh,
                 generated_mesh_path=generated_mesh,
                 base_mesh_path=setting_mesh_path,
                 output_dir=config.service.output_dir,
                 task_id=task_id,
-                fusion_method="boolean",
+                fusion_method=fusion_method,
                 enable_icp=enable_icp,
                 enable_repair=True,
                 output_format=result_format,
+                apply_jewelry_repair_smooth=mode_settings.apply_jewelry_repair_smooth,
+                generation_config=mode_settings.config,
             )
             if process_result.get("success"):
                 generated_mesh = process_result["output_path"]
-                output_files.append(generated_mesh)
+                preview_mesh_path = process_result.get("preview_path")
             else:
                 logger.warning(
                     "镶嵌底座融合失败: %s",
@@ -432,12 +506,20 @@ class GeneratorService:
                 )
         elif setting_mesh_path and not enable_fusion:
             logger.info("已提供镶嵌底座但 enable_mesh_fusion=false，跳过融合")
+        else:
+            generated_mesh = gen_result["output_path"]
 
         self.update_task(task_id, progress=95, current_step="保存结果")
 
+        output_files = [generated_mesh]
+        if preview_mesh_path and preview_mesh_path not in output_files:
+            output_files.append(preview_mesh_path)
+
+        # 仅暴露最终产物；勿把 generated.glb 放在 result_files[0]，否则 business 会同步错文件
         return {
             "success": True,
             "output_path": generated_mesh,
+            "preview_path": preview_mesh_path,
             "output_files": output_files,
         }
 
@@ -533,7 +615,7 @@ class GeneratorService:
 
     @staticmethod
     def _invoke_shape_gen(shape_gen, image_input, gen_cfg):
-        """调用 ShapeGen，mc_algo 不可用时自动回退"""
+        """调用 ShapeGen，mc_algo 不可用时自动回退（须在 GPU 推理槽位内调用）"""
         kwargs = GeneratorService._build_shape_gen_kwargs(gen_cfg)
         mc_algo = kwargs.get("mc_algo")
         try:
@@ -559,6 +641,7 @@ class GeneratorService:
         result_format: str = "glb",
         apply_texture: bool = False,
         views: Optional[Dict[str, str]] = None,
+        mode_settings: Optional[GenerationModeSettings] = None,
     ) -> Dict[str, Any]:
         """
         执行Hunyuan3D-2图片到3D生成
@@ -567,7 +650,9 @@ class GeneratorService:
         """
         model_manager = get_model_manager()
         config = get_config()
-        gen_cfg = config.generation
+        if mode_settings is None:
+            mode_settings = resolve_generation_mode("quality")
+        gen_cfg = mode_settings.config
 
         try:
             from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
@@ -647,16 +732,26 @@ class GeneratorService:
                 logger.info(f"3D网格已生成: {raw_output_path}")
 
                 # 珠宝曲面后处理（去尖刺/锯齿，轻度平滑）
-                try:
-                    processor = get_mesh_processor()
-                    finished_path = generate_output_path(
-                        output_dir, task_id, "finished_raw.obj"
-                    )
-                    processor.jewelry_finish_mesh(raw_output_path, finished_path)
-                    raw_output_path = finished_path
-                    logger.info("珠宝曲面后处理完成: %s", raw_output_path)
-                except Exception as e:
-                    logger.warning("珠宝曲面后处理跳过: %s", e)
+                if mode_settings.apply_jewelry_mesh_finish:
+                    try:
+                        processor = get_mesh_processor()
+                        finished_path = generate_output_path(
+                            output_dir, task_id, "finished_raw.obj"
+                        )
+                        processor.jewelry_finish_mesh(
+                            raw_output_path,
+                            finished_path,
+                            generation_config=gen_cfg,
+                        )
+                        raw_output_path = finished_path
+                        if gen_cfg.jewelry_taubin_iterations > 0:
+                            logger.info("珠宝曲面后处理完成: %s", raw_output_path)
+                        else:
+                            logger.info("急速模式拓扑修复完成: %s", raw_output_path)
+                    except Exception as e:
+                        logger.warning("珠宝/拓扑后处理跳过: %s", e)
+                else:
+                    logger.info("后处理已禁用：保留原始生成网格")
 
                 # 轨道A：纹理生成（Hunyuan3D-Paint）
                 textured_path = raw_output_path
@@ -939,92 +1034,33 @@ class GeneratorService:
         if not validate_mesh_file(generated_mesh_path):
             return {"success": False, "error": f"无效的生成网格: {generated_mesh_path}"}
 
-        fusion_method = params.get("fusion_method", "boolean")
+        fusion_method = params.get("fusion_method") or "colored_merge"
         output_format = params.get("output_format", "glb")
         enable_repair = params.get("enable_topology_repair", True)
 
         processor = get_mesh_processor()
 
-        # 步骤1: ICP对齐
-        self.update_task(task_id, progress=15, current_step="ICP对齐")
-        if processor._open3d_available:
-            try:
-                aligned_path = generate_output_path(
-                    config.service.output_dir, task_id, "aligned.obj"
-                )
-                transform, rmse = await asyncio.to_thread(
-                    processor.icp_align,
-                    generated_mesh_path, base_mesh_path,
-                    max_iterations=params.get("icp_iterations", 50),
-                )
-                generated_mesh_path = await asyncio.to_thread(
-                    processor.apply_icp_transform,
-                    generated_mesh_path, transform, aligned_path,
-                )
-            except Exception as e:
-                logger.warning(f"ICP对齐失败: {e}")
-
-        # 步骤2: 布尔融合
-        self.update_task(task_id, progress=40, current_step="布尔融合")
-        output_path = generate_output_path(
-            config.service.output_dir, task_id, f"fused.{output_format}"
+        # 统一走 process_generated_mesh（分色合并会保留双网格颜色，避免整模 repair 冲掉）
+        self.update_task(task_id, progress=20, current_step="网格融合与后处理")
+        process_result = await asyncio.to_thread(
+            processor.process_generated_mesh,
+            generated_mesh_path=generated_mesh_path,
+            base_mesh_path=base_mesh_path,
+            output_dir=config.service.output_dir,
+            task_id=task_id,
+            fusion_method=fusion_method,
+            enable_icp=True,
+            enable_repair=enable_repair,
+            output_format=output_format,
         )
+        if not process_result.get("success"):
+            return {
+                "success": False,
+                "error": process_result.get("error") or "网格融合失败",
+            }
 
-        try:
-            if fusion_method == "boolean":
-                output_path = await asyncio.to_thread(
-                    processor.boolean_union,
-                    base_mesh_path, generated_mesh_path, output_path,
-                )
-            elif fusion_method == "icp_merge":
-                # ICP对齐后简单合并
-                import trimesh
-                mesh_a = trimesh.load(base_mesh_path)
-                mesh_b = trimesh.load(generated_mesh_path)
-                if isinstance(mesh_a, trimesh.Scene):
-                    mesh_a = mesh_a.dump(concatenate=True)
-                if isinstance(mesh_b, trimesh.Scene):
-                    mesh_b = mesh_b.dump(concatenate=True)
-                merged = processor._simple_merge(mesh_a, mesh_b)
-                merged.export(output_path)
-            else:
-                # 简单合并
-                import trimesh
-                mesh_a = trimesh.load(base_mesh_path)
-                mesh_b = trimesh.load(generated_mesh_path)
-                if isinstance(mesh_a, trimesh.Scene):
-                    mesh_a = mesh_a.dump(concatenate=True)
-                if isinstance(mesh_b, trimesh.Scene):
-                    mesh_b = mesh_b.dump(concatenate=True)
-                merged = processor._simple_merge(mesh_a, mesh_b)
-                merged.export(output_path)
-        except Exception as e:
-            logger.error(f"融合失败: {e}", exc_info=True)
-            return {"success": False, "error": f"网格融合失败: {e}"}
-
-        # 步骤3: 拓扑修复
-        if enable_repair:
-            self.update_task(task_id, progress=70, current_step="拓扑修复")
-            try:
-                repaired_path = generate_output_path(
-                    config.service.output_dir, task_id, f"final.{output_format}"
-                )
-                repair_stats = await asyncio.to_thread(
-                    processor.repair_mesh, output_path, repaired_path
-                )
-                output_path = repaired_path
-            except Exception as e:
-                logger.warning(f"拓扑修复失败: {e}")
-
-        # 步骤4: 分析结果
-        self.update_task(task_id, progress=90, current_step="分析结果")
-        mesh_info = {}
-        try:
-            mesh_info = await asyncio.to_thread(
-                processor.analyze_mesh, output_path
-            )
-        except Exception as e:
-            logger.warning(f"网格分析失败: {e}")
+        output_path = process_result["output_path"]
+        mesh_info = process_result.get("mesh_info") or {}
 
         self.update_task(task_id, progress=95, current_step="保存结果")
 
@@ -1033,6 +1069,8 @@ class GeneratorService:
             "output_path": output_path,
             "output_files": [output_path],
             "mesh_info": mesh_info,
+            "region_colors": process_result.get("region_colors"),
+            "steps_completed": process_result.get("steps_completed"),
         }
 
 

@@ -22,11 +22,66 @@ ENV_MODEL_PATH = "MODEL_PATH"                 # 模型本地存放路径
 ENV_INLAY_DB_PATH = "INLAY_DB_PATH"           # 镶嵌结构数据库路径
 ENV_OUTPUT_DIR = "OUTPUT_DIR"                 # 输出文件目录
 ENV_CUDA_DEVICE = "CUDA_VISIBLE_DEVICES"      # 指定使用的GPU
+ENV_REQUIRE_GPU = "REQUIRE_GPU"               # 强制 GPU；默认 true，禁止静默 CPU
 ENV_HOST = "SERVICE_HOST"                     # 服务监听地址
 ENV_PORT = "SERVICE_PORT"                     # 服务监听端口
 ENV_LOG_LEVEL = "LOG_LEVEL"                   # 日志级别
 ENV_OFFLINE_MODE = "OFFLINE_MODE"             # 离线模式（不从HuggingFace下载）
 ENV_TRACK_A_GEOMETRY_ONLY = "TRACK_A_GEOMETRY_ONLY"  # 轨道A：仅输出几何白模，不烘焙纹理
+ENV_MAX_CONCURRENT_TASKS = "MAX_CONCURRENT_TASKS"   # 可同时处理的任务数（含排队+后处理）
+ENV_MAX_CONCURRENT_GPU_JOBS = "MAX_CONCURRENT_GPU_JOBS"  # GPU 推理并发（实际强制≤1）
+ENV_ENABLE_GEM_REPAINT = "ENABLE_GEM_REPAINT"
+ENV_GEM_REPAINT_MODEL_PATH = "GEM_REPAINT_MODEL_PATH"
+ENV_GEM_REPAINT_STRENGTH = "GEM_REPAINT_STRENGTH"
+ENV_GEM_REPAINT_MASK_DILATE = "GEM_REPAINT_MASK_DILATE"
+ENV_GEM_REPAINT_SEED = "GEM_REPAINT_SEED"
+ENV_ALIGNMENT_MODE = "ALIGNMENT_MODE"  # casa | ring_frame
+ENV_CASA_SOFT_ACCEPT = "CASA_SOFT_ACCEPT"
+ENV_CASA_MIN_PEAK_RATIO = "CASA_MIN_PEAK_RATIO"
+ENV_CASA_MIN_INLAY_OVERLAP_RATIO = "CASA_MIN_INLAY_OVERLAP_RATIO"
+
+
+def is_require_gpu() -> bool:
+    """
+    是否强制要求 CUDA。
+    默认 True（未设置环境变量时也要求 GPU）；仅 REQUIRE_GPU=0/false/no 时允许 CPU。
+    """
+    raw = os.environ.get(ENV_REQUIRE_GPU, "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def assert_cuda_available(context: str = "startup") -> None:
+    """
+    REQUIRE_GPU 开启时若 CUDA 不可用则立即以非零退出，禁止静默落到 CPU。
+    """
+    if not is_require_gpu():
+        return
+    try:
+        import torch
+        cuda_ok = bool(torch.cuda.is_available())
+    except Exception as e:
+        logger.error(
+            "[REQUIRE_GPU] %s: 无法检测 CUDA（torch 导入失败）: %s",
+            context,
+            e,
+        )
+        raise SystemExit(1) from e
+
+    if not cuda_ok:
+        logger.error(
+            "[REQUIRE_GPU] %s: CUDA 不可用，拒绝以 CPU 运行。"
+            "请确认 Docker 已分配 GPU（docker-compose.yml 内置 devices），"
+            "或紧急场景使用 start.bat --cpu（REQUIRE_GPU=0）。",
+            context,
+        )
+        raise SystemExit(1)
+
+    try:
+        import torch
+        name = torch.cuda.get_device_name(0)
+        logger.info("[REQUIRE_GPU] CUDA 可用: %s", name)
+    except Exception:
+        logger.info("[REQUIRE_GPU] CUDA 可用")
 
 # 3D 生成推理参数（珠宝平滑曲面优化，可通过环境变量覆盖）
 ENV_GEN_INFERENCE_STEPS = "GEN_INFERENCE_STEPS"
@@ -59,6 +114,60 @@ class GenerationConfig:
 
 
 @dataclass
+class GenerationModeSettings:
+    """单次生成任务的模式配置（推理参数 + 后处理开关）。"""
+    config: GenerationConfig
+    apply_jewelry_prompt: bool = True
+    apply_jewelry_mesh_finish: bool = True
+    apply_jewelry_repair_smooth: bool = True
+
+
+def _fast_generation_config() -> GenerationConfig:
+    """
+    急速模式：恢复旧版 pipeline 默认行为。
+    较低 octree/steps、无 dmc、无珠宝 prompt 与曲面后处理。
+    """
+    return GenerationConfig(
+        num_inference_steps=30,
+        guidance_scale=7.5,
+        octree_resolution=256,
+        num_chunks=8000,
+        mc_level=0.0,
+        mc_algo=None,
+        box_v=1.01,
+        jewelry_taubin_iterations=0,
+        jewelry_taubin_lambda=0.5,
+        jewelry_taubin_nu=-0.53,
+        jewelry_spike_aspect_ratio=80.0,
+        jewelry_min_face_area_ratio=0.0005,
+    )
+
+
+def resolve_generation_mode(mode: Optional[str] = None) -> GenerationModeSettings:
+    """
+    解析生成模式。缺省 quality，保持向后兼容（当前高质量默认）。
+    支持: fast / quality（及中文别名 急速 / 高质量）。
+    """
+    if mode is not None and hasattr(mode, "value"):
+        mode = mode.value
+    normalized = (str(mode) if mode else "quality").strip().lower()
+    if normalized in ("fast", "speed", "急速", "快速"):
+        return GenerationModeSettings(
+            config=_fast_generation_config(),
+            apply_jewelry_prompt=False,
+            apply_jewelry_mesh_finish=True,
+            apply_jewelry_repair_smooth=False,
+        )
+
+    return GenerationModeSettings(
+        config=get_config().generation,
+        apply_jewelry_prompt=True,
+        apply_jewelry_mesh_finish=True,
+        apply_jewelry_repair_smooth=True,
+    )
+
+
+@dataclass
 class ModelConfig:
     """模型配置"""
     version: str = "mini"              # 模型版本: mini / standard / turbo
@@ -87,8 +196,38 @@ class ServiceConfig:
     inlay_db_path: str = "./镶嵌结构数据库/"  # 镶嵌结构数据库路径
     max_upload_size: int = 50 * 1024 * 1024  # 最大上传文件大小（50MB）
     task_timeout: int = 600            # 任务超时时间（秒）
-    max_concurrent_tasks: int = 3      # 最大并发任务数
+    max_concurrent_tasks: int = 8      # 最大并行任务数（验证/后处理可并行；GPU 仍串行）
+    max_concurrent_gpu_jobs: int = 1   # GPU 推理并发上限（Hunyuan3D 非线程安全，固定为 1）
     track_a_geometry_only: bool = True  # 轨道A默认纯几何（不调用 Paint 纹理）
+    require_gpu: bool = True            # 强制 GPU；False 仅紧急 CPU
+
+
+@dataclass
+class AlignmentConfig:
+    """镶嵌对齐算法配置（CASA / ring-frame）"""
+    alignment_mode: str = "casa"  # casa | ring_frame
+    casa_soft_accept: bool = False
+    casa_min_peak_ratio: float = 0.15
+    casa_min_pose_confidence: float = 0.12
+    casa_scale_min: float = 0.05
+    casa_scale_max: float = 50.0
+    casa_ratio_std_max: float = 0.45
+    casa_min_inlay_overlap_ratio: float = 0.98
+    casa_overlap_sample_count: int = 6000
+
+
+@dataclass
+class GemRepaintConfig:
+    """宝石去反光 AI 重绘配置"""
+    enabled: bool = True
+    model_path: str = "./models/instruct-pix2pix"
+    default_strength: float = 0.45
+    default_mask_dilate: int = 8
+    default_seed: Optional[int] = 42
+    default_prompt: str = (
+        "make the gemstone matte and diffuse, remove specular highlights, "
+        "keep facet structure and color, do not change metal or prongs"
+    )
 
 
 @dataclass
@@ -97,6 +236,8 @@ class AppConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
     service: ServiceConfig = field(default_factory=ServiceConfig)
+    gem_repaint: GemRepaintConfig = field(default_factory=GemRepaintConfig)
+    alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
     gpu_info: Optional[GPUInfo] = None
     recommendation: Optional[ModelRecommendation] = None
 
@@ -263,16 +404,103 @@ def _load_service_config() -> ServiceConfig:
 
     geo_env = os.environ.get(ENV_TRACK_A_GEOMETRY_ONLY, "true").lower()
     config.track_a_geometry_only = geo_env in ("true", "1", "yes")
+    config.require_gpu = is_require_gpu()
+
+    tasks_env = os.environ.get(ENV_MAX_CONCURRENT_TASKS, "").strip()
+    if tasks_env.isdigit():
+        config.max_concurrent_tasks = max(1, min(32, int(tasks_env)))
+
+    gpu_jobs_env = os.environ.get(ENV_MAX_CONCURRENT_GPU_JOBS, "").strip()
+    if gpu_jobs_env.isdigit():
+        config.max_concurrent_gpu_jobs = max(1, min(4, int(gpu_jobs_env)))
 
     logger.info(
         f"服务配置: 地址={config.host}:{config.port}, "
         f"日志级别={config.log_level}, "
         f"输出目录={config.output_dir}, "
         f"镶嵌数据库={config.inlay_db_path}, "
-        f"轨道A纯几何={config.track_a_geometry_only}"
+        f"轨道A纯几何={config.track_a_geometry_only}, "
+        f"REQUIRE_GPU={config.require_gpu}, "
+        f"max_concurrent_tasks={config.max_concurrent_tasks}, "
+        f"max_concurrent_gpu_jobs={config.max_concurrent_gpu_jobs}"
     )
 
     return config
+
+
+def _load_gem_repaint_config() -> GemRepaintConfig:
+    cfg = GemRepaintConfig()
+
+    enabled_env = os.environ.get(ENV_ENABLE_GEM_REPAINT, "1").strip().lower()
+    cfg.enabled = enabled_env in ("1", "true", "yes", "on")
+
+    raw_path = os.environ.get(ENV_GEM_REPAINT_MODEL_PATH, cfg.model_path)
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = (Path.cwd() / candidate).resolve()
+    cfg.model_path = str(candidate)
+
+    strength_env = os.environ.get(ENV_GEM_REPAINT_STRENGTH, "").strip()
+    if strength_env:
+        try:
+            cfg.default_strength = float(max(0.1, min(1.0, float(strength_env))))
+        except ValueError:
+            pass
+
+    dilate_env = os.environ.get(ENV_GEM_REPAINT_MASK_DILATE, "").strip()
+    if dilate_env.isdigit():
+        cfg.default_mask_dilate = max(0, min(32, int(dilate_env)))
+
+    seed_env = os.environ.get(ENV_GEM_REPAINT_SEED, "").strip()
+    if seed_env.lstrip("-").isdigit():
+        cfg.default_seed = int(seed_env)
+
+    logger.info(
+        "宝石重绘配置: enabled=%s model_path=%s strength=%.2f dilate=%d seed=%s",
+        cfg.enabled,
+        cfg.model_path,
+        cfg.default_strength,
+        cfg.default_mask_dilate,
+        cfg.default_seed,
+    )
+    return cfg
+
+
+def _load_alignment_config() -> AlignmentConfig:
+    cfg = AlignmentConfig()
+
+    mode = os.environ.get(ENV_ALIGNMENT_MODE, cfg.alignment_mode).strip().lower()
+    if mode in ("casa", "ring_frame", "ring-frame", "legacy"):
+        cfg.alignment_mode = "ring_frame" if mode in ("ring_frame", "ring-frame", "legacy") else "casa"
+
+    soft_env = os.environ.get(ENV_CASA_SOFT_ACCEPT, "false").strip().lower()
+    cfg.casa_soft_accept = soft_env in ("1", "true", "yes", "on")
+
+    peak_env = os.environ.get(ENV_CASA_MIN_PEAK_RATIO, "").strip()
+    if peak_env:
+        try:
+            cfg.casa_min_peak_ratio = float(max(0.0, min(1.0, float(peak_env))))
+        except ValueError:
+            pass
+
+    overlap_env = os.environ.get(ENV_CASA_MIN_INLAY_OVERLAP_RATIO, "").strip()
+    if overlap_env:
+        try:
+            cfg.casa_min_inlay_overlap_ratio = float(
+                max(0.5, min(1.0, float(overlap_env)))
+            )
+        except ValueError:
+            pass
+
+    logger.info(
+        "对齐配置: mode=%s casa_soft_accept=%s min_peak_ratio=%.2f "
+        "min_inlay_overlap=%.2f",
+        cfg.alignment_mode,
+        cfg.casa_soft_accept,
+        cfg.casa_min_peak_ratio,
+        cfg.casa_min_inlay_overlap_ratio,
+    )
+    return cfg
 
 
 def load_config() -> AppConfig:
@@ -295,9 +523,18 @@ def load_config() -> AppConfig:
     # 加载服务配置
     app_config.service = _load_service_config()
 
+    # 宝石去反光重绘
+    app_config.gem_repaint = _load_gem_repaint_config()
+
+    # 镶嵌对齐（CASA / ring-frame）
+    app_config.alignment = _load_alignment_config()
+
     # 保存GPU信息
     app_config.gpu_info = detect_gpu()
     app_config.recommendation = get_recommended_model(app_config.gpu_info)
+
+    # 强制 GPU：配置阶段即失败退出，避免后续静默 CPU
+    assert_cuda_available("load_config")
 
     # 确保输出目录存在
     os.makedirs(app_config.service.output_dir, exist_ok=True)
@@ -305,6 +542,7 @@ def load_config() -> AppConfig:
     logger.info("=" * 60)
     logger.info("应用配置加载完成")
     logger.info(f"  GPU: {app_config.gpu_info.gpu_name} ({app_config.gpu_info.vram_gb}GB)")
+    logger.info(f"  REQUIRE_GPU: {app_config.service.require_gpu}")
     logger.info(f"  模型版本: {app_config.model.version}")
     logger.info(f"  服务端口: {app_config.service.port}")
     logger.info("=" * 60)

@@ -18,8 +18,25 @@ from app.services.multi_view import (
     MV_SHAPE_SUBDIRS,
     MV_REPO_DIR,
 )
+from app.config import assert_cuda_available, is_require_gpu
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_inference_device() -> str:
+    """
+    解析推理设备。REQUIRE_GPU=1 时 CUDA 不可用则非零退出，禁止静默 CPU。
+    """
+    import torch
+
+    assert_cuda_available("model_manager")
+    if torch.cuda.is_available():
+        return "cuda"
+    if is_require_gpu():
+        # assert 已处理；兜底
+        raise SystemExit(1)
+    logger.warning("CUDA 不可用，REQUIRE_GPU=0，使用 CPU（极慢）")
+    return "cpu"
 
 
 class ModelManager:
@@ -110,7 +127,8 @@ class ModelManager:
 
                 if success:
                     self._loaded = True
-                    self._current_version = self._model_config.version
+                    if self._current_version is None:
+                        self._current_version = self._model_config.version
                     self._last_load_error = None
                     logger.info(f"模型加载成功: {self._current_version}")
                 else:
@@ -157,7 +175,7 @@ class ModelManager:
         if local_shape:
             repo_root = str(Path(local_shape).parent)
             logger.info("检测到本地 ShapeGen 权重: %s", local_shape)
-            return self._load_from_local(repo_root)
+            return self._load_from_local(repo_root, shape_path=local_shape)
 
         if config.offline_mode:
             self._last_load_error = (
@@ -197,25 +215,32 @@ class ModelManager:
                 return cand
         return model_path
 
-    def _load_from_local(self, model_path: str) -> bool:
+    def _load_from_local(
+        self, model_path: str, shape_path: Optional[str] = None
+    ) -> bool:
         """
         从本地路径加载模型
+
+        shape_path: 已探测到的 ShapeGen 权重目录；传入时跳过按版本名的二次解析，
+                    避免 MODEL_VERSION=standard/turbo 时误落到仓库根目录。
         """
         try:
             import torch
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = _resolve_inference_device()
             dtype = torch.float16 if (
                 self._model_config.use_fp16 and device == "cuda"
             ) else torch.float32
 
             logger.info(f"加载设备: {device}, 数据类型: {dtype}")
 
-            shape_path = self._resolve_shape_subpath(model_path)
-            logger.info(f"形状模型路径: {shape_path}")
+            resolved_shape = shape_path or self._resolve_shape_subpath(model_path)
+            logger.info(f"形状模型路径: {resolved_shape}")
 
-            if not self._load_shape_gen_from_path(shape_path):
+            if not self._load_shape_gen_from_path(resolved_shape):
                 return False
+
+            self._current_version = self._infer_shape_version_from_path(resolved_shape)
 
             # 纹理模型（可选，mini 仓库无 paint，需完整版仓库）
             paint_candidates = [
@@ -251,7 +276,7 @@ class ModelManager:
         try:
             import torch
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = _resolve_inference_device()
             dtype = torch.float16 if (
                 self._model_config.use_fp16 and device == "cuda"
             ) else torch.float32
@@ -326,6 +351,12 @@ class ModelManager:
 
         self._loaded = False
         self._current_version = None
+
+    def unload_model(self) -> None:
+        """卸载 Hunyuan3D 模型，释放 GPU 显存（供预处理重绘错峰使用）。"""
+        with self._model_lock:
+            if self._loaded or self._models:
+                self._unload_models()
 
     def get_model(self, model_name: str = "shape_gen"):
         """
@@ -429,7 +460,7 @@ class ModelManager:
             import torch
             from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = _resolve_inference_device()
             dtype = torch.float16 if (
                 self._model_config.use_fp16 and device == "cuda"
             ) else torch.float32

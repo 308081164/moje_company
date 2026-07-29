@@ -30,6 +30,12 @@ public class TaskViewDto {
     @JsonProperty("result_file")
     private String resultFile;
 
+    @JsonProperty("preview_url")
+    private String previewUrl;
+
+    @JsonProperty("input_preview_url")
+    private String inputPreviewUrl;
+
     @JsonProperty("error_message")
     private String errorMessage;
 

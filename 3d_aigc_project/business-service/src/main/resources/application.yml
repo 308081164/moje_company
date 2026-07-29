@@ -4,23 +4,93 @@ server:
 # AI推理服务配置
 ai-service:
   base-url: http://localhost:8855
-  # AI 服务生成文件的本地目录（与 ai-service 的 OUTPUT_DIR 对应）
   output-dir: ../ai-service/outputs
-  # Docker内部部署时使用: http://ai-service:8855
 
-# 镶嵌结构数据库路径配置
+# 云端宝石去反光（通义万相 / DashScope）
+gem:
+  repaint:
+    provider: ${GEM_REPAINT_PROVIDER:wanx}
+    primary-model: ${GEM_REPAINT_PRIMARY_MODEL:wanx2.1-imageedit}
+    fallback-enabled: ${GEM_REPAINT_FALLBACK_ENABLED:false}
+    timeout-seconds: ${GEM_REPAINT_TIMEOUT_SECONDS:90}
+    default-strength: ${GEM_REPAINT_STRENGTH:0.20}
+    default-mask-dilate-px: ${GEM_REPAINT_MASK_DILATE:8}
+    default-prompt: "${GEM_REPAINT_DEFAULT_PROMPT:修改戒指主石宝石的表面光影：将镜面反光和过曝高光改为柔和自然的哑光漫反射（matte, non-reflective, diffuse gem surface, jewelry product photo style）；禁止生成镜面高光、玻璃质感、强烈镜面反射（no mirror highlights, no glass reflection, no specular shine）；宝石必须完整保留在原位置，保持原有形状、体积、颜色、透明度和切面结构；严禁删除、擦除、镂空或移除宝石；金属爪镶、戒圈与背景完全不变。}"
+    default-mask-prompt: "${GEM_REPAINT_DEFAULT_MASK_PROMPT:在蒙版区域内，将宝石表面镜面反光和过曝高光改为柔和自然的哑光漫反射（matte, non-reflective, diffuse gem surface, jewelry product photo style）；禁止生成镜面高光、玻璃质感、强烈镜面反射（no mirror highlights, no glass reflection, no specular shine）；保持宝石原有颜色、透明度、切面结构与形状，不要生成空白或镂空。}"
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
+
+# 镶嵌结构数据库路径配置（v1 legacy，仅一次性迁移 scan-legacy / rehydrate 使用）
 inlay-db:
-  path: ../镶嵌结构数据库
+  path: ../镶嵌结构数据库  # 仅 scan-legacy / rehydrate 一次性迁移使用
 
-# 文件存储配置（相对路径基于 business-service 启动目录解析为绝对路径）
+# 镶嵌库 v2 配置
+inlay-v2:
+  enabled: true
+  mesh-crop-jcd-enabled: true
+  legacy-fallback: false
+  v1-index-enabled: false
+  cache-dir: uploads/inlay_cache
+  storage:
+    mode: local          # local | minio
+    local-root: uploads/inlay-storage
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    source-bucket: inlay-source
+    mesh-bucket: inlay-mesh
+    preview-bucket: inlay-preview
+  queue:
+    type: memory         # memory | redis
+    worker-threads: 2
+    poll-interval-ms: 30000
+  cache:
+    thumbnail-max-age: 86400
+    mesh-max-age: 3600
+    immutable-thumbnails: true
+
+# 文件存储配置
 file:
   upload-dir: uploads
   output-dir: outputs
+
+# 3D 生成任务对象存储（默认本地；full profile 切换为 MinIO）
+generate:
+  storage:
+    mode: local
+    local-root: uploads/generate-storage
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    input-bucket: generate-input
+    output-bucket: generate-output
 
 # Spring应用配置
 spring:
   application:
     name: jewelry3d-business-service
+  datasource:
+    # 本地开发默认 SQLite；生产可改为 PostgreSQL
+    url: jdbc:sqlite:./data/inlay-catalog.db
+    driver-class-name: org.sqlite.JDBC
+    # url: jdbc:postgresql://localhost:5432/jewelry3d
+    # driver-class-name: org.postgresql.Driver
+    # username: jewelry
+    # password: jewelry
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+        # dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
   servlet:
     multipart:
       max-file-size: 100MB
@@ -29,8 +99,12 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
+  # Redis（仅 inlay-v2.queue.type=redis 时需要）
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
-# 日志配置
 logging:
   level:
     com.moje.jewelry3d: INFO

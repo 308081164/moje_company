@@ -1,0 +1,37 @@
+# Docker 完整栈配置（PostgreSQL + MinIO + Redis）
+# 激活方式：SPRING_PROFILES_ACTIVE=docker,docker-full
+# 需同时启动 compose profile：full
+
+inlay-v2:
+  storage:
+    mode: minio
+    endpoint: http://minio:9000
+  queue:
+    type: redis
+
+generate:
+  storage:
+    mode: minio
+    local-root: /app/generate-storage
+    endpoint: http://minio:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    input-bucket: generate-input
+    output-bucket: generate-output
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/jewelry3d
+    driver-class-name: org.postgresql.Driver
+    username: jewelry
+    password: ${POSTGRES_PASSWORD:jewelry}
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  autoconfigure:
+    exclude: []
+  data:
+    redis:
+      host: redis
+      port: 6379

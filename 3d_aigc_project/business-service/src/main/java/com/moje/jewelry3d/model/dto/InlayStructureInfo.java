@@ -35,4 +35,7 @@ public class InlayStructureInfo {
 
     /** 是否可直接用于融合（OBJ/GLB/STL 或 JCD 带伴生 mesh） */
     private boolean meshReady;
+
+    /** 是否为主记录（非 JCD 伴生 mesh 重复项） */
+    private boolean primaryRecord = true;
 }

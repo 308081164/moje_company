@@ -14,10 +14,10 @@ export default defineConfig({
   server: {
     port: 8853,
     host: '0.0.0.0',
-    // API代理：将 /api 请求转发到后端业务服务
+    // API代理：本地开发 localhost；Docker dev 模式用 VITE_API_PROXY_TARGET
     proxy: {
       '/api': {
-        target: 'http://localhost:8854',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:8854',
         changeOrigin: true,
       },
     },
