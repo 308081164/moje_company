@@ -35,6 +35,12 @@ const router = createRouter({
       component: () => import('@/views/MeshConvertView.vue'),
       meta: { title: '格式转换' },
     },
+    {
+      path: '/debug',
+      name: 'debug',
+      component: () => import('@/views/DebugStudioView.vue'),
+      meta: { title: '对齐调试' },
+    },
   ],
 })
 

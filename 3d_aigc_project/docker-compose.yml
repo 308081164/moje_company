@@ -81,6 +81,8 @@ services:
       args:
         # 默认 CUDA PyTorch；紧急 CPU 见 docker-compose.cpu.yml
         TORCH_INDEX: https://download.pytorch.org/whl/cu121
+        ENABLE_DMC: ${ENABLE_DMC:-1}
+        TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-8.9}
     container_name: 3d-aigc-ai-service
     ports:
       - "${AI_SERVICE_PORT:-8855}:8855"
@@ -101,6 +103,15 @@ services:
       MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-8}
       MAX_CONCURRENT_GPU_JOBS: ${MAX_CONCURRENT_GPU_JOBS:-1}
       ENABLE_GEM_REPAINT: ${ENABLE_GEM_REPAINT:-0}
+      ENABLE_CAD_REVERSE: ${ENABLE_CAD_REVERSE:-1}
+      ULTRA_CAD_ENABLED: ${ULTRA_CAD_ENABLED:-1}
+      GEN_ULTRA_OCTREE_RESOLUTION: ${GEN_ULTRA_OCTREE_RESOLUTION:-512}
+      GEN_ULTRA_INFERENCE_STEPS: ${GEN_ULTRA_INFERENCE_STEPS:-65}
+      ULTRA_FIT_TOLERANCE_MM: ${ULTRA_FIT_TOLERANCE_MM:-0.08}
+      ULTRA_MAX_SURFACES: ${ULTRA_MAX_SURFACES:-60}
+      USE_OMNI_CONDITIONING: ${USE_OMNI_CONDITIONING:-true}
+      OMNI_MODEL_PATH: ${OMNI_MODEL_PATH:-/app/models/hunyuan3d-omni}
+      CASA_MIN_INLAY_OVERLAP_RATIO: ${CASA_MIN_INLAY_OVERLAP_RATIO:-0.80}
       PYTHONUNBUFFERED: "1"
     volumes:
       - ${MODELS_PATH:-./models}:/app/models:ro

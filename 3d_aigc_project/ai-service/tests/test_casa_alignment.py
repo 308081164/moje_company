@@ -38,10 +38,18 @@ def _make_setting_blob(center, size: float = 2.5):
     return box
 
 
-def _build_inlay_target(major_r: float = 10.0):
+def _build_inlay_target(major_r: float = 10.0, setting_size: float = 2.0):
     shank = _make_torus_ring(major_r=major_r, minor_r=1.0)
     tip = np.array([0.0, major_r + 2.0, 0.0])
-    setting = _make_setting_blob(tip, size=2.0)
+    setting = _make_setting_blob(tip, size=setting_size)
+    return trimesh.util.concatenate([shank, setting])
+
+
+def _build_prong_only_inlay(major_r: float = 10.0):
+    """小 shank + 大 setting，模拟 prong-only 测量场景。"""
+    shank = _make_torus_ring(major_r=major_r, minor_r=0.55, sections=36)
+    tip = np.array([0.0, major_r + 2.5, 0.0])
+    setting = _make_setting_blob(tip, size=5.5)
     return trimesh.util.concatenate([shank, setting])
 
 
@@ -100,7 +108,6 @@ class TestCasaAlignmentHelpers(unittest.TestCase):
             ai, shank, fi, M_pose, clearance_mm=0.05
         )
         tgt_d = float(fi["diameter"])
-        # Scale should be O(tgt_d), not O(tgt_d/src_d) after normalization.
         self.assertGreater(s, tgt_d * 0.35)
         self.assertLess(s, tgt_d * 2.5)
         if p2.get("fallback") == "diameter_ratio":
@@ -124,7 +131,6 @@ class TestCasaAlignmentHelpers(unittest.TestCase):
                 ai, shank, fi, M_pose, clearance_mm=0.05
             )
             tgt_d = float(fi["diameter"])
-            # After T_norm in M_pose, scale should restore target ring diameter (~tgt_d).
             self.assertGreater(s, tgt_d * 0.35)
             self.assertLess(s, tgt_d * 2.5)
             if int(p2.get("n_valid_sectors", 0)) >= 6:
@@ -160,6 +166,68 @@ class TestCasaAlignmentHelpers(unittest.TestCase):
         self.assertGreater(ratio_ok, ratio_bad)
         self.assertLess(ratio_bad, 0.5)
         self.assertEqual(info_ok.get("region"), "shank_inner_wall")
+
+    def test_prong_refine_reaches_80_percent_overlap(self):
+        inlay = _build_prong_only_inlay(major_r=11.0)
+        ai = inlay.copy()
+        ai.apply_translation([0.15, -0.12, 0.08])
+        ai.apply_transform(
+            trimesh.transformations.rotation_matrix(
+                np.radians(3.5), [0.0, 0.0, 1.0], point=[0.0, 0.0, 0.0]
+            )
+        )
+        shank, setting = self.processor._split_shank_and_setting(inlay)
+        fi0 = self.processor._estimate_ring_frame(shank)
+        up = self.processor._geometric_setting_up(fi0, setting)
+        fi = self.processor._frame_with_up(fi0, up)
+        ring_M, ring_info = self.processor._compute_ring_alignment_transform(ai, inlay)
+        self.assertIsNotNone(ring_M, msg=f"ring-frame init failed: {ring_info}")
+        refined_M, info = self.processor._refine_alignment_inlay_overlap(
+            ai,
+            inlay,
+            shank,
+            setting,
+            fi,
+            ring_M,
+            full_ring=False,
+            target_ratio=0.80,
+        )
+        self.assertGreaterEqual(float(info.get("overlap_after", 0.0)), 0.80)
+        self.assertIsNotNone(refined_M)
+
+    def test_rescue_fixes_inverted_head_overlap(self):
+        inlay = _build_inlay_target(major_r=11.0)
+        ai = _build_ai_source(major_r=11.0, scale=0.45, roll_deg=35.0)
+        shank, setting = self.processor._split_shank_and_setting(inlay)
+        fi0 = self.processor._estimate_ring_frame(shank)
+        up = self.processor._geometric_setting_up(fi0, setting)
+        fi = self.processor._frame_with_up(fi0, up)
+        ring_M, _ = self.processor._compute_ring_alignment_transform(ai, inlay)
+        self.assertIsNotNone(ring_M)
+        flip = self.processor._rotation_about_axis_matrix(
+            np.asarray(fi["axis"], dtype=np.float64),
+            np.asarray(fi["center"], dtype=np.float64),
+            np.pi,
+        )
+        bad_M = flip @ ring_M
+        before = self.processor._eval_alignment_pose_metrics(
+            ai, inlay, shank, setting, fi, bad_M
+        )
+        self.assertLess(float(before.get("up_cos", 1.0)), 0.0)
+        rescued_M, rescue_info = self.processor._rescue_poor_alignment_pose(
+            ai,
+            inlay,
+            shank,
+            setting,
+            fi,
+            bad_M,
+            full_ring=False,
+        )
+        after = rescue_info.get("after") or {}
+        self.assertTrue(rescue_info.get("rescued"))
+        self.assertGreaterEqual(float(after.get("up_cos", -1.0)), 0.25)
+        self.assertGreaterEqual(float(after.get("overlap", 0.0)), 0.80)
+        self.assertIsNotNone(rescued_M)
 
     def test_pick_casa_scale_by_overlap_smoke(self):
         inlay = _build_inlay_target(major_r=11.0)
@@ -201,6 +269,7 @@ class TestCasaAlignmentIntegration(unittest.TestCase):
             casa_soft_accept=False,
             casa_min_peak_ratio=0.08,
             casa_min_pose_confidence=0.08,
+            casa_min_inlay_overlap_ratio=0.80,
         )
         self.processor._get_alignment_config = lambda: self._align_cfg
 
@@ -236,7 +305,7 @@ class TestCasaAlignmentIntegration(unittest.TestCase):
         overlap = float(info.get("inlay_overlap_ratio", 0.0))
         if info.get("method") == "casa":
             self.assertLess(float(fq.get("diam_ratio", 999)), 1.6)
-            self.assertGreaterEqual(overlap, 0.98)
+            self.assertGreaterEqual(overlap, 0.80)
 
     def test_casa_align_large_ai(self):
         _, _, info = self._run_align(ai_scale=4.0, roll_deg=-25.0)
@@ -249,16 +318,52 @@ class TestCasaAlignmentIntegration(unittest.TestCase):
         if casa.get("ok"):
             ang = (casa.get("angular_gap") or {}).get("max_protrusion_mm", 0.0)
             self.assertLess(float(ang), 2.0)
-            self.assertGreaterEqual(overlap, 0.98)
+            self.assertGreaterEqual(overlap, 0.80)
 
     def test_overlap_gate_reports_ratio_after_successful_align(self):
         _, _, info = self._run_align(ai_scale=1.0, roll_deg=0.0)
         overlap = float(info.get("inlay_overlap_ratio", 0.0))
-        self.assertGreaterEqual(overlap, 0.98)
+        self.assertGreaterEqual(overlap, 0.80)
         self.assertIn(info.get("inlay_overlap_final", {}).get("region"), (
             "shank_inner_wall",
             "shank",
         ))
+
+    def test_overlap_gate_failed_does_not_raise(self):
+        """Soft gate: 未达 80% 仍返回对齐结果并标记 overlap_gate_failed。"""
+        inlay = _build_inlay_target(major_r=11.0)
+        ai = _build_ai_source(major_r=11.0, scale=0.12, roll_deg=40.0)
+        inlay_path = os.path.join(self._tmpdir, "inlay_gate.glb")
+        ai_path = os.path.join(self._tmpdir, "ai_gate.glb")
+        out_path = os.path.join(self._tmpdir, "aligned_gate.glb")
+        inlay.export(inlay_path)
+        ai.export(ai_path)
+        path, _, info = self.processor.align_generated_to_base(
+            ai_path,
+            inlay_path,
+            out_path,
+            enable_icp=False,
+        )
+        self.assertTrue(os.path.isfile(path))
+        overlap = float(info.get("inlay_overlap_ratio", 1.0))
+        if overlap < 0.80:
+            self.assertTrue(info.get("overlap_gate_failed"))
+        else:
+            self.assertFalse(info.get("overlap_gate_failed"))
+
+    def test_ring_frame_fallback_applies_overlap_refine(self):
+        strict = AlignmentConfig(
+            alignment_mode="casa",
+            casa_soft_accept=False,
+            casa_min_peak_ratio=0.99,
+            casa_min_pose_confidence=0.99,
+            casa_min_inlay_overlap_ratio=0.80,
+        )
+        self.processor._get_alignment_config = lambda: strict
+        _, _, info = self._run_align(ai_scale=0.35, roll_deg=12.0)
+        if info.get("method") == "ring_frame_fallback":
+            refine = info.get("overlap_refine_ring_frame") or {}
+            self.assertIn("overlap_after", refine)
 
 
 if __name__ == "__main__":

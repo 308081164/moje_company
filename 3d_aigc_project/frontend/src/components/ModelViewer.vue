@@ -48,6 +48,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { sniffMeshFormatFromBuffer } from '@/utils/meshFormat'
 
 // ==========================================
 // Props & Emits
@@ -114,6 +115,7 @@ const EDGE_OVERLAY_NAME = 'preview-edge-overlay'
 const glbBufferCache = new Map<string, ArrayBuffer>()
 const GLB_FETCH_MAX_RETRIES = 3
 const GLB_FETCH_RETRY_BASE_MS = 700
+const MESH_FETCH_TIMEOUT_MS = 120_000
 
 const CAMERA_FOV = 50
 /** 初始适配时在包围球距离上额外留白，避免巨型模型贴边 */
@@ -648,15 +650,30 @@ async function loadModel(url: string, format: string) {
     let model: THREE.Group
 
     const normalizedFormat = format.toUpperCase()
+    let effectiveFormat = normalizedFormat
 
     if (normalizedFormat === 'GLB') {
       model = await loadGLB(url)
-    } else if (normalizedFormat === 'OBJ') {
-      model = await loadOBJ(url)
-    } else if (normalizedFormat === 'STL') {
-      model = await loadSTL(url)
     } else {
-      throw new Error(`不支持的模型格式: ${format}`)
+      const buffer = await fetchMeshBuffer(url)
+      const sniffed = sniffMeshFormatFromBuffer(buffer)
+      if (sniffed && sniffed !== normalizedFormat) {
+        console.warn(
+          `模型格式声明为 ${normalizedFormat}，实际内容为 ${sniffed}，已自动纠正`,
+        )
+        effectiveFormat = sniffed
+      }
+      if (effectiveFormat === 'OBJ') {
+        model = await parseOBJBuffer(buffer)
+      } else if (effectiveFormat === 'STL') {
+        model = await parseSTLBuffer(buffer)
+      } else if (normalizedFormat === 'OBJ') {
+        model = await parseOBJBuffer(buffer)
+      } else if (normalizedFormat === 'STL') {
+        model = await parseSTLBuffer(buffer)
+      } else {
+        throw new Error(`不支持的模型格式: ${format}`)
+      }
     }
 
     // 计算模型边界并居中
@@ -741,6 +758,34 @@ async function fetchGlbBuffer(url: string): Promise<ArrayBuffer> {
   throw lastError ?? new Error('GLB 下载失败')
 }
 
+/** 下载 OBJ/STL（带超时；避免 URL 直载挂死） */
+async function fetchMeshBuffer(url: string): Promise<ArrayBuffer> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), MESH_FETCH_TIMEOUT_MS)
+  try {
+    const resp = await fetch(url, { credentials: 'include', signal: controller.signal })
+    if (!resp.ok) {
+      throw new Error(`模型下载失败 HTTP ${resp.status}`)
+    }
+    const buffer = await resp.arrayBuffer()
+    if (buffer.byteLength < 12) {
+      throw new Error('模型文件过小或为空')
+    }
+    const peek = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(120, buffer.byteLength)))
+    if (peek.trimStart().startsWith('{') && peek.includes('"code"')) {
+      throw new Error('下载接口返回了错误 JSON，模型可能不存在')
+    }
+    return buffer
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('模型下载超时，请稍后重试或先下载到本地查看')
+    }
+    throw err instanceof Error ? err : new Error(String(err))
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 function validateGlbBuffer(buffer: ArrayBuffer) {
   if (buffer.byteLength < 12) {
     throw new Error('预览文件过小，不是有效 GLB')
@@ -772,48 +817,38 @@ async function loadGLB(url: string): Promise<THREE.Group> {
   })
 }
 
-/** 加载STL模型 */
-function loadSTL(url: string): Promise<THREE.Group> {
+async function parseSTLBuffer(buffer: ArrayBuffer): Promise<THREE.Group> {
   return new Promise((resolve, reject) => {
     const loader = new STLLoader()
-    loader.load(
-      url,
-      (geometry) => {
-        geometry.computeVertexNormals()
-        const material = makePreviewMaterial({ color: WHITE_PREVIEW_COLOR })
-        const mesh = new THREE.Mesh(geometry, material)
-        const group = new THREE.Group()
-        group.add(mesh)
-        resolve(group)
-      },
-      undefined,
-      (err) => {
-        reject(new Error('STL模型加载失败: ' + (err.message || '未知错误')))
-      }
-    )
+    try {
+      const geometry = loader.parse(buffer)
+      geometry.computeVertexNormals()
+      const material = makePreviewMaterial({ color: WHITE_PREVIEW_COLOR })
+      const mesh = new THREE.Mesh(geometry, material)
+      const group = new THREE.Group()
+      group.add(mesh)
+      resolve(group)
+    } catch (err: any) {
+      reject(new Error('STL模型加载失败: ' + (err?.message || '解析错误')))
+    }
   })
 }
 
-/** 加载OBJ模型 */
-function loadOBJ(url: string): Promise<THREE.Group> {
+async function parseOBJBuffer(buffer: ArrayBuffer): Promise<THREE.Group> {
   return new Promise((resolve, reject) => {
     const loader = new OBJLoader()
-    loader.load(
-      url,
-      (obj) => {
-        // 为OBJ模型添加默认材质
-        obj.traverse((child) => {
-          if (child instanceof THREE.Mesh && !child.material) {
-            child.material = makePreviewMaterial({ color: WHITE_PREVIEW_COLOR })
-          }
-        })
-        resolve(obj)
-      },
-      undefined,
-      (err) => {
-        reject(new Error('OBJ模型加载失败: ' + (err.message || '未知错误')))
-      }
-    )
+    try {
+      const text = new TextDecoder().decode(buffer)
+      const obj = loader.parse(text)
+      obj.traverse((child) => {
+        if (child instanceof THREE.Mesh && !child.material) {
+          child.material = makePreviewMaterial({ color: WHITE_PREVIEW_COLOR })
+        }
+      })
+      resolve(obj)
+    } catch (err: any) {
+      reject(new Error('OBJ模型加载失败: ' + (err?.message || '解析错误')))
+    }
   })
 }
 

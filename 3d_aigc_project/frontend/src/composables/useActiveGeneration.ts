@@ -69,10 +69,12 @@ async function pollOnce(taskId: string) {
       clearPersistedTaskId()
       taskProgress.value = 100
       onCompleteHandlers.forEach((handler) => handler(detail))
-    } else if (detail.status === 'failed') {
+    } else if (detail.status === 'failed' || detail.status === 'cancelled') {
       stopActiveTaskPolling()
       clearPersistedTaskId()
-      onFailedHandlers.forEach((handler) => handler(detail))
+      if (detail.status === 'failed') {
+        onFailedHandlers.forEach((handler) => handler(detail))
+      }
     }
   } catch {
     console.warn('轮询任务状态失败')
@@ -128,6 +130,26 @@ export function clearActiveTask() {
   taskProgress.value = 0
 }
 
+/** 终止轮询并保留任务详情（如用户取消后展示「已取消」状态） */
+export function settleActiveTask(detail: TaskDetail) {
+  stopActiveTaskPolling()
+  clearPersistedTaskId()
+  activeTask.value = detail
+  if (detail.status === 'completed') {
+    taskProgress.value = 100
+  } else if (detail.status === 'cancelled' || detail.status === 'failed') {
+    taskProgress.value = 0
+  }
+}
+
+/** 若删除的任务正是首页轮询中的活跃任务，停止轮询 */
+export function clearActiveTaskIfMatch(taskId: string) {
+  const persisted = readPersistedTaskId()
+  if (persisted === taskId || pollingTaskId === taskId) {
+    clearActiveTask()
+  }
+}
+
 export function useActiveGeneration() {
   const isGenerating = computed(() => {
     const task = activeTask.value
@@ -142,6 +164,7 @@ export function useActiveGeneration() {
     stopPolling: stopActiveTaskPolling,
     resumePolling: resumeActiveTaskPolling,
     clearActiveTask,
+    settleActiveTask,
     isActiveTaskStatus,
   }
 }

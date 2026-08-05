@@ -50,6 +50,12 @@ def filter_views_for_hy3d(views: Dict[str, str]) -> Dict[str, str]:
     return {k: v for k, v in views.items() if k in HY3D_MV_FACES and v}
 
 
+def canonicalize_views_for_hy3d(views: Dict[str, str]) -> Dict[str, str]:
+    """Return hy3d views in MVImageProcessorV2 canonical order."""
+    filtered = filter_views_for_hy3d(views)
+    return {face: filtered[face] for face in HY3D_MV_FACES if face in filtered}
+
+
 def unsupported_view_keys(views: Dict[str, str]) -> List[str]:
     """返回已上传但 hy3dgen 暂不支持的视角键"""
     return [k for k in views if k not in HY3D_MV_FACES]

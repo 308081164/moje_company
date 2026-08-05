@@ -17,6 +17,7 @@ from app.routers.generate import router as generate_router
 from app.routers.mesh import router as mesh_router
 from app.routers.mesh_edit import router as mesh_edit_router
 from app.routers.preprocess import router as preprocess_router
+from app.routers.debug import router as debug_router
 from app.services.model_manager import get_model_manager
 from app.services.generator import get_generator_service
 from app.models.schemas import HealthResponse
@@ -177,6 +178,7 @@ app.include_router(generate_router)
 app.include_router(mesh_router)
 app.include_router(mesh_edit_router)
 app.include_router(preprocess_router)
+app.include_router(debug_router)
 
 
 # ============================================================
@@ -213,6 +215,12 @@ async def health_check():
     else:
         status = "ok_cpu"
 
+    from app.services.conditional_generator import verify_omni_pipeline_api
+    from app.config import dmc_surface_extractor_available
+
+    omni_report = verify_omni_pipeline_api()
+    dmc_available = dmc_surface_extractor_available()
+
     return HealthResponse(
         status=status,
         version="1.0.0",
@@ -226,6 +234,11 @@ async def health_check():
         gpu_active_task_id=concurrency["gpu_queue"].get("active_task_id"),
         max_concurrent_tasks=concurrency["max_concurrent_tasks"],
         max_concurrent_gpu_jobs=config.service.max_concurrent_gpu_jobs,
+        queue_depth=concurrency.get("queue_depth", 0),
+        gpu_job_running=concurrency.get("gpu_job_running", False),
+        omni_available=bool(omni_report.get("hy3dshape_available")),
+        omni_model_dir=omni_report.get("local_model_dir"),
+        dmc_available=dmc_available,
     )
 
 

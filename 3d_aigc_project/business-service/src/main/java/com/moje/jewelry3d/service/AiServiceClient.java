@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -318,7 +320,19 @@ public class AiServiceClient {
             String resultFormat,
             boolean multiViewEnabled,
             Map<String, String> viewPaths,
-            String generationMode
+            String generationMode,
+            String inlayType,
+            String gemType,
+            Float stoneDiameterMm,
+            Boolean useOmniConditioning,
+            String inlayGenStrategy,
+            Boolean applyInlayRenderCondition,
+            Boolean enableFastSizeAlign,
+            String fusionMethod,
+            Boolean enableInlayPostprocess,
+            Integer customTargetFaces,
+            Integer customOctreeResolution,
+            Integer customInferenceSteps
     ) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("task_id", taskId);
@@ -333,16 +347,87 @@ public class AiServiceClient {
         }
         if (settingMeshPath != null && !settingMeshPath.isBlank()) {
             body.put("setting_mesh_path", normalizePath(settingMeshPath));
-            // 分色双网格：前端「分色预览」依赖 COLOR_0 / inlay_structure+ai_generated
-            body.put("fusion_method", "colored_merge");
-            body.put("enable_mesh_fusion", true);
+            if (fusionMethod != null && !fusionMethod.isBlank()) {
+                body.put("fusion_method", fusionMethod);
+            }
+        }
+        body.put(
+                "enable_inlay_postprocess",
+                enableInlayPostprocess != null && enableInlayPostprocess
+        );
+        if (customTargetFaces != null) {
+            body.put("custom_target_faces", customTargetFaces);
+        }
+        if (customOctreeResolution != null) {
+            body.put("custom_octree_resolution", customOctreeResolution);
+        }
+        if (customInferenceSteps != null) {
+            body.put("custom_inference_steps", customInferenceSteps);
         }
         if (prompt != null && !prompt.isBlank()) {
             body.put("prompt", prompt);
         }
+        if (inlayType != null && !inlayType.isBlank()) {
+            body.put("inlay_type", inlayType);
+        }
+        if (gemType != null && !gemType.isBlank()) {
+            body.put("gem_type", gemType);
+        }
+        if (stoneDiameterMm != null && stoneDiameterMm > 0) {
+            body.put("stone_diameter_mm", stoneDiameterMm);
+        }
+        if (useOmniConditioning != null) {
+            body.put("use_omni_conditioning", useOmniConditioning);
+        }
+        if (inlayGenStrategy != null && !inlayGenStrategy.isBlank()) {
+            body.put("inlay_gen_strategy", inlayGenStrategy);
+        }
+        if (applyInlayRenderCondition != null) {
+            body.put("apply_inlay_render_condition", applyInlayRenderCondition);
+        }
+        if (enableFastSizeAlign != null) {
+            body.put("enable_fast_size_align", enableFastSizeAlign);
+        }
         body.put("result_format", resultFormat != null ? resultFormat.toLowerCase() : "glb");
         body.put("generation_mode", normalizeGenerationMode(generationMode));
         return postJson("/api/generate/image-to-3d", body);
+    }
+
+    /**
+     * 图片转 3D（向后兼容）
+     */
+    public JsonNode callImageTo3d(
+            String taskId,
+            String imagePath,
+            String settingMeshPath,
+            String prompt,
+            String resultFormat,
+            boolean multiViewEnabled,
+            Map<String, String> viewPaths,
+            String generationMode
+    ) {
+        return callImageTo3d(
+                taskId,
+                imagePath,
+                settingMeshPath,
+                prompt,
+                resultFormat,
+                multiViewEnabled,
+                viewPaths,
+                generationMode,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     /**
@@ -356,7 +441,11 @@ public class AiServiceClient {
             String resultFormat,
             String inlayType,
             String gemType,
-            String generationMode
+            String generationMode,
+            Boolean enableInlayPostprocess,
+            Integer customTargetFaces,
+            Integer customOctreeResolution,
+            Integer customInferenceSteps
     ) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("task_id", taskId);
@@ -373,10 +462,49 @@ public class AiServiceClient {
             body.put("gem_type", gemType);
         }
         body.put("enable_icp_alignment", true);
-        body.put("enable_mesh_fusion", true);
+        body.put(
+                "enable_inlay_postprocess",
+                enableInlayPostprocess != null && enableInlayPostprocess
+        );
         body.put("fusion_method", "colored_merge");
+        if (customTargetFaces != null) {
+            body.put("custom_target_faces", customTargetFaces);
+        }
+        if (customOctreeResolution != null) {
+            body.put("custom_octree_resolution", customOctreeResolution);
+        }
+        if (customInferenceSteps != null) {
+            body.put("custom_inference_steps", customInferenceSteps);
+        }
         body.put("generation_mode", normalizeGenerationMode(generationMode));
         return postJson("/api/generate/condition-generate", body);
+    }
+
+    /** @deprecated 请使用带 enableInlayPostprocess 的重载 */
+    public JsonNode callConditionGenerate(
+            String taskId,
+            String designImagePath,
+            String settingMeshPath,
+            String prompt,
+            String resultFormat,
+            String inlayType,
+            String gemType,
+            String generationMode
+    ) {
+        return callConditionGenerate(
+                taskId,
+                designImagePath,
+                settingMeshPath,
+                prompt,
+                resultFormat,
+                inlayType,
+                gemType,
+                generationMode,
+                false,
+                null,
+                null,
+                null
+        );
     }
 
     private static String normalizeGenerationMode(String generationMode) {
@@ -387,7 +515,32 @@ public class AiServiceClient {
         if ("fast".equals(mode) || "speed".equals(mode) || "急速".equals(mode) || "快速".equals(mode)) {
             return "fast";
         }
+        if ("custom".equals(mode) || "自定义".equals(mode)) {
+            return "custom";
+        }
+        if ("ultra".equals(mode) || "cad".equals(mode) || "step".equals(mode)
+                || "超高精度".equals(mode) || "ultra_cad".equals(mode)) {
+            return "ultra";
+        }
         return "quality";
+    }
+
+    private static boolean isUltraModeAlias(String generationMode) {
+        if (generationMode == null || generationMode.isBlank()) {
+            return false;
+        }
+        String mode = generationMode.trim().toLowerCase();
+        return "ultra".equals(mode) || "cad".equals(mode) || "step".equals(mode)
+                || "超高精度".equals(mode) || "ultra_cad".equals(mode);
+    }
+
+    public static void assertUltraModeAllowed(String generationMode) {
+        if (isUltraModeAlias(generationMode)) {
+            throw new com.moje.jewelry3d.common.BusinessException(
+                    503,
+                    "Ultra CAD 功能全面升级中，敬请期待"
+            );
+        }
     }
 
     /**
@@ -395,6 +548,13 @@ public class AiServiceClient {
      */
     public JsonNode getTaskStatus(String taskId) {
         return doGet("/api/generate/status/" + taskId);
+    }
+
+    /**
+     * 取消 AI 生成任务（删除进行中的任务时调用）
+     */
+    public JsonNode cancelTask(String taskId) {
+        return postJson("/api/generate/cancel/" + taskId, objectMapper.createObjectNode());
     }
 
     /**
@@ -409,6 +569,143 @@ public class AiServiceClient {
      */
     public JsonNode getSystemInfo() {
         return doGet("/api/generate/system-info");
+    }
+
+    // ============================================================
+    // Debug pipeline（逐步对齐调试）
+    // ============================================================
+
+    public JsonNode createDebugSession(
+            String sourceTaskId,
+            String rawMeshPath,
+            String inlayMeshPath,
+            String sessionId,
+            boolean enableIcp
+    ) {
+        return createDebugSession(
+                sourceTaskId, rawMeshPath, inlayMeshPath, sessionId, enableIcp, false
+        );
+    }
+
+    public JsonNode createDebugSession(
+            String sourceTaskId,
+            String rawMeshPath,
+            String inlayMeshPath,
+            String sessionId,
+            boolean enableIcp,
+            boolean enableAiPartSplit
+    ) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("source_task_id", sourceTaskId != null ? sourceTaskId : "");
+        body.put("raw_mesh_path", normalizePath(rawMeshPath));
+        body.put("inlay_mesh_path", normalizePath(inlayMeshPath));
+        if (sessionId != null && !sessionId.isBlank()) {
+            body.put("session_id", sessionId);
+        }
+        body.put("output_format", "glb");
+        body.put("enable_icp", enableIcp);
+        body.put("enable_ai_part_split", enableAiPartSplit);
+        return postJson("/api/debug/sessions", body);
+    }
+
+    public JsonNode createStandaloneDebugSession(
+            org.springframework.core.io.Resource rawMesh,
+            org.springframework.core.io.Resource inlayMesh,
+            boolean enableIcp,
+            boolean enableAiPartSplit,
+            String outputFormat
+    ) {
+        try {
+            String url = getBaseUrl() + "/api/debug/sessions/standalone";
+            org.springframework.util.LinkedMultiValueMap<String, Object> form =
+                    new org.springframework.util.LinkedMultiValueMap<>();
+            form.add("raw_mesh", rawMesh);
+            form.add("inlay_mesh", inlayMesh);
+            form.add("enable_icp", String.valueOf(enableIcp));
+            form.add("enable_ai_part_split", String.valueOf(enableAiPartSplit));
+            form.add("output_format", outputFormat != null ? outputFormat : "glb");
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            HttpEntity<org.springframework.util.MultiValueMap<String, Object>> entity =
+                    new HttpEntity<>(form, headers);
+
+            log.info("调用AI服务 POST {} standalone debug session", url);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return objectMapper.readTree(response.getBody());
+            }
+            throw new BusinessException("AI服务调用失败: HTTP " + response.getStatusCode());
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            String detail = extractFastApiDetail(e.getResponseBodyAsString());
+            int code = e.getStatusCode().value();
+            throw new BusinessException(code >= 400 && code < 500 ? code : 500, detail);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("调用AI standalone debug session 异常", e);
+            throw new BusinessException("AI服务调用异常: " + e.getMessage(), e);
+        }
+    }
+
+    public JsonNode runDebugStepDirect(
+            String stepId,
+            String rawMeshPath,
+            String inlayMeshPath,
+            JsonNode context,
+            boolean force
+    ) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("raw_mesh_path", normalizePath(rawMeshPath));
+        body.put("inlay_mesh_path", normalizePath(inlayMeshPath));
+        body.put("force", force);
+        if (context != null && !context.isNull()) {
+            body.set("context", context);
+        }
+        return postJson("/api/debug/steps/" + stepId + "/run", body);
+    }
+
+    public JsonNode getDebugSession(String sessionId) {
+        return doGet("/api/debug/sessions/" + sessionId);
+    }
+
+    public JsonNode runDebugStep(String sessionId, String stepId, boolean force) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("force", force);
+        return postJson("/api/debug/sessions/" + sessionId + "/steps/" + stepId + "/run", body);
+    }
+
+    public JsonNode confirmDebugStep(String sessionId, String stepId) {
+        ObjectNode body = objectMapper.createObjectNode();
+        return postJson("/api/debug/sessions/" + sessionId + "/steps/" + stepId + "/confirm", body);
+    }
+
+    public void deleteDebugSession(String sessionId) {
+        try {
+            String url = getBaseUrl() + "/api/debug/sessions/" + sessionId;
+            restTemplate.exchange(url, HttpMethod.DELETE, HttpEntity.EMPTY, String.class);
+        } catch (Exception e) {
+            log.warn("删除 AI debug session 失败 {}: {}", sessionId, e.getMessage());
+        }
+    }
+
+    public Path resolveDebugPreviewPath(String sessionId, String stepId) {
+        JsonNode session = getDebugSession(sessionId);
+        JsonNode steps = session.path("steps");
+        if (steps.isArray()) {
+            for (JsonNode step : steps) {
+                if (stepId.equals(step.path("id").asText())) {
+                    JsonNode result = step.path("result");
+                    String preview = result.path("preview_path").asText(null);
+                    if (preview != null && !preview.isBlank()) {
+                        return Paths.get(preview);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**

@@ -62,6 +62,33 @@
           <el-descriptions-item label="输出格式">
             {{ taskDetail.output_format || '-' }}
           </el-descriptions-item>
+          <el-descriptions-item label="生成模式">
+            <el-tag
+              :type="getGenerationModeTagType(taskDetail.generation_mode)"
+              round
+              size="small"
+            >
+              {{ getGenerationModeLabel(taskDetail.generation_mode) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="taskDetail.generation_mode === 'ultra' && taskDetail.cad_fit_score != null"
+            label="CAD 拟合评分"
+          >
+            <el-tag
+              :type="taskDetail.cad_fit_score >= 70 ? 'success' : 'warning'"
+              round
+              size="small"
+            >
+              {{ taskDetail.cad_fit_score }} / 100
+            </el-tag>
+            <span
+              v-if="taskDetail.cad_fit_score < 70"
+              class="cad-review-hint"
+            >
+              评分偏低，建议在 Rhino 中对 STEP 做 Patch 微调后再交付
+            </span>
+          </el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag
               :type="getStatusType(taskDetail.status)"
@@ -158,6 +185,14 @@
             >
               下载模型
             </el-button>
+            <el-button
+              v-if="taskDetail?.status === 'completed' && taskDetail?.cad_step_url"
+              type="primary"
+              :icon="Download"
+              @click="handleDownloadCadStep(taskDetail!.task_id)"
+            >
+              下载 STEP
+            </el-button>
           </div>
         </div>
       </template>
@@ -174,10 +209,13 @@ import ModelViewer from '@/components/ModelViewer.vue'
 import {
   getTaskDetail,
   downloadResult as downloadResultApi,
+  downloadCadStep as downloadCadStepApi,
   deleteTask as deleteTaskApi,
   type TaskDetail,
 } from '@/api'
 import { verifyDeletePassword } from '@/utils/deleteAuth'
+import { inferMeshFormat } from '@/utils/meshFormat'
+import { clearActiveTaskIfMatch } from '@/composables/useActiveGeneration'
 
 // ==========================================
 // 状态
@@ -245,9 +283,7 @@ const detailModelPreviewUrl = computed(() => {
 const detailModelPreviewFormat = computed((): 'GLB' | 'OBJ' | 'STL' => {
   if (!taskDetail.value) return 'GLB'
   if (taskDetail.value.preview_url) return 'GLB'
-  const fmt = (taskDetail.value.output_format || 'GLB').toUpperCase()
-  if (fmt === 'OBJ' || fmt === 'STL') return fmt
-  return 'GLB'
+  return inferMeshFormat(taskDetail.value.result_file, taskDetail.value.output_format)
 })
 
 const showDetailPreviewToggle = computed(
@@ -374,6 +410,37 @@ async function handleDownload(taskId: string) {
   }
 }
 
+async function handleDownloadCadStep(taskId: string) {
+  try {
+    const blob = await downloadCadStepApi(taskId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cad_${taskId.substring(0, 8)}.step`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('STEP 下载成功')
+  } catch {
+    ElMessage.error('STEP 下载失败')
+  }
+}
+
+function getGenerationModeLabel(mode?: string): string {
+  if (mode === 'fast') return '快速模式'
+  if (mode === 'custom') return '自定义'
+  if (mode === 'ultra') return 'Ultra CAD'
+  return '高质量模式'
+}
+
+function getGenerationModeTagType(mode?: string): 'warning' | 'primary' | 'success' | 'info' {
+  if (mode === 'fast') return 'warning'
+  if (mode === 'custom') return 'info'
+  if (mode === 'ultra') return 'success'
+  return 'primary'
+}
+
 /** 删除任务（列表操作） */
 async function handleDelete(taskId: string) {
   const verified = await verifyDeletePassword()
@@ -390,6 +457,7 @@ async function handleDelete(taskId: string) {
       }
     )
     await deleteTaskApi(taskId)
+    clearActiveTaskIfMatch(taskId)
     ElMessage.success('任务已永久删除')
     taskListRef.value?.refresh()
   } catch (err: unknown) {
@@ -426,6 +494,7 @@ async function handleDetailDelete() {
   detailDeleting.value = true
   try {
     await deleteTaskApi(deletedTaskId)
+    clearActiveTaskIfMatch(deletedTaskId)
     ElMessage.success('任务已永久删除')
     await taskListRef.value?.refresh()
 
@@ -467,6 +536,7 @@ function getStatusType(status: string): 'info' | 'warning' | 'success' | 'danger
     processing: 'warning',
     completed: 'success',
     failed: 'danger',
+    cancelled: 'info',
   }
   return map[status] || 'info'
 }
@@ -485,6 +555,7 @@ function getStatusLabel(status: string): string {
     processing: '生成中',
     completed: '已完成',
     failed: '失败',
+    cancelled: '已取消',
   }
   return map[status] || status
 }
@@ -562,6 +633,14 @@ function formatInlayLabel(inlayFile?: string | null): string {
 
 .error-message {
   color: #f56c6c;
+}
+
+.cad-review-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-color-warning);
+  line-height: 1.5;
 }
 
 .detail-preview h4 {

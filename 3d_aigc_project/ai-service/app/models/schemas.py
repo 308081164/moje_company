@@ -45,14 +45,17 @@ class FusionMethod(str, Enum):
     """网格融合方法"""
     COLORED_MERGE = "colored_merge"  # 分色双网格（镶嵌底座 + AI 主体，默认）
     BOOLEAN = "boolean"           # 布尔融合（SDF）
+    REPLACE = "replace"             # 局部替换：差集去重镶口 + 库 mesh 插入
     ICP_MERGE = "icp_merge"       # ICP对齐后合并
     SIMPLE = "simple"             # 简单合并（无对齐）
 
 
 class GenerationMode(str, Enum):
     """3D 生成质量模式"""
-    FAST = "fast"                 # 急速模式（旧版默认，更快）
-    QUALITY = "quality"           # 高质量模式（当前珠宝优化默认）
+    FAST = "fast"                 # 急速模式
+    QUALITY = "quality"           # 高质量模式（不限制面数）
+    CUSTOM = "custom"             # 自定义模式（用户指定目标面数等）
+    ULTRA = "ultra"               # Ultra CAD 模式（封禁中）
 
 
 # ============================================================
@@ -120,13 +123,49 @@ class GenerateRequest(BaseModel):
         None,
         description="宝石类型（diamond/ruby 等，有 setting_mesh_path 时用于 prompt 增强）",
     )
+    stone_diameter_mm: Optional[float] = Field(
+        None,
+        description="主石直径（毫米），用于动态 box_v 与 Omni 条件",
+    )
+    use_omni_conditioning: Optional[bool] = Field(
+        None,
+        description="是否启用 Hunyuan3D-Omni 点云条件；None 时跟随服务配置",
+    )
+    inlay_gen_strategy: Optional[str] = Field(
+        None,
+        description="镶嵌参与推理策略: mv_only | mv_then_omni_refine | omni_single",
+    )
+    apply_inlay_render_condition: Optional[bool] = Field(
+        None,
+        description="多视图生成前叠加 inlay 轮廓 hint（默认有镶嵌+多视图时开启）",
+    )
+    enable_fast_size_align: Optional[bool] = Field(
+        None,
+        description="融合前启用快速轮廓尺寸对齐（默认有镶嵌时开启）",
+    )
     enable_icp_alignment: bool = Field(
         True,
         description="与镶嵌底座融合前是否 ICP 对齐",
     )
+    enable_inlay_postprocess: bool = Field(
+        False,
+        description="是否启用镶嵌比对/对齐/裁剪/替换/融合后处理（默认关闭）",
+    )
     enable_mesh_fusion: bool = Field(
-        True,
-        description="是否将 AI 生成主体与镶嵌底座融合（默认分色双网格）",
+        False,
+        description="[已弃用] 请使用 enable_inlay_postprocess",
+    )
+    custom_target_faces: Optional[int] = Field(
+        None,
+        description="custom 模式目标面数（1000–200000，0=不限制）",
+    )
+    custom_octree_resolution: Optional[int] = Field(
+        None,
+        description="custom 模式可选 octree 分辨率覆盖（256–512）",
+    )
+    custom_inference_steps: Optional[int] = Field(
+        None,
+        description="custom 模式可选推理步数覆盖（5–100）",
     )
     fusion_method: FusionMethod = Field(
         FusionMethod.COLORED_MERGE,
@@ -134,7 +173,7 @@ class GenerateRequest(BaseModel):
     )
     generation_mode: GenerationMode = Field(
         GenerationMode.QUALITY,
-        description="生成模式: fast=急速(旧版默认) / quality=高质量(珠宝优化)",
+        description="生成模式: fast / quality / custom / ultra(封禁)",
     )
 
     @field_validator("prompt", "negative_prompt", mode="before")
@@ -212,9 +251,25 @@ class ConditionGenerateRequest(BaseModel):
         True,
         description="是否启用ICP点云对齐"
     )
+    enable_inlay_postprocess: bool = Field(
+        False,
+        description="是否启用镶嵌比对/对齐/裁剪/替换/融合后处理（默认关闭）",
+    )
     enable_mesh_fusion: bool = Field(
-        True,
-        description="是否启用网格融合"
+        False,
+        description="[已弃用] 请使用 enable_inlay_postprocess",
+    )
+    custom_target_faces: Optional[int] = Field(
+        None,
+        description="custom 模式目标面数",
+    )
+    custom_octree_resolution: Optional[int] = Field(
+        None,
+        description="custom 模式可选 octree 分辨率",
+    )
+    custom_inference_steps: Optional[int] = Field(
+        None,
+        description="custom 模式可选推理步数",
     )
     fusion_method: FusionMethod = Field(
         FusionMethod.COLORED_MERGE,
@@ -222,7 +277,7 @@ class ConditionGenerateRequest(BaseModel):
     )
     generation_mode: GenerationMode = Field(
         GenerationMode.QUALITY,
-        description="生成模式: fast=急速(旧版默认) / quality=高质量(珠宝优化)",
+        description="生成模式: fast / quality / custom / ultra(封禁)",
     )
 
     @field_validator("prompt", mode="before")
@@ -479,6 +534,15 @@ class HealthResponse(BaseModel):
     gpu_active_task_id: Optional[str] = Field(None, description="当前占用 GPU 的任务 ID")
     max_concurrent_tasks: int = Field(8, description="允许的最大并行任务数")
     max_concurrent_gpu_jobs: int = Field(1, description="GPU 推理并发上限（实际为 1）")
+    queue_depth: int = Field(0, description="GPU 等待队列深度 + 后处理排队数")
+    gpu_job_running: bool = Field(False, description="是否有任务正在占用 GPU 推理槽位")
+    omni_available: Optional[bool] = Field(
+        None, description="Hunyuan3D-Omni (hy3dshape) 是否可用"
+    )
+    omni_model_dir: Optional[str] = Field(None, description="本地 Omni 权重目录")
+    dmc_available: bool = Field(
+        False, description="DiffDMC (diso) 是否可用，Ultra/quality mc_algo=dmc 依赖此项"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -489,6 +553,59 @@ class ErrorResponse(BaseModel):
     message: str = Field(..., description="错误描述")
     detail: Optional[str] = Field(None, description="详细信息")
     code: int = Field(500, description="错误码")
+
+
+# ============================================================
+# Debug pipeline（逐步对齐调试）
+# ============================================================
+
+class DebugSessionCreateRequest(BaseModel):
+    source_task_id: str = Field("", description="源生成任务 ID；standalone 可为空")
+    raw_mesh_path: str = Field(..., description="AI raw mesh 绝对路径")
+    inlay_mesh_path: str = Field(..., description="镶嵌底座绝对路径")
+    output_format: ResultFormat = Field(ResultFormat.GLB, description="中间产物格式")
+    enable_icp: bool = Field(True, description="是否在 ICP 步骤启用 Open3D ICP")
+    enable_ai_part_split: bool = Field(
+        False, description="是否在 ai_inlay_detect 前执行 AI 拆件步骤"
+    )
+    session_id: Optional[str] = Field(None, description="可选指定会话 ID")
+
+
+class DebugStepRunRequest(BaseModel):
+    force: bool = Field(False, description="强制重跑已确认步骤")
+
+
+class DebugStepDirectRunRequest(BaseModel):
+    raw_mesh_path: str = Field(..., description="AI raw mesh 绝对路径")
+    inlay_mesh_path: str = Field(..., description="镶嵌底座绝对路径")
+    context: Optional[Dict[str, Any]] = Field(
+        None, description="可选 DebugPipelineContext 字段覆盖（路径/开关等）"
+    )
+    force: bool = Field(False, description="忽略会话顺序时保留兼容字段")
+
+
+class DebugSessionResponse(BaseModel):
+    session_id: str
+    source_task_id: Optional[str] = ""
+    current_step_index: int
+    current_step_id: Optional[str] = None
+    completed: bool = False
+    steps: List[Dict[str, Any]] = Field(default_factory=list)
+    step_definitions: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class DebugStepResultResponse(BaseModel):
+    step_id: str
+    success: bool
+    preview_path: Optional[str] = None
+    preview_mode: str = "white"
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    artifacts: Dict[str, str] = Field(default_factory=dict)
+    message: str = ""
+    session_id: Optional[str] = Field(None, description="step-direct 临时会话 ID")
+    output_dir: Optional[str] = Field(None, description="step-direct 输出目录")
 
 
 # ============================================================

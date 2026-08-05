@@ -33,6 +33,10 @@
             <el-icon><Switch /></el-icon>
             格式转换
           </el-menu-item>
+          <el-menu-item index="/debug">
+            <el-icon><Tools /></el-icon>
+            对齐调试
+          </el-menu-item>
         </el-menu>
         <div class="header-right">
           <!-- 系统状态指示器 -->
@@ -56,7 +60,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Box, MagicStick, List, Monitor, Collection, Switch } from '@element-plus/icons-vue'
+import { Box, MagicStick, List, Monitor, Collection, Switch, Tools } from '@element-plus/icons-vue'
 import { getSystemInfo } from '@/api'
 import { APP_NAME, APP_SUBTITLE } from '@/constants/brand'
 

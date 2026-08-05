@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 # 镶嵌底座 / AI 生成主体 分色（RGBA 0-255）
 INLAY_REGION_COLOR = (230, 162, 60, 255)      # 琥珀色：引用镶嵌结构区域
 GENERATED_REGION_COLOR = (64, 158, 255, 255)  # 蓝色：AI 生成主体区域
+AI_INLAY_ANALOGUE_COLOR = (255, 56, 56, 255)  # 红色：AI 上识别出的镶嵌对应结构
+AI_BASE_NEUTRAL_COLOR = (190, 194, 198, 255)  # 灰白：识别预览底模
 
 
 class MeshProcessor:
@@ -80,6 +82,126 @@ class MeshProcessor:
             )
         except Exception as e:
             logger.warning("[%s] failed to log extents: %s", label, e)
+
+    @staticmethod
+    def _mesh_aabb_volume(mesh) -> float:
+        """Axis-aligned bounding box volume (mm³)."""
+        try:
+            bounds = mesh.bounds
+            ext = np.asarray(bounds[1] - bounds[0], dtype=np.float64)
+            return float(np.prod(np.maximum(ext, 0.0)))
+        except Exception:
+            return 0.0
+
+    def _ai_shank_radial_band(
+        self,
+        r: np.ndarray,
+        frame: Dict[str, Any],
+    ) -> Tuple[float, float]:
+        """
+        Radial band for AI shank sampling in the inlay ring frame.
+        When AI is unit-normalized (r << inlay r_med), use AI-relative limits.
+        """
+        rm_inlay = float(frame["r_med"])
+        r_pos = r[np.isfinite(r) & (r > 1e-9)]
+        if len(r_pos) < 8:
+            return rm_inlay * 0.30, rm_inlay * 1.25
+        ai_rm = float(np.percentile(r_pos, 55))
+        if ai_rm < rm_inlay * 0.22:
+            r_lo = max(ai_rm * 0.35, 1e-6)
+            r_hi = max(ai_rm * 1.75, r_lo * 2.0)
+            return r_lo, r_hi
+        return rm_inlay * 0.30, rm_inlay * 1.25
+
+    def _compute_volume_scale_floor(
+        self,
+        source_mesh,
+        inlay_mesh,
+        M_pose: np.ndarray,
+        *,
+        margin: float = 1.04,
+    ) -> Tuple[float, Dict[str, Any]]:
+        """Minimum uniform scale so AI AABB volume >= inlay AABB volume."""
+        inlay_vol = self._mesh_aabb_volume(inlay_mesh)
+        posed = source_mesh.copy()
+        posed.apply_transform(np.asarray(M_pose, dtype=np.float64))
+        ai_vol = self._mesh_aabb_volume(posed)
+        info = {
+            "inlay_aabb_volume": inlay_vol,
+            "ai_aabb_volume_posed": ai_vol,
+        }
+        if ai_vol < 1e-12 or inlay_vol < 1e-12:
+            info["s_volume_floor"] = 1.0
+            return 1.0, info
+        s_floor = float((inlay_vol / ai_vol) ** (1.0 / 3.0) * margin)
+        info["s_volume_floor"] = s_floor
+        info["volume_ratio_posed"] = float(ai_vol / max(inlay_vol, 1e-12))
+        return s_floor, info
+
+    def _compute_ai_surface_containment_by_inlay(
+        self,
+        ai_mesh,
+        inlay_mesh,
+        *,
+        n_samples: int = 1200,
+    ) -> Tuple[float, Dict[str, Any]]:
+        """
+        Fraction of AI surface samples lying inside inlay solid.
+        Should stay moderate/low: AI body wraps inlay, not the reverse.
+        """
+        info: Dict[str, Any] = {"n_samples": 0, "n_inside": 0}
+        if self._mesh_vertex_count(ai_mesh) == 0 or self._mesh_vertex_count(inlay_mesh) == 0:
+            return 0.0, info
+        try:
+            import trimesh
+
+            n_draw = min(n_samples, max(400, len(ai_mesh.faces) * 2))
+            samples, _ = trimesh.sample.sample_surface(ai_mesh, n_draw)
+        except Exception:
+            verts = np.asarray(ai_mesh.vertices, dtype=np.float64)
+            if len(verts) == 0:
+                return 0.0, info
+            idx = np.random.default_rng(11).choice(
+                len(verts), min(n_samples, len(verts)), replace=False
+            )
+            samples = verts[idx]
+        info["n_samples"] = int(len(samples))
+        inside = np.zeros(len(samples), dtype=bool)
+        try:
+            if bool(getattr(inlay_mesh, "is_watertight", False)):
+                inside |= np.asarray(inlay_mesh.contains(samples), dtype=bool)
+        except Exception:
+            pass
+        if not inside.any():
+            try:
+                from trimesh.proximity import ProximityQuery
+
+                pq = ProximityQuery(inlay_mesh)
+                _, dist, _ = pq.on_surface(samples)
+                ext = float(np.max(inlay_mesh.bounds[1] - inlay_mesh.bounds[0]))
+                tol = max(ext * 0.02, 0.12)
+                inside |= np.asarray(dist <= tol, dtype=bool)
+            except Exception:
+                pass
+        info["n_inside"] = int(inside.sum())
+        ratio = float(np.mean(inside)) if len(inside) else 0.0
+        info["ratio"] = ratio
+        return ratio, info
+
+    def _envelope_scale_to_inlay_wall(
+        self,
+        inner_profile: Dict[str, Any],
+        outer_profile: Dict[str, Any],
+        clearance_mm: float,
+    ) -> float:
+        """Uniform scale so AI shank outer sits at inlay inner wall (can be >>1)."""
+        both = inner_profile["valid"] & outer_profile["valid"]
+        if int(both.sum()) < 6:
+            return 1.0
+        targets = inner_profile["inner_r"][both] - float(clearance_mm)
+        outers = outer_profile["outer_r"][both]
+        ratios = targets / np.maximum(outers, 1e-9)
+        return float(np.median(ratios))
 
     def _split_components(self, mesh) -> list:
         """Split mesh into connected components; never raises on failure."""
@@ -497,14 +619,20 @@ class MeshProcessor:
         radial = pts - c - np.outer(d, axis)
         r = np.linalg.norm(radial, axis=1)
         ang_cos = (radial @ up) / np.maximum(r, 1e-9)
+        r_lo, r_hi = self._ai_shank_radial_band(r, frame)
         mask = (
             (ang_cos < 0.55)
-            & (r > rm * 0.30)
-            & (r < rm * 1.25)
+            & (r > r_lo)
+            & (r < r_hi)
             & (np.abs(d) < max(thick * 1.5, rm * 0.38))
         )
         if int(mask.sum()) < 40:
             mask = r > rm * 0.25
+        if int(mask.sum()) < 8:
+            posed_rm = float(np.median(r)) if len(r) else rm
+            mask = (r > posed_rm * 0.35) & (r < posed_rm * 1.8)
+        if int(mask.sum()) < 8:
+            mask = np.ones(len(r), dtype=bool)
         return float(np.percentile(r[mask], percentile))
 
     def _ai_inner_bore_radius(
@@ -699,6 +827,7 @@ class MeshProcessor:
         outer_r = np.full(bins, np.nan, dtype=np.float64)
         valid = np.zeros(bins, dtype=bool)
         axial_band = max(thick * 1.5, rm * 0.38)
+        r_lo_band, r_hi_band = self._ai_shank_radial_band(r, frame)
         for b in range(bins):
             a0 = -np.pi + b * (2.0 * np.pi / bins)
             a1 = a0 + 2.0 * np.pi / bins
@@ -707,8 +836,8 @@ class MeshProcessor:
                 m = (
                     m
                     & (ang_cos < 0.55)
-                    & (r > rm * 0.30)
-                    & (r < rm * 1.25)
+                    & (r > r_lo_band)
+                    & (r < r_hi_band)
                 )
             if int(m.sum()) >= 6:
                 outer_r[b] = float(np.percentile(r[m], 88))
@@ -824,13 +953,14 @@ class MeshProcessor:
         frame: Dict[str, Any],
         n_per_sector: int = 6,
         bins: int = 36,
+        axial_band_mult: float = 1.0,
     ) -> np.ndarray:
         """Angularly distributed samples on the inlay inner shank wall."""
         pts = np.asarray(shank_mesh.vertices, dtype=np.float64)
         rm = float(frame["r_med"])
         thick = float(frame.get("thick", rm * 0.25))
         d, r, ang, ang_cos = self._ring_cylindrical_coords(pts, frame)
-        axial_band = max(thick * 1.2, rm * 0.32)
+        axial_band = max(thick * 1.2, rm * 0.32) * float(axial_band_mult)
         samples: List[np.ndarray] = []
         rng = np.random.default_rng(7)
         for b in range(bins):
@@ -932,7 +1062,16 @@ class MeshProcessor:
         region: str
         if frame is not None and self._mesh_vertex_count(shank) > 0:
             wall = self._sample_inlay_inner_wall_points(shank, frame)
-            if len(wall) >= 120:
+            if len(wall) < 80:
+                for mult in (1.5, 2.0, 2.8):
+                    expanded = self._sample_inlay_inner_wall_points(
+                        shank, frame, axial_band_mult=mult
+                    )
+                    if len(expanded) > len(wall):
+                        wall = expanded
+                    if len(wall) >= 80:
+                        break
+            if len(wall) >= 80:
                 samples = wall
                 region = "shank_inner_wall"
             else:
@@ -976,7 +1115,7 @@ class MeshProcessor:
             )
             ai_ext = float(np.max(ai_mesh.bounds[1] - ai_mesh.bounds[0]))
             diam = float(frame["diameter"]) if frame else max(inlay_ext, ai_ext)
-            tolerance_mm = max(diam * 0.018, 0.10)
+            tolerance_mm = max(diam * 0.022, 0.12)
 
         covered = self._inlay_point_covered_by_ai(ai_mesh, samples, tolerance_mm)
         ratio = float(np.mean(covered)) if len(covered) else 0.0
@@ -1058,6 +1197,12 @@ class MeshProcessor:
         )
         c = np.asarray(frame["center"], dtype=np.float64)
         up = np.asarray(frame["up"], dtype=np.float64)
+        axis = np.asarray(frame["axis"], dtype=np.float64)
+        axis = axis / (np.linalg.norm(axis) + 1e-12)
+        up_n = up / (np.linalg.norm(up) + 1e-12)
+        e1 = np.cross(axis, up_n)
+        e1 = e1 / (np.linalg.norm(e1) + 1e-12)
+        e2 = np.cross(axis, e1)
         diam = float(frame["diameter"])
 
         best_M = np.asarray(init_M, dtype=np.float64).copy()
@@ -1073,7 +1218,50 @@ class MeshProcessor:
         )
         initial_ratio = best_ratio
 
-        if best_ratio >= target:
+        axis_chk = np.asarray(frame["axis"], dtype=np.float64)
+        axis_chk = axis_chk / (np.linalg.norm(axis_chk) + 1e-12)
+        c_chk = np.asarray(frame["center"], dtype=np.float64)
+        up_probe = source_mesh.copy()
+        up_probe.apply_transform(best_M)
+        up_before_flip = float(self._ai_up_alignment(up_probe, frame))
+        if up_before_flip < 0.15:
+            flip_M = self._rotation_about_axis_matrix(axis_chk, c_chk, np.pi) @ best_M
+            trial = source_mesh.copy()
+            trial.apply_transform(flip_M)
+            ratio_flip, info_flip = self._compute_inlay_ai_overlap_ratio(
+                inlay_mesh,
+                trial,
+                shank_mesh=shank_mesh,
+                setting_mesh=setting_mesh,
+                frame=frame,
+                full_ring=full_ring,
+            )
+            up_after_flip = float(self._ai_up_alignment(trial, frame))
+            accept_flip = ratio_flip > best_ratio + 1e-6 or (
+                up_after_flip >= 0.25
+                and up_after_flip > up_before_flip + 0.35
+                and ratio_flip >= best_ratio - 0.05
+            )
+            if accept_flip:
+                best_ratio = max(best_ratio, ratio_flip)
+                best_M = flip_M
+                best_info = info_flip
+
+        pose_early = self._eval_alignment_pose_metrics(
+            source_mesh,
+            inlay_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            best_M,
+            full_ring=full_ring,
+        )
+        pose_ok = (
+            pose_early["up_cos"] >= 0.25
+            and 0.82 <= pose_early["diam_ratio"] <= 1.22
+            and pose_early["center_dist"] <= diam * 0.10
+        )
+        if best_ratio >= target and pose_ok:
             return best_M, {
                 "refined": False,
                 "overlap_before": initial_ratio,
@@ -1082,7 +1270,7 @@ class MeshProcessor:
                 "meets_target": True,
             }
 
-        for s_mult in np.linspace(0.50, 2.00, 31):
+        for s_mult in np.linspace(0.35, 2.50, 44):
             trial_M = self._scale_transform_about_point(best_M, c, float(s_mult))
             trial = source_mesh.copy()
             trial.apply_transform(trial_M)
@@ -1103,7 +1291,7 @@ class MeshProcessor:
             base_M = best_M.copy()
             for du in np.linspace(-0.18 * diam, 0.18 * diam, 15):
                 trial_M = base_M.copy()
-                trial_M[:3, 3] = trial_M[:3, 3] + up * float(du)
+                trial_M[:3, 3] = trial_M[:3, 3] + up_n * float(du)
                 trial = source_mesh.copy()
                 trial.apply_transform(trial_M)
                 ratio, oinfo = self._compute_inlay_ai_overlap_ratio(
@@ -1119,9 +1307,118 @@ class MeshProcessor:
                     best_M = trial_M
                     best_info = oinfo
 
-        if best_ratio < target:
+        pose_probe = self._eval_alignment_pose_metrics(
+            source_mesh,
+            inlay_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            best_M,
+            full_ring=full_ring,
+        )
+        need_pose_fix = (
+            pose_probe["up_cos"] < 0.25
+            or pose_probe["diam_ratio"] < 0.82
+            or pose_probe["diam_ratio"] > 1.22
+            or pose_probe["center_dist"] > diam * 0.10
+        )
+
+        if best_ratio < target or need_pose_fix:
             base_M = best_M.copy()
-            for s_mult in np.linspace(0.85, 1.15, 13):
+            plane_span = 0.15 * diam if need_pose_fix else 0.08 * diam
+            plane_steps = 11 if need_pose_fix else 7
+            for du1 in np.linspace(-plane_span, plane_span, plane_steps):
+                for du2 in np.linspace(-plane_span, plane_span, plane_steps):
+                    shift = e1 * float(du1) + e2 * float(du2)
+                    trial_M = base_M.copy()
+                    trial_M[:3, 3] = trial_M[:3, 3] + shift
+                    trial = source_mesh.copy()
+                    trial.apply_transform(trial_M)
+                    ratio, oinfo = self._compute_inlay_ai_overlap_ratio(
+                        inlay_mesh,
+                        trial,
+                        shank_mesh=shank_mesh,
+                        setting_mesh=setting_mesh,
+                        frame=frame,
+                        full_ring=full_ring,
+                    )
+                    accept = ratio > best_ratio + 1e-6
+                    if need_pose_fix and not accept:
+                        trial_pose = self._eval_alignment_pose_metrics(
+                            source_mesh,
+                            inlay_mesh,
+                            shank_mesh,
+                            setting_mesh,
+                            frame,
+                            trial_M,
+                            full_ring=full_ring,
+                        )
+                        accept = trial_pose["score"] < pose_probe["score"] - 1e-4
+                    if accept:
+                        best_ratio = max(best_ratio, ratio)
+                        best_M = trial_M
+                        best_info = oinfo
+                        pose_probe = self._eval_alignment_pose_metrics(
+                            source_mesh,
+                            inlay_mesh,
+                            shank_mesh,
+                            setting_mesh,
+                            frame,
+                            best_M,
+                            full_ring=full_ring,
+                        )
+
+        if best_ratio < target or need_pose_fix:
+            base_M = best_M.copy()
+            for roll_deg in np.linspace(-8.0, 8.0, 9):
+                roll_rad = float(np.radians(roll_deg))
+                ca, sa = float(np.cos(roll_rad)), float(np.sin(roll_rad))
+                K = np.array(
+                    [
+                        [0.0, -axis[2], axis[1]],
+                        [axis[2], 0.0, -axis[0]],
+                        [-axis[1], axis[0], 0.0],
+                    ],
+                    dtype=np.float64,
+                )
+                R = np.eye(3) + sa * K + (1.0 - ca) * (K @ K)
+                R4 = np.eye(4, dtype=np.float64)
+                R4[:3, :3] = R
+                T = np.eye(4, dtype=np.float64)
+                T[:3, 3] = c
+                Tinv = np.eye(4, dtype=np.float64)
+                Tinv[:3, 3] = -c
+                roll_M = T @ R4 @ Tinv @ base_M
+                trial = source_mesh.copy()
+                trial.apply_transform(roll_M)
+                ratio, oinfo = self._compute_inlay_ai_overlap_ratio(
+                    inlay_mesh,
+                    trial,
+                    shank_mesh=shank_mesh,
+                    setting_mesh=setting_mesh,
+                    frame=frame,
+                    full_ring=full_ring,
+                )
+                accept = ratio > best_ratio + 1e-6
+                if need_pose_fix and not accept:
+                    trial_pose = self._eval_alignment_pose_metrics(
+                        source_mesh,
+                        inlay_mesh,
+                        shank_mesh,
+                        setting_mesh,
+                        frame,
+                        roll_M,
+                        full_ring=full_ring,
+                    )
+                    accept = trial_pose["score"] < pose_probe["score"] - 1e-4
+                if accept:
+                    best_ratio = max(best_ratio, ratio)
+                    best_M = roll_M
+                    best_info = oinfo
+
+        if best_ratio < target or need_pose_fix:
+            base_M = best_M.copy()
+            for s_mult in np.linspace(0.72, 1.38, 17):
                 trial_M = self._scale_transform_about_point(base_M, c, float(s_mult))
                 trial = source_mesh.copy()
                 trial.apply_transform(trial_M)
@@ -1133,10 +1430,55 @@ class MeshProcessor:
                     frame=frame,
                     full_ring=full_ring,
                 )
-                if ratio > best_ratio + 1e-6:
-                    best_ratio = ratio
+                accept = ratio > best_ratio + 1e-6
+                if need_pose_fix and not accept:
+                    trial_pose = self._eval_alignment_pose_metrics(
+                        source_mesh,
+                        inlay_mesh,
+                        shank_mesh,
+                        setting_mesh,
+                        frame,
+                        trial_M,
+                        full_ring=full_ring,
+                    )
+                    accept = trial_pose["score"] < pose_probe["score"] - 1e-4
+                if accept:
+                    best_ratio = max(best_ratio, ratio)
                     best_M = trial_M
                     best_info = oinfo
+
+        trial = source_mesh.copy()
+        trial.apply_transform(best_M)
+        fa_end = self._estimate_ring_frame(trial)
+        tgt_d = float(frame["diameter"])
+        src_d = float(fa_end["diameter"])
+        if src_d > 1e-6 and tgt_d > 1e-6:
+            diam_ratio = src_d / tgt_d
+            if diam_ratio < 0.85 or diam_ratio > 1.18:
+                s_snap = float(np.clip(tgt_d / src_d, 0.72, 1.38))
+                snap_M = self._scale_transform_about_point(best_M, c, s_snap)
+                snap_pose = self._eval_alignment_pose_metrics(
+                    source_mesh,
+                    inlay_mesh,
+                    shank_mesh,
+                    setting_mesh,
+                    frame,
+                    snap_M,
+                    full_ring=full_ring,
+                )
+                cur_pose = self._eval_alignment_pose_metrics(
+                    source_mesh,
+                    inlay_mesh,
+                    shank_mesh,
+                    setting_mesh,
+                    frame,
+                    best_M,
+                    full_ring=full_ring,
+                )
+                if snap_pose["score"] < cur_pose["score"] - 1e-4:
+                    best_M = snap_M
+                    best_ratio = max(best_ratio, snap_pose["overlap"])
+                    best_info = snap_pose.get("overlap_info") or best_info
 
         return best_M, {
             "refined": best_ratio > initial_ratio + 1e-6,
@@ -1145,6 +1487,207 @@ class MeshProcessor:
             "overlap": best_info,
             "meets_target": best_ratio >= target,
         }
+
+    def _eval_alignment_pose_metrics(
+        self,
+        source_mesh,
+        target_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        M: np.ndarray,
+        *,
+        full_ring: bool = False,
+    ) -> Dict[str, Any]:
+        """Score a candidate alignment transform for rescue / preview registration."""
+        trial = source_mesh.copy()
+        trial.apply_transform(np.asarray(M, dtype=np.float64))
+        ratio, overlap_info = self._compute_inlay_ai_overlap_ratio(
+            target_mesh,
+            trial,
+            shank_mesh=shank_mesh,
+            setting_mesh=setting_mesh,
+            frame=frame,
+            full_ring=full_ring,
+        )
+        up_cos = float(self._ai_up_alignment(trial, frame))
+        set_med = 0.0
+        if setting_mesh is not None and self._mesh_vertex_count(setting_mesh) > 0:
+            set_med = float(
+                self._setting_surface_distance(trial, setting_mesh, frame)["median"]
+            )
+        fa = self._estimate_ring_frame(trial)
+        diam = float(frame.get("diameter", 1.0))
+        diam_ratio = float(fa["diameter"] / max(diam, 1e-9))
+        center_dist = float(np.linalg.norm(np.asarray(fa["center"]) - np.asarray(frame["center"])))
+        # Lower is better: prioritize overlap, penalize inverted head and seat gap.
+        score = (
+            -float(ratio) * 120.0
+            + max(0.0, 0.30 - up_cos) * 90.0
+            + set_med * 2.5
+            + abs(diam_ratio - 1.0) * 18.0
+            + center_dist * 1.2
+        )
+        return {
+            "score": score,
+            "overlap": float(ratio),
+            "up_cos": up_cos,
+            "setting_median": set_med,
+            "diam_ratio": diam_ratio,
+            "center_dist": center_dist,
+            "overlap_info": overlap_info,
+        }
+
+    def _rescue_poor_alignment_pose(
+        self,
+        source_mesh,
+        target_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        init_M: np.ndarray,
+        *,
+        full_ring: bool = False,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Recover from inverted head / diameter drift / seat gap after fallback or ICP.
+        Tries axis half-turns, bore diameter scale, overlap refine, and micro seat search.
+        """
+        cfg = self._get_alignment_config()
+        M = np.asarray(init_M, dtype=np.float64).copy()
+        before = self._eval_alignment_pose_metrics(
+            source_mesh,
+            target_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            M,
+            full_ring=full_ring,
+        )
+        best_M = M
+        best = dict(before)
+        info: Dict[str, Any] = {"before": before}
+
+        init_rec = {"score": before["score"], **before}
+        M_axis, axis_rec = self._resolve_ring_axis_half_turn(
+            source_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            M,
+            init_rec,
+            extra_degs=(0.0, 90.0, 180.0, 270.0),
+        )
+        after_axis = self._eval_alignment_pose_metrics(
+            source_mesh,
+            target_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            M_axis,
+            full_ring=full_ring,
+        )
+        if after_axis["score"] < best["score"] - 1e-4:
+            best_M, best = M_axis, after_axis
+            info["axis_resolve"] = axis_rec
+
+        trial = source_mesh.copy()
+        trial.apply_transform(best_M)
+        fa = self._estimate_ring_frame(trial)
+        tgt_d = float(frame["diameter"])
+        src_d = float(fa["diameter"])
+        if src_d > 1e-6 and tgt_d > 1e-6:
+            s_fix = float(np.clip(tgt_d / src_d, 0.72, 1.38))
+            if abs(s_fix - 1.0) > 0.035:
+                M_scale = self._scale_transform_about_point(
+                    best_M, frame["center"], s_fix
+                )
+                after_scale = self._eval_alignment_pose_metrics(
+                    source_mesh,
+                    target_mesh,
+                    shank_mesh,
+                    setting_mesh,
+                    frame,
+                    M_scale,
+                    full_ring=full_ring,
+                )
+                if after_scale["score"] < best["score"] - 1e-4:
+                    best_M, best = M_scale, after_scale
+                    info["diameter_scale"] = s_fix
+
+        M_ref, ref_info = self._refine_alignment_inlay_overlap(
+            source_mesh,
+            target_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            best_M,
+            full_ring=full_ring,
+            target_ratio=cfg.casa_min_inlay_overlap_ratio,
+        )
+        after_ref = self._eval_alignment_pose_metrics(
+            source_mesh,
+            target_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            M_ref,
+            full_ring=full_ring,
+        )
+        if after_ref["score"] < best["score"] - 1e-4 or after_ref["overlap"] >= best["overlap"]:
+            best_M, best = M_ref, after_ref
+        info["overlap_refine"] = ref_info
+
+        seat_best = dict(best)
+        scored_seat = self._score_ring_alignment_pose(
+            source_mesh, shank_mesh, setting_mesh, frame, best_M
+        )
+        seat_best.update(scored_seat)
+        M_seat, seat_out = self._refine_seating_micro_search(
+            source_mesh,
+            best_M,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            seat_best,
+        )
+        after_seat = self._eval_alignment_pose_metrics(
+            source_mesh,
+            target_mesh,
+            shank_mesh,
+            setting_mesh,
+            frame,
+            M_seat,
+            full_ring=full_ring,
+        )
+        if after_seat["score"] < best["score"] - 1e-4:
+            best_M, best = M_seat, after_seat
+            info["seat_micro"] = seat_out
+
+        info["after"] = best
+        info["rescued"] = (
+            best["score"] < before["score"] - 1e-4
+            or best["overlap"] >= before["overlap"] + 0.02
+            or best["up_cos"] >= before["up_cos"] + 0.35
+            or (
+                best["up_cos"] >= 0.25
+                and before["up_cos"] < 0.25
+            )
+        )
+        if info["rescued"]:
+            logger.info(
+                "alignment rescue: overlap %.3f -> %.3f up_cos %.2f -> %.2f "
+                "set_med %.3f -> %.3f diam_ratio %.3f -> %.3f",
+                before["overlap"],
+                best["overlap"],
+                before["up_cos"],
+                best["up_cos"],
+                before["setting_median"],
+                best["setting_median"],
+                before["diam_ratio"],
+                best["diam_ratio"],
+            )
+        return best_M, info
 
     def _planar_procrustes_delta(
         self,
@@ -1993,6 +2536,7 @@ class MeshProcessor:
         source_mesh,
         shank_mesh,
         frame: Dict[str, Any],
+        contact_max: float = 1.15,
     ) -> Tuple[float, Dict[str, Any]]:
         """Ring diameter + contact scale (same as ring-frame alignment phase-1 scale)."""
         fa0 = self._estimate_ring_frame(source_mesh)
@@ -2002,7 +2546,7 @@ class MeshProcessor:
         est_outer = ai_outer_src * scale_base
         target_outer = inlay_inner_r - max(float(frame["diameter"]) * 0.006, 0.05e-3)
         scale_contact = float(
-            np.clip(target_outer / max(est_outer, 1e-9), 0.98, 1.15)
+            np.clip(target_outer / max(est_outer, 1e-9), 0.98, float(contact_max))
         )
         scale = scale_base * scale_contact
         return scale, {
@@ -2081,6 +2625,1254 @@ class MeshProcessor:
         if extreme:
             s = float(np.clip(s, cfg.casa_scale_min, cfg.casa_scale_max))
         return s, info
+
+    def _ai_head_envelope_profile(
+        self,
+        ai_mesh,
+        frame: Dict[str, Any],
+        bins: int = 36,
+    ) -> Dict[str, Any]:
+        """Per-sector outer radius on AI forward/head region (ang_cos > 0.35)."""
+        pts = np.asarray(ai_mesh.vertices, dtype=np.float64)
+        rm = float(frame["r_med"])
+        thick = float(frame.get("thick", rm * 0.25))
+        d, r, ang, ang_cos = self._ring_cylindrical_coords(pts, frame)
+        outer_r = np.full(bins, np.nan, dtype=np.float64)
+        valid = np.zeros(bins, dtype=bool)
+        up = np.asarray(frame["up"], dtype=np.float64)
+        up_n = up / (np.linalg.norm(up) + 1e-12)
+        proj = (pts - np.asarray(frame["center"], dtype=np.float64)) @ up_n
+        head_floor = float(np.percentile(proj, 55))
+        axial_band = max(thick * 2.2, rm * 0.55)
+        for b in range(bins):
+            a0 = -np.pi + b * (2.0 * np.pi / bins)
+            a1 = a0 + 2.0 * np.pi / bins
+            m = (
+                (ang >= a0)
+                & (ang < a1)
+                & (ang_cos > 0.35)
+                & (proj >= head_floor)
+                & (np.abs(d) < axial_band)
+            )
+            if int(m.sum()) >= 4:
+                outer_r[b] = float(np.percentile(r[m], 90))
+                valid[b] = True
+        return {"outer_r": outer_r, "valid": valid, "bins": bins}
+
+    def _inlay_setting_envelope_profile(
+        self,
+        setting_mesh,
+        frame: Dict[str, Any],
+        bins: int = 36,
+    ) -> Dict[str, Any]:
+        """Per-sector radial extent of inlay setting/prong component."""
+        if setting_mesh is None or self._mesh_vertex_count(setting_mesh) == 0:
+            return {
+                "outer_r": np.full(bins, np.nan),
+                "valid": np.zeros(bins, dtype=bool),
+                "bins": bins,
+            }
+        pts = np.asarray(setting_mesh.vertices, dtype=np.float64)
+        rm = float(frame["r_med"])
+        d, r, ang, _ = self._ring_cylindrical_coords(pts, frame)
+        outer_r = np.full(bins, np.nan, dtype=np.float64)
+        valid = np.zeros(bins, dtype=bool)
+        for b in range(bins):
+            a0 = -np.pi + b * (2.0 * np.pi / bins)
+            a1 = a0 + 2.0 * np.pi / bins
+            m = (ang >= a0) & (ang < a1) & (r > rm * 0.15)
+            if int(m.sum()) >= 3:
+                outer_r[b] = float(np.percentile(r[m], 92))
+                valid[b] = True
+        return {"outer_r": outer_r, "valid": valid, "bins": bins}
+
+    def _measure_head_setting_extent_ratios(
+        self,
+        posed_ai,
+        setting_mesh,
+        frame: Dict[str, Any],
+    ) -> Dict[str, float]:
+        """Compare head vs inlay setting height and in-plane span (no overlap)."""
+        up = np.asarray(frame["up"], dtype=np.float64)
+        up_n = up / (np.linalg.norm(up) + 1e-12)
+        c = np.asarray(frame["center"], dtype=np.float64)
+        ai_pts = np.asarray(posed_ai.vertices, dtype=np.float64)
+        ai_proj = (ai_pts - c) @ up_n
+        ai_head = ai_pts[ai_proj >= np.percentile(ai_proj, 72)]
+        if len(ai_head) < 8:
+            ai_head = ai_pts[ai_proj >= np.percentile(ai_proj, 55)]
+        ai_height = float(np.max(ai_proj) - np.min(ai_proj[ai_proj >= np.percentile(ai_proj, 40)])) if len(ai_proj) > 0 else 0.0
+        ai_head_c = ai_head.mean(axis=0) if len(ai_head) >= 4 else ai_pts.mean(axis=0)
+        e1 = np.cross(frame["axis"], up_n)
+        e1 = e1 / (np.linalg.norm(e1) + 1e-12)
+        e2 = np.cross(frame["axis"], e1)
+        ai_span = float(
+            np.max(np.abs((ai_head - ai_head_c) @ e1))
+            + np.max(np.abs((ai_head - ai_head_c) @ e2))
+        ) if len(ai_head) >= 4 else 0.0
+
+        set_height = 0.0
+        set_span = 0.0
+        if setting_mesh is not None and self._mesh_vertex_count(setting_mesh) > 0:
+            sp = np.asarray(setting_mesh.vertices, dtype=np.float64)
+            set_proj = (sp - c) @ up_n
+            set_height = float(np.max(set_proj) - np.min(set_proj))
+            set_c = sp.mean(axis=0)
+            set_span = float(
+                np.max(np.abs((sp - set_c) @ e1))
+                + np.max(np.abs((sp - set_c) @ e2))
+            )
+
+        height_ratio = ai_height / max(set_height, 1e-9) if set_height > 1e-6 else 1.0
+        span_ratio = ai_span / max(set_span, 1e-9) if set_span > 1e-6 else 1.0
+        return {
+            "ai_height": ai_height,
+            "setting_height": set_height,
+            "height_ratio": height_ratio,
+            "ai_span": ai_span,
+            "setting_span": set_span,
+            "span_ratio": span_ratio,
+        }
+
+    def _fallback_detect_pose_matrix(
+        self,
+        source_mesh,
+        shank_mesh,
+        fa0: Dict[str, Any],
+        fi0: Dict[str, Any],
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Ring-frame center + uniform scale + axis alignment when contour pose fails."""
+        up_src = self._detect_setting_up(source_mesh, fa0)
+        fa = self._frame_with_up(fa0, up_src)
+        fi = self._frame_with_up(fi0, fi0.get("up", fa0.get("up")))
+        R = np.asarray(fi["R"], dtype=np.float64) @ np.asarray(fa["R"], dtype=np.float64).T
+        scale, scale_info = self._compute_ring_frame_scale(source_mesh, shank_mesh, fi)
+        scale = float(np.clip(scale, 0.12, 14.0))
+        fc = np.asarray(fi["center"], dtype=np.float64)
+        ac = np.asarray(fa["center"], dtype=np.float64)
+        M = np.eye(4, dtype=np.float64)
+        M[:3, :3] = scale * R
+        M[:3, 3] = fc - scale * (R @ ac)
+        return M, {
+            "pose_source": "ring_frame_fallback",
+            "scale": scale,
+            **scale_info,
+        }
+
+    def _coarse_pose_for_inlay_detect(
+        self,
+        source_mesh,
+        shank_mesh,
+        setting_mesh,
+        fi0: Dict[str, Any],
+    ) -> Tuple[np.ndarray, Dict[str, Any], Dict[str, Any]]:
+        """Align AI into inlay ring frame before analogue detection."""
+        fa0 = self._estimate_ring_frame(source_mesh)
+        up_tgt = self._geometric_setting_up(fi0, setting_mesh)
+        if up_tgt is None:
+            up_tgt = self._detect_setting_up(shank_mesh, fi0)
+        fi = self._frame_with_up(fi0, up_tgt)
+
+        M_pose, pose_info = self._compute_contour_anchored_pose(
+            source_mesh, shank_mesh, setting_mesh, fa0, fi0
+        )
+        if M_pose is not None:
+            pose_info = dict(pose_info)
+            pose_info["pose_source"] = "contour_anchored"
+            return np.asarray(M_pose, dtype=np.float64), fi, pose_info
+
+        M_pose, fb_info = self._fallback_detect_pose_matrix(
+            source_mesh, shank_mesh, fa0, fi0
+        )
+        return M_pose, fi, fb_info
+
+    def _smooth_vertex_mask_on_mesh(
+        self,
+        mesh,
+        mask: np.ndarray,
+        *,
+        face_min_hits: int = 2,
+        dilate_rings: int = 1,
+    ) -> np.ndarray:
+        """Expand sparse vertex hits to face-connected regions for cleaner preview."""
+        mask = np.asarray(mask, dtype=bool).copy()
+        faces = np.asarray(mesh.faces, dtype=np.int64)
+        if len(faces) == 0:
+            return mask
+        for _ in range(max(1, int(dilate_rings))):
+            face_hits = mask[faces].sum(axis=1) >= int(face_min_hits)
+            if not bool(face_hits.any()):
+                face_hits = mask[faces].any(axis=1)
+            if not bool(face_hits.any()):
+                break
+            mask[faces[face_hits].reshape(-1)] = True
+        return mask
+
+    def _vertex_colors_from_detect_mask(
+        self,
+        mesh,
+        mask: np.ndarray,
+        *,
+        base_color=AI_BASE_NEUTRAL_COLOR,
+        hit_color=AI_INLAY_ANALOGUE_COLOR,
+    ) -> np.ndarray:
+        """Paint by face connectivity so preview is not a noisy point cloud."""
+        colors = np.tile(np.array(base_color, dtype=np.uint8), (len(mesh.vertices), 1))
+        faces = np.asarray(mesh.faces, dtype=np.int64)
+        if len(faces) == 0:
+            colors[np.asarray(mask, dtype=bool)] = np.array(hit_color, dtype=np.uint8)
+            return colors
+        face_hits = mask[faces].sum(axis=1) >= 1
+        hit = np.array(hit_color, dtype=np.uint8)
+        for f_idx in np.where(face_hits)[0]:
+            colors[faces[f_idx]] = hit
+        return colors
+
+    def split_ai_ring_parts(
+        self,
+        ai_mesh,
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+        """Split AI mesh into shank vs setting/prong vertex masks."""
+        import trimesh
+
+        n_verts = len(ai_mesh.vertices)
+        shank_mask = np.zeros(n_verts, dtype=bool)
+        setting_mask = np.zeros(n_verts, dtype=bool)
+        faces = np.asarray(ai_mesh.faces, dtype=np.int64)
+        if len(faces) == 0:
+            return shank_mask, setting_mask, {"reason": "empty_mesh", "method": "none"}
+
+        try:
+            labels = trimesh.graph.connected_component_labels(
+                ai_mesh.face_adjacency, min_len=1
+            )
+            unique, counts = np.unique(labels, return_counts=True)
+            n_components = int(len(unique))
+        except Exception:
+            labels = np.zeros(len(faces), dtype=np.int64)
+            unique = np.array([0], dtype=np.int64)
+            counts = np.array([len(faces)], dtype=np.int64)
+            n_components = 1
+
+        if n_components >= 2:
+            shank_label = int(unique[int(np.argmax(counts))])
+            shank_faces = labels == shank_label
+            setting_faces = ~shank_faces
+            for f_idx in np.where(shank_faces)[0]:
+                shank_mask[faces[f_idx]] = True
+            for f_idx in np.where(setting_faces)[0]:
+                setting_mask[faces[f_idx]] = True
+            method = "connected_components"
+        else:
+            fa0 = self._estimate_ring_frame(ai_mesh)
+            up = self._detect_setting_up(ai_mesh, fa0)
+            frame = self._frame_with_up(fa0, up)
+            c = np.asarray(frame["center"], dtype=np.float64)
+            up_n = np.asarray(frame["up"], dtype=np.float64)
+            up_n = up_n / (np.linalg.norm(up_n) + 1e-12)
+            pts = np.asarray(ai_mesh.vertices, dtype=np.float64)
+            _, _, _, ang_cos = self._ring_cylindrical_coords(pts, frame)
+            proj = (pts - c) @ up_n
+            setting_mask = (ang_cos > 0.22) | (proj >= np.percentile(proj, 58))
+            shank_mask = (ang_cos < 0.55) & (proj <= np.percentile(proj, 55))
+            method = "ring_band"
+
+        shank_mask = self._smooth_vertex_mask_on_mesh(
+            ai_mesh, shank_mask, face_min_hits=1, dilate_rings=1
+        )
+        setting_mask = self._smooth_vertex_mask_on_mesh(
+            ai_mesh, setting_mask, face_min_hits=1, dilate_rings=1
+        )
+        shank_mask &= ~setting_mask
+
+        info = {
+            "method": method,
+            "n_shank": int(shank_mask.sum()),
+            "n_setting": int(setting_mask.sum()),
+            "n_components": n_components,
+            "n_vertices": n_verts,
+        }
+        return shank_mask, setting_mask, info
+
+    def export_ai_part_split_preview(
+        self,
+        ai_mesh_path: str,
+        output_path: str,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Export AI mesh with shank (blue) and setting (amber) vertex colors."""
+        ai = self._load_trimesh_mesh(ai_mesh_path)
+        mesh = self._prepare_mesh_for_region_paint(ai)
+        shank_mask, setting_mask, info = self.split_ai_ring_parts(mesh)
+        colors = np.tile(np.array(AI_BASE_NEUTRAL_COLOR, dtype=np.uint8), (len(mesh.vertices), 1))
+        colors[np.asarray(shank_mask, dtype=bool)] = np.array(
+            GENERATED_REGION_COLOR, dtype=np.uint8
+        )
+        colors[np.asarray(setting_mask, dtype=bool)] = np.array(
+            INLAY_REGION_COLOR, dtype=np.uint8
+        )
+        import trimesh
+
+        if hasattr(mesh, "visual") and mesh.visual is not None:
+            if hasattr(mesh.visual, "face_colors"):
+                mesh.visual.face_colors = None
+        mesh.visual = trimesh.visual.ColorVisuals(mesh=mesh, vertex_colors=colors)
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        scene = trimesh.Scene()
+        scene.add_geometry(mesh, node_name="ai_part_split", geom_name="ai_part_split")
+        scene.export(output_path, file_type="glb")
+        info["output_path"] = output_path
+        info["_shank_mask"] = shank_mask
+        info["_setting_mask"] = setting_mask
+        return output_path, info
+
+    def _build_inlay_labeled_mesh(
+        self,
+        shank,
+        setting,
+    ) -> Tuple[Optional[Any], Optional[np.ndarray]]:
+        """Merge shank/setting with per-vertex labels (0=shank, 1=setting)."""
+        import trimesh
+
+        parts: List[Any] = []
+        labels: List[np.ndarray] = []
+        if shank is not None and self._mesh_vertex_count(shank) > 0:
+            parts.append(shank)
+            labels.append(np.zeros(len(shank.vertices), dtype=np.int8))
+        if setting is not None and self._mesh_vertex_count(setting) > 0:
+            parts.append(setting)
+            labels.append(np.ones(len(setting.vertices), dtype=np.int8))
+        if not parts:
+            return None, None
+        combined = trimesh.util.concatenate(parts) if len(parts) > 1 else parts[0]
+        vertex_labels = np.concatenate(labels)
+        return combined, vertex_labels
+
+    def _transform_points_h(
+        self,
+        pts: np.ndarray,
+        M: np.ndarray,
+    ) -> np.ndarray:
+        pts = np.asarray(pts, dtype=np.float64)
+        homog = np.c_[pts, np.ones(len(pts), dtype=np.float64)]
+        return (np.asarray(M, dtype=np.float64) @ homog.T).T[:, :3]
+
+    def _extract_nricp_landmarks(
+        self,
+        labeled_mesh,
+        vertex_labels: np.ndarray,
+        shank,
+        setting,
+        frame: Dict[str, Any],
+        M_inlay_to_ai: np.ndarray,
+        ai_mesh,
+        ai_part_masks: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        verts = np.asarray(labeled_mesh.vertices, dtype=np.float64)
+        landmark_indices: List[int] = []
+        target_positions: List[np.ndarray] = []
+
+        if setting is not None and self._mesh_vertex_count(setting) > 0:
+            set_pts = np.asarray(setting.vertices, dtype=np.float64)
+            set_c = set_pts.mean(axis=0)
+            set_vmask = vertex_labels == 1
+            if int(set_vmask.sum()) > 0:
+                idxs = np.where(set_vmask)[0]
+                li = int(idxs[np.argmin(np.linalg.norm(verts[idxs] - set_c, axis=1))])
+                landmark_indices.append(li)
+                target_positions.append(
+                    self._transform_points_h(set_c.reshape(1, 3), M_inlay_to_ai)[0]
+                )
+
+        if shank is not None and self._mesh_vertex_count(shank) > 0:
+            sh_pts = np.asarray(shank.vertices, dtype=np.float64)
+            _, _, ang, _ = self._ring_cylindrical_coords(sh_pts, frame)
+            c = np.asarray(frame["center"], dtype=np.float64)
+            up_n = np.asarray(frame["up"], dtype=np.float64)
+            up_n = up_n / (np.linalg.norm(up_n) + 1e-12)
+            shank_vmask = vertex_labels == 0
+            for k in range(8):
+                target_ang = -np.pi + k * (np.pi / 4.0)
+                ang_diff = np.abs(
+                    np.arctan2(np.sin(ang - target_ang), np.cos(ang - target_ang))
+                )
+                band = ang_diff < 0.28
+                if int(band.sum()) < 3:
+                    continue
+                candidates = sh_pts[band]
+                proj = (candidates - c) @ up_n
+                pick = candidates[int(np.argmin(np.abs(proj - np.median(proj))))]
+                if int(shank_vmask.sum()) > 0:
+                    idxs = np.where(shank_vmask)[0]
+                    li = int(idxs[np.argmin(np.linalg.norm(verts[idxs] - pick, axis=1))])
+                    landmark_indices.append(li)
+                    target_positions.append(
+                        self._transform_points_h(pick.reshape(1, 3), M_inlay_to_ai)[0]
+                    )
+
+        if ai_part_masks is not None:
+            shank_mask_ai, setting_mask_ai = ai_part_masks
+            ai_pts = np.asarray(ai_mesh.vertices, dtype=np.float64)
+            if setting_mask_ai is not None and int(np.asarray(setting_mask_ai).sum()) >= 4:
+                sc = ai_pts[np.asarray(setting_mask_ai, dtype=bool)].mean(axis=0)
+                if int((vertex_labels == 1).sum()) > 0:
+                    idxs = np.where(vertex_labels == 1)[0]
+                    li = int(idxs[np.argmin(np.linalg.norm(verts[idxs] - sc, axis=1))])
+                    if li not in landmark_indices:
+                        landmark_indices.append(li)
+                        target_positions.append(sc)
+            if shank_mask_ai is not None and int(np.asarray(shank_mask_ai).sum()) >= 8:
+                band_pts = ai_pts[np.asarray(shank_mask_ai, dtype=bool)]
+                pick = band_pts[int(len(band_pts) // 3)]
+                if int((vertex_labels == 0).sum()) > 0:
+                    idxs = np.where(vertex_labels == 0)[0]
+                    li = int(idxs[np.argmin(np.linalg.norm(verts[idxs] - pick, axis=1))])
+                    if li not in landmark_indices:
+                        landmark_indices.append(li)
+                        target_positions.append(pick)
+
+        if len(landmark_indices) < 3:
+            return None, None
+        return (
+            np.asarray(landmark_indices, dtype=np.int64),
+            np.asarray(target_positions, dtype=np.float64),
+        )
+
+    def _detect_ai_inlay_analogue_envelope(
+        self,
+        ai_mesh,
+        inlay_mesh,
+        *,
+        M_pose: Optional[np.ndarray] = None,
+        frame: Optional[Dict[str, Any]] = None,
+        pose_info: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Envelope + proximity scoring on coarse-aligned AI coordinates."""
+        shank, setting = self._split_shank_and_setting(inlay_mesh)
+        fi0 = self._estimate_ring_frame(shank)
+        if M_pose is None or frame is None or pose_info is None:
+            M_pose, frame, pose_info = self._coarse_pose_for_inlay_detect(
+                ai_mesh, shank, setting, fi0
+            )
+
+        posed = ai_mesh.copy()
+        posed.apply_transform(M_pose)
+
+        c = np.asarray(frame["center"], dtype=np.float64)
+        up_n = np.asarray(frame["up"], dtype=np.float64)
+        up_n = up_n / (np.linalg.norm(up_n) + 1e-12)
+        rm = float(frame["r_med"])
+        thick = float(frame.get("thick", rm * 0.25))
+
+        pts = np.asarray(posed.vertices, dtype=np.float64)
+        n = len(pts)
+        scores = np.zeros(n, dtype=np.float64)
+        if n == 0:
+            return scores.astype(bool), {"reason": "empty_ai"}
+
+        d, r, ang, ang_cos = self._ring_cylindrical_coords(pts, frame)
+        proj = (pts - c) @ up_n
+
+        set_prof = self._inlay_setting_envelope_profile(setting, frame)
+        head_prof = self._ai_head_envelope_profile(posed, frame)
+        set_as_inner = {
+            "inner_r": set_prof["outer_r"],
+            "valid": set_prof["valid"],
+            "bins": set_prof["bins"],
+        }
+        head_as_outer = {
+            "outer_r": head_prof["outer_r"],
+            "valid": head_prof["valid"],
+            "bins": head_prof["bins"],
+        }
+        roll_deg, prof_peak, _ = self._angular_profile_cross_correlation(
+            set_as_inner, head_as_outer
+        )
+
+        set_pts = (
+            np.asarray(setting.vertices, dtype=np.float64)
+            if setting is not None and self._mesh_vertex_count(setting) > 0
+            else np.empty((0, 3))
+        )
+        if len(set_pts) >= 8:
+            _, _, set_ang, _ = self._ring_cylindrical_coords(set_pts, frame)
+            set_proj = (set_pts - c) @ up_n
+            set_ang_c = float(
+                np.arctan2(np.mean(np.sin(set_ang)), np.mean(np.cos(set_ang)))
+            )
+            set_u0 = float(np.percentile(set_proj, 18))
+            set_u1 = float(np.percentile(set_proj, 94))
+        else:
+            set_ang_c = 0.0
+            set_u0 = float(np.percentile(proj, 52))
+            set_u1 = float(np.percentile(proj, 96))
+
+        inner_p = self._inlay_inner_envelope_profile(shank, frame)
+        bins = int(inner_p["bins"])
+        bin_idx = (
+            np.floor((ang + np.pi) / (2.0 * np.pi) * bins).astype(np.int64) % bins
+        )
+        inner_r_at = inner_p["inner_r"][bin_idx]
+        inner_valid = inner_p["valid"][bin_idx]
+
+        tol_setting = max(rm * 0.16, 0.28)
+        tol_shank = max(rm * 0.11, 0.20)
+
+        if setting is not None and self._mesh_vertex_count(setting) > 0:
+            try:
+                from trimesh.proximity import ProximityQuery
+
+                _, dist_set, _ = ProximityQuery(setting).on_surface(pts)
+                dist_set = np.asarray(dist_set, dtype=np.float64)
+                head_region = (ang_cos > 0.08) | (proj >= set_u0 - rm * 0.22)
+                u_band = (proj >= set_u0 - rm * 0.18) & (proj <= set_u1 + rm * 0.45)
+                setting_score = np.exp(-dist_set / tol_setting)
+                scores = np.maximum(
+                    scores,
+                    setting_score * head_region.astype(np.float64) * u_band.astype(np.float64),
+                )
+            except Exception as exc:
+                logger.debug("setting proximity detect failed: %s", exc)
+
+        if shank is not None and self._mesh_vertex_count(shank) > 0:
+            try:
+                from trimesh.proximity import ProximityQuery
+
+                _, dist_sh, _ = ProximityQuery(shank).on_surface(pts)
+                dist_sh = np.asarray(dist_sh, dtype=np.float64)
+                axial_band = np.abs(d) < max(thick * 1.8, rm * 0.48)
+                radial_band = inner_valid & (
+                    (r >= inner_r_at * 0.62) & (r <= inner_r_at * 1.22)
+                )
+                shank_region = (ang_cos < 0.65) & axial_band & radial_band
+                shank_score = np.exp(-dist_sh / tol_shank) * shank_region.astype(
+                    np.float64
+                )
+                scores = np.maximum(scores, shank_score)
+            except Exception as exc:
+                logger.debug("shank proximity detect failed: %s", exc)
+
+        both_valid = set_prof["valid"][bin_idx] & head_prof["valid"][bin_idx]
+        if bool(both_valid.any()):
+            rt = set_prof["outer_r"][bin_idx]
+            rh = head_prof["outer_r"][bin_idx]
+            env_head = np.exp(-np.abs(r - rt) / max(rm * 0.16, 0.35))
+            env_head *= np.exp(-np.abs(rh - rt) / max(rm * 0.20, 0.45))
+            head_band = (ang_cos > 0.15) & (proj >= set_u0 - rm * 0.18)
+            scores = np.maximum(
+                scores, env_head * both_valid.astype(np.float64) * head_band.astype(np.float64)
+            )
+
+        if inner_valid.any():
+            radial_fit = np.exp(
+                -np.abs(r - inner_r_at * 0.96) / max(rm * 0.09, 0.16)
+            )
+            shank_env = (
+                (ang_cos < 0.62)
+                & inner_valid
+                & (np.abs(d) < max(thick * 1.7, rm * 0.45))
+            )
+            scores = np.maximum(
+                scores, radial_fit * shank_env.astype(np.float64) * 0.85
+            )
+
+        positive = scores[scores > 1e-6]
+        if len(positive) < 12:
+            head_guess = (ang_cos > 0.18) & (proj >= np.percentile(proj, 52))
+            scores[head_guess] = np.maximum(scores[head_guess], 0.22)
+            positive = scores[scores > 1e-6]
+
+        if len(positive) >= 8:
+            thr = float(np.percentile(positive, 62))
+        else:
+            thr = 0.18
+        mask = scores >= thr
+        min_hits = max(24, int(n * 0.006))
+        if int(mask.sum()) < min_hits:
+            order = np.argsort(scores)[::-1]
+            k = max(min_hits, int(n * 0.010))
+            mask = np.zeros(n, dtype=bool)
+            mask[order[: min(k, n)]] = True
+
+        mask = self._smooth_vertex_mask_on_mesh(
+            ai_mesh, mask, face_min_hits=2, dilate_rings=2
+        )
+
+        info = {
+            "n_vertices": n,
+            "n_detected": int(mask.sum()),
+            "detect_ratio": float(mask.mean()),
+            "profile_peak": float(prof_peak),
+            "roll_hint_deg": float(roll_deg),
+            "setting_ang_center_deg": float(np.degrees(set_ang_c)),
+            "score_threshold": thr,
+            "frame_diameter": float(frame["diameter"]),
+            "pose_source": pose_info.get("pose_source", "unknown"),
+            "pose_confidence": float(pose_info.get("pose_confidence", 0.0)),
+            "peak_ratio": float(pose_info.get("peak_ratio", 0.0)),
+            "alignment_applied": True,
+            "detect_method": "envelope_fallback",
+            "nricp_success": False,
+        }
+        return mask, info
+
+    def _detect_ai_inlay_analogue_nricp(
+        self,
+        ai_mesh,
+        inlay_mesh,
+        *,
+        ai_part_masks: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Transfer inlay shank/setting labels onto AI via NRICP."""
+        shank, setting = self._split_shank_and_setting(inlay_mesh)
+        fi0 = self._estimate_ring_frame(shank)
+        M_pose, frame, pose_info = self._coarse_pose_for_inlay_detect(
+            ai_mesh, shank, setting, fi0
+        )
+        labeled_mesh, vertex_labels = self._build_inlay_labeled_mesh(shank, setting)
+        if labeled_mesh is None or vertex_labels is None:
+            raise ValueError("empty inlay labeled mesh")
+
+        M_inlay_to_ai = np.linalg.inv(np.asarray(M_pose, dtype=np.float64))
+        aligned_source = labeled_mesh.copy()
+        aligned_source.apply_transform(M_inlay_to_ai)
+        rm = float(frame["r_med"])
+
+        source_landmarks, target_positions = self._extract_nricp_landmarks(
+            aligned_source,
+            vertex_labels,
+            shank,
+            setting,
+            frame,
+            M_inlay_to_ai,
+            ai_mesh,
+            ai_part_masks=ai_part_masks,
+        )
+        if source_landmarks is None or target_positions is None:
+            raise ValueError("insufficient NRICP landmarks")
+
+        from trimesh.registration import nricp_amberg
+
+        dist_thr = max(rm * 0.12, 0.25)
+        deformed_verts = nricp_amberg(
+            aligned_source,
+            ai_mesh,
+            source_landmarks=source_landmarks,
+            target_positions=target_positions,
+            steps=[
+                (0.02, 5, 0.5, 6),
+                (0.03, 2.5, 0.0, 6),
+            ],
+            distance_threshold=dist_thr,
+        )
+        deformed = aligned_source.copy()
+        deformed.vertices = np.asarray(deformed_verts, dtype=np.float64)
+
+        ai_pts = np.asarray(ai_mesh.vertices, dtype=np.float64)
+        tol = max(rm * 0.22, 0.45)
+        mask = np.zeros(len(ai_pts), dtype=bool)
+        try:
+            from scipy.spatial import cKDTree
+
+            tree = cKDTree(np.asarray(deformed.vertices, dtype=np.float64))
+            d_nn, _ = tree.query(ai_pts, k=1)
+            mask |= np.asarray(d_nn, dtype=np.float64) <= tol
+        except Exception:
+            pass
+        try:
+            from trimesh.proximity import ProximityQuery
+
+            pq = ProximityQuery(deformed)
+            _, dist, _ = pq.on_surface(ai_pts)
+            mask |= np.asarray(dist, dtype=np.float64) <= tol
+        except Exception as exc:
+            logger.debug("NRICP surface query failed: %s", exc)
+
+        if ai_part_masks is not None:
+            shank_mask_ai, setting_mask_ai = ai_part_masks
+            if shank_mask_ai is not None and setting_mask_ai is not None:
+                part_union = np.asarray(shank_mask_ai, dtype=bool) | np.asarray(
+                    setting_mask_ai, dtype=bool
+                )
+                if int(part_union.sum()) >= 12:
+                    mask &= part_union
+
+        n = len(ai_pts)
+        label_transfer_ratio = float(mask.mean())
+        min_hits = max(24, int(n * 0.006))
+        if int(mask.sum()) < min_hits or label_transfer_ratio < 0.03:
+            raise ValueError(
+                f"NRICP label transfer too sparse: ratio={label_transfer_ratio:.4f}"
+            )
+
+        mask = self._smooth_vertex_mask_on_mesh(
+            ai_mesh, mask, face_min_hits=2, dilate_rings=2
+        )
+
+        set_prof = self._inlay_setting_envelope_profile(setting, frame)
+        head_prof = self._ai_head_envelope_profile(ai_mesh, frame)
+        roll_deg, prof_peak, _ = self._angular_profile_cross_correlation(
+            {
+                "inner_r": set_prof["outer_r"],
+                "valid": set_prof["valid"],
+                "bins": set_prof["bins"],
+            },
+            {
+                "outer_r": head_prof["outer_r"],
+                "valid": head_prof["valid"],
+                "bins": head_prof["bins"],
+            },
+        )
+
+        info = {
+            "n_vertices": n,
+            "n_detected": int(mask.sum()),
+            "detect_ratio": float(mask.mean()),
+            "profile_peak": float(prof_peak),
+            "roll_hint_deg": float(roll_deg),
+            "frame_diameter": float(frame["diameter"]),
+            "pose_source": pose_info.get("pose_source", "unknown"),
+            "pose_confidence": float(pose_info.get("pose_confidence", 0.0)),
+            "peak_ratio": float(pose_info.get("peak_ratio", 0.0)),
+            "alignment_applied": True,
+            "detect_method": "nricp",
+            "nricp_success": True,
+            "label_transfer_ratio": label_transfer_ratio,
+            "landmark_count": int(len(source_landmarks)),
+            "nricp_distance_threshold": dist_thr,
+        }
+        return mask, info
+
+    def _detect_ai_inlay_analogue(
+        self,
+        ai_mesh,
+        inlay_mesh,
+        *,
+        ai_part_masks: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Mark AI vertices matching inlay setting + shank seat (NRICP primary).
+        """
+        try:
+            return self._detect_ai_inlay_analogue_nricp(
+                ai_mesh, inlay_mesh, ai_part_masks=ai_part_masks
+            )
+        except Exception as exc:
+            logger.warning("NRICP inlay detect failed, using envelope fallback: %s", exc)
+            return self._detect_ai_inlay_analogue_envelope(ai_mesh, inlay_mesh)
+
+    def export_ai_inlay_detect_preview(
+        self,
+        ai_mesh_path: str,
+        inlay_mesh_path: str,
+        output_path: str,
+        *,
+        cleaned_inlay_path: Optional[str] = None,
+        ai_part_split_info: Optional[Dict[str, Any]] = None,
+        ai_shank_mask: Optional[np.ndarray] = None,
+        ai_setting_mask: Optional[np.ndarray] = None,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Export AI mesh with detected inlay-analogue vertices painted red."""
+        if cleaned_inlay_path and self._is_valid_output_file(cleaned_inlay_path):
+            inlay = self._load_trimesh_mesh(cleaned_inlay_path)
+        else:
+            inlay = self._load_trimesh_mesh(inlay_mesh_path)
+        ai = self._load_trimesh_mesh(ai_mesh_path)
+        mesh = self._prepare_mesh_for_region_paint(ai)
+        ai_part_masks = None
+        if ai_part_split_info and not ai_part_split_info.get("skipped"):
+            if ai_shank_mask is not None and ai_setting_mask is not None:
+                if len(ai_shank_mask) == len(mesh.vertices) and len(ai_setting_mask) == len(
+                    mesh.vertices
+                ):
+                    ai_part_masks = (
+                        np.asarray(ai_shank_mask, dtype=bool),
+                        np.asarray(ai_setting_mask, dtype=bool),
+                    )
+        mask, detect_info = self._detect_ai_inlay_analogue(
+            mesh, inlay, ai_part_masks=ai_part_masks
+        )
+        colors = self._vertex_colors_from_detect_mask(mesh, mask)
+        import trimesh
+
+        if hasattr(mesh, "visual") and mesh.visual is not None:
+            if hasattr(mesh.visual, "face_colors"):
+                mesh.visual.face_colors = None
+        # 仅写 COLOR_0；勿挂 PBR baseColorFactor，否则部分 GLB 导出会丢弃顶点色
+        mesh.visual = trimesh.visual.ColorVisuals(mesh=mesh, vertex_colors=colors)
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        scene = trimesh.Scene()
+        scene.add_geometry(mesh, node_name="ai_inlay_detect", geom_name="ai_inlay_detect")
+        scene.export(output_path, file_type="glb")
+        detect_info["output_path"] = output_path
+        return output_path, detect_info
+
+    def _translation_matrix(self, delta: np.ndarray) -> np.ndarray:
+        T = np.eye(4, dtype=np.float64)
+        T[:3, 3] = np.asarray(delta, dtype=np.float64)
+        return T
+
+    def _refine_contour_size_translation(
+        self,
+        source_mesh,
+        inlay_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        M: np.ndarray,
+        *,
+        span_scale: float = 1.0,
+        overlap_samples: int = 450,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Search ring-frame translations so inlay seats on AI (fixes zero overlap)."""
+        c = np.asarray(frame["center"], dtype=np.float64)
+        up = np.asarray(frame["up"], dtype=np.float64)
+        up_n = up / (np.linalg.norm(up) + 1e-12)
+        axis = np.asarray(frame["axis"], dtype=np.float64)
+        axis = axis / (np.linalg.norm(axis) + 1e-12)
+        e1 = np.cross(axis, up_n)
+        e1 = e1 / (np.linalg.norm(e1) + 1e-12)
+        diam = float(frame["diameter"]) * float(span_scale)
+        span_r = diam * 0.22
+        span_u = diam * 0.22
+        span_a = diam * 0.10
+
+        best_M = np.asarray(M, dtype=np.float64)
+        best_key = (-1.0, 1e18)
+        tried: List[Dict[str, Any]] = []
+
+        for dr in np.linspace(-span_r, span_r, 13):
+            for du in np.linspace(-span_u, span_u, 13):
+                for da in np.linspace(-span_a, span_a, 5):
+                    delta = dr * e1 + du * up_n + da * axis
+                    M_trial = self._translation_matrix(delta) @ np.asarray(M, dtype=np.float64)
+                    metrics = self._score_contour_size_alignment(
+                        source_mesh,
+                        inlay_mesh,
+                        shank_mesh,
+                        setting_mesh,
+                        frame,
+                        M_trial,
+                        overlap_samples=overlap_samples,
+                    )
+                    overlap = float(metrics.get("inlay_overlap_ratio") or 0.0)
+                    key = (overlap, -float(metrics["score"]))
+                    tried.append(
+                        {
+                            "dr": float(dr),
+                            "du": float(du),
+                            "da": float(da),
+                            "overlap": overlap,
+                            "score": float(metrics["score"]),
+                        }
+                    )
+                    if key > best_key:
+                        best_key = key
+                        best_M = M_trial
+
+        info = {
+            "best_overlap": float(best_key[0]),
+            "best_score": float(-best_key[1]) if best_key[0] >= 0 else None,
+            "n_tried": len(tried),
+            "samples": tried[-8:],
+        }
+        return best_M, info
+
+    def _score_contour_size_alignment(
+        self,
+        source_mesh,
+        inlay_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        M: np.ndarray,
+        *,
+        peak_ratio_hint: Optional[float] = None,
+        overlap_samples: int = 900,
+    ) -> Dict[str, Any]:
+        """
+        Size-only alignment score using contour/gap metrics only (no overlap pick).
+        Overlap is measured as inlay→AI coverage (inlay part of AI body), never reversed.
+        Lower is better.
+        """
+        posed = source_mesh.copy()
+        posed.apply_transform(np.asarray(M, dtype=np.float64))
+        fa = self._estimate_ring_frame(posed)
+        diam = float(frame["diameter"])
+        diam_ratio = float(fa["diameter"] / max(diam, 1e-9))
+        gap_prof = self._angular_shank_gap_profile(posed, shank_mesh, frame)
+        ann_gap = self._shank_annular_gap_mm(posed, shank_mesh, frame)
+        target_clear = max(diam * 0.006, 0.05e-3)
+        set_d = self._setting_surface_distance(posed, setting_mesh, frame)
+        up_cos = float(self._ai_up_alignment(posed, frame))
+
+        inlay_vol = self._mesh_aabb_volume(inlay_mesh)
+        ai_vol = self._mesh_aabb_volume(posed)
+        volume_ratio = float(ai_vol / max(inlay_vol, 1e-12))
+
+        inlay_overlap, overlap_info = self._compute_inlay_ai_overlap_ratio(
+            inlay_mesh,
+            posed,
+            shank_mesh=shank_mesh,
+            setting_mesh=setting_mesh,
+            frame=frame,
+            full_ring=True,
+            max_samples=overlap_samples,
+        )
+        ai_containment, containment_info = self._compute_ai_surface_containment_by_inlay(
+            posed,
+            inlay_mesh,
+            n_samples=min(800, overlap_samples),
+        )
+
+        peak_ratio = float(peak_ratio_hint if peak_ratio_hint is not None else 0.0)
+        if peak_ratio_hint is None:
+            try:
+                inner_p = self._inlay_inner_envelope_profile(shank_mesh, frame)
+                outer_p = self._ai_outer_envelope_profile(posed, frame, shank_only=True)
+                _, peak_ratio, _ = self._angular_profile_cross_correlation(inner_p, outer_p)
+            except Exception:
+                peak_ratio = 0.0
+
+        gap_median = float(gap_prof.get("gap_median", 0.0))
+        max_prot = float(gap_prof.get("max_protrusion_mm", 0.0))
+        band_pen = 0.0
+        if diam_ratio < 0.85:
+            band_pen = (0.85 - diam_ratio) * 55.0
+        elif diam_ratio > 1.15:
+            band_pen = (diam_ratio - 1.15) * 55.0
+        band_bonus = -10.0 if 0.85 <= diam_ratio <= 1.15 else 0.0
+        vol_pen = 0.0
+        if volume_ratio < 1.0:
+            vol_pen = (1.0 - volume_ratio) * diam * 6.0
+        overlap_pen = 0.0
+        if inlay_overlap < 0.12:
+            overlap_pen = (0.12 - inlay_overlap) * diam * 42.0
+        score = (
+            abs(diam_ratio - 1.0) * 28.0
+            + band_pen
+            + band_bonus
+            + vol_pen
+            + overlap_pen
+            + abs(ann_gap - target_clear) * 12.0
+            + abs(gap_median) * 6.0
+            + max_prot * 14.0
+            + max(0.0, 0.55 - inlay_overlap) * diam * 5.0
+            + max(0.0, ai_containment - 0.45) * diam * 10.0
+            + max(0.0, 0.35 - peak_ratio) * diam * 0.15
+            + max(0.0, 0.25 - up_cos) * diam * 0.12
+            + float(set_d["median"]) * 1.8
+        )
+        return {
+            "score": float(score),
+            "diam_ratio": diam_ratio,
+            "shank_annular_gap_mm": float(ann_gap),
+            "gap_median": gap_median,
+            "max_protrusion_mm": max_prot,
+            "peak_ratio": peak_ratio,
+            "setting_median": float(set_d["median"]),
+            "up_cos": up_cos,
+            "volume_ratio": volume_ratio,
+            "inlay_overlap_ratio": float(inlay_overlap),
+            "ai_containment_ratio": float(ai_containment),
+            "overlap_info": overlap_info,
+            "containment_info": containment_info,
+            "gap_profile": {k: gap_prof[k] for k in gap_prof if k != "gaps"},
+        }
+
+    def _compute_contour_size_scale(
+        self,
+        source_mesh,
+        inlay_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        M_pose: np.ndarray,
+        *,
+        fast: bool = False,
+    ) -> Tuple[float, Dict[str, Any]]:
+        """Search uniform scale about frame center; contour metrics only."""
+        cfg = self._get_alignment_config()
+        c = np.asarray(frame["center"], dtype=np.float64)
+        clearance = max(float(frame["diameter"]) * 0.006, 0.05e-3)
+        info: Dict[str, Any] = {}
+
+        posed = source_mesh.copy()
+        posed.apply_transform(M_pose)
+        s_vol_floor, vol_floor_info = self._compute_volume_scale_floor(
+            source_mesh, inlay_mesh, M_pose
+        )
+        info["volume_floor"] = vol_floor_info
+
+        s_ring, ring_info = self._compute_ring_frame_scale(posed, shank_mesh, frame)
+        s_env, env_info = self._compute_casa_envelope_scale(
+            posed, shank_mesh, frame, np.eye(4, dtype=np.float64), clearance
+        )
+        inner_p = self._inlay_inner_envelope_profile(shank_mesh, frame)
+        outer_p = self._ai_outer_envelope_profile(posed, frame, shank_only=True)
+        s_wall = self._envelope_scale_to_inlay_wall(inner_p, outer_p, clearance)
+        info["candidates"] = {
+            "ring_frame": float(s_ring),
+            "envelope": float(s_env),
+            "inlay_wall": float(s_wall),
+            "volume_floor": float(s_vol_floor),
+        }
+        info["ring_detail"] = ring_info
+        info["envelope_detail"] = env_info
+
+        seeds = {
+            float(s_ring),
+            float(s_env),
+            float(s_wall),
+            float(s_vol_floor),
+            1.0,
+            float(frame["diameter"]),
+        }
+        s_lo = max(cfg.casa_scale_min, 0.08, float(s_vol_floor))
+        s_hi = min(
+            cfg.casa_scale_max,
+            max(12.5, float(frame["diameter"]) * 1.35, float(s_vol_floor) * 1.25),
+        )
+        n_geom = 12 if fast else 28
+        n_refine = 9 if fast else 17
+        overlap_n = 350 if fast else 600
+        for mult in np.geomspace(s_lo, s_hi, n_geom):
+            seeds.add(float(mult))
+        for seed in (s_ring, s_env, s_wall, s_vol_floor):
+            if seed > 1e-6:
+                for f in (0.82, 0.92, 1.0, 1.08, 1.18):
+                    seeds.add(float(np.clip(seed * f, s_lo, s_hi)))
+
+        best_s = float(max(s_ring, s_vol_floor))
+        best_score = 1e18
+        best_metrics: Dict[str, Any] = {}
+        tried: List[Dict[str, Any]] = []
+        for s_cand in sorted(seeds):
+            s_val = float(np.clip(s_cand, s_lo, s_hi))
+            M_trial = self._scale_transform_about_point(M_pose, c, s_val)
+            metrics = self._score_contour_size_alignment(
+                source_mesh,
+                inlay_mesh,
+                shank_mesh,
+                setting_mesh,
+                frame,
+                M_trial,
+                overlap_samples=overlap_n,
+            )
+            tried.append({"s": s_val, "score": metrics["score"]})
+            if metrics["score"] < best_score - 1e-6:
+                best_score = metrics["score"]
+                best_s = s_val
+                best_metrics = metrics
+
+        ref_lo = max(s_lo, best_s * 0.88)
+        ref_hi = min(s_hi, best_s * 1.12)
+        for s_ref in np.linspace(ref_lo, ref_hi, n_refine):
+            s_val = float(s_ref)
+            M_trial = self._scale_transform_about_point(M_pose, c, s_val)
+            metrics = self._score_contour_size_alignment(
+                source_mesh,
+                inlay_mesh,
+                shank_mesh,
+                setting_mesh,
+                frame,
+                M_trial,
+                overlap_samples=overlap_n,
+            )
+            tried.append({"s": s_val, "score": metrics["score"], "refine": True})
+            if metrics["score"] < best_score - 1e-6:
+                best_score = metrics["score"]
+                best_s = s_val
+                best_metrics = metrics
+
+        info["scale_search"] = tried[-12:]
+        info["scale_best"] = float(best_s)
+        info.update(best_metrics)
+        return best_s, info
+
+    def _apply_head_setting_scale_correction(
+        self,
+        source_mesh,
+        shank_mesh,
+        setting_mesh,
+        frame: Dict[str, Any],
+        M_base: np.ndarray,
+        s_base: float,
+        s_volume_floor: float = 1.0,
+    ) -> Tuple[float, np.ndarray, Dict[str, Any]]:
+        """Phase C: minor uniform scale tweak from head/setting extent ratios."""
+        c = np.asarray(frame["center"], dtype=np.float64)
+        M_scaled = self._scale_transform_about_point(M_base, c, s_base)
+        posed = source_mesh.copy()
+        posed.apply_transform(M_scaled)
+        ratios = self._measure_head_setting_extent_ratios(posed, setting_mesh, frame)
+        info = {"ratios": ratios, "applied": False}
+        height_ratio = float(ratios.get("height_ratio", 1.0))
+        span_ratio = float(ratios.get("span_ratio", 1.0))
+        blend_ratio = 0.5 * height_ratio + 0.5 * span_ratio
+        if abs(blend_ratio - 1.0) <= 0.12:
+            return s_base, M_scaled, info
+
+        s_head = float(np.clip(1.0 / max(blend_ratio, 1e-9), 0.85, 1.15))
+        s_final = float(max(s_base * (s_head ** 0.35), s_volume_floor))
+        M_final = self._scale_transform_about_point(M_base, c, s_final)
+        info["applied"] = True
+        info["s_head_factor"] = s_head
+        info["s_final"] = s_final
+        return s_final, M_final, info
+
+    def compute_size_alignment_transform(
+        self,
+        source_mesh,
+        target_mesh,
+        *,
+        cleaned_base_path: Optional[str] = None,
+        inlay_detect_info: Optional[Dict[str, Any]] = None,
+        fast: bool = False,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Contour-based size alignment: pose match + uniform scale (no overlap).
+        """
+        if cleaned_base_path and self._is_valid_output_file(cleaned_base_path):
+            inlay = self._load_trimesh_mesh(cleaned_base_path)
+        else:
+            inlay = self._load_trimesh_mesh(target_mesh) if isinstance(target_mesh, str) else target_mesh
+        if isinstance(source_mesh, str):
+            source = self._load_trimesh_mesh(source_mesh)
+        else:
+            source = source_mesh
+
+        shank, setting = self._split_shank_and_setting(inlay)
+        fi0 = self._estimate_ring_frame(shank)
+        up = self._geometric_setting_up(fi0, setting)
+        if up is None:
+            up = self._detect_setting_up(inlay, fi0)
+        frame = self._frame_with_up(fi0, up)
+        fa0 = self._estimate_ring_frame(source)
+
+        info: Dict[str, Any] = {"method": "contour_size_align"}
+        if fa0["score"] < 0.20 or fi0["score"] < 0.20:
+            info["warning"] = "low_ring_score"
+
+        M_pose, pose_info = self._compute_contour_anchored_pose(
+            source, shank, setting, fa0, fi0
+        )
+        info["pose"] = pose_info
+        if M_pose is None:
+            raise RuntimeError(
+                f"contour pose failed: {pose_info.get('reason', 'unknown')}"
+            )
+
+        roll_hint = float((inlay_detect_info or {}).get("roll_hint_deg", 0.0))
+        if abs(roll_hint) > 1e-3:
+            roll_rad = np.radians(roll_hint)
+            T_roll = self._rotation_about_axis_matrix(
+                frame["axis"], frame["center"], roll_rad
+            )
+            M_pose = T_roll @ M_pose
+            info["detect_roll_applied_deg"] = roll_hint
+
+        M_loc, trans_pre = self._refine_contour_size_translation(
+            source,
+            inlay,
+            shank,
+            setting,
+            frame,
+            M_pose,
+            span_scale=1.0,
+            overlap_samples=280 if fast else 450,
+        )
+        info["translation_pre"] = trans_pre
+
+        s_base, scale_info = self._compute_contour_size_scale(
+            source, inlay, shank, setting, frame, M_loc, fast=fast
+        )
+        info["scale"] = scale_info
+        info["fast_mode"] = fast
+        s_vol_floor = float((scale_info.get("volume_floor") or {}).get("s_volume_floor", 1.0))
+        s_final, M_scaled, head_info = self._apply_head_setting_scale_correction(
+            source, shank, setting, frame, M_loc, s_base, s_volume_floor=s_vol_floor
+        )
+        info["head_correction"] = head_info
+        info["scale_final"] = float(s_final)
+
+        M_final, trans_post = self._refine_contour_size_translation(
+            source,
+            inlay,
+            shank,
+            setting,
+            frame,
+            M_scaled,
+            span_scale=0.65 if not fast else 0.5,
+            overlap_samples=400 if fast else 800,
+        )
+        info["translation_post"] = trans_post
+
+        final_metrics = self._score_contour_size_alignment(
+            source,
+            inlay,
+            shank,
+            setting,
+            frame,
+            M_final,
+            overlap_samples=700 if fast else 1500,
+        )
+        info["final_metrics"] = final_metrics
+        info["diam_ratio"] = final_metrics.get("diam_ratio")
+        info["peak_ratio"] = final_metrics.get("peak_ratio")
+        info["shank_annular_gap_mm"] = final_metrics.get("shank_annular_gap_mm")
+        info["volume_ratio"] = final_metrics.get("volume_ratio")
+        info["inlay_overlap_ratio"] = final_metrics.get("inlay_overlap_ratio")
+        info["ai_containment_ratio"] = final_metrics.get("ai_containment_ratio")
+        info["setting_height_ratio"] = (head_info.get("ratios") or {}).get(
+            "height_ratio"
+        )
+        info["setting_median"] = final_metrics.get("setting_median")
+        info["up_cos"] = final_metrics.get("up_cos")
+        return M_final, info
+
+    def apply_size_alignment(
+        self,
+        generated_mesh_path: str,
+        base_mesh_path: str,
+        cleaned_base_path: Optional[str],
+        output_dir: str,
+        task_id: str,
+        output_format: str = "glb",
+        inlay_detect_info: Optional[Dict[str, Any]] = None,
+        *,
+        fast: bool = False,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Write size-aligned AI mesh; used by debug pipeline and production."""
+        from app.utils.file_utils import generate_output_path
+
+        out_path = generate_output_path(
+            output_dir, task_id, f"size_aligned.{output_format.lower()}"
+        )
+        M, info = self.compute_size_alignment_transform(
+            generated_mesh_path,
+            base_mesh_path,
+            cleaned_base_path=cleaned_base_path,
+            inlay_detect_info=inlay_detect_info,
+            fast=fast,
+        )
+        src_tmp = out_path + ".src.tmp.glb"
+        source = self._load_trimesh_mesh(generated_mesh_path)
+        source.export(src_tmp, file_type="glb")
+        self._apply_trimesh_transform(src_tmp, M, out_path)
+        try:
+            if os.path.isfile(src_tmp):
+                os.remove(src_tmp)
+        except OSError:
+            pass
+        info["output_path"] = out_path
+        logger.info(
+            "contour size alignment: scale_final=%.4f diam_ratio=%.3f peak=%.3f gap=%.4f",
+            info.get("scale_final", 1.0),
+            float(info.get("diam_ratio") or 0),
+            float(info.get("peak_ratio") or 0),
+            float(info.get("shank_annular_gap_mm") or 0),
+        )
+        return out_path, info, M
 
     def _compute_pca_rotation_only_transform(
         self,
@@ -2197,7 +3989,11 @@ class MeshProcessor:
             scale_candidates.append(float(p2["s_uniform"]))
         if p2.get("s_robust") is not None:
             scale_candidates.append(float(p2["s_robust"]))
-        s_ring, ring_scale_info = self._compute_ring_frame_scale(source_mesh, shank, fi)
+        _, prong_reason = self._detect_full_ring_inlay_mode(target_mesh, fi)
+        contact_max = 1.25 if prong_reason == "prong_only" else 1.15
+        s_ring, ring_scale_info = self._compute_ring_frame_scale(
+            source_mesh, shank, fi, contact_max=contact_max
+        )
         scale_candidates.append(float(s_ring))
         info["ring_frame_scale"] = ring_scale_info
 
@@ -2410,13 +4206,15 @@ class MeshProcessor:
             up_tgt = self._detect_setting_up(target_mesh, fi0)
         fi = self._frame_with_up(fi0, up_tgt)
 
+        _, prong_reason = self._detect_full_ring_inlay_mode(target_mesh, fi)
+        contact_max = 1.25 if prong_reason == "prong_only" else 1.15
         inlay_inner_r = self._inlay_inner_hole_radius(shank, fi)
         ai_outer_src = self._ai_shank_outer_radius(source_mesh, fa0)
         scale_base = float(fi["diameter"] / max(fa0["diameter"], 1e-9))
         est_outer = ai_outer_src * scale_base
         target_outer = inlay_inner_r - max(fi["diameter"] * 0.006, 0.05e-3)
         scale_contact = float(
-            np.clip(target_outer / max(est_outer, 1e-9), 0.98, 1.15)
+            np.clip(target_outer / max(est_outer, 1e-9), 0.98, contact_max)
         )
         scale = scale_base * scale_contact
         info["scale_base"] = scale_base
@@ -2796,6 +4594,7 @@ class MeshProcessor:
         enable_icp: bool = True,
         max_iterations: int = 50,
         cleaned_base_path: Optional[str] = None,
+        skip_overlap_refine: bool = False,
     ) -> Tuple[str, np.ndarray, Dict[str, Any]]:
         """
         Align AI body to cleaned inlay for jewelry replacement.
@@ -3022,6 +4821,75 @@ class MeshProcessor:
                 scale,
             )
 
+        if transform is not None and info.get("method") in (
+            "ring_frame",
+            "ring_frame_fallback",
+        ):
+            try:
+                shank_rf, setting_rf = self._split_shank_and_setting(target)
+                fi_rf = self._estimate_ring_frame(shank_rf)
+                up_rf = self._geometric_setting_up(fi_rf, setting_rf)
+                if up_rf is None:
+                    up_rf = self._detect_setting_up(target, fi_rf)
+                frame_rf = self._frame_with_up(fi_rf, up_rf)
+                full_ring_rf, _ = self._detect_full_ring_inlay_mode(target, frame_rf)
+                if not skip_overlap_refine:
+                    refined_M, refine_info = self._refine_alignment_inlay_overlap(
+                        source,
+                        target,
+                        shank_rf,
+                        setting_rf,
+                        frame_rf,
+                        transform,
+                        full_ring=full_ring_rf,
+                    )
+                    info["overlap_refine_ring_frame"] = refine_info
+                    info["overlap_refine_applied"] = bool(refine_info.get("refined"))
+                    if refine_info.get("refined") or refine_info.get("meets_target"):
+                        transform = refined_M
+                        info["inlay_overlap_ratio"] = float(
+                            refine_info.get("overlap_after", info.get("inlay_overlap_ratio", 0.0))
+                        )
+                else:
+                    info["overlap_refine_skipped"] = "size_alignment_done"
+                pose_rf = self._eval_alignment_pose_metrics(
+                    source,
+                    target,
+                    shank_rf,
+                    setting_rf,
+                    frame_rf,
+                    transform,
+                    full_ring=full_ring_rf,
+                )
+                if pose_rf["up_cos"] < 0.25:
+                    init_rec = {"score": pose_rf["score"], **pose_rf}
+                    M_axis, axis_rec = self._resolve_ring_axis_half_turn(
+                        source,
+                        shank_rf,
+                        setting_rf,
+                        frame_rf,
+                        transform,
+                        init_rec,
+                        extra_degs=(0.0, 90.0, 180.0, 270.0),
+                    )
+                    pose_axis = self._eval_alignment_pose_metrics(
+                        source,
+                        target,
+                        shank_rf,
+                        setting_rf,
+                        frame_rf,
+                        M_axis,
+                        full_ring=full_ring_rf,
+                    )
+                    if pose_axis["score"] < pose_rf["score"] - 1e-4 or (
+                        pose_axis["up_cos"] >= 0.25 and pose_rf["up_cos"] < 0.25
+                    ):
+                        transform = M_axis
+                        info["ring_frame_axis_fix"] = axis_rec
+                        info["inlay_overlap_ratio"] = float(pose_axis["overlap"])
+            except Exception as e:
+                logger.warning("ring-frame overlap refine skipped: %s", e)
+
         pre_icp_path = output_path + ".pre_icp.tmp.glb"
         self._apply_trimesh_transform(src_tmp, transform, pre_icp_path)
 
@@ -3073,8 +4941,12 @@ class MeshProcessor:
                         setting_for_icp is None
                         or set_after["median"] <= set_before["median"] * 1.08
                     )
-                    up_ok = up_after >= min(up_before - 0.12, 0.25) or (
-                        setting_for_icp is None
+                    up_ok = (
+                        up_after >= 0.25
+                        and (
+                            setting_for_icp is None
+                            or up_after >= min(up_before - 0.12, 0.25)
+                        )
                     )
                     # Also reject if ring axis is destroyed
                     fa_t = self._estimate_ring_frame(trial_mesh)
@@ -3090,7 +4962,41 @@ class MeshProcessor:
                         )
                     )
                     info["icp_axis_ang_deg"] = axis_ang
-                    if improved and setting_ok and up_ok and axis_ang <= 30.0:
+                    overlap_before_icp = None
+                    overlap_after_icp = None
+                    try:
+                        full_ring_icp, _ = self._detect_full_ring_inlay_mode(
+                            target, shank_frame
+                        )
+                        overlap_before_icp, _ = self._compute_inlay_ai_overlap_ratio(
+                            target,
+                            pre_mesh,
+                            shank_mesh=shank,
+                            setting_mesh=setting_for_icp,
+                            frame=shank_frame,
+                            full_ring=full_ring_icp,
+                        )
+                        overlap_after_icp, _ = self._compute_inlay_ai_overlap_ratio(
+                            target,
+                            trial_mesh,
+                            shank_mesh=shank,
+                            setting_mesh=setting_for_icp,
+                            frame=shank_frame,
+                            full_ring=full_ring_icp,
+                        )
+                        info["icp_overlap_before"] = float(overlap_before_icp)
+                        info["icp_overlap_after"] = float(overlap_after_icp)
+                    except Exception as overlap_err:
+                        logger.warning("ICP overlap check skipped: %s", overlap_err)
+                    overlap_ok = True
+                    if (
+                        overlap_before_icp is not None
+                        and overlap_after_icp is not None
+                        and overlap_after_icp < overlap_before_icp - 0.03
+                    ):
+                        overlap_ok = False
+                        info["icp_overlap_rejected"] = True
+                    if improved and setting_ok and up_ok and axis_ang <= 30.0 and overlap_ok:
                         transform = trial
                         info["method"] = info.get("method", "pca") + "+icp"
                         logger.info(
@@ -3235,6 +5141,65 @@ class MeshProcessor:
         except Exception as e:
             logger.warning("overlap refinement post-ICP skipped: %s", e)
 
+        # Rescue inverted head / diameter drift (common after ring_frame_fallback + weak ICP)
+        try:
+            shank_rs, setting_rs = self._split_shank_and_setting(target)
+            fi_rs = self._estimate_ring_frame(shank_rs)
+            up_rs = self._geometric_setting_up(fi_rs, setting_rs)
+            if up_rs is None:
+                up_rs = self._detect_setting_up(target, fi_rs)
+            frame_rs = self._frame_with_up(fi_rs, up_rs)
+            full_ring_rs, _ = self._detect_full_ring_inlay_mode(target, frame_rs)
+            probe = self._eval_alignment_pose_metrics(
+                source,
+                target,
+                shank_rs,
+                setting_rs,
+                frame_rs,
+                transform,
+                full_ring=full_ring_rs,
+            )
+            diam = float(frame_rs["diameter"])
+            need_rescue = (
+                probe["up_cos"] < 0.30
+                or probe["overlap"] < align_cfg.casa_min_inlay_overlap_ratio
+                or probe["diam_ratio"] < 0.78
+                or probe["diam_ratio"] > 1.32
+                or (
+                    setting_rs is not None
+                    and probe["setting_median"] > max(diam * 0.10, 0.35)
+                )
+                or probe["center_dist"] > diam * 0.12
+            )
+            if need_rescue:
+                rescued_M, rescue_info = self._rescue_poor_alignment_pose(
+                    source,
+                    target,
+                    shank_rs,
+                    setting_rs,
+                    frame_rs,
+                    transform,
+                    full_ring=full_ring_rs,
+                )
+                info["alignment_rescue"] = rescue_info
+                after_rescue = rescue_info.get("after") or {}
+                apply_rescue = (
+                    rescue_info.get("rescued")
+                    or float(after_rescue.get("overlap", 0.0))
+                    >= float(probe.get("overlap", 0.0))
+                    or float(after_rescue.get("up_cos", -1.0))
+                    >= float(probe.get("up_cos", -1.0)) + 0.25
+                    or float(after_rescue.get("score", 0.0))
+                    < float(probe.get("score", 0.0)) - 1e-4
+                )
+                if apply_rescue:
+                    transform = rescued_M
+                    self._apply_trimesh_transform(src_tmp, transform, output_path)
+                    aligned = self._load_trimesh_mesh(output_path)
+                    info["overlap_refine_applied"] = True
+        except Exception as e:
+            logger.warning("alignment rescue skipped: %s", e)
+
         # Final quality report (needed before reliability gate and bore edits)
         try:
             shank2, setting2 = self._split_shank_and_setting(target)
@@ -3289,7 +5254,9 @@ class MeshProcessor:
                 pass
 
         # Full-ring: band-limited envelope shrink + bore restoration (contact vs bore)
-        ring_info_post = info.get("casa") or info.get("ring") or {}
+        ring_info_post = (
+            info.get("casa") or info.get("ring") or info.get("ring_fallback") or {}
+        )
         ring_accepted = bool(ring_info_post.get("ok") or ring_info_post.get("soft_accept"))
         if ring_accepted:
             try:
@@ -3325,7 +5292,7 @@ class MeshProcessor:
         else:
             info["bore_preservation"] = {"skipped": True, "reason": "ring_frame_not_accepted"}
 
-        # Hard gate: inlay volume must overlap aligned AI by >= 98% (sampled)
+        # Hard gate: inlay volume must overlap aligned AI by >= threshold (sampled)
         shank_gate, setting_gate = self._split_shank_and_setting(target)
         fi_gate = self._estimate_ring_frame(shank_gate)
         up_gate = self._geometric_setting_up(fi_gate, setting_gate)
@@ -3343,12 +5310,19 @@ class MeshProcessor:
         )
         info["inlay_overlap_final"] = overlap_final
         info["inlay_overlap_ratio"] = ratio_final
-        if ratio_final < align_cfg.casa_min_inlay_overlap_ratio:
-            raise ValueError(
-                f"inlay-AI overlap gate failed: {ratio_final:.4f} < "
-                f"{align_cfg.casa_min_inlay_overlap_ratio:.4f} "
-                f"(region={overlap_final.get('region')}, method={info.get('method')})"
+        min_ratio = align_cfg.casa_min_inlay_overlap_ratio
+        info["overlap_gate_failed"] = ratio_final < min_ratio
+        if info["overlap_gate_failed"]:
+            logger.warning(
+                "inlay-AI overlap below download threshold: %.4f < %.4f "
+                "(region=%s, method=%s) — will attempt preview-only colored merge",
+                ratio_final,
+                min_ratio,
+                overlap_final.get("region"),
+                info.get("method"),
             )
+        else:
+            info["overlap_gate_passed"] = True
 
         self._log_mesh_extents("align/source_after", aligned)
 
@@ -4274,7 +6248,7 @@ class MeshProcessor:
             stats["boundary_smooth"] = False
 
         stats["interface_smooth"] = interface_smoothed
-        taubin_iter = min(3, gen_cfg.jewelry_taubin_iterations if gen_cfg else 3)
+        taubin_iter = min(8, gen_cfg.jewelry_taubin_iterations if gen_cfg else 3)
         if taubin_iter > 0 and len(mesh.faces) < 120_000:
             try:
                 import trimesh.smoothing as smoothing
@@ -4290,6 +6264,8 @@ class MeshProcessor:
                 stats["taubin_iter"] = taubin_iter
             except Exception as e:
                 logger.debug("post-crop taubin skipped: %s", e)
+
+        mesh = self._decimate_jewelry_mesh(mesh, generation_config)
 
         if not was_watertight:
             mesh = self._remove_spike_faces(
@@ -4958,6 +6934,141 @@ class MeshProcessor:
             len(mesh.faces),
             taubin_iter,
         )
+
+        mesh = self._decimate_jewelry_mesh(mesh, generation_config)
+        return mesh
+
+    def _decimate_jewelry_mesh(self, mesh, generation_config=None):
+        """
+        珠宝 quality 网格重建：QEM 粗化 → Loop 细分（函数式曲面恢复）→ Taubin → 可选终简化。
+
+        单纯 QEM 减面会在戒圈/戒头上留下大块平面三角（视觉“折线感”）；
+        Loop 细分在粗网格上插值细分，等价于低阶曲面重拟合，可恢复顺滑后再控面数。
+        """
+        import trimesh
+
+        if not isinstance(mesh, trimesh.Trimesh) or len(mesh.faces) < 8:
+            return mesh
+
+        gen_cfg = self._get_generation_smooth_config(generation_config)
+        coarse_target = int(gen_cfg.jewelry_coarse_faces if gen_cfg else 0)
+        final_target = int(gen_cfg.jewelry_target_faces if gen_cfg else 0)
+        loop_iters = int(gen_cfg.jewelry_subdivide_loop_iterations if gen_cfg else 0)
+        min_input = int(gen_cfg.jewelry_decimate_min_input_faces if gen_cfg else 0)
+        post_taubin = int(
+            gen_cfg.jewelry_post_decimate_taubin_iterations if gen_cfg else 0
+        )
+        if coarse_target <= 0 or not self._open3d_available:
+            return mesh
+
+        face_count = int(len(mesh.faces))
+        if face_count < max(min_input, coarse_target * 2):
+            return mesh
+
+        before = face_count
+        try:
+            import open3d as o3d
+
+            def _to_trimesh(o3d_mesh):
+                return trimesh.Trimesh(
+                    vertices=np.asarray(o3d_mesh.vertices, dtype=np.float64),
+                    faces=np.asarray(o3d_mesh.triangles, dtype=np.int64),
+                    process=True,
+                )
+
+            def _qem_decimate(src_mesh, target):
+                o3d_mesh = o3d.geometry.TriangleMesh(
+                    o3d.utility.Vector3dVector(
+                        np.asarray(src_mesh.vertices, dtype=np.float64)
+                    ),
+                    o3d.utility.Vector3iVector(
+                        np.asarray(src_mesh.faces, dtype=np.int32)
+                    ),
+                )
+                o3d_mesh.remove_duplicated_vertices()
+                o3d_mesh.remove_degenerate_triangles()
+                o3d_mesh.remove_duplicated_triangles()
+                o3d_mesh.remove_unreferenced_vertices()
+                tgt = min(int(target), len(o3d_mesh.triangles) - 4)
+                if tgt < 1000:
+                    return src_mesh
+                simplified = o3d_mesh.simplify_quadric_decimation(
+                    target_number_of_triangles=tgt
+                )
+                simplified.remove_degenerate_triangles()
+                simplified.remove_duplicated_triangles()
+                simplified.remove_unreferenced_vertices()
+                return _to_trimesh(simplified)
+
+            # 1) QEM 粗化：去掉 AI 碎面，保留整体形状
+            mesh = _qem_decimate(mesh, coarse_target)
+            coarse_faces = len(mesh.faces)
+
+            # 2) Loop 细分：在粗网格上恢复连续曲面（≈ 低阶细分曲面重拟合）
+            if loop_iters > 0 and len(mesh.faces) >= 4:
+                try:
+                    v, f = trimesh.remesh.subdivide_loop(
+                        np.asarray(mesh.vertices, dtype=np.float64),
+                        np.asarray(mesh.faces, dtype=np.int64),
+                        iterations=loop_iters,
+                    )
+                    mesh = trimesh.Trimesh(v, f, process=True)
+                except Exception as e:
+                    logger.warning("Loop 细分跳过: %s", e)
+
+            self._cleanup_mesh_topology(mesh)
+            try:
+                mesh.fix_normals()
+            except Exception:
+                pass
+
+            # 3) Taubin 保体积平滑：消除 decimate/细分后的折痕
+            if post_taubin > 0:
+                try:
+                    import trimesh.smoothing as smoothing
+
+                    smoothed = smoothing.filter_taubin(
+                        mesh,
+                        lamb=gen_cfg.jewelry_taubin_lambda if gen_cfg else 0.5,
+                        nu=gen_cfg.jewelry_taubin_nu if gen_cfg else -0.53,
+                        iterations=post_taubin,
+                    )
+                    if isinstance(smoothed, trimesh.Trimesh):
+                        mesh = self._normalize_trimesh(smoothed)
+                except Exception:
+                    pass
+
+            # 4) 若仍超出导出预算，再做一次温和 QEM（不再 /100 激进压缩）
+            if final_target > 0 and len(mesh.faces) > final_target * 1.15:
+                mesh = _qem_decimate(mesh, final_target)
+                if post_taubin >= 4:
+                    try:
+                        import trimesh.smoothing as smoothing
+
+                        smoothed = smoothing.filter_taubin(
+                            mesh,
+                            lamb=0.45,
+                            nu=-0.5,
+                            iterations=min(6, post_taubin // 2),
+                        )
+                        if isinstance(smoothed, trimesh.Trimesh):
+                            mesh = self._normalize_trimesh(smoothed)
+                    except Exception:
+                        pass
+
+            logger.info(
+                "珠宝网格重建: %d -> coarse %d -> %d 面 "
+                "(coarse_target=%d loop=%d final_target=%d, ratio=%.2fx)",
+                before,
+                coarse_faces,
+                len(mesh.faces),
+                coarse_target,
+                loop_iters,
+                final_target,
+                before / max(len(mesh.faces), 1),
+            )
+        except Exception as e:
+            logger.warning("珠宝网格重建跳过: %s", e)
         return mesh
 
     def jewelry_finish_mesh(
@@ -5127,6 +7238,7 @@ class MeshProcessor:
         output_format: str = "glb",
         apply_jewelry_repair_smooth: bool = True,
         generation_config=None,
+        enable_fast_size_align: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         完整的网格后处理流程
@@ -5160,6 +7272,9 @@ class MeshProcessor:
             "output_path": None,
             "error": None,
         }
+
+        original_generated_path = generated_mesh_path
+        overlap_gate_failed = False
 
         try:
             # 步骤1: 加载并验证生成的网格
@@ -5202,6 +7317,48 @@ class MeshProcessor:
                     )
                     cleaned_inlay_path = base_mesh_path
 
+            fusion_input_path = generated_mesh_path
+            size_alignment_done = False
+            enable_fast_size = enable_fast_size_align
+            if enable_fast_size is None and base_mesh_path:
+                enable_fast_size = True
+            if base_mesh_path and enable_fast_size:
+                try:
+                    detect_info = None
+                    try:
+                        ai_mesh = self._load_trimesh_mesh(generated_mesh_path)
+                        inlay_mesh = self._load_trimesh_mesh(
+                            cleaned_inlay_path or base_mesh_path
+                        )
+                        _, detect_info = self._detect_ai_inlay_analogue(ai_mesh, inlay_mesh)
+                    except Exception as det_err:
+                        logger.debug("fast size_align detect skipped: %s", det_err)
+                    size_path, size_info, _size_M = self.apply_size_alignment(
+                        generated_mesh_path,
+                        base_mesh_path,
+                        cleaned_inlay_path,
+                        output_dir,
+                        task_id,
+                        output_format=user_fmt,
+                        inlay_detect_info=detect_info,
+                        fast=True,
+                    )
+                    fusion_input_path = size_path
+                    size_alignment_done = True
+                    result["size_alignment"] = size_info
+                    result["steps_completed"].append("size_alignment_fast")
+                    logger.info(
+                        "fast contour size alignment: scale=%.4f diam_ratio=%.3f overlap=%.3f",
+                        size_info.get("scale_final", 1.0),
+                        float(size_info.get("diam_ratio") or 0),
+                        float(size_info.get("inlay_overlap_ratio") or 0),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "fast contour size alignment failed (%s); using raw mesh for align",
+                        e,
+                    )
+
             # Step 2: align AI → cleaned inlay (PCA + ICP / setting-region). Abort if fails.
             if base_mesh_path:
                 logger.info("Executing mesh alignment (PCA/ICP/setting-region)...")
@@ -5210,14 +7367,16 @@ class MeshProcessor:
                         output_dir, task_id, f"aligned.{user_fmt}"
                     )
                     aligned_mesh_path, _, align_info = self.align_generated_to_base(
-                        generated_mesh_path,
+                        fusion_input_path,
                         base_mesh_path,
                         aligned_path,
                         enable_icp=enable_icp and self._open3d_available,
                         cleaned_base_path=cleaned_inlay_path,
+                        skip_overlap_refine=size_alignment_done,
                     )
                     current_mesh_path = aligned_mesh_path
                     result["alignment"] = align_info
+                    overlap_gate_failed = bool(align_info.get("overlap_gate_failed"))
                     if align_info.get("icp_rmse") is not None:
                         result["icp_rmse"] = align_info["icp_rmse"]
                     result["steps_completed"].append("mesh_alignment")
@@ -5275,9 +7434,48 @@ class MeshProcessor:
                 except Exception as e:
                     logger.warning("pre-crop interface gap close failed (%s)", e)
 
+            # Step 2a-replace: boolean difference removes AI duplicate inlay region
+            if (
+                base_mesh_path
+                and inlay_for_merge
+                and fusion_method in ("replace", "boolean")
+            ):
+                try:
+                    cut_path = generate_output_path(
+                        output_dir, task_id, f"ai_replace_cut.{user_fmt}"
+                    )
+                    self.boolean_difference(
+                        current_mesh_path,
+                        inlay_for_merge,
+                        cut_path,
+                    )
+                    current_mesh_path = cut_path
+                    aligned_mesh_path = cut_path
+                    result["inlay_replace"] = {
+                        "method": "boolean_difference",
+                        "output": cut_path,
+                    }
+                    result["steps_completed"].append("inlay_replace_difference")
+                    logger.info("inlay replace: boolean difference -> %s", cut_path)
+                except Exception as diff_err:
+                    logger.warning(
+                        "inlay replace difference failed (%s); continuing with aligned AI",
+                        diff_err,
+                    )
+                    result["inlay_replace"] = {
+                        "success": False,
+                        "error": str(diff_err),
+                    }
+
             # Step 2b: replacement crop — remove AI faces overlapping inlay setting
             if base_mesh_path and inlay_for_merge:
-                if full_ring_inlay:
+                if fusion_method == "replace":
+                    cropped_ai_path = current_mesh_path
+                    result["replacement_crop"] = {
+                        "skipped": True,
+                        "reason": "fusion_mode_replace",
+                    }
+                elif full_ring_inlay:
                     # Full-ring: envelope alignment already seats AI in the bore.
                     # overlap_only crop peels the contact shell and leaves the body
                     # inside solid inlay — invisible in colored preview.
@@ -5385,7 +7583,7 @@ class MeshProcessor:
                         cropped_ai_path = current_mesh_path
 
             # Step 3: fuse with cleaned inlay (colored dual / boolean)
-            if base_mesh_path and fusion_method == "colored_merge":
+            if base_mesh_path and fusion_method in ("colored_merge", "replace"):
                 logger.info(
                     "Executing inlay replacement colored merge "
                     "(cleaned inlay + cropped AI, preserve region colors)..."
@@ -5574,7 +7772,18 @@ class MeshProcessor:
                 result["mesh_info"] = mesh_info
 
             result["success"] = True
-            result["output_path"] = current_mesh_path
+            if overlap_gate_failed:
+                ratio = float((result.get("alignment") or {}).get("inlay_overlap_ratio") or 0.0)
+                result["fusion_warning"] = (
+                    f"镶嵌对齐重合率 {ratio:.1%} 未达 80%，下载文件为 AI 主体；"
+                    f"分色预览仅供参考，建议调整镶嵌或重新生成"
+                )
+                if os.path.isfile(original_generated_path):
+                    result["output_path"] = original_generated_path
+                else:
+                    result["output_path"] = current_mesh_path
+            else:
+                result["output_path"] = current_mesh_path
 
             logger.info(f"网格后处理完成: {current_mesh_path}")
             logger.info(f"完成的步骤: {result['steps_completed']}")
@@ -5584,6 +7793,456 @@ class MeshProcessor:
             result["error"] = str(e)
 
         return result
+
+    # ============================================================
+    # Debug pipeline: alignment phases (step-by-step)
+    # ============================================================
+
+    def _debug_init_alignment_workspace(
+        self,
+        generated_mesh_path: str,
+        base_mesh_path: str,
+        output_path: str,
+    ) -> Dict[str, Any]:
+        source = self._load_trimesh_mesh(generated_mesh_path)
+        target = self._load_trimesh_mesh(base_mesh_path)
+        try:
+            src_filtered, src_junk = self._filter_junk_components(source)
+            if isinstance(src_filtered, list):
+                import trimesh
+
+                source = (
+                    trimesh.util.concatenate(src_filtered)
+                    if len(src_filtered) > 1
+                    else src_filtered[0]
+                )
+            else:
+                source = src_filtered
+        except Exception:
+            pass
+        if self._mesh_vertex_count(source) == 0:
+            raise ValueError(f"source mesh empty: {generated_mesh_path}")
+        if self._mesh_vertex_count(target) == 0:
+            raise ValueError(f"target mesh empty: {base_mesh_path}")
+
+        shank = self._largest_component(target)
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        shank_tmp = output_path + ".shank.tmp.glb"
+        src_tmp = output_path + ".src_clean.tmp.glb"
+        shank.export(shank_tmp, file_type="glb")
+        source.export(src_tmp, file_type="glb")
+        target_path = base_mesh_path
+        return {
+            "source": source,
+            "target": target,
+            "shank": shank,
+            "src_tmp": src_tmp,
+            "shank_tmp": shank_tmp,
+            "target_path_for_icp": target_path,
+            "output_path": output_path,
+        }
+
+    def _debug_restore_alignment_workspace(
+        self, ctx, output_path: str
+    ) -> Dict[str, Any]:
+        inlay = ctx.cleaned_inlay_path or ctx.inlay_mesh_path
+        ai_src = (
+            ctx.size_aligned_mesh_path
+            or ctx.cleaned_ai_path
+            or ctx.raw_mesh_path
+        )
+        ws = self._debug_init_alignment_workspace(
+            ai_src, inlay, output_path
+        )
+        ws["src_tmp"] = ctx.src_tmp or ws["src_tmp"]
+        ws["shank_tmp"] = ctx.shank_tmp or ws["shank_tmp"]
+        return ws
+
+    def _debug_compute_coarse_transform(
+        self,
+        source,
+        target,
+        workspace: Dict[str, Any],
+        *,
+        skip_overlap_refine: bool = False,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        info: Dict[str, Any] = {}
+        transform: Optional[np.ndarray] = None
+        scale = 1.0
+        align_cfg = self._get_alignment_config()
+
+        if align_cfg.alignment_mode == "casa":
+            casa_M, casa_info = self._compute_casa_alignment_transform(source, target)
+            info["casa"] = casa_info
+            if casa_M is not None and (
+                casa_info.get("ok")
+                or (align_cfg.casa_soft_accept and casa_info.get("soft_accept"))
+            ):
+                transform = casa_M
+                scale = float(casa_info.get("scale", 1.0))
+                info["method"] = "casa"
+                info["scale"] = scale
+        if transform is None and align_cfg.alignment_mode == "casa":
+            ring_M, ring_info = self._compute_ring_alignment_transform(source, target)
+            info["ring_fallback"] = ring_info
+            if ring_M is not None and (
+                ring_info.get("ok") or ring_info.get("soft_accept")
+            ):
+                transform = ring_M
+                scale = float(ring_info.get("scale", 1.0))
+                info["method"] = "ring_frame_fallback"
+                info["scale"] = scale
+        if transform is None:
+            try:
+                ring_M, ring_info = self._compute_ring_alignment_transform(source, target)
+                info["ring"] = ring_info
+                if ring_M is not None and (
+                    ring_info.get("ok") or ring_info.get("soft_accept")
+                ):
+                    transform = ring_M
+                    scale = float(ring_info.get("scale", 1.0))
+                    info["method"] = "ring_frame"
+                    info["scale"] = scale
+            except Exception as e:
+                info["ring"] = {"ok": False, "reason": str(e)}
+
+        if transform is None:
+            transform_rot, pca_iou = self._compute_pca_rotation_only_transform(
+                source, target
+            )
+            transform_rot, amb_info = self._fix_alignment_axis_ambiguity(
+                source, target, transform_rot
+            )
+            info["pca_axis_resolve"] = amb_info
+            shank_fb, setting_fb = self._split_shank_and_setting(target)
+            fi0_fb = self._estimate_ring_frame(shank_fb)
+            up_fb = self._geometric_setting_up(fi0_fb, setting_fb)
+            if up_fb is None:
+                up_fb = self._detect_setting_up(target, fi0_fb)
+            fi_fb = self._frame_with_up(fi0_fb, up_fb)
+            s_ring, _ = self._compute_ring_frame_scale(source, shank_fb, fi_fb)
+            transform = self._scale_transform_about_point(
+                transform_rot, fi_fb["center"], s_ring
+            )
+            scale = float(s_ring)
+            info.update({"method": "casa_pca_fallback", "scale": scale, "pca_iou": float(pca_iou)})
+
+        if transform is None:
+            raise RuntimeError("coarse alignment failed: no transform")
+
+        if info.get("method") in ("ring_frame", "ring_frame_fallback"):
+            shank_rf, setting_rf = self._split_shank_and_setting(target)
+            fi_rf = self._estimate_ring_frame(shank_rf)
+            up_rf = self._geometric_setting_up(fi_rf, setting_rf)
+            if up_rf is None:
+                up_rf = self._detect_setting_up(target, fi_rf)
+            frame_rf = self._frame_with_up(fi_rf, up_rf)
+            full_ring_rf, _ = self._detect_full_ring_inlay_mode(target, frame_rf)
+            if not skip_overlap_refine:
+                refined_M, refine_info = self._refine_alignment_inlay_overlap(
+                    source,
+                    target,
+                    shank_rf,
+                    setting_rf,
+                    frame_rf,
+                    transform,
+                    full_ring=full_ring_rf,
+                )
+                info["overlap_refine_ring_frame"] = refine_info
+                if refine_info.get("refined") or refine_info.get("meets_target"):
+                    transform = refined_M
+                    info["inlay_overlap_ratio"] = float(
+                        refine_info.get("overlap_after", 0.0)
+                    )
+            else:
+                info["overlap_refine_skipped"] = "size_alignment_done"
+            pose_rf = self._eval_alignment_pose_metrics(
+                source, target, shank_rf, setting_rf, frame_rf, transform, full_ring=full_ring_rf
+            )
+            if pose_rf["up_cos"] < 0.25:
+                init_rec = {"score": pose_rf["score"], **pose_rf}
+                M_axis, axis_rec = self._resolve_ring_axis_half_turn(
+                    source,
+                    shank_rf,
+                    setting_rf,
+                    frame_rf,
+                    transform,
+                    init_rec,
+                    extra_degs=(0.0, 90.0, 180.0, 270.0),
+                )
+                pose_axis = self._eval_alignment_pose_metrics(
+                    source, target, shank_rf, setting_rf, frame_rf, M_axis, full_ring=full_ring_rf
+                )
+                if pose_axis["score"] < pose_rf["score"] - 1e-4 or (
+                    pose_axis["up_cos"] >= 0.25 and pose_rf["up_cos"] < 0.25
+                ):
+                    transform = M_axis
+                    info["ring_frame_axis_fix"] = axis_rec
+                    info["inlay_overlap_ratio"] = float(pose_axis["overlap"])
+
+        return transform, info
+
+    def _debug_apply_icp_phase(
+        self,
+        workspace: Dict[str, Any],
+        transform: np.ndarray,
+        info: Dict[str, Any],
+        *,
+        enable_icp: bool = True,
+        max_iterations: int = 50,
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        if not enable_icp or not self._open3d_available:
+            info["icp_skipped"] = True
+            return transform, info
+
+        source = workspace["source"]
+        target = workspace["target"]
+        shank = workspace["shank"]
+        src_tmp = workspace["src_tmp"]
+        shank_tmp = workspace["shank_tmp"]
+        output_path = workspace["output_path"]
+        pre_icp_path = output_path + ".pre_icp.tmp.glb"
+        self._apply_trimesh_transform(src_tmp, transform, pre_icp_path)
+
+        fi0_icp = self._estimate_ring_frame(shank)
+        _, setting_for_icp = self._split_shank_and_setting(target)
+        up_icp = self._geometric_setting_up(fi0_icp, setting_for_icp)
+        if up_icp is None:
+            up_icp = self._detect_setting_up(target, fi0_icp)
+        shank_frame = self._frame_with_up(fi0_icp, up_icp)
+        pre_mesh = self._load_trimesh_mesh(pre_icp_path)
+        before = self._shank_surface_distance(pre_mesh, shank, shank_frame)
+        set_before = self._setting_surface_distance(
+            pre_mesh, setting_for_icp, shank_frame
+        )
+        up_before = self._ai_up_alignment(pre_mesh, shank_frame)
+
+        icp_transform, rmse, fitness = self.icp_align(
+            pre_icp_path,
+            shank_tmp,
+            max_iterations=max_iterations,
+            init_transform=np.eye(4),
+        )
+        info["icp_rmse"] = float(rmse)
+        info["icp_fitness"] = float(fitness)
+
+        if fitness >= 0.25:
+            trial = icp_transform @ transform
+            trial_path = output_path + ".icp_trial.tmp.glb"
+            self._apply_trimesh_transform(src_tmp, trial, trial_path)
+            trial_mesh = self._load_trimesh_mesh(trial_path)
+            after = self._shank_surface_distance(trial_mesh, shank, shank_frame)
+            set_after = self._setting_surface_distance(
+                trial_mesh, setting_for_icp, shank_frame
+            )
+            up_after = self._ai_up_alignment(trial_mesh, shank_frame)
+            info["icp_shank_before"] = before
+            info["icp_shank_after"] = after
+            info["icp_setting_before"] = set_before
+            info["icp_setting_after"] = set_after
+            info["icp_up_before"] = up_before
+            info["icp_up_after"] = up_after
+            improved = after["median"] <= before["median"] * 1.05
+            setting_ok = (
+                setting_for_icp is None
+                or set_after["median"] <= set_before["median"] * 1.08
+            )
+            up_ok = up_after >= 0.25 and (
+                setting_for_icp is None
+                or up_after >= min(up_before - 0.12, 0.25)
+            )
+            fa_t = self._estimate_ring_frame(trial_mesh)
+            axis_ang = float(
+                np.degrees(
+                    np.arccos(
+                        np.clip(
+                            abs(float(np.dot(fa_t["axis"], shank_frame["axis"]))),
+                            -1.0,
+                            1.0,
+                        )
+                    )
+                )
+            )
+            overlap_ok = True
+            try:
+                full_ring_icp, _ = self._detect_full_ring_inlay_mode(target, shank_frame)
+                ob, _ = self._compute_inlay_ai_overlap_ratio(
+                    target, pre_mesh, shank_mesh=shank, setting_mesh=setting_for_icp,
+                    frame=shank_frame, full_ring=full_ring_icp,
+                )
+                oa, _ = self._compute_inlay_ai_overlap_ratio(
+                    target, trial_mesh, shank_mesh=shank, setting_mesh=setting_for_icp,
+                    frame=shank_frame, full_ring=full_ring_icp,
+                )
+                info["icp_overlap_before"] = float(ob)
+                info["icp_overlap_after"] = float(oa)
+                if oa < ob - 0.03:
+                    overlap_ok = False
+            except Exception:
+                pass
+            if improved and setting_ok and up_ok and axis_ang <= 30.0 and overlap_ok:
+                transform = trial
+                info["method"] = info.get("method", "pca") + "+icp"
+        try:
+            if os.path.isfile(pre_icp_path):
+                os.remove(pre_icp_path)
+        except OSError:
+            pass
+        return transform, info
+
+    def _debug_apply_refine_rescue_phase(
+        self,
+        workspace: Dict[str, Any],
+        transform: np.ndarray,
+        info: Dict[str, Any],
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        source = workspace["source"]
+        target = workspace["target"]
+        src_tmp = workspace["src_tmp"]
+        output_path = workspace["output_path"]
+        align_cfg = self._get_alignment_config()
+
+        self._apply_trimesh_transform(src_tmp, transform, output_path)
+        aligned = self._load_trimesh_mesh(output_path)
+
+        shank_ov, setting_ov = self._split_shank_and_setting(target)
+        fi_ov = self._estimate_ring_frame(shank_ov)
+        up_ov = self._geometric_setting_up(fi_ov, setting_ov)
+        if up_ov is None:
+            up_ov = self._detect_setting_up(target, fi_ov)
+        frame_ov = self._frame_with_up(fi_ov, up_ov)
+        full_ring_ov, _ = self._detect_full_ring_inlay_mode(target, frame_ov)
+        ratio_pre, _ = self._compute_inlay_ai_overlap_ratio(
+            target, aligned, shank_mesh=shank_ov, setting_mesh=setting_ov,
+            frame=frame_ov, full_ring=full_ring_ov,
+        )
+        info["inlay_overlap_ratio_pre_bore"] = ratio_pre
+        if ratio_pre < align_cfg.casa_min_inlay_overlap_ratio:
+            refined_M, refine_info = self._refine_alignment_inlay_overlap(
+                source, target, shank_ov, setting_ov, frame_ov, transform, full_ring=full_ring_ov,
+            )
+            info["overlap_refine_post_icp"] = refine_info
+            if refine_info.get("refined") or refine_info.get("meets_target"):
+                transform = refined_M
+                self._apply_trimesh_transform(src_tmp, transform, output_path)
+                aligned = self._load_trimesh_mesh(output_path)
+
+        shank_rs, setting_rs = self._split_shank_and_setting(target)
+        fi_rs = self._estimate_ring_frame(shank_rs)
+        up_rs = self._geometric_setting_up(fi_rs, setting_rs)
+        if up_rs is None:
+            up_rs = self._detect_setting_up(target, fi_rs)
+        frame_rs = self._frame_with_up(fi_rs, up_rs)
+        full_ring_rs, _ = self._detect_full_ring_inlay_mode(target, frame_rs)
+        probe = self._eval_alignment_pose_metrics(
+            source, target, shank_rs, setting_rs, frame_rs, transform, full_ring=full_ring_rs,
+        )
+        diam = float(frame_rs["diameter"])
+        need_rescue = (
+            probe["up_cos"] < 0.30
+            or probe["overlap"] < align_cfg.casa_min_inlay_overlap_ratio
+            or probe["diam_ratio"] < 0.78
+            or probe["diam_ratio"] > 1.32
+            or (
+                setting_rs is not None
+                and probe["setting_median"] > max(diam * 0.10, 0.35)
+            )
+            or probe["center_dist"] > diam * 0.12
+        )
+        if need_rescue:
+            rescued_M, rescue_info = self._rescue_poor_alignment_pose(
+                source, target, shank_rs, setting_rs, frame_rs, transform, full_ring=full_ring_rs,
+            )
+            info["alignment_rescue"] = rescue_info
+            after_rescue = rescue_info.get("after") or {}
+            apply_rescue = (
+                rescue_info.get("rescued")
+                or float(after_rescue.get("overlap", 0.0)) >= float(probe.get("overlap", 0.0))
+                or float(after_rescue.get("up_cos", -1.0))
+                >= float(probe.get("up_cos", -1.0)) + 0.25
+            )
+            if apply_rescue:
+                transform = rescued_M
+                self._apply_trimesh_transform(src_tmp, transform, output_path)
+                info["overlap_refine_applied"] = True
+
+        ratio_final, _ = self._compute_inlay_ai_overlap_ratio(
+            target,
+            self._load_trimesh_mesh(output_path),
+            shank_mesh=shank_ov,
+            setting_mesh=setting_ov,
+            frame=frame_ov,
+            full_ring=full_ring_ov,
+        )
+        info["inlay_overlap_ratio"] = ratio_final
+        info["overlap_gate_failed"] = ratio_final < align_cfg.casa_min_inlay_overlap_ratio
+        return transform, info
+
+    def _debug_update_final_quality(
+        self,
+        workspace: Dict[str, Any],
+        transform: np.ndarray,
+        info: Dict[str, Any],
+        output_path: str,
+    ) -> None:
+        target = workspace["target"]
+        aligned = self._load_trimesh_mesh(output_path)
+        shank2, setting2 = self._split_shank_and_setting(target)
+        fi0q = self._estimate_ring_frame(shank2)
+        up_q = self._geometric_setting_up(fi0q, setting2)
+        if up_q is None:
+            up_q = self._detect_setting_up(target, fi0q)
+        sf = self._frame_with_up(fi0q, up_q)
+        q = self._shank_surface_distance(aligned, shank2, sf)
+        qs = self._setting_surface_distance(aligned, setting2, sf)
+        up_c = self._ai_up_alignment(aligned, sf)
+        fa = self._estimate_ring_frame(aligned)
+        info["final_quality"] = {
+            "shank_median": q["median"],
+            "setting_median": qs["median"],
+            "up_cos": up_c,
+            "diam_ratio": float(fa["diameter"] / max(sf["diameter"], 1e-9)),
+        }
+
+    def debug_step_prepare(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_prepare as _fn
+        return _fn(self, ctx)
+
+    def debug_step_inlay_sanitize(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_inlay_sanitize as _fn
+        return _fn(self, ctx)
+
+    def debug_step_ai_sanitize(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_ai_sanitize as _fn
+        return _fn(self, ctx)
+
+    def debug_step_ai_inlay_detect(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_ai_inlay_detect as _fn
+        return _fn(self, ctx)
+
+    def debug_step_align_coarse(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_align_coarse as _fn
+        return _fn(self, ctx)
+
+    def debug_step_align_icp(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_align_icp as _fn
+        return _fn(self, ctx)
+
+    def debug_step_align_refine(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_align_refine as _fn
+        return _fn(self, ctx)
+
+    def debug_step_gap_close(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_gap_close as _fn
+        return _fn(self, ctx)
+
+    def debug_step_crop(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_crop as _fn
+        return _fn(self, ctx)
+
+    def debug_step_colored_merge(self, ctx):
+        from app.services.debug_pipeline_steps import debug_step_colored_merge as _fn
+        return _fn(self, ctx)
 
 
 # 全局处理器实例

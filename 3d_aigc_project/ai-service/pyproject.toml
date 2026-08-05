@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aigc-cli"
+version = "1.0.0"
+description = "3D AIGC platform CLI for batch generation and debug"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+aigc = "cli.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cli*"]

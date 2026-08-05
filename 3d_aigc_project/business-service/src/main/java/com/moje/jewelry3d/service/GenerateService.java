@@ -1,6 +1,7 @@
 package com.moje.jewelry3d.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moje.jewelry3d.common.BusinessException;
 import com.moje.jewelry3d.config.AiServiceConfig;
 import com.moje.jewelry3d.config.FileStorageConfig;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -39,9 +41,17 @@ public class GenerateService {
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     /** 历史任务未落库镶嵌 ID、仅能从分色产物推断时使用 */
     private static final String INLAY_BACKFILL_MARKER = "colored_merge";
+    /** 中间产物，不应作为用户下载/预览主文件 */
+    private static final Set<String> INTERMEDIATE_OUTPUT_NAMES = Set.of(
+            "finished_raw.obj",
+            "raw_mesh.obj",
+            "inlay_clean.glb"
+    );
     private static final List<String> VIEW_FACE_KEYS = List.of(
             "front", "back", "left", "right", "top", "bottom"
     );
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final AiServiceClient aiServiceClient;
     private final AiServiceConfig aiServiceConfig;
@@ -80,10 +90,22 @@ public class GenerateService {
             String inlayStructureFilename,
             boolean multiViewEnabled,
             Map<String, MultipartFile> viewFiles,
-            String generationMode
+            String generationMode,
+            String inlayType,
+            String gemType,
+            Float stoneDiameterMm,
+            Boolean useOmniConditioning,
+            String inlayGenStrategy,
+            Boolean applyInlayRenderCondition,
+            Boolean enableFastSizeAlign,
+            String fusionMethod,
+            boolean enableInlayPostprocess,
+            Integer customTargetFaces,
+            Integer customOctreeResolution,
+            Integer customInferenceSteps
     ) {
+        AiServiceClient.assertUltraModeAllowed(generationMode);
         String taskId = UUID.randomUUID().toString();
-        // 必须写入镶嵌文件名：否则任务详情无 preview_url，前端会回退到灰模 STL 下载
         GenerateTaskEntity task = createTask(
                 taskId, "image-to-3d", imageFile, prompt, outputFormat,
                 inlayStructureFilename, multiViewEnabled, viewFiles, generationMode
@@ -91,9 +113,22 @@ public class GenerateService {
 
         try {
             String settingPath = resolveInlayMeshPath(inlayStructureFilename);
+            String resolvedInlayType = inlayType;
+            Float resolvedStoneDiameter = stoneDiameterMm;
             if (inlayStructureFilename != null && !inlayStructureFilename.isBlank()) {
                 task.setInlayStructureFilename(inlayStructureFilename);
                 saveTask(task);
+                Optional<InlayItemEntity> catalogItem =
+                        inlayItemRepository.findById(inlayStructureFilename);
+                if (catalogItem.isPresent()) {
+                    InlayItemEntity item = catalogItem.get();
+                    if (resolvedInlayType == null || resolvedInlayType.isBlank()) {
+                        resolvedInlayType = item.getInlayType();
+                    }
+                    if (resolvedStoneDiameter == null && item.getStoneDiameterMm() != null) {
+                        resolvedStoneDiameter = item.getStoneDiameterMm();
+                    }
+                }
             }
             Map<String, String> viewPaths = resolveViewPaths(taskId, viewFiles);
             String primaryImagePath = resolvePrimaryImagePath(taskId, viewPaths);
@@ -105,7 +140,19 @@ public class GenerateService {
                     outputFormat,
                     multiViewEnabled,
                     viewPaths,
-                    generationMode
+                    generationMode,
+                    resolvedInlayType,
+                    gemType,
+                    resolvedStoneDiameter,
+                    useOmniConditioning,
+                    inlayGenStrategy,
+                    applyInlayRenderCondition,
+                    enableFastSizeAlign,
+                    fusionMethod,
+                    enableInlayPostprocess,
+                    customTargetFaces,
+                    customOctreeResolution,
+                    customInferenceSteps
             );
             applyAiSubmission(task, aiResponse);
         } catch (Exception e) {
@@ -113,6 +160,38 @@ public class GenerateService {
             throw new BusinessException("图片转3D提交失败: " + e.getMessage(), e);
         }
         return buildResponse(task);
+    }
+
+    public GenerateResponse imageTo3d(
+            MultipartFile imageFile,
+            String prompt,
+            String outputFormat,
+            String inlayStructureFilename,
+            boolean multiViewEnabled,
+            Map<String, MultipartFile> viewFiles,
+            String generationMode
+    ) {
+        return imageTo3d(
+                imageFile,
+                prompt,
+                outputFormat,
+                inlayStructureFilename,
+                multiViewEnabled,
+                viewFiles,
+                generationMode,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null
+        );
     }
 
     public GenerateResponse conditionGenerate(
@@ -123,8 +202,13 @@ public class GenerateService {
             String outputFormat,
             String inlayType,
             String gemType,
-            String generationMode
+            String generationMode,
+            boolean enableInlayPostprocess,
+            Integer customTargetFaces,
+            Integer customOctreeResolution,
+            Integer customInferenceSteps
     ) {
+        AiServiceClient.assertUltraModeAllowed(generationMode);
         String taskId = UUID.randomUUID().toString();
         GenerateTaskEntity task = createTask(
                 taskId, "condition-generate", imageFile, prompt, outputFormat,
@@ -162,7 +246,11 @@ public class GenerateService {
                     outputFormat,
                     inlayType,
                     gemType,
-                    generationMode
+                    generationMode,
+                    enableInlayPostprocess,
+                    customTargetFaces,
+                    customOctreeResolution,
+                    customInferenceSteps
             );
             applyAiSubmission(task, aiResponse);
         } catch (BusinessException e) {
@@ -304,6 +392,25 @@ public class GenerateService {
         throw new BusinessException(404, "分色预览 GLB 不存在，请下载 STL 或使用白模预览");
     }
 
+    /** Ultra 模式 CAD STEP 下载（final.step）。 */
+    public Path getCadStepFile(String taskId) {
+        GenerateTaskEntity task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException(404, "任务不存在"));
+        if (!"completed".equals(task.getStatus())) {
+            throw new BusinessException("任务尚未完成，当前状态: " + task.getStatus());
+        }
+        Path stepPath = resolveCadStepPath(task);
+        if (stepPath != null && Files.exists(stepPath)) {
+            return stepPath;
+        }
+        syncOutputFromAi(task);
+        stepPath = resolveCadStepPath(task);
+        if (stepPath != null && Files.exists(stepPath)) {
+            return stepPath;
+        }
+        throw new BusinessException(404, "CAD STEP 文件不存在（可能拟合失败或未使用 Ultra 模式）");
+    }
+
     /**
      * 分色预览补同步：不依赖 inlay 字段（历史任务可能未落库），只要 AI 侧有 final/colored.glb 就同步。
      */
@@ -343,10 +450,51 @@ public class GenerateService {
         }
     }
 
+    private static boolean isActiveGenerationStatus(String status) {
+        return "pending".equals(status)
+                || "queued".equals(status)
+                || "processing".equals(status);
+    }
+
+    @Transactional
+    public TaskViewDto cancelTask(String taskId) {
+        GenerateTaskEntity task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException(404, "任务不存在: " + taskId));
+
+        if (!isActiveGenerationStatus(task.getStatus())) {
+            throw new BusinessException("任务当前不可取消，状态: " + task.getStatus());
+        }
+
+        try {
+            aiServiceClient.cancelTask(taskId);
+            log.info("已请求取消 AI 任务: {}", taskId);
+        } catch (Exception e) {
+            log.warn("取消 AI 任务失败 {}: {}", taskId, e.getMessage());
+        }
+
+        refreshTaskFromAi(task);
+        if (isActiveGenerationStatus(task.getStatus())) {
+            task.setStatus("cancelled");
+            task.setCompletedAt(LocalDateTime.now());
+            task.setErrorMessage(null);
+            saveTask(task);
+        }
+        return toViewDtoWithInlayBackfill(task);
+    }
+
     @Transactional
     public void deleteTask(String taskId) {
         GenerateTaskEntity task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new BusinessException(404, "任务不存在: " + taskId));
+
+        if (isActiveGenerationStatus(task.getStatus())) {
+            try {
+                aiServiceClient.cancelTask(taskId);
+                log.info("已请求终止进行中的 AI 任务: {}", taskId);
+            } catch (Exception e) {
+                log.warn("取消 AI 任务失败（仍继续删除）: {} — {}", taskId, e.getMessage());
+            }
+        }
 
         String storagePrefix = taskId + "/";
         for (GenerateTaskAssetEntity asset : assetRepository.findByTaskId(taskId)) {
@@ -624,6 +772,9 @@ public class GenerateService {
                 String message = statusNode.path("message").asText("AI生成失败");
                 task.setErrorMessage(detail != null && !detail.isBlank() ? detail : message);
                 task.setCompletedAt(LocalDateTime.now());
+            } else if ("cancelled".equals(status)) {
+                task.setCompletedAt(LocalDateTime.now());
+                task.setErrorMessage(null);
             }
             saveTask(task);
         } catch (Exception e) {
@@ -659,9 +810,78 @@ public class GenerateService {
             registerAsset(task.getTaskId(), "output", storageService.outputBucket(), storageKey, dest, guessContentType(filename));
 
             syncPreviewArtifactsFromAi(task, destDir);
+            syncCadArtifactsFromAi(task, destDir, resultNode);
+
+            JsonNode meta = resultNode.path("metadata");
+            if (meta.hasNonNull("fusion_warning")) {
+                task.setErrorMessage(meta.get("fusion_warning").asText());
+            }
+            JsonNode cadReverse = meta.path("cad_reverse");
+            if (cadReverse.hasNonNull("warning") && !cadReverse.get("warning").asText().isBlank()) {
+                String cadWarn = cadReverse.get("warning").asText();
+                String existing = task.getErrorMessage();
+                if (existing == null || existing.isBlank()) {
+                    task.setErrorMessage(cadWarn);
+                } else if (!existing.contains(cadWarn)) {
+                    task.setErrorMessage(existing + "; " + cadWarn);
+                }
+                saveTask(task);
+            }
             log.info("已同步 AI 输出: {} -> {}", source, dest);
         } catch (Exception e) {
             log.warn("同步 AI 输出失败 {}: {}", task.getTaskId(), e.getMessage());
+        }
+    }
+
+    private void syncCadArtifactsFromAi(GenerateTaskEntity task, Path destDir, JsonNode resultNode) {
+        Path aiTaskDir = aiServiceConfig.getOutputPath().resolve(task.getTaskId());
+        for (String[] spec : List.of(
+                new String[] {"final.step", "cad_step", "model/step"},
+                new String[] {"cad_fit_report.json", "cad_report", "application/json"}
+        )) {
+            String filename = spec[0];
+            String assetType = spec[1];
+            String contentType = spec[2];
+            Path aiFile = aiTaskDir.resolve(filename);
+            if (!Files.isRegularFile(aiFile)) {
+                continue;
+            }
+            try {
+                Path dest = destDir.resolve(filename);
+                Files.copy(aiFile, dest, StandardCopyOption.REPLACE_EXISTING);
+                registerAsset(
+                        task.getTaskId(),
+                        assetType,
+                        storageService.outputBucket(),
+                        task.getTaskId() + "/" + filename,
+                        dest,
+                        contentType
+                );
+            } catch (Exception e) {
+                log.warn("同步 CAD 资产失败 {} {}: {}", task.getTaskId(), filename, e.getMessage());
+            }
+        }
+        JsonNode cadReverse = resultNode.path("metadata").path("cad_reverse");
+        if (cadReverse.isMissingNode() || cadReverse.isEmpty()) {
+            return;
+        }
+        Path reportPath = destDir.resolve("cad_fit_report.json");
+        if (Files.isRegularFile(reportPath)) {
+            return;
+        }
+        try {
+            Files.createDirectories(destDir);
+            Files.writeString(reportPath, cadReverse.toPrettyString(), StandardCharsets.UTF_8);
+            registerAsset(
+                    task.getTaskId(),
+                    "cad_report",
+                    storageService.outputBucket(),
+                    task.getTaskId() + "/cad_fit_report.json",
+                    reportPath,
+                    "application/json"
+            );
+        } catch (Exception e) {
+            log.warn("写入 CAD 拟合报告失败 {}: {}", task.getTaskId(), e.getMessage());
         }
     }
 
@@ -698,6 +918,11 @@ public class GenerateService {
     }
 
     private Path resolveDownloadPath(GenerateTaskEntity task) {
+        Path bestOnDisk = findBestDownloadOnDisk(task);
+        if (bestOnDisk != null) {
+            return bestOnDisk;
+        }
+
         Optional<GenerateTaskAssetEntity> outputAsset = assetRepository.findFirstByTaskIdAndAssetTypeOrderByCreatedAtDesc(task.getTaskId(), "output");
         if (outputAsset.isPresent()) {
             Optional<Path> materialized = storageService.materializeLocal(outputAsset.get().getStorageBucket(), outputAsset.get().getStorageKey());
@@ -708,11 +933,93 @@ public class GenerateService {
 
         if (task.getOutputFilename() != null) {
             Path local = fileStorageConfig.getOutputPath().resolve(task.getTaskId()).resolve(task.getOutputFilename());
-            if (Files.exists(local)) {
+            if (Files.exists(local) && !isIntermediateOutputName(task.getOutputFilename())) {
                 return local.normalize();
             }
         }
         return findDownloadOnDisk(task.getTaskId(), task);
+    }
+
+    /**
+     * 优先返回 final / aligned / generated 等用户可见产物，跳过 finished_raw 等中间文件。
+     */
+    private Path findBestDownloadOnDisk(GenerateTaskEntity task) {
+        if (task == null) {
+            return null;
+        }
+        String taskId = task.getTaskId();
+        List<String> candidates = new ArrayList<>();
+        String preferredExt = extractOutputFormatExt(task);
+        if (preferredExt != null) {
+            candidates.add("final." + preferredExt);
+            candidates.add("aligned." + preferredExt);
+            candidates.add("generated." + preferredExt);
+        }
+        candidates.addAll(List.of(
+                "final.glb", "final.stl", "final.obj",
+                "aligned.stl", "aligned.glb", "aligned.obj",
+                "generated.stl", "generated.glb", "generated.obj"
+        ));
+        for (String name : candidates) {
+            Path business = fileStorageConfig.getOutputPath().resolve(taskId).resolve(name);
+            if (Files.isRegularFile(business)) {
+                return business.normalize();
+            }
+            Path ai = aiServiceConfig.getOutputPath().resolve(taskId).resolve(name);
+            if (Files.isRegularFile(ai)) {
+                return ai.normalize();
+            }
+        }
+        return null;
+    }
+
+    private static boolean isIntermediateOutputName(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        return INTERMEDIATE_OUTPUT_NAMES.contains(filename.toLowerCase(Locale.ROOT));
+    }
+
+    private static int outputFilePriority(String baseName) {
+        String lower = baseName.toLowerCase(Locale.ROOT);
+        if (isIntermediateOutputName(lower)) {
+            return 100;
+        }
+        if (lower.startsWith("final.")) {
+            return 0;
+        }
+        if (lower.startsWith("aligned.")) {
+            return 1;
+        }
+        if (lower.startsWith("generated.")) {
+            return 2;
+        }
+        return 50;
+    }
+
+    private String pickBestResultFilePath(JsonNode files, GenerateTaskEntity task) {
+        String preferredExt = extractOutputFormatExt(task);
+        String bestPath = null;
+        int bestPriority = Integer.MAX_VALUE;
+        for (JsonNode fileNode : files) {
+            String path = fileNode.asText("");
+            if (path.isBlank()) {
+                continue;
+            }
+            String base = Paths.get(path.replace('\\', '/')).getFileName().toString();
+            int priority = outputFilePriority(base);
+            if (preferredExt != null) {
+                String lower = base.toLowerCase(Locale.ROOT);
+                if (lower.endsWith("." + preferredExt)) {
+                    priority -= 3;
+                }
+            }
+            if (priority < bestPriority) {
+                bestPriority = priority;
+                bestPath = path;
+            }
+        }
+        return bestPath;
     }
 
     private Path resolvePreviewPath(GenerateTaskEntity task) {
@@ -768,6 +1075,10 @@ public class GenerateService {
                     if (base.startsWith("final.")) {
                         return path;
                     }
+                }
+                String picked = pickBestResultFilePath(files, task);
+                if (picked != null) {
+                    return picked;
                 }
                 return files.get(files.size() - 1).asText();
             }
@@ -889,7 +1200,12 @@ public class GenerateService {
         dto.setInputFile(task.getInputImageFilename());
         dto.setStatus(task.getStatus());
         dto.setInlayFile(resolveInlayDisplayName(task.getInlayStructureFilename()));
-        dto.setResultFile(task.getOutputFilename());
+        Path bestDownload = findBestDownloadOnDisk(task);
+        if (bestDownload != null) {
+            dto.setResultFile(bestDownload.getFileName().toString());
+        } else {
+            dto.setResultFile(task.getOutputFilename());
+        }
         // 仅当磁盘上存在分色 GLB 时才返回 preview_url（避免仅有 inlay 字段但融合失败时前端 404）
         boolean hasColoredPreview = findPreviewOnDisk(task.getTaskId()) != null;
         if (hasColoredPreview) {
@@ -912,6 +1228,8 @@ public class GenerateService {
             if (prompt != null) {
                 dto.setPrompt(prompt);
             }
+            String generationMode = extractParamsField(params, "generation_mode");
+            dto.setGenerationMode(normalizeGenerationModeForView(generationMode));
             // 列为空但 params 有值时，详情仍应展示（ensureInlayMetadata 通常已回填）
             if (dto.getInlayFile() == null || dto.getInlayFile().isBlank()) {
                 String inlayFromParams = extractParamsField(params, "inlay_file");
@@ -919,8 +1237,87 @@ public class GenerateService {
                     dto.setInlayFile(resolveInlayDisplayName(inlayFromParams));
                 }
             }
+        } else {
+            dto.setGenerationMode("quality");
         }
+        enrichCadFields(dto, task);
         return dto;
+    }
+
+    private void enrichCadFields(TaskViewDto dto, GenerateTaskEntity task) {
+        Path stepPath = resolveCadStepPath(task);
+        if (stepPath != null && Files.isRegularFile(stepPath)) {
+            dto.setCadStepUrl("/api/tasks/" + task.getTaskId() + "/cad-step");
+        }
+        Integer score = readCadFitScore(task);
+        if (score != null) {
+            dto.setCadFitScore(score);
+        }
+    }
+
+    private Path resolveCadStepPath(GenerateTaskEntity task) {
+        Optional<GenerateTaskAssetEntity> stepAsset = assetRepository
+                .findFirstByTaskIdAndAssetTypeOrderByCreatedAtDesc(task.getTaskId(), "cad_step");
+        if (stepAsset.isPresent()) {
+            Optional<Path> materialized = storageService.materializeLocal(
+                    stepAsset.get().getStorageBucket(), stepAsset.get().getStorageKey());
+            if (materialized.isPresent()) {
+                return materialized.get();
+            }
+        }
+        for (Path base : List.of(
+                fileStorageConfig.getOutputPath().resolve(task.getTaskId()),
+                aiServiceConfig.getOutputPath().resolve(task.getTaskId())
+        )) {
+            Path step = base.resolve("final.step");
+            if (Files.isRegularFile(step)) {
+                return step.normalize();
+            }
+        }
+        return null;
+    }
+
+    private Integer readCadFitScore(GenerateTaskEntity task) {
+        for (Path base : List.of(
+                fileStorageConfig.getOutputPath().resolve(task.getTaskId()),
+                aiServiceConfig.getOutputPath().resolve(task.getTaskId())
+        )) {
+            Path report = base.resolve("cad_fit_report.json");
+            if (!Files.isRegularFile(report)) {
+                continue;
+            }
+            try {
+                JsonNode root = JSON.readTree(Files.readString(report, StandardCharsets.UTF_8));
+                if (root.hasNonNull("score_0_100")) {
+                    return root.get("score_0_100").asInt();
+                }
+                JsonNode fit = root.path("fit_report");
+                if (fit.hasNonNull("score_0_100")) {
+                    return fit.get("score_0_100").asInt();
+                }
+            } catch (Exception e) {
+                log.warn("读取 CAD 拟合评分失败 {}: {}", task.getTaskId(), e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private String normalizeGenerationModeForView(String mode) {
+        if (mode == null || mode.isBlank()) {
+            return "quality";
+        }
+        String normalized = mode.trim().toLowerCase(Locale.ROOT);
+        if ("fast".equals(normalized) || "speed".equals(normalized)) {
+            return "fast";
+        }
+        if ("custom".equals(normalized) || "自定义".equals(normalized)) {
+            return "custom";
+        }
+        if ("ultra".equals(normalized) || "cad".equals(normalized) || "step".equals(normalized)
+                || "ultra_cad".equals(normalized)) {
+            return "ultra";
+        }
+        return "quality";
     }
 
     /**
@@ -994,6 +1391,7 @@ public class GenerateService {
             case "processing" -> "任务正在处理中";
             case "completed" -> "生成完成";
             case "failed" -> "生成失败: " + task.getErrorMessage();
+            case "cancelled" -> "任务已取消";
             default -> "未知状态";
         });
         if ("completed".equals(task.getStatus())) {

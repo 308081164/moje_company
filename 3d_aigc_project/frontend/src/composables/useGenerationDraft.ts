@@ -43,7 +43,7 @@ export interface GenerationDraftPayload {
   generateParams: {
     prompt: string
     output_format: 'OBJ' | 'GLB' | 'STL'
-    generation_mode?: 'fast' | 'quality'
+    generation_mode?: 'fast' | 'quality' | 'custom' | 'ultra'
   }
   inlayEnabled: boolean
   inlayPanelOpen: boolean

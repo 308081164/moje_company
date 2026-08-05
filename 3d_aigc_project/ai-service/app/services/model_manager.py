@@ -74,6 +74,8 @@ class ModelManager:
         # 线程锁（load_model 并发等待，需 Condition 支持 wait/notify）
         self._model_lock = threading.Condition()
         self._last_load_error: Optional[str] = None
+        self._last_omni_error: Optional[str] = None
+        self._omni_loading: bool = False
 
         logger.info("模型管理器已初始化（单例）")
 
@@ -88,6 +90,10 @@ class ModelManager:
     def get_last_load_error(self) -> Optional[str]:
         """返回最近一次 load_model 失败原因"""
         return self._last_load_error
+
+    def get_last_omni_error(self) -> Optional[str]:
+        """返回最近一次 Omni pipeline 加载失败原因"""
+        return self._last_omni_error
 
     def load_model(self, force_reload: bool = False) -> bool:
         """
@@ -268,6 +274,96 @@ class ModelManager:
         except Exception as e:
             logger.error(f"从本地加载模型失败: {e}", exc_info=True)
             return False
+
+    def load_omni_pipeline(self, force_reload: bool = False) -> Optional[Any]:
+        """
+        Lazy-load Hunyuan3D-Omni pipeline for point-cloud conditioning.
+        Returns pipeline instance or None when unavailable.
+        """
+        from app.config import get_config
+        from app.services.conditional_generator import resolve_omni_model_dir
+
+        omni_cfg = get_config().omni
+        if not omni_cfg.enabled:
+            self._last_omni_error = "omni_disabled"
+            return None
+
+        if "omni" in self._models and not force_reload:
+            return self._models["omni"]
+
+        with self._model_lock:
+            if "omni" in self._models and not force_reload:
+                return self._models["omni"]
+            if self._omni_loading:
+                self._model_lock.wait(timeout=600)
+                return self._models.get("omni")
+
+            self._omni_loading = True
+            try:
+                try:
+                    from hy3dshape.pipelines import Hunyuan3DOmniSiTFlowMatchingPipeline
+                except ImportError as e:
+                    self._last_omni_error = f"hy3dshape_not_installed: {e}"
+                    logger.warning("Omni 不可用: %s", self._last_omni_error)
+                    return None
+
+                import torch
+
+                device = _resolve_inference_device()
+                dtype = torch.float16 if device == "cuda" else torch.float32
+                local_dir = resolve_omni_model_dir(omni_cfg)
+                repo_id = omni_cfg.repo_id
+
+                logger.info(
+                    "正在加载 Hunyuan3D-Omni: local=%s repo=%s",
+                    local_dir or "none",
+                    repo_id,
+                )
+                if local_dir and os.path.isfile(os.path.join(local_dir, "config.yaml")):
+                    pipeline = Hunyuan3DOmniSiTFlowMatchingPipeline.from_pretrained(
+                        local_dir,
+                        torch_dtype=dtype,
+                    )
+                elif not omni_cfg.enabled or get_config().model.offline_mode:
+                    self._last_omni_error = (
+                        f"offline: Omni weights not found under {omni_cfg.model_path}"
+                    )
+                    logger.warning(self._last_omni_error)
+                    return None
+                else:
+                    pipeline = Hunyuan3DOmniSiTFlowMatchingPipeline.from_pretrained(
+                        repo_id,
+                        torch_dtype=dtype,
+                    )
+                pipeline = pipeline.to(device)
+                self._models["omni"] = pipeline
+                self._last_omni_error = None
+                logger.info("Hunyuan3D-Omni pipeline 加载成功")
+                return pipeline
+            except Exception as e:
+                self._last_omni_error = str(e)
+                logger.warning("Omni pipeline 加载失败: %s", e)
+                return None
+            finally:
+                self._omni_loading = False
+                self._model_lock.notify_all()
+
+    def unload_omni_pipeline(self) -> None:
+        """Unload Omni pipeline to free VRAM."""
+        with self._model_lock:
+            if "omni" in self._models:
+                try:
+                    del self._models["omni"]
+                except Exception:
+                    pass
+                import gc
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
 
     def _load_from_huggingface(self) -> bool:
         """

@@ -798,6 +798,12 @@ async function runSplit() {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '切分失败'
     ElMessage.error(msg)
+    if (splitMode.value === 'auto') {
+      splitMode.value = 'manual'
+      editorTool.value = 'draw'
+      await ensureManualSplitMeta()
+      ElMessage.info('已切换到「手动切分」，请拖拽绘制各视角矩形框')
+    }
   } finally {
     splitting.value = false
   }

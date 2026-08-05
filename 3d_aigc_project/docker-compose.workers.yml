@@ -1,0 +1,45 @@
+# 多 GPU ai-service 副本（可选 profile: multi-gpu）
+# 仅当机器有多 GPU 且每卡 VRAM >= 10GB 时启用
+# 用法: docker compose -f docker-compose.yml -f docker-compose.workers.yml --profile multi-gpu up -d
+
+services:
+  ai-service-gpu0:
+    extends:
+      file: docker-compose.yml
+      service: ai-service
+    container_name: 3d-aigc-ai-service-gpu0
+    profiles: [multi-gpu]
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+    ports:
+      - "8856:8855"
+
+  ai-service-gpu1:
+    extends:
+      file: docker-compose.yml
+      service: ai-service
+    container_name: 3d-aigc-ai-service-gpu1
+    profiles: [multi-gpu]
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+    ports:
+      - "8857:8855"
+
+  ai-lb:
+    image: nginx:alpine
+    container_name: 3d-aigc-ai-lb
+    profiles: [multi-gpu]
+    ports:
+      - "8860:80"
+    volumes:
+      - ./deploy/nginx-ai-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - ai-service-gpu0
+      - ai-service-gpu1
+    networks:
+      - 3d-aigc-network
+
+networks:
+  3d-aigc-network:
+    external: true
+    name: 3d-aigc_3d-aigc-network

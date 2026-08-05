@@ -30,6 +30,7 @@ ENV_OFFLINE_MODE = "OFFLINE_MODE"             # 离线模式（不从HuggingFace
 ENV_TRACK_A_GEOMETRY_ONLY = "TRACK_A_GEOMETRY_ONLY"  # 轨道A：仅输出几何白模，不烘焙纹理
 ENV_MAX_CONCURRENT_TASKS = "MAX_CONCURRENT_TASKS"   # 可同时处理的任务数（含排队+后处理）
 ENV_MAX_CONCURRENT_GPU_JOBS = "MAX_CONCURRENT_GPU_JOBS"  # GPU 推理并发（实际强制≤1）
+ENV_MAX_POSTPROCESS_WORKERS = "MAX_POSTPROCESS_WORKERS"  # 后处理线程池大小
 ENV_ENABLE_GEM_REPAINT = "ENABLE_GEM_REPAINT"
 ENV_GEM_REPAINT_MODEL_PATH = "GEM_REPAINT_MODEL_PATH"
 ENV_GEM_REPAINT_STRENGTH = "GEM_REPAINT_STRENGTH"
@@ -39,6 +40,8 @@ ENV_ALIGNMENT_MODE = "ALIGNMENT_MODE"  # casa | ring_frame
 ENV_CASA_SOFT_ACCEPT = "CASA_SOFT_ACCEPT"
 ENV_CASA_MIN_PEAK_RATIO = "CASA_MIN_PEAK_RATIO"
 ENV_CASA_MIN_INLAY_OVERLAP_RATIO = "CASA_MIN_INLAY_OVERLAP_RATIO"
+ENV_USE_OMNI_CONDITIONING = "USE_OMNI_CONDITIONING"
+ENV_OMNI_MODEL_PATH = "OMNI_MODEL_PATH"
 
 
 def is_require_gpu() -> bool:
@@ -91,6 +94,21 @@ ENV_GEN_NUM_CHUNKS = "GEN_NUM_CHUNKS"
 ENV_GEN_MC_LEVEL = "GEN_MC_LEVEL"
 ENV_GEN_MC_ALGO = "GEN_MC_ALGO"
 ENV_GEN_JEWELRY_SMOOTH_ITER = "GEN_JEWELRY_SMOOTH_ITER"
+ENV_GEN_JEWELRY_TARGET_FACES = "GEN_JEWELRY_TARGET_FACES"
+ENV_GEN_JEWELRY_COARSE_FACES = "GEN_JEWELRY_COARSE_FACES"
+ENV_GEN_JEWELRY_SUBDIVIDE_LOOP = "GEN_JEWELRY_SUBDIVIDE_LOOP"
+ENV_GEN_ULTRA_OCTREE_RESOLUTION = "GEN_ULTRA_OCTREE_RESOLUTION"
+ENV_GEN_ULTRA_INFERENCE_STEPS = "GEN_ULTRA_INFERENCE_STEPS"
+ENV_ULTRA_CAD_ENABLED = "ULTRA_CAD_ENABLED"
+ENV_ULTRA_FIT_TOLERANCE_MM = "ULTRA_FIT_TOLERANCE_MM"
+ENV_ULTRA_MAX_SURFACES = "ULTRA_MAX_SURFACES"
+ENV_ULTRA_SHARP_ANGLE_DEG = "ULTRA_SHARP_ANGLE_DEG"
+ENV_ULTRA_PLANAR_MERGE_ANGLE_DEG = "ULTRA_PLANAR_MERGE_ANGLE_DEG"
+ENV_ULTRA_STEP_SCHEMA = "ULTRA_STEP_SCHEMA"
+ENV_ENABLE_CAD_REVERSE = "ENABLE_CAD_REVERSE"
+ENV_ULTRA_MODE_ENABLED = "ULTRA_MODE_ENABLED"
+
+ULTRA_MODE_DISABLED_MESSAGE = "Ultra CAD 功能全面升级中，敬请期待"
 
 
 @dataclass
@@ -106,11 +124,68 @@ class GenerationConfig:
     mc_level: float = 0.0
     mc_algo: Optional[str] = "dmc"
     box_v: float = 1.01
-    jewelry_taubin_iterations: int = 10
+    jewelry_taubin_iterations: int = 18
     jewelry_taubin_lambda: float = 0.5
     jewelry_taubin_nu: float = -0.53
-    jewelry_spike_aspect_ratio: float = 40.0
-    jewelry_min_face_area_ratio: float = 0.0015
+    jewelry_spike_aspect_ratio: float = 35.0
+    jewelry_min_face_area_ratio: float = 0.004
+    # 减面 + 曲面重建：先 QEM 粗化，再 Loop 细分恢复顺滑，最后 Taubin
+    jewelry_coarse_faces: int = 16000
+    jewelry_subdivide_loop_iterations: int = 1
+    jewelry_target_faces: int = 48000
+    jewelry_decimate_min_input_faces: int = 30000
+    jewelry_post_decimate_taubin_iterations: int = 12
+
+
+def dmc_surface_extractor_available() -> bool:
+    """DiffDMC (mc_algo=dmc) 依赖 diso；缺失或编译失败时不可用。"""
+    try:
+        from diso import DiffDMC  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def is_ultra_mode_enabled() -> bool:
+    """Ultra CAD 模式是否开放（默认封禁）。"""
+    raw = os.environ.get(ENV_ULTRA_MODE_ENABLED, "0").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+class UltraModeDisabledError(ValueError):
+    """Ultra 模式封禁时抛出。"""
+
+    def __init__(self) -> None:
+        super().__init__(ULTRA_MODE_DISABLED_MESSAGE)
+
+
+def resolve_mc_algo(mc_algo: Optional[str]) -> Optional[str]:
+    """
+    解析 mc_algo：dmc 需要 diso，不可用时回退默认 marching cubes（不传 mc_algo）。
+    """
+    if not mc_algo or mc_algo in ("mc", "default"):
+        return None
+    if mc_algo == "dmc" and not dmc_surface_extractor_available():
+        logger.warning(
+            "mc_algo=dmc 不可用（缺少 diso 或编译失败），回退默认 marching cubes"
+        )
+        return None
+    return mc_algo
+
+
+@dataclass
+class UltraCadConfig:
+    """Ultra 模式 mesh → NURBS/STEP 逆向参数。"""
+    enabled: bool = True
+    sharp_angle_deg: float = 30.0
+    planar_merge_angle_deg: float = 3.0
+    fit_tolerance_mm: float = 0.08
+    max_surfaces: int = 60
+    step_schema: str = "AP214"
+    fallback_on_failure: bool = True
+    min_patch_faces: int = 12
+    max_patch_faces: int = 8000
 
 
 @dataclass
@@ -120,6 +195,8 @@ class GenerationModeSettings:
     apply_jewelry_prompt: bool = True
     apply_jewelry_mesh_finish: bool = True
     apply_jewelry_repair_smooth: bool = True
+    apply_cad_reverse: bool = False
+    ultra_cad: Optional[UltraCadConfig] = None
 
 
 def _fast_generation_config() -> GenerationConfig:
@@ -140,31 +217,199 @@ def _fast_generation_config() -> GenerationConfig:
         jewelry_taubin_nu=-0.53,
         jewelry_spike_aspect_ratio=80.0,
         jewelry_min_face_area_ratio=0.0005,
+        jewelry_coarse_faces=0,
+        jewelry_subdivide_loop_iterations=0,
+        jewelry_target_faces=0,
+        jewelry_decimate_min_input_faces=0,
+        jewelry_post_decimate_taubin_iterations=0,
     )
 
 
-def resolve_generation_mode(mode: Optional[str] = None) -> GenerationModeSettings:
+def _quality_generation_config() -> GenerationConfig:
+    """
+    高质量模式：最高外观顺滑与建模精细度，不限制面数（跳过 QEM 减面）。
+    """
+    return GenerationConfig(
+        num_inference_steps=65,
+        guidance_scale=4.5,
+        octree_resolution=512,
+        num_chunks=16000,
+        mc_level=0.0,
+        mc_algo="dmc",
+        box_v=1.01,
+        jewelry_taubin_iterations=24,
+        jewelry_taubin_lambda=0.5,
+        jewelry_taubin_nu=-0.53,
+        jewelry_spike_aspect_ratio=30.0,
+        jewelry_min_face_area_ratio=0.003,
+        jewelry_coarse_faces=0,
+        jewelry_subdivide_loop_iterations=2,
+        jewelry_target_faces=0,
+        jewelry_decimate_min_input_faces=0,
+        jewelry_post_decimate_taubin_iterations=16,
+    )
+
+
+def _custom_generation_config(
+    target_faces: int = 48000,
+    octree_resolution: Optional[int] = None,
+    inference_steps: Optional[int] = None,
+) -> GenerationConfig:
+    """自定义模式：继承 quality 基线，允许用户指定目标面数与可选推理参数。"""
+    cfg = _quality_generation_config()
+    cfg.jewelry_target_faces = max(0, min(200_000, int(target_faces)))
+    if octree_resolution is not None:
+        cfg.octree_resolution = max(256, min(512, int(octree_resolution)))
+    if inference_steps is not None:
+        cfg.num_inference_steps = max(5, min(100, int(inference_steps)))
+    if cfg.jewelry_target_faces > 0:
+        cfg.jewelry_coarse_faces = max(cfg.jewelry_target_faces // 3, 8000)
+        cfg.jewelry_decimate_min_input_faces = max(cfg.jewelry_target_faces, 30000)
+    return cfg
+
+
+def _ultra_generation_config() -> GenerationConfig:
+    """
+    Ultra 模式：最高推理精度，保留全细节 mesh 供 CAD 逆向；跳过 QEM/Loop 减面。
+    """
+    return GenerationConfig(
+        num_inference_steps=65,
+        guidance_scale=4.5,
+        octree_resolution=512,
+        num_chunks=16000,
+        mc_level=0.0,
+        mc_algo="dmc",
+        box_v=1.01,
+        jewelry_taubin_iterations=6,
+        jewelry_taubin_lambda=0.5,
+        jewelry_taubin_nu=-0.53,
+        jewelry_spike_aspect_ratio=35.0,
+        jewelry_min_face_area_ratio=0.003,
+        jewelry_coarse_faces=0,
+        jewelry_subdivide_loop_iterations=0,
+        jewelry_target_faces=0,
+        jewelry_decimate_min_input_faces=0,
+        jewelry_post_decimate_taubin_iterations=0,
+    )
+
+
+def _load_ultra_cad_config() -> UltraCadConfig:
+    cfg = UltraCadConfig()
+    raw = os.environ.get(ENV_ULTRA_CAD_ENABLED, "1").strip().lower()
+    cfg.enabled = raw not in ("0", "false", "no", "off")
+    tol = os.environ.get(ENV_ULTRA_FIT_TOLERANCE_MM, "").strip()
+    if tol:
+        try:
+            cfg.fit_tolerance_mm = max(0.01, min(1.0, float(tol)))
+        except ValueError:
+            pass
+    max_surf = os.environ.get(ENV_ULTRA_MAX_SURFACES, "").strip()
+    if max_surf.isdigit():
+        cfg.max_surfaces = max(4, min(200, int(max_surf)))
+    sharp = os.environ.get(ENV_ULTRA_SHARP_ANGLE_DEG, "").strip()
+    if sharp:
+        try:
+            cfg.sharp_angle_deg = max(5.0, min(60.0, float(sharp)))
+        except ValueError:
+            pass
+    planar = os.environ.get(ENV_ULTRA_PLANAR_MERGE_ANGLE_DEG, "").strip()
+    if planar:
+        try:
+            cfg.planar_merge_angle_deg = max(0.5, min(15.0, float(planar)))
+        except ValueError:
+            pass
+    schema = os.environ.get(ENV_ULTRA_STEP_SCHEMA, "").strip().upper()
+    if schema in ("AP214", "AP242"):
+        cfg.step_schema = schema
+    return cfg
+
+
+def resolve_generation_mode(
+    mode: Optional[str] = None,
+    params: Optional[dict] = None,
+) -> GenerationModeSettings:
     """
     解析生成模式。缺省 quality，保持向后兼容（当前高质量默认）。
-    支持: fast / quality（及中文别名 急速 / 高质量）。
+    支持: fast / quality / custom / ultra（及中文别名）。
     """
     if mode is not None and hasattr(mode, "value"):
         mode = mode.value
     normalized = (str(mode) if mode else "quality").strip().lower()
+    p = params or {}
+
     if normalized in ("fast", "speed", "急速", "快速"):
         return GenerationModeSettings(
             config=_fast_generation_config(),
             apply_jewelry_prompt=False,
             apply_jewelry_mesh_finish=True,
             apply_jewelry_repair_smooth=False,
+            apply_cad_reverse=False,
+        )
+
+    if normalized in ("custom", "自定义"):
+        target = p.get("custom_target_faces", 48000)
+        try:
+            target_int = int(target) if target is not None else 48000
+        except (TypeError, ValueError):
+            target_int = 48000
+        octree = p.get("custom_octree_resolution")
+        steps = p.get("custom_inference_steps")
+        octree_int = int(octree) if octree is not None and str(octree).isdigit() else None
+        steps_int = int(steps) if steps is not None and str(steps).isdigit() else None
+        return GenerationModeSettings(
+            config=_custom_generation_config(target_int, octree_int, steps_int),
+            apply_jewelry_prompt=True,
+            apply_jewelry_mesh_finish=True,
+            apply_jewelry_repair_smooth=True,
+            apply_cad_reverse=False,
+        )
+
+    if normalized in ("ultra", "cad", "step", "超高精度", "ultra_cad"):
+        if not is_ultra_mode_enabled():
+            raise UltraModeDisabledError()
+        ultra_cfg = _ultra_generation_config()
+        ultra_steps = os.environ.get(ENV_GEN_ULTRA_INFERENCE_STEPS, "").strip()
+        if ultra_steps.isdigit():
+            ultra_cfg.num_inference_steps = max(30, min(100, int(ultra_steps)))
+        ultra_octree = os.environ.get(ENV_GEN_ULTRA_OCTREE_RESOLUTION, "").strip()
+        if ultra_octree.isdigit():
+            ultra_cfg.octree_resolution = max(384, min(512, int(ultra_octree)))
+        cad_enabled = os.environ.get(ENV_ENABLE_CAD_REVERSE, "1").strip().lower()
+        cad_on = cad_enabled not in ("0", "false", "no", "off")
+        ultra_cad = _load_ultra_cad_config()
+        ultra_cad.enabled = ultra_cad.enabled and cad_on
+        return GenerationModeSettings(
+            config=ultra_cfg,
+            apply_jewelry_prompt=True,
+            apply_jewelry_mesh_finish=True,
+            apply_jewelry_repair_smooth=True,
+            apply_cad_reverse=ultra_cad.enabled,
+            ultra_cad=ultra_cad,
         )
 
     return GenerationModeSettings(
-        config=get_config().generation,
+        config=_quality_generation_config(),
         apply_jewelry_prompt=True,
         apply_jewelry_mesh_finish=True,
         apply_jewelry_repair_smooth=True,
+        apply_cad_reverse=False,
     )
+
+
+def resolve_enable_inlay_postprocess(params: dict) -> bool:
+    """
+    镶嵌比对/替换后处理开关，默认关闭。
+    兼容旧字段 enable_mesh_fusion=true。
+    """
+    if "enable_inlay_postprocess" in params:
+        return bool(params.get("enable_inlay_postprocess"))
+    if params.get("enable_mesh_fusion") is True:
+        logger.warning(
+            "enable_mesh_fusion 已弃用，请改用 enable_inlay_postprocess；"
+            "本次仍启用镶嵌后处理"
+        )
+        return True
+    return False
 
 
 @dataclass
@@ -198,6 +443,7 @@ class ServiceConfig:
     task_timeout: int = 600            # 任务超时时间（秒）
     max_concurrent_tasks: int = 8      # 最大并行任务数（验证/后处理可并行；GPU 仍串行）
     max_concurrent_gpu_jobs: int = 1   # GPU 推理并发上限（Hunyuan3D 非线程安全，固定为 1）
+    max_postprocess_workers: int = 4   # 后处理线程池 worker 数
     track_a_geometry_only: bool = True  # 轨道A默认纯几何（不调用 Paint 纹理）
     require_gpu: bool = True            # 强制 GPU；False 仅紧急 CPU
 
@@ -212,8 +458,17 @@ class AlignmentConfig:
     casa_scale_min: float = 0.05
     casa_scale_max: float = 50.0
     casa_ratio_std_max: float = 0.45
-    casa_min_inlay_overlap_ratio: float = 0.98
+    casa_min_inlay_overlap_ratio: float = 0.80
     casa_overlap_sample_count: int = 6000
+
+
+@dataclass
+class OmniConfig:
+    """Hunyuan3D-Omni 点云条件生成配置"""
+    enabled: bool = True
+    model_path: str = "./models/hunyuan3d-omni"
+    repo_id: str = "tencent/Hunyuan3D-Omni"
+    lazy_load: bool = True
 
 
 @dataclass
@@ -238,6 +493,7 @@ class AppConfig:
     service: ServiceConfig = field(default_factory=ServiceConfig)
     gem_repaint: GemRepaintConfig = field(default_factory=GemRepaintConfig)
     alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
+    omni: OmniConfig = field(default_factory=OmniConfig)
     gpu_info: Optional[GPUInfo] = None
     recommendation: Optional[ModelRecommendation] = None
 
@@ -370,15 +626,30 @@ def _load_generation_config() -> GenerationConfig:
     if smooth_iter.isdigit():
         cfg.jewelry_taubin_iterations = max(0, min(30, int(smooth_iter)))
 
+    target_faces = os.environ.get(ENV_GEN_JEWELRY_TARGET_FACES, "").strip()
+    if target_faces.isdigit():
+        cfg.jewelry_target_faces = max(0, min(200_000, int(target_faces)))
+
+    coarse_faces = os.environ.get(ENV_GEN_JEWELRY_COARSE_FACES, "").strip()
+    if coarse_faces.isdigit():
+        cfg.jewelry_coarse_faces = max(0, min(100_000, int(coarse_faces)))
+
+    loop_iter = os.environ.get(ENV_GEN_JEWELRY_SUBDIVIDE_LOOP, "").strip()
+    if loop_iter.isdigit():
+        cfg.jewelry_subdivide_loop_iterations = max(0, min(3, int(loop_iter)))
+
     logger.info(
         "生成参数(珠宝默认): steps=%d guidance=%.2f octree=%d chunks=%d "
-        "mc_algo=%s taubin_iter=%d",
+        "mc_algo=%s taubin_iter=%d coarse_faces=%d loop=%d target_faces=%d",
         cfg.num_inference_steps,
         cfg.guidance_scale,
         cfg.octree_resolution,
         cfg.num_chunks,
         cfg.mc_algo or "default",
         cfg.jewelry_taubin_iterations,
+        cfg.jewelry_coarse_faces,
+        cfg.jewelry_subdivide_loop_iterations,
+        cfg.jewelry_target_faces,
     )
     return cfg
 
@@ -414,6 +685,10 @@ def _load_service_config() -> ServiceConfig:
     if gpu_jobs_env.isdigit():
         config.max_concurrent_gpu_jobs = max(1, min(4, int(gpu_jobs_env)))
 
+    pp_env = os.environ.get(ENV_MAX_POSTPROCESS_WORKERS, "").strip()
+    if pp_env.isdigit():
+        config.max_postprocess_workers = max(1, min(16, int(pp_env)))
+
     logger.info(
         f"服务配置: 地址={config.host}:{config.port}, "
         f"日志级别={config.log_level}, "
@@ -422,7 +697,8 @@ def _load_service_config() -> ServiceConfig:
         f"轨道A纯几何={config.track_a_geometry_only}, "
         f"REQUIRE_GPU={config.require_gpu}, "
         f"max_concurrent_tasks={config.max_concurrent_tasks}, "
-        f"max_concurrent_gpu_jobs={config.max_concurrent_gpu_jobs}"
+        f"max_concurrent_gpu_jobs={config.max_concurrent_gpu_jobs}, "
+        f"max_postprocess_workers={config.max_postprocess_workers}"
     )
 
     return config
@@ -503,6 +779,31 @@ def _load_alignment_config() -> AlignmentConfig:
     return cfg
 
 
+def _load_omni_config() -> OmniConfig:
+    """加载 Hunyuan3D-Omni 点云条件生成配置"""
+    cfg = OmniConfig()
+
+    enabled_env = os.environ.get(ENV_USE_OMNI_CONDITIONING, "true").strip().lower()
+    cfg.enabled = enabled_env not in ("0", "false", "no", "off")
+
+    omni_path = os.environ.get(ENV_OMNI_MODEL_PATH, "").strip()
+    if omni_path:
+        cfg.model_path = _resolve_model_path(omni_path)
+    else:
+        default = Path(cfg.model_path)
+        if not default.is_absolute():
+            cfg.model_path = str((Path.cwd() / default).resolve())
+
+    logger.info(
+        "Omni 配置: enabled=%s model_path=%s repo_id=%s lazy_load=%s",
+        cfg.enabled,
+        cfg.model_path,
+        cfg.repo_id,
+        cfg.lazy_load,
+    )
+    return cfg
+
+
 def load_config() -> AppConfig:
     """
     加载完整的应用配置
@@ -528,6 +829,9 @@ def load_config() -> AppConfig:
 
     # 镶嵌对齐（CASA / ring-frame）
     app_config.alignment = _load_alignment_config()
+
+    # Hunyuan3D-Omni 点云条件生成
+    app_config.omni = _load_omni_config()
 
     # 保存GPU信息
     app_config.gpu_info = detect_gpu()

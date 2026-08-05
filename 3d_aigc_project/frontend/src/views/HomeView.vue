@@ -295,6 +295,47 @@
             v-model="selectedInlay"
             @select="onInlaySelect"
           />
+          <div v-if="inlayEnabled && inlayPanelOpen" class="inlay-strategy-block">
+            <p class="inlay-strategy-hint">
+              启用镶嵌结构后，推理阶段可使用 Omni 点云条件；比对/对齐/替换为可选后处理。
+            </p>
+            <el-form-item label="镶嵌后处理">
+              <el-switch
+                v-model="inlayPostprocessEnabled"
+                active-text="启用镶嵌比对与替换（后处理）"
+              />
+            </el-form-item>
+            <template v-if="inlayPostprocessEnabled">
+              <el-form-item v-if="useMultiViewWorkflow" label="镶嵌推理策略">
+                <el-select v-model="inlayGenStrategy" size="small" style="width: 100%">
+                  <el-option
+                    label="多视图 + Omni 精修（推荐）"
+                    value="mv_then_omni_refine"
+                  />
+                  <el-option label="仅多视图（镶嵌仅用于融合）" value="mv_only" />
+                  <el-option label="单视图 + Omni 点云" value="omni_single" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="融合模式">
+                <el-select v-model="fusionMethod" size="small" style="width: 100%">
+                  <el-option label="分色合并（默认）" value="colored_merge" />
+                  <el-option label="局部替换（差集去重镶口）" value="replace" />
+                </el-select>
+              </el-form-item>
+            </template>
+            <template v-else-if="useMultiViewWorkflow">
+              <el-form-item label="镶嵌推理策略">
+                <el-select v-model="inlayGenStrategy" size="small" style="width: 100%">
+                  <el-option
+                    label="多视图 + Omni 精修（推荐）"
+                    value="mv_then_omni_refine"
+                  />
+                  <el-option label="仅多视图" value="mv_only" />
+                  <el-option label="单视图 + Omni 点云" value="omni_single" />
+                </el-select>
+              </el-form-item>
+            </template>
+          </div>
         </section>
 
         <!-- Step 4: 生成参数 -->
@@ -352,10 +393,54 @@
               <el-radio-group v-model="generateParams.generation_mode" class="format-group">
                 <el-radio-button value="fast">急速模式</el-radio-button>
                 <el-radio-button value="quality">高质量模式</el-radio-button>
+                <el-radio-button value="custom">自定义</el-radio-button>
+                <el-tooltip content="功能全面升级中，敬请期待" placement="top">
+                  <el-radio-button value="ultra" disabled>Ultra CAD</el-radio-button>
+                </el-tooltip>
               </el-radio-group>
               <div class="format-hint">
                 <span>急速模式：更快生成，接近旧版默认效果</span>
-                <span>高质量模式：对称更规整、曲面更顺滑，耗时更长</span>
+                <span>高质量模式：不限制面数，优先外观顺滑与建模精细度</span>
+                <span>自定义：可指定目标面数与可选推理参数</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item
+              v-if="generateParams.generation_mode === 'custom'"
+              label="自定义参数"
+            >
+              <div class="custom-mode-panel">
+                <el-form-item label="目标面数（0=不限制）">
+                  <el-slider
+                    v-model="customTargetFaces"
+                    :min="0"
+                    :max="200000"
+                    :step="1000"
+                    show-input
+                  />
+                </el-form-item>
+                <el-form-item label="Octree 分辨率（可选）">
+                  <el-input-number
+                    v-model="customOctreeResolution"
+                    :min="256"
+                    :max="512"
+                    :step="64"
+                    placeholder="默认继承高质量"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                <el-form-item label="推理步数（可选）">
+                  <el-input-number
+                    v-model="customInferenceSteps"
+                    :min="5"
+                    :max="100"
+                    :step="5"
+                    placeholder="默认继承高质量"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                </el-form-item>
               </div>
             </el-form-item>
           </el-form>
@@ -378,6 +463,17 @@
               >
                 {{ taskStatusLabel }}
               </el-tag>
+              <el-button
+                v-if="isGenerating"
+                type="danger"
+                size="small"
+                plain
+                class="canvas-cancel-btn"
+                :loading="cancelingTask"
+                @click="handleCancelGeneration"
+              >
+                取消任务
+              </el-button>
             </div>
             <el-button
               class="result-fullscreen-btn"
@@ -433,6 +529,16 @@
               <p class="generating-hint">生成过程可能需要几分钟，请耐心等待</p>
             </div>
 
+            <!-- 已取消状态 -->
+            <div v-else-if="currentTask.status === 'cancelled'" class="result-cancelled">
+              <div class="cancelled-icon-wrap">
+                <el-icon :size="40"><CircleCloseFilled /></el-icon>
+              </div>
+              <p class="cancelled-text">任务已取消</p>
+              <p class="cancelled-hint">生成已终止，可调整参数后重新生成</p>
+              <el-button type="primary" @click="startGenerate">重新生成</el-button>
+            </div>
+
             <!-- 生成失败状态 -->
             <div v-else-if="currentTask.status === 'failed'" class="result-failed">
               <div class="failed-icon-wrap">
@@ -451,6 +557,14 @@
               <p v-if="lastGenerationDurationMs != null" class="generation-duration">
                 本次生成用时 {{ lastGenerationDurationText }}
               </p>
+              <el-alert
+                v-if="showInlayFusionHint"
+                class="fusion-hint"
+                type="warning"
+                :closable="false"
+                show-icon
+                :title="inlayFusionHintTitle"
+              />
               <div v-if="showModelPreviewModeToggle" class="model-preview-toolbar">
                 <el-radio-group v-model="modelPreviewMode" size="small">
                   <el-radio-button value="colored">分色预览</el-radio-button>
@@ -502,6 +616,7 @@
           <span>{{ generateSummaryText }}</span>
         </div>
       </div>
+      <div class="action-bar-buttons">
       <el-button
         type="primary"
         size="large"
@@ -513,6 +628,14 @@
         <el-icon v-if="!submitting"><VideoPlay /></el-icon>
         {{ submitting ? '提交中...' : '开始生成' }}
       </el-button>
+      <router-link
+        v-if="canOpenDebugStudio"
+        :to="{ path: '/debug', query: { task_id: currentTask?.task_id } }"
+        class="debug-studio-link"
+      >
+        <el-button size="large">打开对齐调试工作台</el-button>
+      </router-link>
+      </div>
     </div>
 
     <PreprocessEditor
@@ -574,7 +697,7 @@ import {
   ArrowUp, ArrowDown, Picture, Crop, EditPen, FullScreen, Close,
   FolderOpened,
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import FileUpload from '@/components/FileUpload.vue'
 import MultiViewUploader from '@/components/MultiViewUploader.vue'
 import SheetSplitUploader from '@/components/SheetSplitUploader.vue'
@@ -603,6 +726,7 @@ import ModelViewer from '@/components/ModelViewer.vue'
 import PreprocessEditor from '@/components/PreprocessEditor.vue'
 import {
   generateImageTo3d,
+  cancelTask as cancelTaskApi,
   downloadResult as downloadResultApi,
   removeBackground,
   type GemPreset,
@@ -610,6 +734,7 @@ import {
   type InlayInfo,
   type TaskDetail,
 } from '@/api'
+import { inferMeshFormat } from '@/utils/meshFormat'
 
 // ==========================================
 // 状态
@@ -651,6 +776,12 @@ const viewImages = ref<ViewImages>({})
 const selectedInlay = ref<InlayInfo | null>(null)
 const inlayEnabled = ref(false)
 const inlayPanelOpen = ref(false)
+const inlayPostprocessEnabled = ref(false)
+const inlayGenStrategy = ref<'mv_then_omni_refine' | 'mv_only' | 'omni_single'>('mv_then_omni_refine')
+const fusionMethod = ref<'colored_merge' | 'replace'>('colored_merge')
+const customTargetFaces = ref(48000)
+const customOctreeResolution = ref<number | null>(null)
+const customInferenceSteps = ref<number | null>(null)
 const submitting = ref(false)
 const {
   activeTask: currentTask,
@@ -659,7 +790,11 @@ const {
   startPolling,
   resumePolling,
   clearActiveTask,
+  settleActiveTask,
 } = useActiveGeneration()
+
+const cancelingTask = ref(false)
+
 const bgRemovalEnabled = ref(false)
 const enableGemRepaint = ref(false)
 const gemRepaintSeed = ref(42)
@@ -792,7 +927,11 @@ onMounted(() => {
 
   removeCompleteHandler = onActiveTaskComplete((detail) => {
     finalizeGenerationTimer()
-    ElMessage.success('3D模型生成完成！')
+    if (detail.error_message && (detail.inlay_file || selectedInlay.value)) {
+      ElMessage.warning(detail.error_message)
+    } else {
+      ElMessage.success('3D模型生成完成！')
+    }
     applyCompletedTaskPreview(detail)
   })
 
@@ -818,7 +957,7 @@ let removeFailedHandler: (() => void) | null = null
 const generateParams = ref({
   prompt: '',
   output_format: 'GLB' as 'OBJ' | 'GLB' | 'STL',
-  generation_mode: 'fast' as 'fast' | 'quality',
+  generation_mode: 'quality' as 'fast' | 'quality' | 'custom' | 'ultra',
 })
 
 // 预处理源图（单图模式）
@@ -866,13 +1005,36 @@ const canGenerate = computed(() => {
   return true
 })
 
+const canOpenDebugStudio = computed(() => {
+  if (currentTask.value?.status !== 'completed') return false
+  const inlay = currentTask.value?.inlay_file
+  return Boolean(inlay && inlay !== 'colored_merge')
+})
+
 /** 本次任务是否使用了镶嵌结构（显示分色/白模切换） */
+const taskUsedInlay = computed(
+  () => Boolean(selectedInlay.value || currentTask.value?.inlay_file),
+)
+
 const showModelPreviewModeToggle = computed(
   () =>
-    Boolean(
-      modelPreviewUrl.value?.includes('/preview') && modelPreviewFormat.value === 'GLB'
-    )
+    taskUsedInlay.value &&
+    Boolean(modelPreviewUrl.value?.includes('/preview') && modelPreviewFormat.value === 'GLB'),
 )
+
+const showInlayFusionHint = computed(
+  () =>
+    taskUsedInlay.value &&
+    currentTask.value?.status === 'completed' &&
+    !modelPreviewUrl.value?.includes('/preview'),
+)
+
+const inlayFusionHintTitle = computed(() => {
+  if (currentTask.value?.error_message) {
+    return currentTask.value.error_message
+  }
+  return '镶嵌融合预览不可用，当前仅显示 AI 主体白模。请重新生成或检查镶嵌结构。'
+})
 
 function getEffectiveViewFile(face: ViewFace): File | undefined {
   return processedViewFiles.value[face] ?? viewImages.value[face]
@@ -1101,6 +1263,7 @@ const taskStatusLabel = computed(() => {
     processing: '生成中',
     completed: '已完成',
     failed: '失败',
+    cancelled: '已取消',
   }
   return map[currentTask.value.status] ?? currentTask.value.status
 })
@@ -1113,6 +1276,7 @@ const taskStatusTagType = computed(() => {
     processing: 'warning',
     completed: 'success',
     failed: 'danger',
+    cancelled: 'info',
   }
   return map[currentTask.value.status] ?? 'info'
 })
@@ -1242,7 +1406,11 @@ function clearWorkflowState() {
   selectedInlay.value = null
   lastGemCoverage.value = null
   bgRemovalEnabled.value = false
-  generateParams.value = { prompt: '', output_format: 'GLB', generation_mode: 'fast' }
+  generateParams.value = { prompt: '', output_format: 'GLB', generation_mode: 'quality' }
+  inlayPostprocessEnabled.value = false
+  customTargetFaces.value = 48000
+  customOctreeResolution.value = null
+  customInferenceSteps.value = null
   uploadRemountKey.value += 1
 }
 
@@ -1739,7 +1907,7 @@ function applyCompletedTaskPreview(detail: TaskDetail) {
     return
   }
   modelPreviewUrl.value = `/api/tasks/${taskId}/download`
-  modelPreviewFormat.value = generateParams.value.output_format
+  modelPreviewFormat.value = inferMeshFormat(detail.result_file, detail.output_format)
   modelPreviewMode.value = 'white'
 }
 
@@ -1769,9 +1937,18 @@ async function startGenerate() {
       ? `多视图(${Object.keys(getViewsForGenerate()).length}张)`
       : (imageFile?.name ?? '')
 
-    const params = {
+    const params: Record<string, unknown> = {
       ...generateParams.value,
       multi_view_enabled: useMultiViewWorkflow.value,
+    }
+    if (generateParams.value.generation_mode === 'custom') {
+      params.custom_target_faces = customTargetFaces.value
+      if (customOctreeResolution.value != null) {
+        params.custom_octree_resolution = customOctreeResolution.value
+      }
+      if (customInferenceSteps.value != null) {
+        params.custom_inference_steps = customInferenceSteps.value
+      }
     }
     if (inlayEnabled.value) {
       if (!selectedInlay.value?.id) {
@@ -1780,6 +1957,22 @@ async function startGenerate() {
         return
       }
       params.inlay_structure_filename = selectedInlay.value.id
+      if (selectedInlay.value.inlay_type) {
+        params.inlay_type = selectedInlay.value.inlay_type
+      }
+      if (selectedInlay.value.stone_diameter_mm != null) {
+        params.stone_diameter_mm = selectedInlay.value.stone_diameter_mm
+      }
+      params.use_omni_conditioning = true
+      params.inlay_gen_strategy = useMultiViewWorkflow.value
+        ? inlayGenStrategy.value
+        : 'omni_single'
+      params.enable_inlay_postprocess = inlayPostprocessEnabled.value
+      if (inlayPostprocessEnabled.value) {
+        params.apply_inlay_render_condition = true
+        params.enable_fast_size_align = true
+        params.fusion_method = fusionMethod.value
+      }
     }
 
     const result = await generateImageTo3d(
@@ -1828,8 +2021,42 @@ function onModelPreviewError(message: string) {
       : `分色预览加载失败：${message}，已切换为白模预览`,
   )
   modelPreviewUrl.value = `/api/tasks/${taskId}/download`
-  modelPreviewFormat.value = generateParams.value.output_format
+  modelPreviewFormat.value = inferMeshFormat(
+    currentTask.value?.result_file,
+    generateParams.value.output_format,
+  )
   modelPreviewMode.value = 'white'
+}
+
+/** 取消进行中的生成任务 */
+async function handleCancelGeneration() {
+  if (!currentTask.value || !isGenerating.value || cancelingTask.value) return
+  try {
+    await ElMessageBox.confirm(
+      '确定要取消当前生成任务吗？取消后需重新提交生成。',
+      '取消任务',
+      {
+        confirmButtonText: '取消任务',
+        cancelButtonText: '继续等待',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  const taskId = currentTask.value.task_id
+  cancelingTask.value = true
+  try {
+    const res = await cancelTaskApi(taskId)
+    settleActiveTask(res.data)
+    stopGenerationTimerInterval()
+    ElMessage.success('任务已取消')
+  } catch {
+    ElMessage.error('取消任务失败，请稍后重试')
+  } finally {
+    cancelingTask.value = false
+  }
 }
 
 /** 下载结果 */
@@ -2087,6 +2314,19 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 
+.inlay-strategy-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.inlay-strategy-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
 /* 图像预处理 */
 .preprocess-actions {
   display: flex;
@@ -2279,6 +2519,10 @@ onBeforeUnmount(() => {
   margin-left: 4px;
 }
 
+.canvas-cancel-btn {
+  margin-left: 8px;
+}
+
 .canvas-body {
   flex: 1;
   display: flex;
@@ -2435,8 +2679,47 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.fusion-hint {
+  margin: 0 0 8px;
+}
+
 .generating-hint {
   font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* 已取消状态 */
+.result-cancelled {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 32px;
+}
+
+.cancelled-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(144, 147, 153, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.cancelled-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.cancelled-hint {
+  font-size: 13px;
   color: var(--text-muted);
   margin: 0;
 }
@@ -2608,6 +2891,17 @@ onBeforeUnmount(() => {
   height: 20px;
   background: var(--border-color);
   flex-shrink: 0;
+}
+
+.action-bar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.debug-studio-link {
+  text-decoration: none;
 }
 
 .generate-btn {

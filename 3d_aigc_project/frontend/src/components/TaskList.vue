@@ -45,6 +45,25 @@
         </template>
       </el-table-column>
 
+      <!-- 生成模式 -->
+      <el-table-column
+        prop="generation_mode"
+        label="生成模式"
+        width="120"
+        align="center"
+      >
+        <template #default="{ row }">
+          <el-tag
+            :type="getGenerationModeType(row.generation_mode)"
+            :class="getGenerationModeClass(row.generation_mode)"
+            round
+            size="small"
+          >
+            {{ getGenerationModeLabel(row.generation_mode) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
       <!-- 状态 -->
       <el-table-column
         prop="status"
@@ -230,6 +249,7 @@ function getStatusType(status: string): 'info' | 'warning' | 'success' | 'danger
     processing: 'warning',
     completed: 'success',
     failed: 'danger',
+    cancelled: 'info',
   }
   return map[status] || 'info'
 }
@@ -247,8 +267,30 @@ function getStatusLabel(status: string): string {
     processing: '生成中',
     completed: '已完成',
     failed: '失败',
+    cancelled: '已取消',
   }
   return map[status] || status
+}
+
+function getGenerationModeLabel(mode?: string): string {
+  if (mode === 'fast') return '快速模式'
+  if (mode === 'custom') return '自定义'
+  if (mode === 'ultra') return 'Ultra CAD'
+  return '高质量模式'
+}
+
+function getGenerationModeType(mode?: string): 'warning' | 'primary' | 'success' | 'info' {
+  if (mode === 'fast') return 'warning'
+  if (mode === 'custom') return 'info'
+  if (mode === 'ultra') return 'success'
+  return 'primary'
+}
+
+function getGenerationModeClass(mode?: string): string {
+  if (mode === 'fast') return 'generation-mode-fast'
+  if (mode === 'custom') return 'generation-mode-custom'
+  if (mode === 'ultra') return 'generation-mode-ultra'
+  return 'generation-mode-quality'
 }
 
 /** 格式化时间 */

@@ -35,3 +35,17 @@ start.bat --cpu   # 或 ./start.sh --cpu
 ### 运行时硬失败
 
 `ai-service` 在 `REQUIRE_GPU=1`（compose 默认）时，若 `torch.cuda.is_available()` 为 false，进程以 **非零退出**，不会静默用 CPU 继续服务。
+
+### ai-service 镜像 apt 构建失败（502 等）
+
+`ai-service/Dockerfile` 已切换阿里云 Debian 源、`Acquire::Retries`/`--fix-missing`，并对 `libspatialindex-dev` 单独重试。
+
+若仍无法完成 `docker compose build ai-service`，可临时热更新运行中容器（**不替换镜像层**，仅改 Python 代码）：
+
+```powershell
+docker cp ai-service/app 3d-aigc-ai-service:/app/
+docker restart 3d-aigc-ai-service
+curl http://localhost:8855/health
+```
+
+之后在网络恢复时重新 `docker compose ... build ai-service` 以固化依赖层。

@@ -24,7 +24,7 @@ from app.models.schemas import (
 from app.services.generator import get_generator_service
 from app.services.model_manager import get_model_manager
 from app.utils.hardware import get_system_info
-from app.config import get_config, is_require_gpu
+from app.config import get_config, is_require_gpu, UltraModeDisabledError, ULTRA_MODE_DISABLED_MESSAGE, is_ultra_mode_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,15 @@ def _refuse_cpu_generation_if_required() -> None:
     )
 
 
+def _validate_generation_mode(request_mode) -> None:
+    """提交前校验 generation_mode，Ultra 封禁时拒绝。"""
+    mode_val = request_mode.value if hasattr(request_mode, "value") else str(request_mode or "quality")
+    normalized = mode_val.strip().lower()
+    ultra_aliases = ("ultra", "cad", "step", "超高精度", "ultra_cad")
+    if normalized in ultra_aliases and not is_ultra_mode_enabled():
+        raise HTTPException(status_code=503, detail=ULTRA_MODE_DISABLED_MESSAGE)
+
+
 # ============================================================
 # 图片到3D生成
 # ============================================================
@@ -73,6 +82,7 @@ async def image_to_3d(request: GenerateRequest):
     - **result_format**: 输出格式（glb/obj/stl/ply）
     """
     _refuse_cpu_generation_if_required()
+    _validate_generation_mode(request.generation_mode)
     service = get_generator_service()
 
     # 创建任务
@@ -114,6 +124,7 @@ async def condition_generate(request: ConditionGenerateRequest):
     - **result_format**: 输出格式
     """
     _refuse_cpu_generation_if_required()
+    _validate_generation_mode(request.generation_mode)
     service = get_generator_service()
 
     # 创建任务
@@ -168,6 +179,19 @@ async def get_task_status(task_id: str):
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
+
+
+@router.post(
+    "/cancel/{task_id}",
+    summary="取消生成任务",
+    description="终止进行中的生成任务（GPU 推理进行中需等当前步结束后停止后续阶段）",
+)
+async def cancel_task(task_id: str):
+    service = get_generator_service()
+    result = service.request_cancel(task_id)
+    if result.get("reason") == "not_found":
+        raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+    return result
 
 
 # ============================================================

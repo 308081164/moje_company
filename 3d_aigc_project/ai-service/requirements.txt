@@ -17,6 +17,7 @@ hy3dgen>=0.1.0
 
 # 3D处理库
 trimesh>=4.0.0
+rtree>=1.0.0
 open3d>=0.18.0
 
 # 数值计算
@@ -37,6 +38,12 @@ manifold3d>=2.0.0
 
 # 网格水密修复（marching cubes / 平滑后补洞）
 pymeshfix>=0.16.0
+
+# Ultra CAD 逆向（Open CASCADE / STEP 导出，仅 Linux/Docker）
+pythonocc-core>=7.7.0,<7.9.0; sys_platform == 'linux'
+
+# Ultra/Quality mc_algo=dmc（DiffDMC，Dockerfile ENABLE_DMC=1 时单独编译安装）
+# diso==0.1.4
 
 # 宝石去反光 AI 重绘（InstructPix2Pix）
 diffusers>=0.27.0

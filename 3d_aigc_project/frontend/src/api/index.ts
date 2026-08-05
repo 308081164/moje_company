@@ -10,7 +10,7 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-export type TaskStatus = 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
+export type TaskStatus = 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
 
 export interface TaskInfo {
   task_id: string
@@ -19,6 +19,8 @@ export interface TaskInfo {
   created_at: string
   updated_at: string
   output_format?: string
+  /** fast / quality / custom / ultra */
+  generation_mode?: 'fast' | 'quality' | 'custom' | 'ultra'
   result_file?: string
   error_message?: string
   progress?: number
@@ -26,6 +28,10 @@ export interface TaskInfo {
   inlay_file?: string
   preview_url?: string
   input_preview_url?: string
+  /** Ultra CAD STEP 下载路径 */
+  cad_step_url?: string
+  /** Ultra CAD 拟合评分 0–100 */
+  cad_fit_score?: number
 }
 
 export interface TaskDetail extends TaskInfo {}
@@ -46,6 +52,8 @@ export interface InlayInfo {
   preview_method?: string
   preview_quality?: number
   tags?: string[]
+  inlay_type?: string
+  stone_diameter_mm?: number
 }
 
 export interface InlayV2Info extends InlayInfo {
@@ -146,9 +154,20 @@ export interface GenerateParams {
   inlay_structure_filename?: string
   inlay_type?: string
   gem_type?: string
+  stone_diameter_mm?: number
+  use_omni_conditioning?: boolean
+  /** mv_only | mv_then_omni_refine | omni_single */
+  inlay_gen_strategy?: 'mv_only' | 'mv_then_omni_refine' | 'omni_single'
+  apply_inlay_render_condition?: boolean
+  enable_fast_size_align?: boolean
+  fusion_method?: 'colored_merge' | 'replace' | 'boolean'
+  enable_inlay_postprocess?: boolean
+  custom_target_faces?: number
+  custom_octree_resolution?: number
+  custom_inference_steps?: number
   multi_view_enabled?: boolean
-  /** fast=急速模式 quality=高质量模式 */
-  generation_mode?: 'fast' | 'quality'
+  /** fast / quality / custom / ultra（Ultra 封禁中） */
+  generation_mode?: 'fast' | 'quality' | 'custom' | 'ultra'
 }
 
 export type ViewFace = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
@@ -228,6 +247,9 @@ const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 300000,
 })
+
+/** Ultra 模式生成/轮询使用更长超时（CAD 逆向 + 高精度推理） */
+export const ULTRA_API_TIMEOUT_MS = 900000
 
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
@@ -408,6 +430,38 @@ export async function generateImageTo3d(
   if (params.inlay_structure_filename) {
     formData.append('inlay_structure_filename', params.inlay_structure_filename)
   }
+  if (params.inlay_type) formData.append('inlay_type', params.inlay_type)
+  if (params.gem_type) formData.append('gem_type', params.gem_type)
+  if (params.stone_diameter_mm != null) {
+    formData.append('stone_diameter_mm', String(params.stone_diameter_mm))
+  }
+  if (params.use_omni_conditioning != null) {
+    formData.append('use_omni_conditioning', String(params.use_omni_conditioning))
+  }
+  if (params.inlay_gen_strategy) {
+    formData.append('inlay_gen_strategy', params.inlay_gen_strategy)
+  }
+  if (params.apply_inlay_render_condition != null) {
+    formData.append('apply_inlay_render_condition', String(params.apply_inlay_render_condition))
+  }
+  if (params.enable_fast_size_align != null) {
+    formData.append('enable_fast_size_align', String(params.enable_fast_size_align))
+  }
+  if (params.fusion_method) {
+    formData.append('fusion_method', params.fusion_method)
+  }
+  if (params.enable_inlay_postprocess != null) {
+    formData.append('enable_inlay_postprocess', String(params.enable_inlay_postprocess))
+  }
+  if (params.custom_target_faces != null) {
+    formData.append('custom_target_faces', String(params.custom_target_faces))
+  }
+  if (params.custom_octree_resolution != null) {
+    formData.append('custom_octree_resolution', String(params.custom_octree_resolution))
+  }
+  if (params.custom_inference_steps != null) {
+    formData.append('custom_inference_steps', String(params.custom_inference_steps))
+  }
   if (params.multi_view_enabled) {
     formData.append('multi_view_enabled', 'true')
     if (viewImages) {
@@ -421,10 +475,15 @@ export async function generateImageTo3d(
   if (params.generation_mode) {
     formData.append('generation_mode', params.generation_mode)
   }
+  const requestTimeout =
+    params.generation_mode === 'ultra' ? ULTRA_API_TIMEOUT_MS : undefined
   const response = await apiClient.post<ApiResponse<TaskInfo>>(
     '/generate/image-to-3d',
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: requestTimeout,
+    }
   )
   return response.data
 }
@@ -445,10 +504,15 @@ export async function conditionGenerate(
   if (params.gem_type) formData.append('gem_type', params.gem_type)
   if (params.generation_mode) formData.append('generation_mode', params.generation_mode)
 
+  const requestTimeout =
+    params.generation_mode === 'ultra' ? ULTRA_API_TIMEOUT_MS : undefined
   const response = await apiClient.post<ApiResponse<TaskInfo>>(
     '/generate/condition-generate',
     formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: requestTimeout,
+    }
   )
   return response.data
 }
@@ -691,6 +755,19 @@ export async function downloadResult(taskId: string): Promise<Blob> {
   return response.data as Blob
 }
 
+export async function downloadCadStep(taskId: string): Promise<Blob> {
+  const response = await apiClient.get(`/tasks/${taskId}/cad-step`, {
+    responseType: 'blob',
+    timeout: ULTRA_API_TIMEOUT_MS,
+  })
+  return response.data as Blob
+}
+
+export async function cancelTask(taskId: string): Promise<ApiResponse<TaskDetail>> {
+  const response = await apiClient.post<ApiResponse<TaskDetail>>(`/tasks/${taskId}/cancel`)
+  return response.data
+}
+
 export async function deleteTask(taskId: string): Promise<ApiResponse<null>> {
   const response = await apiClient.delete<ApiResponse<null>>(`/tasks/${taskId}`)
   return response.data
@@ -846,6 +923,142 @@ export async function getInlayV2Jobs(
     ApiResponse<Array<{ id: string; status: string; job_type: string; inlay_id: string }>>
   >('/inlay/v2/jobs', { params: { status, limit } })
   return response.data
+}
+
+// ============================================================
+// Debug pipeline（逐步对齐调试）
+// ============================================================
+
+export type DebugStepStatus =
+  | 'pending'
+  | 'running'
+  | 'awaiting_confirm'
+  | 'confirmed'
+  | 'failed'
+
+export interface DebugStepDefinition {
+  id: string
+  name: string
+  operation: string
+  expected: string
+  index: number
+  status: DebugStepStatus
+  unlocked: boolean
+  is_current: boolean
+  result?: DebugStepResult | null
+}
+
+export interface DebugStepResult {
+  step_id: string
+  success: boolean
+  preview_path?: string | null
+  preview_mode?: 'white' | 'colored'
+  metrics?: Record<string, unknown>
+  artifacts?: Record<string, string>
+  message?: string
+}
+
+export interface DebugSessionInfo {
+  session_id: string
+  source_task_id: string
+  current_step_index: number
+  current_step_id?: string | null
+  completed: boolean
+  steps: DebugStepDefinition[]
+  step_definitions?: DebugStepDefinition[]
+  created_at?: string
+  updated_at?: string
+}
+
+export async function createDebugSession(
+  sourceTaskId: string,
+  enableIcp = true,
+  enableAiPartSplit = true
+): Promise<ApiResponse<{ session_id: string; source_task_id: string; session: DebugSessionInfo }>> {
+  const response = await apiClient.post<
+    ApiResponse<{ session_id: string; source_task_id: string; session: DebugSessionInfo }>
+  >('/debug/sessions', null, {
+    params: {
+      source_task_id: sourceTaskId,
+      enable_icp: enableIcp,
+      enable_ai_part_split: enableAiPartSplit,
+    },
+  })
+  return response.data
+}
+
+export async function createStandaloneDebugSession(
+  rawMesh: File,
+  inlayMesh: File,
+  options?: { enableIcp?: boolean; enableAiPartSplit?: boolean; outputFormat?: string }
+): Promise<ApiResponse<{ session_id: string; source_task_id: string; session: DebugSessionInfo }>> {
+  const form = new FormData()
+  form.append('raw_mesh', rawMesh)
+  form.append('inlay_mesh', inlayMesh)
+  form.append('enable_icp', String(options?.enableIcp ?? true))
+  form.append('enable_ai_part_split', String(options?.enableAiPartSplit ?? false))
+  form.append('output_format', options?.outputFormat ?? 'glb')
+  const response = await apiClient.post<
+    ApiResponse<{ session_id: string; source_task_id: string; session: DebugSessionInfo }>
+  >('/debug/sessions/standalone', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+export async function runDebugStepDirect(
+  stepId: string,
+  rawMeshPath: string,
+  inlayMeshPath: string,
+  context?: Record<string, unknown>,
+  force = false
+): Promise<ApiResponse<DebugStepResult>> {
+  const response = await apiClient.post<ApiResponse<DebugStepResult>>(
+    `/debug/steps/${stepId}/run`,
+    { raw_mesh_path: rawMeshPath, inlay_mesh_path: inlayMeshPath, context, force }
+  )
+  return response.data
+}
+
+export async function getDebugSession(
+  sessionId: string
+): Promise<ApiResponse<DebugSessionInfo>> {
+  const response = await apiClient.get<ApiResponse<DebugSessionInfo>>(
+    `/debug/sessions/${sessionId}`
+  )
+  return response.data
+}
+
+export async function runDebugPipelineStep(
+  sessionId: string,
+  stepId: string,
+  force = false
+): Promise<ApiResponse<DebugStepResult>> {
+  const response = await apiClient.post<ApiResponse<DebugStepResult>>(
+    `/debug/sessions/${sessionId}/steps/${stepId}/run`,
+    null,
+    { params: { force } }
+  )
+  return response.data
+}
+
+export async function confirmDebugPipelineStep(
+  sessionId: string,
+  stepId: string
+): Promise<ApiResponse<DebugSessionInfo>> {
+  const response = await apiClient.post<ApiResponse<DebugSessionInfo>>(
+    `/debug/sessions/${sessionId}/steps/${stepId}/confirm`
+  )
+  return response.data
+}
+
+export async function deleteDebugSession(sessionId: string): Promise<ApiResponse<unknown>> {
+  const response = await apiClient.delete<ApiResponse<unknown>>(`/debug/sessions/${sessionId}`)
+  return response.data
+}
+
+export function debugStepPreviewUrl(sessionId: string, stepId: string): string {
+  return `/api/debug/sessions/${sessionId}/preview/${stepId}?t=${Date.now()}`
 }
 
 export default apiClient

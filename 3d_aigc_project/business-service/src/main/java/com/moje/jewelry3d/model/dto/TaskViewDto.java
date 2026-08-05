@@ -24,6 +24,18 @@ public class TaskViewDto {
     @JsonProperty("output_format")
     private String outputFormat;
 
+    /** fast=快速模式 quality=高精度模式 ultra=Ultra CAD 模式 */
+    @JsonProperty("generation_mode")
+    private String generationMode;
+
+    /** Ultra 模式 STEP 下载 URL（任务完成且拟合成功时） */
+    @JsonProperty("cad_step_url")
+    private String cadStepUrl;
+
+    /** Ultra CAD 拟合评分 0–100 */
+    @JsonProperty("cad_fit_score")
+    private Integer cadFitScore;
+
     @JsonProperty("inlay_file")
     private String inlayFile;
 

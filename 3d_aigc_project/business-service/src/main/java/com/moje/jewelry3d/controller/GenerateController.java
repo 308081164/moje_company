@@ -48,7 +48,19 @@ public class GenerateController {
             @RequestParam(value = "right_image", required = false) MultipartFile rightImage,
             @RequestParam(value = "top_image", required = false) MultipartFile topImage,
             @RequestParam(value = "bottom_image", required = false) MultipartFile bottomImage,
-            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode
+            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode,
+            @RequestParam(value = "inlay_type", required = false) String inlayType,
+            @RequestParam(value = "gem_type", required = false) String gemType,
+            @RequestParam(value = "stone_diameter_mm", required = false) Float stoneDiameterMm,
+            @RequestParam(value = "use_omni_conditioning", required = false) Boolean useOmniConditioning,
+            @RequestParam(value = "inlay_gen_strategy", required = false) String inlayGenStrategy,
+            @RequestParam(value = "apply_inlay_render_condition", required = false) Boolean applyInlayRenderCondition,
+            @RequestParam(value = "enable_fast_size_align", required = false) Boolean enableFastSizeAlign,
+            @RequestParam(value = "fusion_method", required = false) String fusionMethod,
+            @RequestParam(value = "enable_inlay_postprocess", required = false, defaultValue = "false") boolean enableInlayPostprocess,
+            @RequestParam(value = "custom_target_faces", required = false) Integer customTargetFaces,
+            @RequestParam(value = "custom_octree_resolution", required = false) Integer customOctreeResolution,
+            @RequestParam(value = "custom_inference_steps", required = false) Integer customInferenceSteps
     ) {
         Map<String, MultipartFile> viewFiles = new HashMap<>();
         putViewIfPresent(viewFiles, "front", frontImage);
@@ -68,7 +80,10 @@ public class GenerateController {
 
         GenerateResponse response = generateService.imageTo3d(
                 image, prompt, outputFormat, inlayStructureFilename,
-                multiViewEnabled, viewFiles, generationMode
+                multiViewEnabled, viewFiles, generationMode,
+                inlayType, gemType, stoneDiameterMm, useOmniConditioning,
+                inlayGenStrategy, applyInlayRenderCondition, enableFastSizeAlign, fusionMethod,
+                enableInlayPostprocess, customTargetFaces, customOctreeResolution, customInferenceSteps
         );
         return Result.success("生成任务已提交", response);
     }
@@ -88,7 +103,11 @@ public class GenerateController {
             @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat,
             @RequestParam(value = "inlay_type", required = false) String inlayType,
             @RequestParam(value = "gem_type", required = false) String gemType,
-            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode
+            @RequestParam(value = "generation_mode", required = false, defaultValue = "quality") String generationMode,
+            @RequestParam(value = "enable_inlay_postprocess", required = false, defaultValue = "false") boolean enableInlayPostprocess,
+            @RequestParam(value = "custom_target_faces", required = false) Integer customTargetFaces,
+            @RequestParam(value = "custom_octree_resolution", required = false) Integer customOctreeResolution,
+            @RequestParam(value = "custom_inference_steps", required = false) Integer customInferenceSteps
     ) {
         if (image.isEmpty()) {
             throw new BusinessException("请上传设计图文件");
@@ -99,7 +118,8 @@ public class GenerateController {
         }
         GenerateResponse response = generateService.conditionGenerate(
                 image, inlayStructureFilename, inlayStructureFile,
-                prompt, outputFormat, inlayType, gemType, generationMode
+                prompt, outputFormat, inlayType, gemType, generationMode,
+                enableInlayPostprocess, customTargetFaces, customOctreeResolution, customInferenceSteps
         );
         return Result.success("条件生成任务已提交", response);
     }
@@ -113,7 +133,10 @@ public class GenerateController {
             @RequestParam(value = "prompt", required = false) String prompt,
             @RequestParam(value = "output_format", required = false, defaultValue = "GLB") String outputFormat
     ) {
-        return conditionGenerate(image, inlayStructureFilename, inlay, prompt, outputFormat, null, null, "quality");
+        return conditionGenerate(
+                image, inlayStructureFilename, inlay, prompt, outputFormat,
+                null, null, "quality", false, null, null, null
+        );
     }
 
     @GetMapping("/api/generate/tasks")
@@ -147,6 +170,18 @@ public class GenerateController {
         String encodedFilename = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
         return ResponseEntity.ok()
                 .contentType(resolveDownloadMediaType(file.getName()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
+                .body(resource);
+    }
+
+    @GetMapping({"/api/generate/cad-step/{taskId}", "/api/tasks/{taskId}/cad-step"})
+    public ResponseEntity<Resource> downloadCadStep(@PathVariable String taskId) {
+        Path stepPath = generateService.getCadStepFile(taskId);
+        File file = stepPath.toFile();
+        Resource resource = new FileSystemResource(file);
+        String encodedFilename = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("model/step"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
                 .body(resource);
     }
@@ -204,6 +239,11 @@ public class GenerateController {
             return MediaType.parseMediaType("model/gltf+json");
         }
         return MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    @PostMapping({"/api/generate/cancel/{taskId}", "/api/tasks/{taskId}/cancel"})
+    public Result<TaskViewDto> cancelTask(@PathVariable String taskId) {
+        return Result.success("任务已取消", generateService.cancelTask(taskId));
     }
 
     @DeleteMapping({"/api/generate/tasks/{taskId}", "/api/tasks/{taskId}"})
