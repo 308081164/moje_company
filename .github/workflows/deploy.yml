@@ -68,6 +68,27 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Copy docker-compose to server
+      env:
+        SSH_HOST: ${{ secrets.SSH_HOST }}
+        SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p ~/.ssh
+        printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -p "${SSH_PORT}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "${SSH_PORT}" \
+          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}" "mkdir -p /mnt/newdisk/app/MOJE/b2b-client"
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -P "${SSH_PORT}" \
+          docker-compose.prod.yml \
+          b2b-client/nginx.prod.conf \
+          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/mnt/newdisk/app/MOJE/"
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -P "${SSH_PORT}" \
+          b2b-client/nginx.prod.conf \
+          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/mnt/newdisk/app/MOJE/b2b-client/"
+
     - name: Validate deployment secrets
       shell: bash
       run: |
@@ -135,89 +156,6 @@ jobs:
         OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
         OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
         JEWELRY_PORTAL_BASE_URL: ${{ secrets.JEWELRY_PORTAL_BASE_URL }}
-        DOCKER_COMPOSE_CONFIG: |
-          version: "3.9"
-
-          services:
-            mysql:
-              image: mysql:8.4
-              container_name: jewelry-mysql
-              restart: unless-stopped
-              environment:
-                MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-                MYSQL_DATABASE: moje_database
-                TZ: Asia/Shanghai
-              volumes:
-                - jewelry_mysql_data:/var/lib/mysql
-              command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
-              networks:
-                - jewelry-network
-              healthcheck:
-                test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
-                interval: 10s
-                timeout: 5s
-                retries: 30
-                start_period: 60s
-
-            backend:
-              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-              container_name: jewelry-backend
-              depends_on:
-                mysql:
-                  condition: service_healthy
-              environment:
-                DB_HOST: mysql
-                DB_PORT: 3306
-                DB_NAME: moje_database
-                DB_USER: root
-                DB_PASSWORD: ${DB_PASSWORD}
-                JWT_SECRET: ${JWT_SECRET}
-                DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
-                DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-kuangjun}
-                OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
-                OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-                ALIYUN_OSS_ENDPOINT: ${ALIYUN_OSS_ENDPOINT:-${OSS_ENDPOINT:-oss-cn-guangzhou.aliyuncs.com}}
-                OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-${OSS_BUCKET:-}}
-                SERVER_PORT: 8851
-                SPRING_PROFILES_ACTIVE: prod
-                JEWELRY_PORTAL_BASE_URL: ${JEWELRY_PORTAL_BASE_URL:-http://localhost:8852}
-              ports:
-                - "8851:8851"
-              volumes:
-                - ./logs:/app/logs
-              restart: unless-stopped
-              networks:
-                - jewelry-network
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8851/api/actuator/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-
-            b2b-client:
-              image: ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
-              container_name: moje-b2b-client
-              depends_on:
-                backend:
-                  condition: service_healthy
-              ports:
-                - "8852:80"
-              restart: unless-stopped
-              networks:
-                - jewelry-network
-              healthcheck:
-                test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 10s
-
-          networks:
-            jewelry-network:
-              driver: bridge
-
-          volumes:
-            jewelry_mysql_data:
       with:
         host: ${{ secrets.SSH_HOST }}
         port: ${{ secrets.SSH_PORT || '22' }}
@@ -229,10 +167,9 @@ jobs:
         timeout: 5m
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
-        envs: DOCKER_COMPOSE_CONFIG,DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
+        envs: DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
         script: |
           set -euo pipefail
-          : "${DOCKER_COMPOSE_CONFIG:?DOCKER_COMPOSE_CONFIG is empty (workflow env not forwarded)}"
           : "${DB_PASSWORD:?DB_PASSWORD is empty (missing GitHub secret DB_PASSWORD)}"
           : "${JWT_SECRET:?JWT_SECRET is empty (missing GitHub secret JWT_SECRET)}"
           : "${DEFAULT_ADMIN_PASSWORD:?DEFAULT_ADMIN_PASSWORD is empty (missing GitHub secret DEFAULT_ADMIN_PASSWORD)}"
@@ -240,18 +177,24 @@ jobs:
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
-          # 检查现有服务目录结构
-          echo "检查现有服务目录..."
-          ls -la /opt/
-          
-          # 部署到指定磁盘目录（避免系统盘空间/权限问题）
           JEWELRY_DIR="/mnt/newdisk/app/MOJE"
           APP_DIR="$JEWELRY_DIR"
           mkdir -p "$APP_DIR"
           cd "$APP_DIR"
           
-          # 宿主机持久化目录
           mkdir -p ./logs
+
+          if [ ! -f docker-compose.prod.yml ]; then
+            echo "错误: docker-compose.prod.yml 不存在，请确认 Copy docker-compose to server 步骤已成功"
+            exit 1
+          fi
+
+          for port in 8851 8852; do
+            if ss -tlnp | grep -q ":${port} "; then
+              echo "端口 ${port} 已被占用，检查冲突..."
+              ss -tlnp | grep ":${port} " || true
+            fi
+          done
 
           # 合并服务器本机 .env：当 GitHub Secrets 中 OSS_BUCKET_NAME 等为空（或仅配置了 OSS_BUCKET 旧名）时，使用 /mnt/newdisk/app/MOJE/.env 中的值
           # 注意：若在 Windows 记事本等编辑 .env 会带 CRLF，直接 source 会报 $'\r': command not found；先去掉 \r 再加载
@@ -270,22 +213,13 @@ jobs:
 
           # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
           export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME OSS_BUCKET ALIYUN_OSS_ENDPOINT OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL
+          export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          export IMAGE_B2B=${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
 
-          # OSS 诊断（不回显密钥，仅长度）
           echo "OSS 配置检查: OSS_BUCKET_NAME 字符数=$(printf %s "${OSS_BUCKET_NAME:-}" | wc -c) ALIYUN_OSS_ENDPOINT=${ALIYUN_OSS_ENDPOINT:-<未设置>} OSS_ACCESS_KEY_ID 字符数=$(printf %s "${OSS_ACCESS_KEY_ID:-}" | wc -c)"
           
-          # ========== 2. 创建docker-compose配置 ==========
-          echo "创建docker-compose.prod.yml..."
-          cat > docker-compose.prod.yml << DOCKER_EOF
-          ${DOCKER_COMPOSE_CONFIG}
-          DOCKER_EOF
-
           echo "校验 docker compose 配置..."
           docker compose -f docker-compose.prod.yml config >/dev/null
-          
-          # ========== 3. 设置环境变量 ==========
-          echo "设置环境变量..."
-          export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           COMPOSE="docker compose -f docker-compose.prod.yml -p moje"
 
