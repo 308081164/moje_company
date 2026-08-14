@@ -68,27 +68,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Copy docker-compose to server
-      env:
-        SSH_HOST: ${{ secrets.SSH_HOST }}
-        SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        mkdir -p ~/.ssh
-        printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -p "${SSH_PORT}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
-        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "${SSH_PORT}" \
-          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}" "mkdir -p /mnt/newdisk/app/MOJE/b2b-client"
-        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -P "${SSH_PORT}" \
-          docker-compose.prod.yml \
-          b2b-client/nginx.prod.conf \
-          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/mnt/newdisk/app/MOJE/"
-        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -P "${SSH_PORT}" \
-          b2b-client/nginx.prod.conf \
-          "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/mnt/newdisk/app/MOJE/b2b-client/"
-
     - name: Validate deployment secrets
       shell: bash
       run: |
@@ -113,6 +92,32 @@ jobs:
           exit 1
         fi
         echo "Deploy secrets 校验通过（已配置 DB_PASSWORD、JWT_SECRET、DEFAULT_ADMIN_PASSWORD）。"
+
+    - name: Copy docker-compose to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT || '22' }}
+        username: ${{ secrets.SSH_USERNAME }}
+        password: ${{ secrets.SSH_PASSWORD }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        source: "docker-compose.prod.yml,b2b-client/nginx.prod.conf"
+        target: "/mnt/newdisk/app/MOJE/"
+        overwrite: true
+
+    - name: Copy B2B nginx config to subfolder
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT || '22' }}
+        username: ${{ secrets.SSH_USERNAME }}
+        password: ${{ secrets.SSH_PASSWORD }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        source: "b2b-client/nginx.prod.conf"
+        target: "/mnt/newdisk/app/MOJE/b2b-client/"
+        overwrite: true
 
     # appleboy/ssh-action 默认「建连」仅 30s；网络抖动或跨境链路易 dial timeout。先 TCP 探测可快速给出防火墙/安全组提示。
     - name: Probe SSH reachability (from GitHub Runner)
