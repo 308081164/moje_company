@@ -295,7 +295,18 @@ function resetView() {
   }
 }
 
-/** 截取当前渲染帧为 PNG（供预览图等用途） */
+const DEFAULT_PREVIEW_WIDTH = 1920
+
+function parseAspectRatio(ratio?: string): number {
+  if (!ratio) return 16 / 9
+  const parts = ratio.split(':').map((part) => Number(part.trim()))
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+    return parts[0] / parts[1]
+  }
+  return 16 / 9
+}
+
+/** 截取当前渲染帧为 PNG（原始画布比例） */
 function captureScreenshot(): Promise<Blob | null> {
   return new Promise((resolve) => {
     if (!renderer || !scene || !camera || loading.value || error.value) {
@@ -308,7 +319,60 @@ function captureScreenshot(): Promise<Blob | null> {
   })
 }
 
-defineExpose({ resetView, captureScreenshot })
+/**
+ * 截取当前 3D 视图并导出为指定宽高比的 PNG（默认 16:9 @ 1920×1080）。
+ * 保持当前相机角度，对画布做居中裁剪后缩放。
+ */
+function capturePreviewPng(
+  aspectRatio = '16:9',
+  outputWidth = DEFAULT_PREVIEW_WIDTH,
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    if (!renderer || !scene || !camera || loading.value || error.value) {
+      resolve(null)
+      return
+    }
+    controls?.update()
+    renderer.render(scene, camera)
+
+    const sourceCanvas = renderer.domElement
+    const srcW = sourceCanvas.width
+    const srcH = sourceCanvas.height
+    if (srcW === 0 || srcH === 0) {
+      resolve(null)
+      return
+    }
+
+    const targetAspect = parseAspectRatio(aspectRatio)
+    const outputHeight = Math.round(outputWidth / targetAspect)
+    const srcAspect = srcW / srcH
+
+    let cropW = srcW
+    let cropH = srcH
+    if (srcAspect > targetAspect) {
+      cropW = Math.round(srcH * targetAspect)
+    } else if (srcAspect < targetAspect) {
+      cropH = Math.round(srcW / targetAspect)
+    }
+
+    const sx = Math.round((srcW - cropW) / 2)
+    const sy = Math.round((srcH - cropH) / 2)
+
+    const offscreen = document.createElement('canvas')
+    offscreen.width = outputWidth
+    offscreen.height = outputHeight
+    const ctx = offscreen.getContext('2d')
+    if (!ctx) {
+      resolve(null)
+      return
+    }
+
+    ctx.drawImage(sourceCanvas, sx, sy, cropW, cropH, 0, 0, outputWidth, outputHeight)
+    offscreen.toBlob((blob) => resolve(blob), 'image/png')
+  })
+}
+
+defineExpose({ resetView, captureScreenshot, capturePreviewPng })
 
 /** 与 ai-service INLAY_REGION_COLOR / GENERATED_REGION_COLOR 对齐 */
 const INLAY_PREVIEW_COLOR = 0xe6a23c

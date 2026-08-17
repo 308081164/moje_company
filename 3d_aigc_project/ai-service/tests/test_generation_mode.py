@@ -73,6 +73,22 @@ class TestGenerationMode(unittest.TestCase):
     def test_resolve_mc_algo_dmc_without_diso(self, _mock_dmc):
         self.assertIsNone(resolve_mc_algo("dmc"))
 
+    @patch.dict(os.environ, {"GEN_MC_ALGO": "mc"})
+    def test_quality_respects_gen_mc_algo_env(self):
+        settings = resolve_generation_mode("quality")
+        self.assertEqual(settings.config.mc_algo, "mc")
+
+    @patch.dict(os.environ, {"GEN_MC_ALGO": "mc"})
+    @patch("app.config.dmc_surface_extractor_available")
+    def test_dmc_probe_skipped_when_gen_mc_algo_mc(self, mock_dmc):
+        import app.config as config_mod
+
+        config_mod._DMC_PROBE_RESULT = None
+        result = config_mod.dmc_surface_extractor_available()
+        self.assertFalse(result)
+        mock_dmc.assert_not_called()
+        config_mod._DMC_PROBE_RESULT = None
+
     def test_resolve_mc_algo_mc_is_default(self):
         self.assertIsNone(resolve_mc_algo("mc"))
         self.assertIsNone(resolve_mc_algo(None))

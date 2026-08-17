@@ -79,10 +79,10 @@ services:
       context: ./ai-service
       dockerfile: Dockerfile
       args:
-        # 默认 CUDA PyTorch；紧急 CPU 见 docker-compose.cpu.yml
-        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+        # RTX 50 系列 (sm_120) 需 cu128+；Ada 等旧卡可设 TORCH_CUDA_ARCH_LIST=8.9 并改用 cu121
+        TORCH_INDEX: https://download.pytorch.org/whl/cu128
         ENABLE_DMC: ${ENABLE_DMC:-1}
-        TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-8.9}
+        TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-12.0}
     container_name: 3d-aigc-ai-service
     ports:
       - "${AI_SERVICE_PORT:-8855}:8855"
@@ -102,6 +102,8 @@ services:
       REQUIRE_GPU: ${REQUIRE_GPU:-1}
       MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-8}
       MAX_CONCURRENT_GPU_JOBS: ${MAX_CONCURRENT_GPU_JOBS:-1}
+      # RTX 50 / 旧版 diso 大网格 DMC 会 poison CUDA；默认 marching cubes 直至 diso 重建
+      GEN_MC_ALGO: ${GEN_MC_ALGO:-mc}
       ENABLE_GEM_REPAINT: ${ENABLE_GEM_REPAINT:-0}
       ENABLE_CAD_REVERSE: ${ENABLE_CAD_REVERSE:-1}
       ULTRA_CAD_ENABLED: ${ULTRA_CAD_ENABLED:-1}

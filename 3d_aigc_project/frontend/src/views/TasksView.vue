@@ -144,6 +144,7 @@
             <div class="detail-model-wrapper">
               <ModelViewer
                 v-if="detailModelPreviewUrl"
+                ref="detailModelViewerRef"
                 :key="taskDetail.task_id"
                 :model-url="detailModelPreviewUrl"
                 :model-format="detailModelPreviewFormat"
@@ -178,6 +179,14 @@
           <div class="detail-dialog-footer-actions">
             <el-button @click="detailVisible = false">关闭</el-button>
             <el-button
+              v-if="taskDetail?.status === 'completed' && detailModelPreviewUrl"
+              :icon="Camera"
+              :loading="exportingPreview"
+              @click="handleExportPreview"
+            >
+              导出预览图
+            </el-button>
+            <el-button
               v-if="taskDetail?.status === 'completed'"
               type="success"
               :icon="Download"
@@ -202,7 +211,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
-import { List, Download, Delete, ArrowLeft, ArrowRight, FullScreen, Close } from '@element-plus/icons-vue'
+import { List, Download, Delete, ArrowLeft, ArrowRight, FullScreen, Close, Camera } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import TaskList from '@/components/TaskList.vue'
 import ModelViewer from '@/components/ModelViewer.vue'
@@ -228,6 +237,8 @@ const detailDeleting = ref(false)
 const taskDetail = ref<TaskDetail | null>(null)
 const detailPreviewMode = ref<'white' | 'colored'>('colored')
 const detailPreviewFullscreen = ref(false)
+const detailModelViewerRef = ref<InstanceType<typeof ModelViewer> | null>(null)
+const exportingPreview = ref(false)
 
 function notifyViewerResize() {
   nextTick(() => {
@@ -389,6 +400,52 @@ onBeforeUnmount(() => {
     document.body.style.overflow = ''
   }
 })
+
+function formatTimestampForFilename(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  const s = String(date.getSeconds()).padStart(2, '0')
+  return `${y}${m}${d}_${h}${min}${s}`
+}
+
+/** 导出当前 3D 预览为 16:9 PNG */
+async function handleExportPreview() {
+  if (!taskDetail.value) return
+
+  const viewer = detailModelViewerRef.value
+  if (!viewer?.capturePreviewPng) {
+    ElMessage.warning('预览尚未就绪')
+    return
+  }
+
+  exportingPreview.value = true
+  try {
+    const blob = await viewer.capturePreviewPng('16:9')
+    if (!blob) {
+      ElMessage.error('导出失败，请确保模型已加载')
+      return
+    }
+
+    const taskId = taskDetail.value.task_id
+    const filename = `${taskId}_preview_${formatTimestampForFilename(new Date())}.png`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('预览图已导出')
+  } catch {
+    ElMessage.error('导出预览图失败')
+  } finally {
+    exportingPreview.value = false
+  }
+}
 
 /** 下载任务结果 */
 async function handleDownload(taskId: string) {

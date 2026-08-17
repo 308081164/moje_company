@@ -4,11 +4,12 @@
 """
 
 import os
+import struct
 import uuid
 import shutil
 import logging
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Any, Dict, Optional, List, Union
 from datetime import datetime
 
 from PIL import Image
@@ -124,37 +125,117 @@ def validate_image_file(filepath: str) -> bool:
         return False
 
 
+def _looks_like_binary_stl(header: bytes, file_size: int) -> bool:
+    """80 字节头 + uint32 面数 + 50 字节/三角面。"""
+    if file_size < 84 or len(header) < 84:
+        return False
+    tri_count = struct.unpack_from("<I", header, 80)[0]
+    if tri_count <= 0:
+        return False
+    return 84 + tri_count * 50 <= file_size
+
+
+def _looks_like_json_error(header: bytes) -> bool:
+    head = header.lstrip()
+    if not head:
+        return False
+    if head[:1] not in (b"{", b"["):
+        return False
+    text = head[:512].decode("utf-8", errors="ignore").lower()
+    if '"detail"' in text or '"error"' in text or '"message"' in text:
+        return True
+    return head[:1] == b"{" and b"asset" not in head[:512].lower()
+
+
 def sniff_mesh_file_type(filepath: str) -> Optional[str]:
     """
     按文件头识别网格格式，避免 inlay_cache 中 GLB 被误存为 .obj 导致加载失败。
     返回 trimesh.load 可用的 file_type：glb/gltf/obj/stl/ply/off 等；无法识别时返回 None。
+
+    注意：扩展名为 .glb 但缺少 glTF magic 时返回 None，禁止仅凭扩展名当作 GLB。
     """
     try:
+        file_size = os.path.getsize(filepath)
+    except OSError as e:
+        logger.debug("无法 stat 网格文件 %s: %s", filepath, e)
+        return None
+
+    if file_size == 0:
+        return None
+
+    try:
         with open(filepath, "rb") as f:
-            header = f.read(512)
+            header = f.read(max(512, min(file_size, 65536)))
     except OSError as e:
         logger.debug("无法读取网格文件头 %s: %s", filepath, e)
         return None
 
     if len(header) >= 4 and header[:4] == b"glTF":
         return "glb"
+
     head = header.lstrip()
     if head.startswith(b"solid") or (len(head) >= 5 and head[:5] == b"solid"):
         return "stl"
+    if _looks_like_binary_stl(header, file_size):
+        return "stl"
+
     try:
         text_head = head[:256].decode("utf-8", errors="ignore").lstrip()
     except Exception:
         text_head = ""
+
     if text_head.startswith("v ") or text_head.startswith("#") or text_head.startswith("o "):
         return "obj"
     if text_head.startswith("ply") or text_head.startswith("comment"):
         return "ply"
     if text_head.startswith("OFF") or text_head.startswith("COOFF"):
         return "off"
+
+    if head[:1] in (b"{", b"["):
+        if b'"asset"' in head[:512].lower():
+            return "gltf"
+        if _looks_like_json_error(header):
+            return None
+
     ext = Path(filepath).suffix.lower().lstrip(".")
-    if ext in {"glb", "gltf", "obj", "stl", "ply", "off"}:
-        return ext if ext != "gltf" else "gltf"
+    # .glb 必须匹配 magic；JSON/HTML 占位也不能回退为 glb
+    if ext == "glb":
+        return None
+    if ext == "gltf":
+        return "gltf" if head[:1] in (b"{", b"[") else None
+    if ext in {"obj", "stl", "ply", "off"}:
+        return ext
     return None
+
+
+def build_trimesh_load_kwargs(filepath: str, **extra: Any) -> Dict[str, Any]:
+    """构建 trimesh.load 参数，优先使用 sniff 到的真实格式。"""
+    kwargs: Dict[str, Any] = dict(extra)
+    sniffed = sniff_mesh_file_type(filepath)
+    if sniffed:
+        kwargs["file_type"] = sniffed
+    return kwargs
+
+
+def describe_mesh_format_mismatch(filepath: str, sniffed: Optional[str] = None) -> str:
+    """生成可读的错误信息，替代 trimesh 的 incorrect header on GLB file。"""
+    ext = Path(filepath).suffix.lower() or "(无扩展名)"
+    detected = sniffed if sniffed is not None else sniff_mesh_file_type(filepath)
+    size = get_file_size(filepath)
+    if size == 0:
+        return f"网格文件为空: {filepath}"
+    if detected:
+        return (
+            f"网格文件扩展名 {ext} 与内容格式 .{detected} 不一致: {filepath}。"
+            f"请重新上传/转换，或修正 inlay_cache 中的扩展名。"
+        )
+    if ext == ".glb":
+        return (
+            f"文件扩展名为 .glb 但缺少 glTF 文件头（可能为损坏文件、OBJ/STL 误标或 JSON 错误响应）: "
+            f"{filepath} ({format_file_size(size)})。"
+            f"请确认镶嵌网格为有效 OBJ/GLB/STL 并重试。"
+        )
+    return f"无法识别网格格式: {filepath} ({format_file_size(size)})"
 
 
 def validate_mesh_file(filepath: str) -> bool:
@@ -165,16 +246,20 @@ def validate_mesh_file(filepath: str) -> bool:
         logger.error(f"网格文件不存在: {filepath}")
         return False
     sniffed = sniff_mesh_file_type(filepath)
+    ext = Path(filepath).suffix.lower()
+    if sniffed is None and ext == ".glb":
+        logger.error("网格文件不是有效 GLB: %s", describe_mesh_format_mismatch(filepath))
+        return False
     if sniffed is None and not validate_file_format(filepath, SUPPORTED_3D_FORMATS):
         logger.error(f"不支持的网格格式: {filepath}")
         return False
     try:
         import trimesh
 
-        load_kwargs = {"force": "mesh", "process": False}
-        if sniffed:
-            load_kwargs["file_type"] = sniffed
-        loaded = trimesh.load(filepath, **load_kwargs)
+        loaded = trimesh.load(
+            filepath,
+            **build_trimesh_load_kwargs(filepath, force="mesh", process=False),
+        )
         if isinstance(loaded, trimesh.Scene):
             verts = sum(
                 len(getattr(g, "vertices", []))

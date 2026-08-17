@@ -1,17 +1,17 @@
 ﻿# ============================================================
 # 3D AIGC 推理服务 Dockerfile（多阶段构建）
-# 默认构建 CUDA PyTorch（compose 传入 TORCH_INDEX=cu121）
+# 默认构建 CUDA PyTorch（compose 传入 TORCH_INDEX=cu128，支持 RTX 50 / sm_120）
 # 紧急 CPU：docker-compose.cpu.yml 覆盖为 cpu 索引
 # ============================================================
 
 # diso 编译：NVIDIA devel 镜像含 nvcc（debian12 apt 已无 cuda-nvcc-12-1）
-FROM nvidia/cuda:12.1.1-devel-ubuntu22.04 AS diso-builder
+FROM nvidia/cuda:12.8.0-devel-ubuntu22.04 AS diso-builder
 
-ARG TORCH_INDEX=https://download.pytorch.org/whl/cu121
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
 ARG PIP_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG DISO_VERSION=0.1.4
-ARG TORCH_CUDA_ARCH_LIST=8.9
+ARG TORCH_CUDA_ARCH_LIST=12.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     FORCE_CUDA=1 \
@@ -24,8 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN i=0; \
-    until pip3 install --no-cache-dir torch --index-url ${TORCH_INDEX} \
+    until pip3 install --no-cache-dir "torch==2.7.1+cu128" \
+        --index-url ${TORCH_INDEX} \
+        --extra-index-url ${PIP_MIRROR} \
         --trusted-host download.pytorch.org \
+        --trusted-host ${PIP_TRUSTED_HOST} \
         && pip3 install --no-cache-dir wheel \
             -i ${PIP_MIRROR} --trusted-host ${PIP_TRUSTED_HOST} \
         && pip3 install --no-cache-dir "diso==${DISO_VERSION}" --no-build-isolation \
@@ -95,29 +98,32 @@ FROM base AS dependencies
 
 WORKDIR /app
 
-# CUDA torch 走官方 cu121；其余 PyPI 走清华镜像（Docker 内 npmmirror DNS 不可用）
-ARG TORCH_INDEX=https://download.pytorch.org/whl/cu121
+# CUDA torch 走官方 cu128（Blackwell sm_120）；其余 PyPI 走清华镜像
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
 ARG PIP_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple
 ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 ARG ENABLE_CAD_REVERSE=1
 ARG ENABLE_DMC=1
 ARG DISO_VERSION=0.1.4
-ARG TORCH_CUDA_ARCH_LIST=8.9
+ARG TORCH_CUDA_ARCH_LIST=12.0
 
 COPY requirements.txt .
 
-# torch 的小型 PyPI 依赖先走镜像（避免 cu121 索引回退到 files.pythonhosted.org ~12kB/s）
+# torch 的小型 PyPI 依赖先走镜像（避免 cu128 索引回退到 files.pythonhosted.org ~12kB/s）
 RUN pip install --no-cache-dir \
     -i ${PIP_MIRROR} \
     --trusted-host ${PIP_TRUSTED_HOST} \
-    sympy networkx filelock fsspec jinja2 typing-extensions pillow numpy mpmath
+    "typing-extensions>=4.10.0" \
+    sympy networkx filelock fsspec jinja2 pillow numpy mpmath
 
-# 独立层：CUDA torch + NVIDIA 包仅从官方 cu121 索引（慢网易 corrupt，失败重试）
+# 独立层：CUDA torch + NVIDIA 包仅从官方 cu128 索引（慢网易 corrupt，失败重试）
 RUN i=0; \
     until pip install --no-cache-dir \
-        torch torchvision \
+        "torch==2.7.1+cu128" "torchvision==0.22.1+cu128" \
         --index-url ${TORCH_INDEX} \
-        --trusted-host download.pytorch.org; do \
+        --extra-index-url ${PIP_MIRROR} \
+        --trusted-host download.pytorch.org \
+        --trusted-host ${PIP_TRUSTED_HOST}; do \
         i=$((i + 1)); \
         if [ "$i" -ge 3 ]; then exit 1; fi; \
         echo "WARN: torch install failed (attempt $i), retrying..."; \

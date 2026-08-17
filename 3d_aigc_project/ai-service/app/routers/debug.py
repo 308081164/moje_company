@@ -2,6 +2,7 @@
 Debug pipeline API — step-by-step alignment debugging.
 """
 
+import asyncio
 import logging
 import os
 import uuid
@@ -10,6 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.config import get_config
+from app.utils.file_utils import sniff_mesh_file_type, validate_mesh_file, describe_mesh_format_mismatch
 from app.models.schemas import (
     DebugSessionCreateRequest,
     DebugSessionResponse,
@@ -33,6 +35,30 @@ def _save_upload(upload: UploadFile, dest_path: str) -> str:
         raise HTTPException(status_code=400, detail=f"上传文件为空: {upload.filename}")
     with open(dest_path, "wb") as f:
         f.write(data)
+
+    sniffed = sniff_mesh_file_type(dest_path)
+    if sniffed:
+        expected_ext = ".gltf" if sniffed == "gltf" else f".{sniffed}"
+        current_ext = os.path.splitext(dest_path)[1].lower()
+        if current_ext != expected_ext:
+            fixed_path = os.path.splitext(dest_path)[0] + expected_ext
+            os.replace(dest_path, fixed_path)
+            dest_path = fixed_path
+            logger.info(
+                "上传网格扩展名已按内容修正: %s -> %s",
+                upload.filename,
+                os.path.basename(dest_path),
+            )
+
+    if not validate_mesh_file(dest_path):
+        try:
+            os.remove(dest_path)
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail=describe_mesh_format_mismatch(dest_path, sniffed),
+        )
     return dest_path
 
 
@@ -107,6 +133,8 @@ async def create_standalone_debug_session(
         raise
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("create standalone debug session failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -119,14 +147,18 @@ async def create_standalone_debug_session(
 )
 async def run_debug_step_direct(step_id: str, body: DebugStepDirectRunRequest):
     service = get_debug_pipeline_service()
-    try:
-        result = service.run_step_direct(
+
+    def _run():
+        return service.run_step_direct(
             step_id,
             body.raw_mesh_path,
             body.inlay_mesh_path,
             context=body.context,
             force=body.force,
         )
+
+    try:
+        result = await asyncio.to_thread(_run)
         return DebugStepResultResponse(**result)
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -159,13 +191,19 @@ async def get_debug_session(session_id: str):
 )
 async def run_debug_step(session_id: str, step_id: str, body: DebugStepRunRequest):
     service = get_debug_pipeline_service()
+
+    def _run():
+        return service.run_step(session_id, step_id, force=body.force)
+
     try:
-        result = service.run_step(session_id, step_id, force=body.force)
+        result = await asyncio.to_thread(_run)
         return DebugStepResultResponse(**result)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("run debug step %s failed", step_id)
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -12,7 +12,7 @@ services:
       context: ./ai-service
       dockerfile: Dockerfile
       args:
-        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+        TORCH_INDEX: https://download.pytorch.org/whl/cu128
     container_name: 3d-aigc-ai-service
     ports:
       - "${AI_SERVICE_PORT:-8855}:8855"

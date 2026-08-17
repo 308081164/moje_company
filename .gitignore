@@ -83,6 +83,9 @@ pip-wheel-metadata/
 third_party/xianyu-super-butler/
 Hunyuan3D-2-main/
 
+# ========== 镶嵌结构库（独立 Git 仓库，见 AI_3d_DataBase/.git）==========
+AI_3d_DataBase/
+
 # ========== 镶嵌结构库（本地文件夹，已同步 OSS，勿提交）==========
 镶嵌结构数据库/
 **/镶嵌结构数据库/

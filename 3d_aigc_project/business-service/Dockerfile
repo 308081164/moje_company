@@ -10,7 +10,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # 第二阶段: 运行时镜像
-FROM eclipse-temurin:17-jre-slim
+FROM eclipse-temurin:17-jre-jammy
 
 LABEL maintainer="moje"
 LABEL description="3D AIGC 珠宝设计业务服务"

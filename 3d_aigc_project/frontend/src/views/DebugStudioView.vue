@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Upload, Box } from '@element-plus/icons-vue'
+import { Upload, Box, Camera } from '@element-plus/icons-vue'
 import DebugPipelinePanel from '@/components/DebugPipelinePanel.vue'
 import ModelViewer from '@/components/ModelViewer.vue'
 import { useDebugPipeline } from '@/composables/useDebugPipeline'
@@ -22,6 +22,7 @@ const {
   previewUrl,
   previewMode,
   lastStepResult,
+  currentStep,
   start,
   startStandalone,
   runCurrentStep,
@@ -30,6 +31,8 @@ const {
 } = useDebugPipeline()
 
 const hasSession = computed(() => Boolean(sessionId.value))
+const debugModelViewerRef = ref<InstanceType<typeof ModelViewer> | null>(null)
+const exportingPreview = ref(false)
 
 function onRawChange(file: File | null) {
   rawMeshFile.value = file
@@ -76,6 +79,50 @@ async function resetSession() {
   await exit()
   rawMeshFile.value = null
   inlayMeshFile.value = null
+}
+
+function formatTimestampForFilename(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  const s = String(date.getSeconds()).padStart(2, '0')
+  return `${y}${m}${d}_${h}${min}${s}`
+}
+
+/** 导出当前 3D 预览为 16:9 PNG */
+async function handleExportPreview() {
+  const viewer = debugModelViewerRef.value
+  if (!viewer?.capturePreviewPng) {
+    ElMessage.warning('预览尚未就绪')
+    return
+  }
+
+  exportingPreview.value = true
+  try {
+    const blob = await viewer.capturePreviewPng('16:9')
+    if (!blob) {
+      ElMessage.error('导出失败，请确保模型已加载')
+      return
+    }
+
+    const prefix = currentStep.value?.id ?? sessionId.value ?? 'debug'
+    const filename = `${prefix}_preview_${formatTimestampForFilename(new Date())}.png`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('预览图已导出')
+  } catch {
+    ElMessage.error('导出预览图失败')
+  } finally {
+    exportingPreview.value = false
+  }
 }
 
 if (route.query.task_id) {
@@ -158,12 +205,24 @@ if (route.query.task_id) {
         <div class="debug-preview-pane">
           <div class="debug-preview-header">
             <span>步骤预览</span>
-            <el-tag size="small" effect="plain">
-              {{ previewMode === 'colored' ? '分色' : '白模' }}
-            </el-tag>
+            <div class="debug-preview-header-actions">
+              <el-tag size="small" effect="plain">
+                {{ previewMode === 'colored' ? '分色' : '白模' }}
+              </el-tag>
+              <el-button
+                v-if="previewUrl"
+                size="small"
+                :icon="Camera"
+                :loading="exportingPreview"
+                @click="handleExportPreview"
+              >
+                导出预览图
+              </el-button>
+            </div>
           </div>
           <ModelViewer
             v-if="previewUrl"
+            ref="debugModelViewerRef"
             :key="previewUrl"
             :model-url="previewUrl"
             model-format="GLB"
@@ -265,6 +324,12 @@ if (route.query.task_id) {
   padding: 10px 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   font-weight: 500;
+}
+
+.debug-preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .debug-preview-pane :deep(.model-viewer) {

@@ -915,12 +915,16 @@ class GeneratorService:
             return shape_gen(image=image_input, **kwargs)
 
         if GeneratorService._extract_first_mesh(mesh_outputs) is None and mc_algo:
-            logger.warning(
-                "mc_algo=%s 未产生有效网格（hy3dgen 内部吞掉异常），回退默认 marching cubes 重试",
+            logger.error(
+                "mc_algo=%s 未产生有效网格；DMC 失败会污染 CUDA 上下文，"
+                "禁止同进程重试。请使用默认 marching cubes（mc_algo=mc）并重启 ai-service。",
                 mc_algo,
             )
             kwargs.pop("mc_algo", None)
-            return shape_gen(image=image_input, **kwargs)
+            raise RuntimeError(
+                f"mc_algo={mc_algo} 曲面提取失败且 CUDA 上下文已不可用，"
+                "请设置 GEN_MC_ALGO=mc 后重启 ai-service"
+            )
         return mesh_outputs
 
     def _run_hunyuan3d_generation(

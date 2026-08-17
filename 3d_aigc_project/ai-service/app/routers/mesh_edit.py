@@ -121,6 +121,8 @@ async def sanitize_mesh(
     try:
         out_path, info = await asyncio.to_thread(_run)
         return {"success": True, "output_path": out_path, "info": info}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("sanitize_mesh failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -141,6 +143,8 @@ async def split_components(mesh_path: str = Form(..., description="输入网格�
     try:
         components = await asyncio.to_thread(_run)
         return {"success": True, "mesh_path": mesh_path, "components": components}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("split_components failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -74,10 +74,9 @@ class PointCloudConditioner:
 
     def _mesh_to_pointcloud_trimesh(self, mesh_path: str) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         import trimesh
+        from app.services.mesh_processor import get_mesh_processor
 
-        mesh = trimesh.load(mesh_path)
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump(concatenate=True)
+        mesh = get_mesh_processor()._load_trimesh_mesh(mesh_path)
 
         points, face_idx = trimesh.sample.sample_surface(mesh, self.num_points)
         points = np.asarray(points, dtype=np.float32)
@@ -148,9 +147,7 @@ class PointCloudConditioner:
             import trimesh
             from app.services.mesh_processor import get_mesh_processor
 
-            mesh = trimesh.load(mesh_path)
-            if isinstance(mesh, trimesh.Scene):
-                mesh = mesh.dump(concatenate=True)
+            mesh = get_mesh_processor()._load_trimesh_mesh(mesh_path)
             processor = get_mesh_processor()
             shank, setting = processor._split_shank_and_setting(mesh)
             if processor._mesh_vertex_count(shank) == 0:

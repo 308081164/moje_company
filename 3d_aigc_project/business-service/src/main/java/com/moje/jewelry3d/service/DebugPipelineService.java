@@ -155,7 +155,8 @@ public class DebugPipelineService {
         try {
             Files.createDirectories(debugInputDir);
             Path localRaw = debugInputDir.resolve("raw_mesh.obj");
-            Path localInlay = debugInputDir.resolve("inlay.glb");
+            String inlayExt = extensionOf(inlayFile.getFileName().toString());
+            Path localInlay = debugInputDir.resolve("inlay" + inlayExt);
             Files.copy(rawMesh, localRaw, StandardCopyOption.REPLACE_EXISTING);
             Files.copy(inlayFile, localInlay, StandardCopyOption.REPLACE_EXISTING);
 
@@ -222,5 +223,20 @@ public class DebugPipelineService {
             return resolved;
         }
         throw new BusinessException(404, "镶嵌结构不存在: " + filename);
+    }
+
+    private static String extensionOf(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return ".glb";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return ".glb";
+        }
+        String ext = filename.substring(dot).toLowerCase();
+        return switch (ext) {
+            case ".obj", ".glb", ".stl" -> ext;
+            default -> ".glb";
+        };
     }
 }

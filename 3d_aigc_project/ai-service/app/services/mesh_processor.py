@@ -11,6 +11,9 @@ from typing import Optional, Tuple, Dict, Any, List, Union
 
 logger = logging.getLogger(__name__)
 
+# 主装配体空间聚类：超过此分量数时退化为按面数 Top-K，避免 O(n²) 卡死
+_MAX_PRIMARY_CLUSTER_COMPONENTS = 512
+
 # 镶嵌底座 / AI 生成主体 分色（RGBA 0-255）
 INLAY_REGION_COLOR = (230, 162, 60, 255)      # 琥珀色：引用镶嵌结构区域
 GENERATED_REGION_COLOR = (64, 158, 255, 255)  # 蓝色：AI 生成主体区域
@@ -258,10 +261,11 @@ class MeshProcessor:
         }
         if not kept:
             logger.warning(
-                "junk filter dropped all %s components; keeping original mesh",
+                "junk filter dropped all %s components; using largest component",
                 len(comps),
             )
-            return mesh, {**stats, "fallback": "original"}
+            largest = self._largest_component(mesh)
+            return largest, {**stats, "fallback": "largest_component"}
         if len(kept) == 1:
             return kept[0], stats
         return kept, stats
@@ -285,6 +289,17 @@ class MeshProcessor:
             raise ValueError("no components available for primary assembly selection")
         if len(kept) == 1:
             return kept[0], {"clusters": 1, "selected_parts": 1, "selected_faces": len(kept[0].faces)}
+
+        components_in = len(kept)
+        if components_in > _MAX_PRIMARY_CLUSTER_COMPONENTS:
+            logger.warning(
+                "too many components (%s) for spatial clustering; using top-%s by face count",
+                components_in,
+                _MAX_PRIMARY_CLUSTER_COMPONENTS,
+            )
+            kept = sorted(kept, key=lambda c: len(c.faces), reverse=True)[
+                :_MAX_PRIMARY_CLUSTER_COMPONENTS
+            ]
 
         n = len(kept)
         parent = list(range(n))
@@ -364,6 +379,8 @@ class MeshProcessor:
             "selected_faces": best["faces"],
             "selected_aspect": best["aspect"],
             "cluster_gap": gap,
+            "components_in": components_in,
+            "components_clustered": n,
         }
         logger.info(
             "primary inlay assembly selected: parts=%s faces=%s aspect=%.2f (from %s clusters)",
@@ -3352,6 +3369,17 @@ class MeshProcessor:
         """
         Mark AI vertices matching inlay setting + shank seat (NRICP primary).
         """
+        n_v = len(np.asarray(ai_mesh.vertices))
+        if n_v > 80000:
+            logger.warning(
+                "NRICP inlay detect skipped (vertices=%d > %d), using envelope fallback",
+                n_v,
+                80000,
+            )
+            mask, info = self._detect_ai_inlay_analogue_envelope(ai_mesh, inlay_mesh)
+            info["nricp_skipped_large_mesh"] = True
+            info["nricp_success"] = False
+            return mask, info
         try:
             return self._detect_ai_inlay_analogue_nricp(
                 ai_mesh, inlay_mesh, ai_part_masks=ai_part_masks
@@ -5496,8 +5524,8 @@ class MeshProcessor:
 
         import trimesh
 
-        mesh_a = trimesh.load(mesh_a_path)
-        mesh_b = trimesh.load(mesh_b_path)
+        mesh_a = self._load_trimesh_mesh(mesh_a_path)
+        mesh_b = self._load_trimesh_mesh(mesh_b_path)
 
         if isinstance(mesh_a, trimesh.Scene):
             mesh_a = mesh_a.dump(concatenate=True)
@@ -6320,13 +6348,26 @@ class MeshProcessor:
         """加载单个 Trimesh 网格（Scene 时合并为单一 Trimesh）"""
         import trimesh
 
-        from app.utils.file_utils import sniff_mesh_file_type
+        from app.utils.file_utils import (
+            build_trimesh_load_kwargs,
+            describe_mesh_format_mismatch,
+            sniff_mesh_file_type,
+        )
 
-        load_kwargs = {"force": "mesh", "process": False}
         sniffed = sniff_mesh_file_type(mesh_path)
-        if sniffed:
-            load_kwargs["file_type"] = sniffed
-        loaded = trimesh.load(mesh_path, **load_kwargs)
+        ext = os.path.splitext(mesh_path)[1].lower()
+        if sniffed is None and ext == ".glb":
+            raise ValueError(describe_mesh_format_mismatch(mesh_path))
+
+        try:
+            loaded = trimesh.load(
+                mesh_path,
+                **build_trimesh_load_kwargs(mesh_path, force="mesh", process=False),
+            )
+        except ValueError as e:
+            if "incorrect header on GLB file" in str(e):
+                raise ValueError(describe_mesh_format_mismatch(mesh_path, sniffed)) from e
+            raise
         if isinstance(loaded, trimesh.Scene):
             meshes = [
                 g for g in loaded.geometry.values()
@@ -6481,7 +6522,9 @@ class MeshProcessor:
                 shutil.copy2(input_path, output_path)
             return output_path
 
-        loaded = trimesh.load(input_path, process=False)
+        from app.utils.file_utils import build_trimesh_load_kwargs
+
+        loaded = trimesh.load(input_path, **build_trimesh_load_kwargs(input_path, process=False))
         loaded.export(output_path, file_type=fmt)
         logger.info("保留 Scene 结构的格式导出: %s -> %s (%s)", input_path, output_path, fmt)
         return output_path
@@ -6523,10 +6566,7 @@ class MeshProcessor:
 
         import trimesh
 
-        mesh = trimesh.load(mesh_path)
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump(concatenate=True)
-
+        mesh = self._load_trimesh_mesh(mesh_path)
         if self._mesh_vertex_count(mesh) == 0:
             logger.warning("跳过空网格修复: %s", mesh_path)
             return {"success": False, "message": "网格为空，跳过修复"}
@@ -7110,9 +7150,7 @@ class MeshProcessor:
 
         import trimesh
 
-        mesh = trimesh.load(mesh_path)
-        if isinstance(mesh, trimesh.Scene):
-            mesh = mesh.dump(concatenate=True)
+        mesh = self._load_trimesh_mesh(mesh_path)
 
         info = {
             "vertices": len(mesh.vertices),
@@ -7158,7 +7196,17 @@ class MeshProcessor:
         if not os.path.isfile(input_path):
             raise FileNotFoundError(f"输入文件不存在: {input_path}")
 
-        loaded = trimesh.load(input_path, force="mesh")
+        from app.utils.file_utils import build_trimesh_load_kwargs, describe_mesh_format_mismatch
+
+        try:
+            loaded = trimesh.load(
+                input_path,
+                **build_trimesh_load_kwargs(input_path, force="mesh"),
+            )
+        except ValueError as e:
+            if "incorrect header on GLB file" in str(e):
+                raise ValueError(describe_mesh_format_mismatch(input_path)) from e
+            raise
         if isinstance(loaded, trimesh.Scene):
             meshes = [
                 g for g in loaded.geometry.values()

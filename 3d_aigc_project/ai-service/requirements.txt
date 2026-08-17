@@ -10,7 +10,7 @@ python-multipart>=0.0.6
 # Pydantic数据验证
 pydantic>=2.5.0
 
-# 深度学习框架（torch/torchvision 由 Dockerfile 从 cu121 索引单独安装，勿在此重复）
+# 深度学习框架（torch/torchvision 由 Dockerfile 从 cu128 索引单独安装，勿在此重复）
 
 # Hunyuan3D-2 3D生成模型
 hy3dgen>=0.1.0

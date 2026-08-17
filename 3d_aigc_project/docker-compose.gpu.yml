@@ -10,7 +10,7 @@ services:
       context: ./ai-service
       dockerfile: Dockerfile
       args:
-        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+        TORCH_INDEX: https://download.pytorch.org/whl/cu128
     environment:
       REQUIRE_GPU: ${REQUIRE_GPU:-1}
     deploy:

@@ -137,14 +137,83 @@ class GenerationConfig:
     jewelry_post_decimate_taubin_iterations: int = 12
 
 
-def dmc_surface_extractor_available() -> bool:
-    """DiffDMC (mc_algo=dmc) 依赖 diso；缺失或编译失败时不可用。"""
-    try:
-        from diso import DiffDMC  # noqa: F401
+_DMC_PROBE_RESULT: Optional[bool] = None
 
-        return True
-    except ImportError:
+
+def _read_env_mc_algo() -> Optional[str]:
+    """读取 GEN_MC_ALGO 环境变量；空/default/none 表示使用默认 marching cubes。"""
+    raw = os.environ.get(ENV_GEN_MC_ALGO, "").strip().lower()
+    if raw in ("", "default", "none"):
+        return None
+    if raw in ("mc", "dmc", "flashvdm_mc", "flashvdm"):
+        return raw
+    return None
+
+
+def _apply_env_mc_algo_override(cfg: GenerationConfig) -> None:
+    """将 GEN_MC_ALGO 覆盖到任意 GenerationConfig（quality/ultra 等模式均生效）。"""
+    env_mc = _read_env_mc_algo()
+    if env_mc is not None:
+        cfg.mc_algo = env_mc
+
+
+def _env_skips_dmc_probe() -> bool:
+    """
+    GEN_MC_ALGO=mc 时禁止运行 DiffDMC GPU 探针。
+    旧版 diso 在大网格探针失败会污染 CUDA 上下文，导致后续推理误报 no kernel image。
+    """
+    raw = os.environ.get(ENV_GEN_MC_ALGO, "").strip().lower()
+    return raw in ("mc", "default", "none", "")
+
+
+def dmc_surface_extractor_available() -> bool:
+    """
+    DiffDMC (mc_algo=dmc) 依赖 diso。
+    导入成功不等于 GPU 可用：旧版 diso 在大网格上会 poison CUDA 上下文，
+    必须在启动时用与生产相近的规模探针（256³）。
+    """
+    global _DMC_PROBE_RESULT
+    if _DMC_PROBE_RESULT is not None:
+        return _DMC_PROBE_RESULT
+
+    if _env_skips_dmc_probe():
+        _DMC_PROBE_RESULT = False
+        logger.info(
+            "GEN_MC_ALGO=%s，跳过 DiffDMC GPU 探针，使用 marching cubes",
+            os.environ.get(ENV_GEN_MC_ALGO, "mc").strip() or "mc",
+        )
         return False
+
+    try:
+        import torch
+        from diso import DiffDMC
+    except ImportError:
+        _DMC_PROBE_RESULT = False
+        return False
+
+    if not torch.cuda.is_available():
+        _DMC_PROBE_RESULT = False
+        return False
+
+    try:
+        dmc = DiffDMC().cuda()
+        grid = torch.randn(256, 256, 256, device="cuda", dtype=torch.float32)
+        dmc(grid, deform=None, return_quads=False, normalize=True)
+        _DMC_PROBE_RESULT = True
+        logger.info("diso DiffDMC 探针通过 (256³)，mc_algo=dmc 可用")
+    except Exception as exc:
+        _DMC_PROBE_RESULT = False
+        logger.warning(
+            "diso DiffDMC GPU 探针失败，禁用 mc_algo=dmc（回退 marching cubes）: %s",
+            exc,
+        )
+        try:
+            torch.cuda.synchronize()
+        except Exception:
+            pass
+        torch.cuda.empty_cache()
+
+    return _DMC_PROBE_RESULT
 
 
 def is_ultra_mode_enabled() -> bool:
@@ -204,7 +273,7 @@ def _fast_generation_config() -> GenerationConfig:
     急速模式：恢复旧版 pipeline 默认行为。
     较低 octree/steps、无 dmc、无珠宝 prompt 与曲面后处理。
     """
-    return GenerationConfig(
+    cfg = GenerationConfig(
         num_inference_steps=30,
         guidance_scale=7.5,
         octree_resolution=256,
@@ -223,13 +292,15 @@ def _fast_generation_config() -> GenerationConfig:
         jewelry_decimate_min_input_faces=0,
         jewelry_post_decimate_taubin_iterations=0,
     )
+    _apply_env_mc_algo_override(cfg)
+    return cfg
 
 
 def _quality_generation_config() -> GenerationConfig:
     """
     高质量模式：最高外观顺滑与建模精细度，不限制面数（跳过 QEM 减面）。
     """
-    return GenerationConfig(
+    cfg = GenerationConfig(
         num_inference_steps=65,
         guidance_scale=4.5,
         octree_resolution=512,
@@ -248,6 +319,8 @@ def _quality_generation_config() -> GenerationConfig:
         jewelry_decimate_min_input_faces=0,
         jewelry_post_decimate_taubin_iterations=16,
     )
+    _apply_env_mc_algo_override(cfg)
+    return cfg
 
 
 def _custom_generation_config(
@@ -265,6 +338,7 @@ def _custom_generation_config(
     if cfg.jewelry_target_faces > 0:
         cfg.jewelry_coarse_faces = max(cfg.jewelry_target_faces // 3, 8000)
         cfg.jewelry_decimate_min_input_faces = max(cfg.jewelry_target_faces, 30000)
+    _apply_env_mc_algo_override(cfg)
     return cfg
 
 
@@ -272,7 +346,7 @@ def _ultra_generation_config() -> GenerationConfig:
     """
     Ultra 模式：最高推理精度，保留全细节 mesh 供 CAD 逆向；跳过 QEM/Loop 减面。
     """
-    return GenerationConfig(
+    cfg = GenerationConfig(
         num_inference_steps=65,
         guidance_scale=4.5,
         octree_resolution=512,
@@ -291,6 +365,8 @@ def _ultra_generation_config() -> GenerationConfig:
         jewelry_decimate_min_input_faces=0,
         jewelry_post_decimate_taubin_iterations=0,
     )
+    _apply_env_mc_algo_override(cfg)
+    return cfg
 
 
 def _load_ultra_cad_config() -> UltraCadConfig:
@@ -616,11 +692,11 @@ def _load_generation_config() -> GenerationConfig:
         except ValueError:
             pass
 
-    mc_algo = os.environ.get(ENV_GEN_MC_ALGO, "").strip().lower()
-    if mc_algo in ("", "default", "none"):
+    env_mc = _read_env_mc_algo()
+    if env_mc is not None:
+        cfg.mc_algo = env_mc
+    elif os.environ.get(ENV_GEN_MC_ALGO, "").strip().lower() in ("", "default", "none"):
         cfg.mc_algo = None
-    elif mc_algo in ("mc", "dmc", "flashvdm_mc", "flashvdm"):
-        cfg.mc_algo = mc_algo
 
     smooth_iter = os.environ.get(ENV_GEN_JEWELRY_SMOOTH_ITER, "").strip()
     if smooth_iter.isdigit():
