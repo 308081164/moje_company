@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.FileRelatedType;
+import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ReviewResult;
 import com.jewelry.system.enums.UserStatus;
 import com.jewelry.system.repository.*;
+import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.util.OrderSourceMapper;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -54,8 +56,8 @@ public class OrderCommandService {
     private final AuditLogService auditLogService;
     private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
-    private final OrderMarketingCopyService orderMarketingCopyService;
     private final SensitiveOperationService sensitiveOperationService;
+    private final OrderEventService orderEventService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -225,6 +227,11 @@ public class OrderCommandService {
             autoAssignmentService.ensureModelerAssigned(order);
         }
         orderRepository.save(order);
+        if (advanced) {
+            orderEventService.record(orderId, OrderEventType.DESIGN_SUBMIT,
+                    AccountKind.STAFF, requireUserId(), "DESIGNER",
+                    "设计师提交设计稿", req.getDesignNotes(), null, null);
+        }
         auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息");
         if (advanced) {
             auditLogService.log("ORDER_DESIGN_SUBMITTED", "ORDER", orderId,
@@ -304,6 +311,9 @@ public class OrderCommandService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
             }
             autoAssignmentService.ensureTrackerAssigned(order);
+            orderEventService.record(orderId, OrderEventType.MODEL_SUBMIT,
+                    AccountKind.STAFF, requireUserId(), SecurityUtils.currentRoleApi().orElse("MODELER"),
+                    "建模师提交建模稿", req.getModelNotes(), null, null);
             auditLogService.log("ORDER_MODEL_TO_REVIEW", "ORDER", orderId,
                     "建模师保存建模信息，订单进入待工艺验证（自 " + stBefore.name() + "）");
         }
@@ -352,17 +362,38 @@ public class OrderCommandService {
         }
         modelingInfoRepository.save(mi);
 
+        orderEventService.record(orderId, OrderEventType.STATUS_CHANGE,
+                AccountKind.STAFF, uid, "MODELER",
+                "建模师驳回给设计师", msg, null, null);
+
         auditLogService.log("ORDER_MODELER_REJECT_TO_DESIGNER", "ORDER", orderId,
                 "建模师驳回给设计师，状态=DESIGNING");
         return orderQueryService.getOrder(orderId);
     }
 
     /**
-     * TODO：驳回给客户 / 上游 — 需产品定义目标状态（例如「待客户补充」）、与 B2B/企微通知衔接后再实现对称接口。
+     * 建模师主动驳回给客户：记录事件卡片（经聊天室推送）并通知，供客户在卡片上查看原因。
+     * 不改变订单状态（「待客户补充」未建模为独立状态）。
      */
-    public void modelerRejectToCustomerStub(long orderId) {
-        loadOrder(orderId);
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "驳回给客户功能尚未实现，请联系产品对齐工作流。");
+    @Transactional
+    public OrderInfoDto modelerRejectToCustomer(long orderId, ModelerRejectToDesignerRequest req) {
+        if (!SecurityUtils.currentRoleApi().filter("MODELER"::equals).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师可操作驳回给客户");
+        }
+        Long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        Order order = loadOrder(orderId);
+        if (order.getModeler() == null || !Objects.equals(order.getModeler().getId(), uid)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅本单指派建模师可驳回给客户");
+        }
+        String msg = req.getMessage() != null ? req.getMessage().trim() : "";
+        if (msg.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "驳回说明不能为空");
+        }
+        orderEventService.record(orderId, OrderEventType.STATUS_CHANGE,
+                AccountKind.STAFF, uid, "MODELER",
+                "建模师驳回给客户", msg, null, null);
+        return orderQueryService.getOrder(orderId);
     }
 
     private void verifyOrderAttachmentFileIds(long orderId, List<Long> fileIds) {
@@ -461,6 +492,10 @@ public class OrderCommandService {
             orderRepository.save(order);
             auditLogService.log("ORDER_REVIEW_PASS_TO_PRODUCING", "ORDER", orderId, "工艺评审通过，订单进入生产中");
         }
+        orderEventService.record(orderId, rejected ? OrderEventType.REVIEW_REJECT : OrderEventType.REVIEW_PASS,
+                AccountKind.STAFF, uid, SecurityUtils.currentRoleApi().orElse("TRACKER"),
+                rejected ? "工艺验证驳回" : "工艺验证通过",
+                req.getReviewNotes(), req.getRejectionReason(), null);
         auditLogService.log("ORDER_UPDATE_REVIEW", "ORDER", orderId, "更新工艺评审信息");
         return orderQueryService.getOrder(orderId);
     }
@@ -490,7 +525,6 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
-        orderMarketingCopyService.ensurePendingRowForCompletedOrder(orderId);
         auditLogService.log("ORDER_PRODUCTION_COMPLETED", "ORDER", orderId, "生产完成，订单已关闭");
         return orderQueryService.getOrder(orderId);
     }
@@ -523,6 +557,9 @@ public class OrderCommandService {
         q.setSubtotal(BigDecimal.valueOf(total));
         q.setTotalAmount(BigDecimal.valueOf(total));
         quotationRepository.save(q);
+        orderEventService.record(orderId, OrderEventType.QUOTATION,
+                AccountKind.STAFF, requireUserId(), SecurityUtils.currentRoleApi().orElse("SALES"),
+                "更新报价", req.getQuotationNotes(), null, null);
         auditLogService.log("ORDER_UPDATE_QUOTATION", "ORDER", orderId, "更新报价信息");
         return orderQueryService.getOrder(orderId);
     }
@@ -540,9 +577,6 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
-        if (target == OrderStatus.COMPLETED) {
-            orderMarketingCopyService.ensurePendingRowForCompletedOrder(orderId);
-        }
         auditLogService.log("ORDER_CHANGE_STATUS", "ORDER", orderId, "变更状态为: " + target.name());
         return orderQueryService.getOrder(orderId);
     }

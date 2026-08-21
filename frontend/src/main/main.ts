@@ -1,11 +1,14 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { spawn, type ChildProcess } from 'child_process';
 import { autoUpdater } from 'electron-updater';
 
 // 保持窗口对象的全局引用，避免被垃圾回收
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let socialPublisherWindow: BrowserWindow | null = null;
+let socialPublisherSidecar: ChildProcess | null = null;
 
 /** 解析后的 HTTP(S) 基址，不含 /api，例如 http://192.168.1.10:8851 */
 let cachedJewelryApiOrigin: string | undefined;
@@ -203,6 +206,99 @@ function createWindow() {
   createTray();
 }
 
+// ============ social_publisher 社媒发布内嵌（桌面端） ============
+
+/** 解析 social_publisher sidecar 可执行文件路径（开发走源码目录，打包走 extraResources） */
+function resolveSocialPublisherSidecarExe(): string {
+  if (isDev) {
+    return path.join(__dirname, '../../../social_publisher/sidecar/dist/publisher-engine.exe');
+  }
+  return path.join(process.resourcesPath, 'social-publisher', 'publisher-engine.exe');
+}
+
+/** 解析 social_publisher 前端（renderer dist）目录 */
+function resolveSocialPublisherDistDir(): string {
+  if (isDev) {
+    return path.join(__dirname, '../../../social_publisher/electron/dist');
+  }
+  return path.join(process.resourcesPath, 'social-publisher', 'dist');
+}
+
+/** 拉起 social_publisher sidecar（无安全层模式，仅内嵌场景） */
+function startSocialPublisherSidecar() {
+  try {
+    const exe = resolveSocialPublisherSidecarExe();
+    if (!fs.existsSync(exe)) {
+      console.warn('[social-publisher] sidecar 可执行文件不存在（跳过内嵌）:', exe);
+      return;
+    }
+    const dataDir = path.join(app.getPath('userData'), 'social-publisher');
+    socialPublisherSidecar = spawn(exe, ['--host', '127.0.0.1', '--port', '8854'], {
+      env: {
+        ...process.env,
+        SOCIAL_PUBLISHER_BYPASS_SECURITY: '1',
+        SOCIAL_PUBLISHER_DATA_DIR: dataDir,
+      },
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    socialPublisherSidecar.on('exit', (code, signal) => {
+      console.log('[social-publisher] sidecar exited code=%s signal=%s', code, signal);
+      socialPublisherSidecar = null;
+    });
+    socialPublisherSidecar.on('error', (err) => {
+      console.error('[social-publisher] sidecar 启动失败', err);
+      socialPublisherSidecar = null;
+    });
+    console.log('[social-publisher] sidecar 已启动，端口 8854');
+  } catch (e) {
+    console.error('[social-publisher] 启动 sidecar 异常', e);
+  }
+}
+
+/** 打开社媒发布子窗口（加载 social_publisher renderer dist） */
+function openSocialPublisherWindow() {
+  if (socialPublisherWindow && !socialPublisherWindow.isDestroyed()) {
+    socialPublisherWindow.show();
+    socialPublisherWindow.focus();
+    return;
+  }
+  const distDir = resolveSocialPublisherDistDir();
+  const indexHtml = path.join(distDir, 'index.html');
+  if (!fs.existsSync(indexHtml)) {
+    console.warn('[social-publisher] 前端产物不存在:', indexHtml);
+    return;
+  }
+  socialPublisherWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 640,
+    title: '社媒发布',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  // query.sidecar 会被 social_publisher 前端读取，用于连接本地 sidecar
+  socialPublisherWindow.loadFile(indexHtml, { query: { sidecar: '8854' } });
+  socialPublisherWindow.on('closed', () => {
+    socialPublisherWindow = null;
+  });
+}
+
+/** 关闭 sidecar 子进程 */
+function stopSocialPublisherSidecar() {
+  if (socialPublisherSidecar) {
+    try {
+      socialPublisherSidecar.kill();
+    } catch {
+      /* ignore */
+    }
+    socialPublisherSidecar = null;
+  }
+}
+
 // 创建系统托盘
 function createTray() {
   // 动态查找图标路径（支持开发和生产环境）
@@ -276,6 +372,7 @@ app.whenReady().then(() => {
 
   createWindow();
   setupAutoUpdater();
+  startSocialPublisherSidecar();
   
   // macOS 应用激活
   app.on('activate', () => {
@@ -299,9 +396,15 @@ app.whenReady().then(() => {
 
 // 所有窗口关闭时退出应用（macOS 除外）
 app.on('window-all-closed', () => {
+  stopSocialPublisherSidecar();
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// 退出前清理 sidecar
+app.on('before-quit', () => {
+  stopSocialPublisherSidecar();
 });
 
 // 创建应用菜单
@@ -401,6 +504,11 @@ ipcMain.handle('get-app-info', () => {
     platform: process.platform,
     isDev
   };
+});
+
+ipcMain.handle('open-social-publisher', () => {
+  openSocialPublisherWindow();
+  return { opened: true };
 });
 
 ipcMain.handle('minimize-window', () => {

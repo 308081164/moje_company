@@ -44,6 +44,8 @@ const electronAPI = {
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
 
+  openSocialPublisher: () => ipcRenderer.invoke('open-social-publisher'),
+
   checkForUpdates: () => ipcRenderer.invoke('check-updates'),
   quitAndInstallUpdate: () => ipcRenderer.invoke('quit-and-install-update'),
   onUpdateChecking: (handler: () => void) => ipcRenderer.on('update-checking', handler),

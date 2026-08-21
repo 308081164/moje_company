@@ -16,6 +16,8 @@ declare global {
       minimizeWindow: () => void;
       maximizeWindow: () => void;
 
+      openSocialPublisher: () => Promise<{ opened: boolean }>;
+
       log: (level: 'info' | 'warn' | 'error', message: string, meta?: any) => void;
       checkForUpdates: () => Promise<{ checked: boolean; reason?: string }>;
       quitAndInstallUpdate: () => Promise<void>;

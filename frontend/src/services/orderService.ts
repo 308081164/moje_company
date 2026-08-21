@@ -23,7 +23,6 @@ import {
   OrderDraftFromChatImageResponse,
   CustomerProgressLinkResponse,
   ModelingArchiveData,
-  OrderMarketingCopyDto,
   OrderProductionFollowLogDto,
   OrderProductionFollowCreateRequest,
 } from '@/types/order';
@@ -696,22 +695,5 @@ export const orderService = {
     }>
   > {
     return api.post('/admin/exports/orders-preview', body);
-  },
-
-  /** 营销：待生成文案的已完成订单（售前/管理员/售中） */
-  async workbenchMarketingCopyPending(page: number, size: number): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/marketing-copy/pending', { params: { page, size } });
-  },
-
-  async getMarketingCopy(orderId: number): Promise<OrderMarketingCopyDto> {
-    return api.get(`/orders/workbench/marketing-copy/order/${orderId}`);
-  },
-
-  async generateMarketingCopy(orderId: number): Promise<OrderMarketingCopyDto> {
-    return api.post(`/orders/workbench/marketing-copy/order/${orderId}/generate`);
-  },
-
-  async downloadMarketingCopyZip(orderIds: number[], fallbackFileName: string): Promise<void> {
-    await downloadPostWithAuth('/orders/workbench/marketing-copy/zip', { orderIds }, fallbackFileName);
   },
 };

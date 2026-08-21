@@ -13,11 +13,11 @@ import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
 import TrackerFollowUpPage from '@/pages/TrackerFollowUpPage';
 import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
-import MarketingCopyPoolPage from '@/pages/MarketingCopyPoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
 import PortalShowcaseAdminPage from '@/pages/PortalShowcaseAdminPage';
 import LegacyOrderArchivePage from '@/pages/LegacyOrderArchivePage';
 import InlayStructureLibraryPage from '@/pages/InlayStructureLibraryPage';
+import ChatPage from '@/pages/ChatPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
 import AppLayout from '@/components/layout/AppLayout';
@@ -200,8 +200,6 @@ const App: React.FC = () => {
 
   // 主应用布局（用户管理/系统配置仅管理员可访问，与《功能设计文档》4.1 一致）
   const isAdmin = user?.role === 'ADMIN';
-  const canAccessMarketingCopy =
-    isAdmin || user?.role === 'PRE_SALES' || user?.role === 'SALES';
   const canAccessInlayStructureLibrary =
     isAdmin || user?.role === 'MODELER' || user?.role === 'DATA_ARCHIVIST';
 
@@ -214,16 +212,13 @@ const App: React.FC = () => {
             {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
             <Route index element={<DashboardPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="chat" element={<ChatPage />} />
             <Route path="workbench" element={<WorkbenchPage />} />
             <Route
               path="workbench/tracker-follow-up"
               element={user?.role === 'TRACKER' ? <TrackerFollowUpPage /> : <Navigate to="/dashboard" replace />}
             />
             <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
-            <Route
-              path="workbench/marketing-copy"
-              element={canAccessMarketingCopy ? <MarketingCopyPoolPage /> : <Navigate to="/dashboard" replace />}
-            />
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="admin-portal" element={isAdmin ? <PortalShowcaseAdminPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="legacy-archives" element={isAdmin ? <LegacyOrderArchivePage /> : <Navigate to="/dashboard" replace />} />

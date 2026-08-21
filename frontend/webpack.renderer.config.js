@@ -5,7 +5,10 @@ const webpack = require('webpack');
 
 module.exports = {
   entry: './src/renderer/index.tsx',
-  target: 'electron-renderer',
+  // 使用 'web' target：renderer 代码不依赖 Node API（Node 能力经 preload 的 contextBridge 注入 window.electronAPI），
+  // 改用 'web' 后 bundle 在浏览器（管理端 web 页面）与 Electron 渲染进程均可运行，
+  // 避免 'electron-renderer' 生成的代码依赖 require 导致浏览器端 "require is not defined" 白屏。
+  target: 'web',
   module: {
     rules: [
       {

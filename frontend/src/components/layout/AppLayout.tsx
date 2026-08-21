@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import InlayStructureLibraryBrowser from '@/components/InlayStructureLibraryBrowser';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layout,
@@ -13,7 +12,6 @@ import {
   Tooltip,
   theme,
   message,
-  Modal,
   Drawer,
 } from 'antd';
 import {
@@ -34,6 +32,7 @@ import {
   PictureOutlined,
   DatabaseOutlined,
   UnorderedListOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -49,7 +48,6 @@ const AppLayout: React.FC = () => {
   const { sidebarCollapsed, toggleSidebar, notifications, unreadNotifications } = useAppStore();
   const [collapsed, setCollapsed] = useState(sidebarCollapsed);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [modelerLibraryOpen, setModelerLibraryOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
   );
@@ -73,6 +71,11 @@ const AppLayout: React.FC = () => {
         key: '/dashboard',
         icon: <DashboardOutlined />,
         label: '仪表盘',
+      },
+      {
+        key: '/chat',
+        icon: <MessageOutlined />,
+        label: '客户沟通',
       },
     ];
 
@@ -124,10 +127,9 @@ const AppLayout: React.FC = () => {
             label: '历史订单归档',
           },
           {
-            key: '/marketing',
+            key: '/social-publish',
             icon: <HighlightOutlined />,
-            label: '营销',
-            children: [{ key: '/workbench/marketing-copy', label: '待生成营销文案订单' }],
+            label: '社媒发布',
           },
         ];
       case 'PRE_SALES':
@@ -140,10 +142,9 @@ const AppLayout: React.FC = () => {
             children: [{ key: '/orders', label: '订单列表' }],
           },
           {
-            key: '/marketing',
+            key: '/social-publish',
             icon: <HighlightOutlined />,
-            label: '营销',
-            children: [{ key: '/workbench/marketing-copy', label: '待生成营销文案订单' }],
+            label: '社媒发布',
           },
         ];
       case 'SALES':
@@ -160,7 +161,6 @@ const AppLayout: React.FC = () => {
               { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
               { key: '/orders?status=PENDING_PRODUCTION', label: '待生产' },
               { key: '/workbench/modeling-archive', label: '建模归档任务池' },
-              { key: '/workbench/marketing-copy', label: '待生成营销文案订单' },
             ],
           },
         ];
@@ -262,7 +262,26 @@ const AppLayout: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
+  const handleSocialPublish = () => {
+    if (window.electronAPI?.openSocialPublisher) {
+      // 桌面端：内嵌 social_publisher，打开社媒发布子窗口
+      window.electronAPI.openSocialPublisher().catch((e) => {
+        console.error('打开社媒发布失败', e);
+        message.error('打开社媒发布失败');
+      });
+    } else {
+      // 网页版：唤起 social_publisher 桌面 app（自定义协议）
+      window.location.href = 'socialpublisher://';
+      message.info('正在唤起社媒发布桌面应用，若未安装请先安装 SocialPublisher');
+    }
+  };
+
   const handleMenuClick = ({ key }: { key: string }) => {
+    if (key === '/social-publish') {
+      handleSocialPublish();
+      setMobileMenuOpen(false);
+      return;
+    }
     navigateAndCloseMobile(key);
   };
 
@@ -336,6 +355,9 @@ const AppLayout: React.FC = () => {
     if (path.startsWith('/dashboard')) {
       return ['/dashboard'];
     }
+    if (path.startsWith('/chat')) {
+      return ['/chat'];
+    }
     if (path.startsWith('/admin-portal')) {
       return ['/admin-portal'];
     }
@@ -347,9 +369,6 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/workbench/modeling-archive')) {
       return ['/workbench/modeling-archive'];
-    }
-    if (path.startsWith('/workbench/marketing-copy')) {
-      return ['/marketing', '/workbench/marketing-copy'];
     }
     if (path.startsWith('/exports')) {
       return ['/exports'];
@@ -435,7 +454,7 @@ const AppLayout: React.FC = () => {
           <Menu
             mode="inline"
             selectedKeys={getSelectedKeys()}
-            defaultOpenKeys={['/orders', '/marketing']}
+            defaultOpenKeys={['/orders']}
             items={menuItems}
             onClick={handleMenuClick}
             style={{
@@ -471,7 +490,7 @@ const AppLayout: React.FC = () => {
         <Menu
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          defaultOpenKeys={['/orders', '/marketing']}
+          defaultOpenKeys={['/orders']}
           items={menuItems}
           onClick={handleMenuClick}
           style={{
@@ -536,7 +555,7 @@ const AppLayout: React.FC = () => {
                   type="text"
                   icon={<DatabaseOutlined />}
                   style={{ fontSize: 16 }}
-                  onClick={() => setModelerLibraryOpen(true)}
+                  onClick={() => navigate('/inlay-structure-library')}
                   aria-label="镶嵌结构库"
                 />
               </Tooltip>
@@ -578,18 +597,6 @@ const AppLayout: React.FC = () => {
         </Content>
       </Layout>
 
-      <Modal
-        title="镶嵌结构库"
-        open={modelerLibraryOpen}
-        onCancel={() => setModelerLibraryOpen(false)}
-        footer={null}
-        width={960}
-        destroyOnClose
-        styles={{ body: { maxHeight: '80vh', overflowY: 'auto' } }}
-      >
-        <InlayStructureLibraryBrowser compact />
-      </Modal>
-
       {isMobile && (
         <div className="mobile-bottom-nav" role="navigation" aria-label="主导航">
           <Button type="text" onClick={() => navigateAndCloseMobile('/dashboard')}>
@@ -614,8 +621,8 @@ const AppLayout: React.FC = () => {
             </Button>
           )}
           {['ADMIN', 'PRE_SALES', 'SALES'].includes(user?.role || '') && (
-            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/marketing-copy')}>
-              营销
+            <Button type="text" onClick={handleSocialPublish}>
+              社媒发布
             </Button>
           )}
           <Button type="text" onClick={() => setMobileMenuOpen(true)}>
