@@ -46,7 +46,6 @@ import type { UserInfo } from '@/types/auth';
 import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/orderLabels';
 import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
 import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
-import InlayStructureLibraryBrowser from '@/components/InlayStructureLibraryBrowser';
 import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;

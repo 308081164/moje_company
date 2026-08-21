@@ -33,4 +33,15 @@ public class AsyncConfig {
         ex.initialize();
         return new DelegatingSecurityContextAsyncTaskExecutor(ex);
     }
+
+    @Bean(name = "translationExecutor")
+    public Executor translationExecutor() {
+        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
+        ex.setCorePoolSize(2);
+        ex.setMaxPoolSize(8);
+        ex.setQueueCapacity(500);
+        ex.setThreadNamePrefix("translation-");
+        ex.initialize();
+        return ex;
+    }
 }

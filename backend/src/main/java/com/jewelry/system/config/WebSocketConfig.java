@@ -13,6 +13,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final WebSocketService webSocketService;
+    private final ConversationWebSocketHandler conversationWebSocketHandler;
+    private final ConversationHandshakeInterceptor conversationHandshakeInterceptor;
 
     // 生产在 server.servlet.context-path 下注册，客户端 URL 形如 wss://host/api/ws/modeler；Nginx 需 proxy_set_header Upgrade $http_upgrade; Connection "upgrade";
 
@@ -23,6 +25,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 .setAllowedOrigins("*");
         registry.addHandler(new WebSocketHandler(webSocketService), "/ws/admin")
                 .addInterceptors(new WebSocketHandshakeInterceptor())
+                .setAllowedOrigins("*");
+        registry.addHandler(conversationWebSocketHandler, "/ws/conversation")
+                .addInterceptors(conversationHandshakeInterceptor)
                 .setAllowedOrigins("*");
     }
 }
