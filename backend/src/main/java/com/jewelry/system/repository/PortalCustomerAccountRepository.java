@@ -10,4 +10,8 @@ public interface PortalCustomerAccountRepository extends JpaRepository<PortalCus
     boolean existsByContact(String contact);
 
     Optional<PortalCustomerAccount> findByContact(String contact);
+
+    Optional<PortalCustomerAccount> findByEmail(String email);
+
+    boolean existsByEmail(String email);
 }

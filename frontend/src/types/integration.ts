@@ -1,12 +1,7 @@
-/** 与后端 IntegrationSettingsViewDto 对齐 */
+/** 与后端 IntegrationSettingsViewDto 对齐（API 配置，仅保留大模型接入字段） */
 export interface IntegrationSettings {
   dashscopeEnabled: boolean;
   dashscopeApiKeyConfigured: boolean;
   dashscopeImageModel: string;
   dashscopeChatModel?: string;
-  b2bSupportWecomQrUrl?: string;
-  wecomEnabled: boolean;
-  wecomCustomerSecretConfigured: boolean;
-  wecomCorpId: string;
-  wecomTemplateChatIds: string;
 }

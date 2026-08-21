@@ -2,6 +2,7 @@ package com.jewelry.system.entity;
 
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
+import com.jewelry.system.enums.ServiceType;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -84,6 +85,15 @@ public class Order {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "b2b_client_id")
     private B2BClient b2bClient;
+
+    /** 服务类型：来图定制 / 设计师设计 / B端建模订单 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_type", length = 30)
+    private ServiceType serviceType;
+
+    /** 关联的站内聊天室 ID */
+    @Column(name = "conversation_id")
+    private Long conversationId;
     
     // 时间信息
     @Column(name = "order_time")

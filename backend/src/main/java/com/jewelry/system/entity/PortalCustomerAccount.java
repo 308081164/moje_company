@@ -24,6 +24,14 @@ public class PortalCustomerAccount {
     @Column(nullable = false, length = 255)
     private String password;
 
+    /** 海外 C 端邮箱账号（邮箱验证码登录） */
+    @Column(length = 100)
+    private String email;
+
+    /** 语言偏好（用于聊天消息自动翻译） */
+    @Column(length = 16)
+    private String lang = "en";
+
     @Column(name = "display_name", length = 100)
     private String displayName;
 

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class PortalCustomerLoginResponse {
     private Long id;
     private String contact;
+    private String email;
     private String displayName;
     private String accessToken;
     private long expiresIn;

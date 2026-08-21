@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/CustomerProgressView.vue')
   },
   {
+    path: '/portal/chat',
+    name: 'PortalChat',
+    component: () => import('@/views/ChatView.vue')
+  },
+  {
     path: '/order/:token',
     redirect: (to) => {
       const raw = to.params.token

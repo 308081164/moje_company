@@ -15,25 +15,30 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/portal")
 @RequiredArgsConstructor
-@Tag(name = "管理员门户展示", description = "B 端门户站点与橱窗配置")
+@Tag(name = "管理员门户展示", description = "B/C 端门户站点、首页区块与橱窗配置（所见即所得）")
 public class PortalAdminController {
 
     private final PortalAdminService portalAdminService;
 
+    // ---------- 站点设置 ----------
+
     @GetMapping("/site-settings")
-    @Operation(summary = "读取门户站点配置（含轮播/企业图文件 ID 列表）")
-    public PortalSiteSettingsAdminDto getSiteSettings() {
-        return portalAdminService.getSiteSettingsAdminDto();
+    @Operation(summary = "读取门户站点配置（scope=B|C）")
+    public PortalSiteSettingsAdminDto getSiteSettings(@RequestParam(defaultValue = "B") String scope) {
+        return portalAdminService.getSiteSettingsAdminDto(scope);
     }
 
     @PutMapping("/site-settings")
-    @Operation(summary = "更新门户站点配置")
-    public PortalSiteSettings updateSiteSettings(@Valid @RequestBody PortalSiteSettingsUpdateRequest body) {
-        return portalAdminService.updateSiteSettings(body);
+    @Operation(summary = "更新门户站点配置（scope=B|C）")
+    public PortalSiteSettings updateSiteSettings(
+            @RequestParam(defaultValue = "B") String scope,
+            @Valid @RequestBody PortalSiteSettingsUpdateRequest body) {
+        return portalAdminService.updateSiteSettings(scope, body);
     }
 
     @PostMapping(value = "/uploads", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -42,14 +47,40 @@ public class PortalAdminController {
         return portalAdminService.uploadPortalMultipart(file, kind);
     }
 
+    // ---------- 首页区块 ----------
+
+    @GetMapping("/home-blocks")
+    @Operation(summary = "读取首页区块配置（scope=B|C）")
+    public List<HomeBlockDto> listHomeBlocks(@RequestParam(defaultValue = "B") String scope) {
+        return portalAdminService.listHomeBlocks(scope);
+    }
+
+    @PutMapping("/home-blocks")
+    @Operation(summary = "批量保存首页区块配置（scope=B|C）")
+    public List<HomeBlockDto> upsertHomeBlocks(
+            @RequestParam(defaultValue = "B") String scope,
+            @RequestBody List<HomeBlockUpsertRequest> blocks) {
+        return portalAdminService.upsertHomeBlocks(scope, blocks);
+    }
+
+    @PostMapping("/home-blocks/translate")
+    @Operation(summary = "中文文案 AI 翻译为 8 语言")
+    public Map<String, String> translate(@RequestBody HomeBlockTranslateRequest body) {
+        return portalAdminService.translateHomeBlockText(body.getZhText());
+    }
+
+    // ---------- 分类 / 橱窗 ----------
+
     @GetMapping("/categories")
-    public List<PortalJewelryCategory> listCategories() {
-        return portalAdminService.listCategoriesAdmin();
+    public List<PortalJewelryCategory> listCategories(@RequestParam(defaultValue = "B") String scope) {
+        return portalAdminService.listCategoriesAdmin(scope);
     }
 
     @PostMapping("/categories")
-    public PortalJewelryCategory createCategory(@RequestBody PortalJewelryCategoryRequest body) {
-        return portalAdminService.createCategory(body);
+    public PortalJewelryCategory createCategory(
+            @RequestParam(defaultValue = "B") String scope,
+            @RequestBody PortalJewelryCategoryRequest body) {
+        return portalAdminService.createCategory(scope, body);
     }
 
     @PutMapping("/categories/{id}")

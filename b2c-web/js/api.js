@@ -1,0 +1,106 @@
+/**
+ * duxury — backend API client
+ * 默认走同源 /api（nginx 反代到后端 8851），可通过 window.DUXURY_API_BASE 覆盖。
+ */
+(function () {
+  'use strict';
+
+  var BASE = (window.DUXURY_API_BASE || '/api').replace(/\/+$/, '');
+
+  function request(method, path, body) {
+    var opts = {
+      method: method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    var token = localStorage.getItem('duxury-token');
+    if (token) {
+      opts.headers['Authorization'] = 'Bearer ' + token;
+    }
+    if (body !== undefined && body !== null) {
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(BASE + path, opts).then(function (res) {
+      return res.text().then(function (text) {
+        var data = null;
+        if (text) {
+          try { data = JSON.parse(text); } catch (e) { data = { message: text }; }
+        }
+        if (!res.ok) {
+          var err = new Error(data && data.message ? data.message : 'Request failed');
+          err.status = res.status;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function post(path, body) { return request('POST', path, body); }
+  function get(path) { return request('GET', path); }
+  function put(path, body) { return request('PUT', path, body); }
+
+  window.DUXURY_API = {
+    base: BASE,
+    // 认证
+    sendVerificationCode: function (email, purpose) {
+      return post('/portal/c/account/send-verification-code', { email: email, purpose: purpose || 'LOGIN' });
+    },
+    loginByCode: function (email, code) {
+      return post('/portal/c/account/login-by-code', { email: email, code: code });
+    },
+    // 语言偏好回写
+    updateLang: function (lang) {
+      return put('/portal/c/account/lang', { lang: lang });
+    },
+    // 门户首页
+    getHome: function () {
+      return get('/public/portal/home');
+    },
+    // C 端独立站首页（多语言区块 + 联系方式）
+    getCHome: function () {
+      return get('/public/portal/c/home');
+    },
+    // C端自助下单
+    createOrder: function (body) {
+      return post('/portal/c/orders/create', body);
+    },
+    // C端订单进度（须已绑定）
+    getOrderSummary: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/summary');
+    },
+    getOrderEvents: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/events');
+    },
+    confirmOrder: function (orderId, eventType) {
+      return post('/portal/c/orders/' + orderId + '/confirm', { eventType: eventType });
+    },
+    rejectOrder: function (orderId, eventType, reason) {
+      return post('/portal/c/orders/' + orderId + '/reject', { eventType: eventType, reason: reason });
+    },
+    confirmDelivery: function (orderId) {
+      return post('/portal/c/orders/' + orderId + '/confirm-delivery', {});
+    },
+    // 站内聊天
+    listConversations: function () {
+      return get('/conversations');
+    },
+    ensureConversation: function (orderId) {
+      return post('/conversations/by-order/' + orderId);
+    },
+    getMessages: function (conversationId) {
+      return get('/conversations/' + conversationId + '/messages');
+    },
+    getMembers: function (conversationId) {
+      return get('/conversations/' + conversationId + '/members');
+    },
+    sendMessage: function (conversationId, body) {
+      return post('/conversations/' + conversationId + '/messages', body);
+    },
+    markRead: function (conversationId) {
+      return post('/conversations/' + conversationId + '/read', {});
+    },
+    translateMessage: function (messageId, targetLang) {
+      return post('/conversations/messages/' + messageId + '/translate', { targetLang: targetLang });
+    }
+  };
+})();

@@ -26,7 +26,7 @@
     <section class="hero">
       <div class="hero-slides">
         <div
-          v-for="(slide, i) in heroSlides"
+          v-for="(slide, i) in heroSlidesComputed"
           :key="slide.src"
           class="hero-slide"
           :class="{ 'hero-slide--active': i === activeHero }"
@@ -45,11 +45,11 @@
           <router-link to="/portal" class="btn-primary">立即定制</router-link>
           <a href="#collections" class="btn-ghost">浏览作品</a>
         </div>
-        <p class="hero-caption">{{ heroSlides[activeHero]?.caption }}</p>
+        <p class="hero-caption">{{ heroSlidesComputed[activeHero]?.caption }}</p>
       </div>
       <div class="hero-dots">
         <button
-          v-for="(_, i) in heroSlides"
+          v-for="(_, i) in heroSlidesComputed"
           :key="i"
           type="button"
           class="hero-dot"
@@ -106,7 +106,7 @@
         <p class="section-desc">从平面方案到可生产 3D 数据，直观呈现恒鎏珠宝定制全流程。</p>
       </div>
       <div class="process-grid">
-        <article v-for="pair in designModelPairs" :key="pair.title" class="process-card">
+        <article v-for="pair in processBlocks" :key="pair.title" class="process-card">
           <h3 class="process-card-title">{{ pair.title }}</h3>
           <div class="process-pair">
             <figure class="process-figure">
@@ -130,10 +130,10 @@
           <span class="section-label section-label--gold">Haute Couture</span>
           <h2 class="section-title section-title--inline">高级定制设计图</h2>
         </div>
-        <p class="haute-note">52 张原创方案 · 横滑浏览精选</p>
+        <p class="haute-note">{{ hauteNote }}</p>
       </div>
       <div class="haute-track">
-        <figure v-for="(src, i) in hauteCoutureStrip" :key="src" class="haute-item">
+        <figure v-for="(src, i) in hauteBlocks" :key="src" class="haute-item">
           <img :src="src" :alt="`高级定制设计 ${i + 1}`" loading="lazy" />
         </figure>
       </div>
@@ -147,7 +147,7 @@
         <p class="section-desc">面向 B 端确认与生产的 3D 呈现，细节可审、结构可读。</p>
       </div>
       <div class="craft-grid">
-        <article v-for="item in craftShowcase" :key="item.title" class="craft-card">
+        <article v-for="item in craftBlocks" :key="item.title" class="craft-card">
           <div class="craft-image-wrap">
             <img :src="item.src" :alt="item.title" loading="lazy" />
           </div>
@@ -180,7 +180,7 @@
             帮助合作伙伴高效完成从需求到成品的全链路交付。
           </p>
           <ul class="about-features">
-            <li v-for="f in atelierFeatures" :key="f.title">
+            <li v-for="f in aboutFeatureBlocks" :key="f.title">
               <strong>{{ f.title }}</strong>
               <span>{{ f.text }}</span>
             </li>
@@ -285,6 +285,62 @@ const displayCategories = computed(() => {
   return fallbackCategories
 })
 
+const heroSlidesComputed = computed(() => {
+  const fromApi = portal.value?.carousel?.filter((c) => c.url)
+  if (fromApi?.length) {
+    return fromApi.map((c) => ({ src: c.url, caption: c.caption || '' }))
+  }
+  return heroSlides
+})
+
+const processBlocks = computed(() => {
+  const blocks = portal.value?.blocks?.filter((b) => b.section === 'process') || []
+  if (blocks.length) {
+    return blocks.map((b) => ({
+      title: b.content?.texts?.['zh-CN'] || b.blockKey,
+      design: { src: b.content?.images?.[0] || '', label: '设计图' },
+      model: { src: b.content?.images?.[1] || '', label: '建模预览' }
+    }))
+  }
+  return designModelPairs
+})
+
+const hauteBlocks = computed(() => {
+  const blocks = portal.value?.blocks?.filter((b) => b.section === 'haute') || []
+  if (blocks.length) {
+    return blocks.flatMap((b) => b.content?.images || [])
+  }
+  return hauteCoutureStrip
+})
+
+const hauteNote = computed(() => {
+  const blocks = portal.value?.blocks?.filter((b) => b.section === 'haute') || []
+  return (blocks[0]?.content?.extra?.note as string) || '52 张原创方案 · 横滑浏览精选'
+})
+
+const craftBlocks = computed(() => {
+  const blocks = portal.value?.blocks?.filter((b) => b.section === 'craft') || []
+  if (blocks.length) {
+    return blocks.map((b) => ({
+      src: b.content?.image || '',
+      title: b.content?.texts?.['zh-CN'] || b.blockKey,
+      text: (b.content?.extra?.text as string) || ''
+    }))
+  }
+  return craftShowcase
+})
+
+const aboutFeatureBlocks = computed(() => {
+  const blocks = portal.value?.blocks?.filter((b) => b.section === 'about') || []
+  if (blocks.length) {
+    return blocks.map((b) => ({
+      title: b.content?.texts?.['zh-CN'] || b.blockKey,
+      text: (b.content?.extra?.text as string) || ''
+    }))
+  }
+  return atelierFeatures
+})
+
 const onScroll = () => {
   headerSolid.value = window.scrollY > 48
 }
@@ -292,7 +348,7 @@ const onScroll = () => {
 onMounted(async () => {
   window.addEventListener('scroll', onScroll, { passive: true })
   heroTimer = setInterval(() => {
-    activeHero.value = (activeHero.value + 1) % heroSlides.length
+    activeHero.value = (activeHero.value + 1) % heroSlidesComputed.value.length
   }, 5500)
   try {
     portal.value = await getPortalHome()

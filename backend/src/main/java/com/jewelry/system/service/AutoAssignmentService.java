@@ -68,6 +68,22 @@ public class AutoAssignmentService {
     }
 
     /**
+     * C 端来图定制建单：跳过设计师，直接进入「建模中」并分配建模师（C2C 建模师池）。
+     */
+    @Transactional
+    public void autoAssignC2cImageOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+
+        assignSalesMid(order);
+        ensureModelerAssigned(order);
+
+        orderRepository.save(order);
+        auditLogService.log("ORDER_AUTO_ASSIGN", "ORDER", orderId,
+                "C端来图定制自动分配（售中/建模师）；不分配设计师");
+    }
+
+    /**
      * 订单进入「建模中」阶段时调用：优先保留原建模师（若仍在职且可接单），否则按负载均衡重选。
      */
     @Transactional

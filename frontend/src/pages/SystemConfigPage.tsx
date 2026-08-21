@@ -13,11 +13,9 @@ import {
   Typography,
   message,
   Switch,
-  Divider,
-  Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import { integrationService } from '@/services/integrationService';
 import type { ProcessInfo } from '@/types/order';
@@ -40,11 +38,9 @@ const SystemConfigPage: React.FC = () => {
   const [integrationUi, setIntegrationUi] = useState<{
     hydrated: boolean;
     dashscopeApiKeyConfigured: boolean;
-    wecomCustomerSecretConfigured: boolean;
   }>({
     hydrated: false,
     dashscopeApiKeyConfigured: false,
-    wecomCustomerSecretConfigured: false,
   });
   const [integrationLastSavedAt, setIntegrationLastSavedAt] = useState<number | null>(null);
 
@@ -103,19 +99,15 @@ const SystemConfigPage: React.FC = () => {
       setIntegrationUi({
         hydrated: true,
         dashscopeApiKeyConfigured: Boolean(s.dashscopeApiKeyConfigured),
-        wecomCustomerSecretConfigured: Boolean(s.wecomCustomerSecretConfigured),
       });
       integrationForm.setFieldsValue({
         dashscopeEnabled: s.dashscopeEnabled,
         dashscopeImageModel: s.dashscopeImageModel || 'qwen-vl-plus',
+        dashscopeChatModel: s.dashscopeChatModel || 'qwen-plus',
         dashscopeApiKey: '',
-        wecomEnabled: s.wecomEnabled,
-        wecomCorpId: s.wecomCorpId || '',
-        wecomCustomerSecret: '',
-        wecomTemplateChatIds: s.wecomTemplateChatIds || '',
       });
     } catch {
-      message.error('加载销售助手集成配置失败');
+      message.error('加载 API 配置失败');
     } finally {
       setLoadingIntegration(false);
     }
@@ -128,18 +120,13 @@ const SystemConfigPage: React.FC = () => {
       const body: Record<string, unknown> = {
         dashscopeEnabled: v.dashscopeEnabled,
         dashscopeImageModel: v.dashscopeImageModel,
-        wecomEnabled: v.wecomEnabled,
-        wecomCorpId: v.wecomCorpId,
-        wecomTemplateChatIds: v.wecomTemplateChatIds,
+        dashscopeChatModel: v.dashscopeChatModel,
       };
       if (v.dashscopeApiKey && String(v.dashscopeApiKey).trim()) {
         body.dashscopeApiKey = String(v.dashscopeApiKey).trim();
       }
-      if (v.wecomCustomerSecret && String(v.wecomCustomerSecret).trim()) {
-        body.wecomCustomerSecret = String(v.wecomCustomerSecret).trim();
-      }
       await integrationService.updateSettings(body);
-      message.success('销售助手集成已保存');
+      message.success('API 配置已保存');
       setIntegrationLastSavedAt(Date.now());
       await loadIntegration();
     } catch {
@@ -446,7 +433,7 @@ const SystemConfigPage: React.FC = () => {
           },
           {
             key: 'salesAssist',
-            label: '销售助手集成',
+            label: 'API 配置',
             children: (
               <div
                 style={{
@@ -458,7 +445,7 @@ const SystemConfigPage: React.FC = () => {
               >
                 <Card bordered={false} loading={loadingIntegration}>
                   <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                    配置通义千问（DashScope）截图识图与企业微信客户联系进群能力。密钥与 Secret 不会在加载后回显，下方状态来自服务端是否已保存过敏感配置。
+                    配置各类大语言模型（DashScope / 通义千问）API 接入，用于截图识图填单、聊天消息自动翻译等能力。密钥不会在加载后回显，下方状态来自服务端是否已保存过敏感配置。
                   </Text>
                   {integrationUi.hydrated ? (
                     <Alert
@@ -469,9 +456,6 @@ const SystemConfigPage: React.FC = () => {
                         <Space size={[8, 8]} wrap>
                           <Tag color={integrationUi.dashscopeApiKeyConfigured ? 'success' : 'default'}>
                             DashScope API Key：{integrationUi.dashscopeApiKeyConfigured ? '已配置' : '未配置'}
-                          </Tag>
-                          <Tag color={integrationUi.wecomCustomerSecretConfigured ? 'success' : 'default'}>
-                            企微客户联系 Secret：{integrationUi.wecomCustomerSecretConfigured ? '已配置' : '未配置'}
                           </Tag>
                         </Space>
                       }
@@ -487,11 +471,11 @@ const SystemConfigPage: React.FC = () => {
                   <Form form={integrationForm} layout="vertical" style={{ maxWidth: 640 }} onFinish={saveIntegration}>
                     <Form.Item
                       name="dashscopeEnabled"
-                      label="启用截图识图填单"
+                      label="启用大模型能力"
                       valuePropName="checked"
                       extra={
                         <Text type="secondary">
-                          开启后，订单截图通过 DashScope OpenAI 兼容接口（含 image_url 与文本指令）解析并辅助填单。
+                          开启后，订单截图识图填单、聊天消息自动翻译等能力通过 DashScope 接口调用。
                         </Text>
                       }
                     >
@@ -510,6 +494,18 @@ const SystemConfigPage: React.FC = () => {
                       <Input placeholder="如 qwen-vl-plus" />
                     </Form.Item>
                     <Form.Item
+                      name="dashscopeChatModel"
+                      label="对话模型名"
+                      rules={[{ required: true, message: '请输入模型名' }]}
+                      extra={
+                        <Text type="secondary">
+                          用于文本对话 / 聊天消息翻译，例如 qwen-plus；修改后保存生效。
+                        </Text>
+                      }
+                    >
+                      <Input placeholder="如 qwen-plus" />
+                    </Form.Item>
+                    <Form.Item
                       name="dashscopeApiKey"
                       label="DashScope API Key（留空表示不修改）"
                       extra={
@@ -521,56 +517,6 @@ const SystemConfigPage: React.FC = () => {
                       }
                     >
                       <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
-                    </Form.Item>
-                    <Divider />
-                    <Form.Item
-                      name="wecomEnabled"
-                      label="启用下单后自动配置客户进群二维码"
-                      valuePropName="checked"
-                      extra={
-                        <Text type="secondary">
-                          依赖企业微信「客户联系」与群聊接口（如 add_join_way / get_join_way）；需正确配置 corpid、客户联系
-                          Secret 与种子群 chat_id。
-                        </Text>
-                      }
-                    >
-                      <Switch />
-                    </Form.Item>
-                    <Form.Item
-                      name="wecomCorpId"
-                      label="企业 ID (corpid)"
-                      extra={
-                        <Text type="secondary">
-                          登录企业微信管理后台，在「我的企业」页面底部可查看企业 ID（corpid），复制到此处。
-                        </Text>
-                      }
-                    >
-                      <Input placeholder="企业微信管理后台「我的企业」" />
-                    </Form.Item>
-                    <Form.Item
-                      name="wecomCustomerSecret"
-                      label="客户联系 Secret（留空表示不修改）"
-                      extra={
-                        <Text type="secondary">
-                          使用「客户联系」能力对应应用的 Secret（非任意自建应用 Secret，需与接口权限一致）。留空提交不会覆盖已保存的
-                          Secret。
-                        </Text>
-                      }
-                    >
-                      <Input.Password placeholder="自建应用或客户联系专用 Secret" autoComplete="new-password" />
-                    </Form.Item>
-                    <Form.Item
-                      name="wecomTemplateChatIds"
-                      label="种子客户群 chat_id"
-                      extra={
-                        <Text type="secondary">
-                          须填写<strong>已存在</strong>的客户群 chat_id（非模板名）；多个可用英文逗号分隔，或 JSON 数组如
-                          [&quot;wrXXXX&quot;]。企业微信群聊相关接口说明见：
-                          https://developer.work.weixin.qq.com/document/path/92229
-                        </Text>
-                      }
-                    >
-                      <Input.TextArea rows={3} placeholder="wrXXXXXXXX" />
                     </Form.Item>
                     <Form.Item>
                       <Space>

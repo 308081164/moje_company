@@ -41,6 +41,9 @@ services:
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-kuangjun}
       - JEWELRY_PUBLIC_BASE_URL=${JEWELRY_PUBLIC_BASE_URL:-http://localhost:8851}
       - JEWELRY_PORTAL_BASE_URL=${JEWELRY_PORTAL_BASE_URL:-http://localhost:8852}
+      - INLAY_DB_API_BASE=${INLAY_DB_API_BASE:-http://192.168.1.10:8871/api}
+      - INLAY_DB_USERNAME=${INLAY_DB_USERNAME:-moje}
+      - INLAY_DB_PASSWORD=${INLAY_DB_PASSWORD:-}
     ports:
       - "8851:8851"
     depends_on:
@@ -63,6 +66,21 @@ services:
     container_name: moje-b2b-client
     ports:
       - "8852:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - jewelry-network
+    restart: unless-stopped
+
+  # 海外 C 端独立站（duxury，多语言 + 邮箱验证码登录）
+  b2c-web:
+    build:
+      context: ./b2c-web
+      dockerfile: Dockerfile
+    container_name: moje-b2c-web
+    ports:
+      - "8853:80"
     depends_on:
       backend:
         condition: service_healthy

@@ -275,22 +275,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   
   refreshStatistics: async () => {
-    // 这里可以调用API获取最新的统计信息
-    // 暂时返回模拟数据
-    const mockStats = {
-      totalOrders: 156,
-      pendingOrders: 23,
-      completedOrders: 89,
-      cancelledOrders: 12,
-      totalRevenue: 1256000,
-      todayNewOrders: 8,
-      weekNewOrders: 42,
-      monthNewOrders: 156,
-      averageOrderValue: 8051,
-      customerSatisfaction: 94.5,
-    };
-    
-    set({ statistics: mockStats });
+    // 真实统计由 DashboardPage 通过 orderService.getOrderStatistics() 获取，
+    // 此处不再返回 mock 数据，避免出现假统计。
+    set({ statistics: null });
   },
 }));
 

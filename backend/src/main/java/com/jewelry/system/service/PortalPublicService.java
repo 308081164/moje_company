@@ -4,10 +4,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.portal.*;
 import com.jewelry.system.entity.FileEntity;
+import com.jewelry.system.entity.PortalHomeBlock;
 import com.jewelry.system.entity.PortalJewelryCategory;
 import com.jewelry.system.entity.PortalShowcaseItem;
 import com.jewelry.system.entity.PortalSiteSettings;
 import com.jewelry.system.repository.FileEntityRepository;
+import com.jewelry.system.repository.PortalHomeBlockRepository;
 import com.jewelry.system.repository.PortalJewelryCategoryRepository;
 import com.jewelry.system.repository.PortalShowcaseItemRepository;
 import com.jewelry.system.repository.PortalSiteSettingsRepository;
@@ -30,14 +32,16 @@ public class PortalPublicService {
     private final PortalSiteSettingsRepository portalSiteSettingsRepository;
     private final PortalJewelryCategoryRepository portalJewelryCategoryRepository;
     private final PortalShowcaseItemRepository portalShowcaseItemRepository;
+    private final PortalHomeBlockRepository homeBlockRepository;
     private final FileEntityRepository fileEntityRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public PortalHomePublicDto home() {
-        PortalSiteSettings s = portalSiteSettingsRepository.findById(PortalSiteSettings.SINGLETON_ID)
+        PortalSiteSettings s = portalSiteSettingsRepository.findByScope(PortalSiteSettings.SCOPE_B)
                 .orElseGet(PortalSiteSettings::new);
-        List<PortalJewelryCategory> cats = portalJewelryCategoryRepository.findAllByEnabledTrueOrderBySortOrderAscIdAsc();
+        List<PortalJewelryCategory> cats = portalJewelryCategoryRepository
+                .findByScopeAndEnabledTrueOrderBySortOrderAscIdAsc(PortalSiteSettings.SCOPE_B);
         List<PortalCategoryPublicDto> categoryDtos = new ArrayList<>();
         for (PortalJewelryCategory c : cats) {
             List<PortalShowcaseItem> items = portalShowcaseItemRepository
@@ -69,7 +73,51 @@ public class PortalPublicService {
                 .carousel(resolveOrderedFiles(s.getCarouselFileIdsJson()))
                 .companyPhotos(resolveOrderedFiles(s.getCompanyPhotoFileIdsJson()))
                 .categories(categoryDtos)
+                .blocks(homeBlocks(PortalSiteSettings.SCOPE_B))
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public PortalHomeCPublicDto homeC() {
+        PortalSiteSettings s = portalSiteSettingsRepository.findByScope(PortalSiteSettings.SCOPE_C)
+                .orElseGet(PortalSiteSettings::new);
+        return PortalHomeCPublicDto.builder()
+                .contactPhone(s.getContactPhone())
+                .contactEmail(s.getContactEmail())
+                .address(s.getAddress())
+                .businessHours(s.getBusinessHours())
+                .blocks(homeBlocks(PortalSiteSettings.SCOPE_C))
+                .build();
+    }
+
+    private List<HomeBlockDto> homeBlocks(String scope) {
+        return homeBlockRepository.findByScopeOrderBySectionAscSortOrderAscIdAsc(scope).stream()
+                .filter(PortalHomeBlock::isEnabled)
+                .map(this::toHomeBlockDto)
+                .toList();
+    }
+
+    private HomeBlockDto toHomeBlockDto(PortalHomeBlock b) {
+        return HomeBlockDto.builder()
+                .id(b.getId())
+                .scope(b.getScope())
+                .section(b.getSection())
+                .blockKey(b.getBlockKey())
+                .sortOrder(b.getSortOrder())
+                .enabled(b.isEnabled())
+                .content(readContent(b.getContentJson()))
+                .build();
+    }
+
+    private Map<String, Object> readContent(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

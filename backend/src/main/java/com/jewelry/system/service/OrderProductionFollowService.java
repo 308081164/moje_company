@@ -9,11 +9,13 @@ import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.OrderProductionFollowLog;
 import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.FileRelatedType;
+import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.FileEntityRepository;
 import com.jewelry.system.repository.OrderProductionFollowLogRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
+import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,6 +39,7 @@ public class OrderProductionFollowService {
     private final FileEntityRepository fileEntityRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final OrderEventService orderEventService;
 
     @Transactional(readOnly = true)
     public List<OrderProductionFollowLogDto> list(long orderId) {
@@ -69,6 +72,9 @@ public class OrderProductionFollowService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片 ID 列表序列化失败");
         }
         logRepository.save(row);
+        orderEventService.record(orderId, OrderEventType.PRODUCTION_LOG,
+                AccountKind.STAFF, uid, SecurityUtils.currentRoleApi().orElse("TRACKER"),
+                "生产跟单记录", note.isEmpty() ? null : note, null, ids);
         return toDto(row);
     }
 

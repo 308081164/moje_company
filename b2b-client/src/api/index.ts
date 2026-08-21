@@ -57,6 +57,33 @@ export interface CustomerOrderPublicMilestoneDto {
   at: string
 }
 
+export interface QuotationPublicDto {
+  laborCost?: number
+  additionalLaborCost?: number
+  totalAmount?: number
+  finalized: boolean
+}
+
+export interface ModelFilePublicDto {
+  fileName?: string
+  fileUrl: string
+}
+
+export interface OrderEventDto {
+  id: number
+  orderId: number
+  eventType: string
+  actorType: string
+  actorId: number
+  actorRole?: string
+  actorName?: string
+  title?: string
+  content?: string
+  reason?: string
+  fileIds?: number[]
+  createdAt?: string
+}
+
 export interface CustomerOrderPublicDto {
   orderNumber: string
   displayTitle: string
@@ -66,6 +93,10 @@ export interface CustomerOrderPublicDto {
   currentStatusLabel?: string
   firstDesignImageUrl?: string
   milestones?: CustomerOrderPublicMilestoneDto[]
+  designApproved?: boolean | null
+  modelApproved?: boolean | null
+  quotation?: QuotationPublicDto | null
+  modelFiles?: ModelFilePublicDto[]
 }
 
 export interface CustomerOrderRegistrationHintDto {
@@ -179,6 +210,22 @@ export function portalOrderSummary(orderId: number): Promise<CustomerOrderPublic
   return request.get(`/portal/c/orders/${orderId}/summary`)
 }
 
+export function portalOrderEvents(orderId: number): Promise<OrderEventDto[]> {
+  return request.get(`/portal/c/orders/${orderId}/events`)
+}
+
+export function portalConfirmOrder(orderId: number, eventType: string): Promise<void> {
+  return request.post(`/portal/c/orders/${orderId}/confirm`, { eventType })
+}
+
+export function portalRejectOrder(orderId: number, eventType: string, reason: string): Promise<void> {
+  return request.post(`/portal/c/orders/${orderId}/reject`, { eventType, reason })
+}
+
+export function portalConfirmDelivery(orderId: number): Promise<void> {
+  return request.post(`/portal/c/orders/${orderId}/confirm-delivery`, {})
+}
+
 export interface PortalImageDto {
   fileId: number
   url: string
@@ -207,6 +254,22 @@ export interface PortalHomePublicDto {
   carousel: PortalImageDto[]
   companyPhotos: PortalImageDto[]
   categories: PortalCategoryPublicDto[]
+  blocks?: HomeBlockDto[]
+}
+
+export interface HomeBlockDto {
+  id: number
+  scope: string
+  section: string
+  blockKey: string
+  sortOrder: number
+  enabled: boolean
+  content?: {
+    texts?: Record<string, string>
+    image?: string
+    images?: string[]
+    extra?: Record<string, unknown>
+  } | null
 }
 
 export function getPortalHome(): Promise<PortalHomePublicDto> {
@@ -223,4 +286,70 @@ export interface PortalCategoryDetailPublicDto {
 
 export function getPortalCategory(slug: string): Promise<PortalCategoryDetailPublicDto> {
   return request.get(`/public/portal/category/${encodeURIComponent(slug)}`)
+}
+
+// ---------- 站内聊天 ----------
+export interface Conversation {
+  id: number
+  orderId: number
+  orderNumber?: string
+  title?: string
+  lastMessage?: string
+  lastMessageAt?: string
+  unreadCount: number
+  createdAt?: string
+}
+
+export interface ConversationMember {
+  id: number
+  accountType: string
+  accountId: number
+  role?: string
+  displayName?: string
+  lastReadMessageId?: number
+  joinedAt?: string
+}
+
+export interface ConversationMessage {
+  id: number
+  conversationId: number
+  senderType: string
+  senderId: number
+  role?: string
+  displayName?: string
+  msgType: string
+  content?: string
+  translatedContent?: string
+  translatedLang?: string
+  fileIds?: number[]
+  eventId?: number
+  createdAt?: string
+}
+
+export function listConversations(): Promise<Conversation[]> {
+  return request.get('/conversations')
+}
+
+export function ensureConversation(orderId: number): Promise<Conversation> {
+  return request.post(`/conversations/by-order/${orderId}`)
+}
+
+export function getConversationMessages(conversationId: number): Promise<ConversationMessage[]> {
+  return request.get(`/conversations/${conversationId}/messages`)
+}
+
+export function getConversationMembers(conversationId: number): Promise<ConversationMember[]> {
+  return request.get(`/conversations/${conversationId}/members`)
+}
+
+export function sendConversationMessage(conversationId: number, content: string): Promise<ConversationMessage> {
+  return request.post(`/conversations/${conversationId}/messages`, { content, msgType: 'text' })
+}
+
+export function markConversationRead(conversationId: number): Promise<void> {
+  return request.post(`/conversations/${conversationId}/read`, {})
+}
+
+export function translateMessage(messageId: number, targetLang: string): Promise<ConversationMessage> {
+  return request.post(`/conversations/messages/${messageId}/translate`, { targetLang })
 }

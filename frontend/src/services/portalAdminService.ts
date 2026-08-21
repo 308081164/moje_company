@@ -15,6 +15,7 @@ export interface PortalSiteSettingsAdmin {
 
 export interface PortalJewelryCategory {
   id: number;
+  scope?: string;
   slug: string;
   nameCn: string;
   nameEn?: string | null;
@@ -35,13 +36,31 @@ export interface PortalShowcaseItemAdmin {
   sortOrder: number;
 }
 
+export interface HomeBlock {
+  id?: number;
+  scope?: string;
+  section: string;
+  blockKey: string;
+  sortOrder?: number;
+  enabled?: boolean;
+  content?: {
+    texts?: Record<string, string>;
+    image?: string;
+    images?: string[];
+    extra?: Record<string, unknown>;
+  } | null;
+}
+
+export type PortalScope = 'B' | 'C';
+
 export const portalAdminService = {
-  async getSiteSettings(): Promise<PortalSiteSettingsAdmin> {
-    return api.get('/admin/portal/site-settings');
+  // 站点设置（scope 隔离）
+  async getSiteSettings(scope: PortalScope = 'B'): Promise<PortalSiteSettingsAdmin> {
+    return api.get('/admin/portal/site-settings', { params: { scope } });
   },
 
-  async updateSiteSettings(body: Partial<PortalSiteSettingsAdmin>): Promise<unknown> {
-    return api.put('/admin/portal/site-settings', body);
+  async updateSiteSettings(scope: PortalScope, body: Partial<PortalSiteSettingsAdmin>): Promise<unknown> {
+    return api.put('/admin/portal/site-settings', body, { params: { scope } });
   },
 
   async uploadPortalFile(file: File, kind: 'carousel' | 'company'): Promise<{ id: number; fileUrl?: string }> {
@@ -52,12 +71,26 @@ export const portalAdminService = {
     });
   },
 
-  async listCategories(): Promise<PortalJewelryCategory[]> {
-    return api.get('/admin/portal/categories');
+  // 首页区块（scope 隔离）
+  async getHomeBlocks(scope: PortalScope): Promise<HomeBlock[]> {
+    return api.get('/admin/portal/home-blocks', { params: { scope } });
   },
 
-  async createCategory(body: Partial<PortalJewelryCategory>): Promise<PortalJewelryCategory> {
-    return api.post('/admin/portal/categories', body);
+  async updateHomeBlocks(scope: PortalScope, blocks: HomeBlock[]): Promise<HomeBlock[]> {
+    return api.put('/admin/portal/home-blocks', blocks, { params: { scope } });
+  },
+
+  async translateBlock(zhText: string): Promise<Record<string, string>> {
+    return api.post('/admin/portal/home-blocks/translate', { zhText });
+  },
+
+  // 分类（scope 隔离）
+  async listCategories(scope: PortalScope = 'B'): Promise<PortalJewelryCategory[]> {
+    return api.get('/admin/portal/categories', { params: { scope } });
+  },
+
+  async createCategory(scope: PortalScope, body: Partial<PortalJewelryCategory>): Promise<PortalJewelryCategory> {
+    return api.post('/admin/portal/categories', body, { params: { scope } });
   },
 
   async updateCategory(id: number, body: Partial<PortalJewelryCategory>): Promise<PortalJewelryCategory> {

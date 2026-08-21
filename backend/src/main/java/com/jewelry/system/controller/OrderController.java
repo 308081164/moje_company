@@ -417,9 +417,11 @@ public class OrderController {
     }
 
     @PostMapping("/{id:\\d+}/modeler/reject-to-customer")
-    @Operation(summary = "建模师驳回给客户（占位，未实现）")
-    public void modelerRejectToCustomer(@PathVariable long id) {
-        orderCommandService.modelerRejectToCustomerStub(id);
+    @Operation(summary = "建模师驳回给客户")
+    public OrderInfoDto modelerRejectToCustomer(
+            @PathVariable long id,
+            @Valid @RequestBody ModelerRejectToDesignerRequest body) {
+        return orderCommandService.modelerRejectToCustomer(id, body);
     }
 
     @GetMapping("/system-config")

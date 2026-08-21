@@ -11,4 +11,8 @@ public interface PortalJewelryCategoryRepository extends JpaRepository<PortalJew
     Optional<PortalJewelryCategory> findBySlug(String slug);
 
     List<PortalJewelryCategory> findAllByEnabledTrueOrderBySortOrderAscIdAsc();
+
+    List<PortalJewelryCategory> findByScopeOrderBySortOrderAscIdAsc(String scope);
+
+    List<PortalJewelryCategory> findByScopeAndEnabledTrueOrderBySortOrderAscIdAsc(String scope);
 }

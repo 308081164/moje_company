@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>duxury · Bespoke Jewelry</title>
+  <meta name="description" content="duxury — bespoke jewelry. From design to delivery, transparent online communication.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="header" id="header">
+  <div class="header__inner">
+    <a href="#hero" class="brand">
+      <span class="brand__name">duxury</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#services" class="nav__link" data-i18n="nav.services">Services</a>
+      <a href="#works" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
+      <a href="#process" class="nav__link" data-i18n="nav.process">Process</a>
+      <a href="#craft" class="nav__link" data-i18n="nav.craft">Craft</a>
+      <a href="order-workspace.html" class="nav__link" data-i18n="nav.orders">Orders</a>
+    </nav>
+    <div class="header__actions">
+      <div class="lang" id="langSwitcher">
+        <button class="lang__btn" id="langBtn" aria-label="Language" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span data-lang-current>EN</span>
+          <svg class="lang__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="lang__menu" id="langMenu"></div>
+      </div>
+      <a href="#cta" class="btn btn--gold btn--sm header__cta" data-i18n="nav.cta">Start Custom</a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<section class="hero" id="hero">
+  <div class="hero__bg">
+    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Luxury%20custom%20diamond%20ring%20on%20dark%20velvet%2C%20editorial%20jewelry%20photography%2C%20warm%20golden%20light%2C%20premium%20artisanal%20feel&image_size=landscape_16_9" alt="Bespoke jewelry" class="hero__img" loading="eager">
+    <div class="hero__overlay"></div>
+  </div>
+  <div class="hero__content">
+    <p class="hero__eyebrow" data-i18n="hero.eyebrow">BESPOKE JEWELRY</p>
+    <h1 class="hero__title"><span data-i18n="hero.title1">Every piece</span><br><span data-i18n="hero.title2">born for you</span></h1>
+    <p class="hero__desc" data-i18n="hero.desc">From inspiration to delivery, transparent online communication throughout. Pay a deposit to begin your bespoke journey.</p>
+    <div class="hero__actions">
+      <a href="#services" class="btn btn--gold" data-i18n="hero.cta1">Consult a Designer</a>
+      <a href="#works" class="btn btn--ghost" data-i18n="hero.cta2">View Portfolio</a>
+    </div>
+  </div>
+  <div class="hero__scroll">
+    <span data-i18n="hero.scroll">Scroll</span>
+    <div class="hero__scroll-line"></div>
+  </div>
+</section>
+
+<!-- ============ Services (placed early, before portfolio) ============ -->
+<section class="section services" id="services">
+  <div class="container">
+    <div class="section__head reveal">
+      <p class="section__eyebrow" data-i18n="svc.eyebrow">OUR SERVICES</p>
+      <h2 class="section__title" data-i18n="svc.title">Choose Your Way</h2>
+      <p class="section__sub" data-i18n="svc.sub">A deposit unlocks your dedicated design team</p>
+    </div>
+    <div class="services__grid">
+      <!-- Custom design (bring your own drawing) -->
+      <article class="service-card reveal">
+        <div class="service-card__icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        </div>
+        <h3 class="service-card__title" data-i18n="svc.custom.title">Bring Your Design</h3>
+        <p class="service-card__desc" data-i18n="svc.custom.desc">Submit your own design drawings and we craft it into reality.</p>
+        <div class="service-card__price">
+          <span class="service-card__amount" data-i18n="svc.custom.price">$49</span>
+          <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
+        </div>
+        <p class="service-card__note" data-i18n="svc.custom.note">Note: your drawing may not meet production standards, and the finished piece may deviate slightly from the design.</p>
+        <button class="btn btn--gold service-card__btn" data-service="custom" data-i18n="svc.select">Select & Pay</button>
+      </article>
+
+      <!-- Designer design -->
+      <article class="service-card service-card--featured reveal">
+        <span class="service-card__badge" data-i18n="svc.popular">Most popular</span>
+        <div class="service-card__icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 6 0.1-4.8 3.6 1.8 5.7-4.9-3.5-4.9 3.5 1.8-5.7-4.8-3.6 6-0.1z"/></svg>
+        </div>
+        <h3 class="service-card__title" data-i18n="svc.designer.title">Designer Design</h3>
+        <p class="service-card__desc" data-i18n="svc.designer.desc">Commission our designers to create a bespoke design from your inspiration.</p>
+        <div class="service-card__price">
+          <span class="service-card__amount" data-i18n="svc.designer.price">$99</span>
+          <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
+        </div>
+        <p class="service-card__note" data-i18n="svc.designer.note">Includes one-on-one consultation, sketches and 3D preview before production.</p>
+        <button class="btn btn--gold service-card__btn" data-service="designer" data-i18n="svc.select">Select & Pay</button>
+      </article>
+    </div>
+    <p class="services__guarantee reveal" data-i18n="svc.guarantee">Fully refundable before production starts</p>
+  </div>
+</section>
+
+<section class="section works" id="works">
+  <div class="container">
+    <div class="section__head reveal">
+      <p class="section__eyebrow" data-i18n="works.eyebrow">PORTFOLIO</p>
+      <h2 class="section__title" data-i18n="works.title">Selected Works</h2>
+      <p class="section__sub" data-i18n="works.sub">Every piece is a one-of-a-kind story</p>
+    </div>
+    <div class="works__grid">
+      <article class="work-card reveal">
+        <div class="work-card__img">
+          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="Sapphire engagement ring" loading="lazy">
+        </div>
+        <div class="work-card__info">
+          <h3 class="work-card__name" data-i18n="work1.name">Galaxy</h3>
+          <p class="work-card__desc" data-i18n="work1.desc">Sapphire · 18K White Gold · Diamond set</p>
+        </div>
+      </article>
+      <article class="work-card reveal">
+        <div class="work-card__img">
+          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="Emerald necklace" loading="lazy">
+        </div>
+        <div class="work-card__info">
+          <h3 class="work-card__name" data-i18n="work2.name">Emerald Plume</h3>
+          <p class="work-card__desc" data-i18n="work2.desc">Emerald · 18K Gold · Custom</p>
+        </div>
+      </article>
+      <article class="work-card reveal">
+        <div class="work-card__img">
+          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="Diamond bracelet" loading="lazy">
+        </div>
+        <div class="work-card__info">
+          <h3 class="work-card__name" data-i18n="work3.name">Lustre</h3>
+          <p class="work-card__desc" data-i18n="work3.desc">Diamond · 18K White Gold · Precision cut</p>
+        </div>
+      </article>
+      <article class="work-card reveal">
+        <div class="work-card__img">
+          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="Pearl earrings" loading="lazy">
+        </div>
+        <div class="work-card__info">
+          <h3 class="work-card__name" data-i18n="work4.name">Morning Dew</h3>
+          <p class="work-card__desc" data-i18n="work4.desc">Akoya Pearl · 18K Gold · Hand forged</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section process" id="process">
+  <div class="container">
+    <div class="section__head reveal">
+      <p class="section__eyebrow" data-i18n="process.eyebrow">PROCESS</p>
+      <h2 class="section__title" data-i18n="process.title">The Journey</h2>
+      <p class="section__sub" data-i18n="process.sub">From idea to finished piece, every step is clear</p>
+    </div>
+    <div class="process__steps">
+      <div class="step reveal">
+        <span class="step__num">01</span>
+        <h3 class="step__title" data-i18n="step1.title">Consultation</h3>
+        <p class="step__desc" data-i18n="step1.desc">One-on-one with a designer to discuss needs, style and budget.</p>
+      </div>
+      <div class="step reveal">
+        <span class="step__num">02</span>
+        <h3 class="step__title" data-i18n="step2.title">Proposal</h3>
+        <p class="step__desc" data-i18n="step2.desc">Sketches, 3D previews, material details and transparent pricing.</p>
+      </div>
+      <div class="step step--highlight reveal">
+        <span class="step__num">03</span>
+        <h3 class="step__title" data-i18n="step3.title">Deposit</h3>
+        <p class="step__desc" data-i18n="step3.desc">Pay a deposit to lock in service — your dedicated order chat opens instantly.</p>
+        <span class="step__badge" data-i18n="step3.badge">Key step</span>
+      </div>
+      <div class="step reveal">
+        <span class="step__num">04</span>
+        <h3 class="step__title" data-i18n="step4.title">Delivery</h3>
+        <p class="step__desc" data-i18n="step4.desc">Delivery and final settlement. Lifetime care keeps your jewelry timeless.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="craft" id="craft">
+  <div class="craft__bg">
+    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Master%20jeweler%20hands%20crafting%20custom%20ring%20in%20workshop%2C%20warm%20lighting%2C%20artisan%20tools%2C%20close-up&image_size=landscape_4_3" alt="Master jeweler" loading="lazy">
+    <div class="craft__overlay"></div>
+  </div>
+  <div class="craft__content reveal">
+    <p class="section__eyebrow section__eyebrow--light" data-i18n="craft.eyebrow">CRAFTSMANSHIP</p>
+    <h2 class="section__title section__title--light" data-i18n="craft.title">Heritage of Craft</h2>
+    <p class="craft__text" data-i18n="craft.text">Every piece is forged by hand by master artisans — from stone selection to setting, through dozens of steps. True luxury lies not in a label, but in the perfection of every detail.</p>
+  </div>
+</section>
+
+<section class="cta" id="cta">
+  <div class="cta__bg">
+    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Luxury%20jewelry%20boutique%20interior%2C%20warm%20lighting%2C%20display%20cases%2C%20premium%20atmosphere&image_size=landscape_16_9" alt="Jewelry boutique" loading="lazy">
+    <div class="cta__overlay"></div>
+  </div>
+  <div class="cta__content reveal">
+    <h2 class="cta__title" data-i18n="cta.title">Begin Your Bespoke Journey</h2>
+    <p class="cta__desc" data-i18n="cta.desc">Book a consultation and let our designers tell your story.</p>
+    <a href="#services" class="btn btn--gold btn--lg" data-i18n="hero.cta1">Consult a Designer</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <span class="brand__name">duxury</span>
+      <p class="footer__tagline" data-i18n="footer.tagline">Bespoke jewelry · every piece born for you</p>
+    </div>
+    <div class="footer__links">
+      <div class="footer__col">
+        <h4 data-i18n="footer.explore">Explore</h4>
+        <a href="#works" data-i18n="nav.portfolio">Portfolio</a>
+        <a href="#process" data-i18n="nav.process">Process</a>
+        <a href="#craft" data-i18n="nav.craft">Craft</a>
+      </div>
+      <div class="footer__col">
+        <h4 data-i18n="footer.service">Service</h4>
+        <a href="#services" data-i18n="nav.services">Services</a>
+        <a href="order-workspace.html" data-i18n="footer.orders">Orders</a>
+        <a href="#" data-i18n="footer.care">Aftercare</a>
+      </div>
+      <div class="footer__col">
+        <h4 data-i18n="footer.contact">Contact</h4>
+        <a href="#">400-888-0000</a>
+        <a href="#">contact@duxury.com</a>
+        <a href="#">Shanghai · Jing'an</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <p>© 2026 duxury. All rights reserved.</p>
+  </div>
+</footer>
+
+<button class="chat-fab" id="chatFab" aria-label="AI assistant">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  <span class="chat-fab__pulse"></span>
+</button>
+
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-panel__head" id="chatPanelHead">
+    <span class="chat-panel__grip" aria-hidden="true"></span>
+    <div>
+      <h3 class="chat-panel__title" data-i18n="ai.title">AI Assistant</h3>
+      <p class="chat-panel__status">
+        <span class="ws-dot ws-dot--active"></span>
+        <span data-i18n="ai.status">AI online · instant reply</span>
+      </p>
+    </div>
+    <button class="chat-panel__close" id="chatClose" aria-label="Close">&times;</button>
+  </div>
+  <div class="chat-panel__body" id="panelChatBody">
+    <div class="ws-msg ws-msg--in">
+      <p class="ws-msg__bubble" data-i18n="ai.welcome">Hi! I'm the duxury AI assistant. I can answer questions about services, deposits and the process before you order.</p>
+      <span class="ws-msg__time">Just now</span>
+    </div>
+  </div>
+  <div class="chat-panel__input">
+    <input type="text" placeholder="Type a message…" data-i18n-placeholder="ws.input" id="panelChatInput">
+    <button class="chat-panel__send" id="panelChatSend" aria-label="Send" data-i18n="ws.send">Send</button>
+  </div>
+</div>
+
+<!-- Login modal -->
+<div class="modal" id="loginModal" aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="modal__dialog">
+    <button class="modal__close" data-modal-close aria-label="Close">&times;</button>
+    <div class="modal__brand">duxury</div>
+    <h3 class="modal__title" data-i18n="login.title">Sign in to continue</h3>
+    <p class="modal__sub" data-i18n="login.sub">Sign in is required before placing your deposit</p>
+    <button class="login-google" id="googleLogin">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      <span data-i18n="login.google">Continue with Google</span>
+    </button>
+    <div class="modal__divider"><span data-i18n="login.or">or</span></div>
+    <div class="login-email">
+      <input type="email" id="emailInput" placeholder="you@example.com" data-i18n-placeholder="login.email.ph">
+      <button class="btn btn--gold" id="emailContinue" data-i18n="login.continue">Continue</button>
+    </div>
+    <div class="login-email" id="emailCodeStep" style="display:none">
+      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
+      <button class="btn btn--gold" id="codeConfirm" data-i18n="login.verify">Verify</button>
+    </div>
+    <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
+  </div>
+</div>
+
+<!-- Checkout modal -->
+<div class="modal" id="checkoutModal" aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="modal__dialog">
+    <button class="modal__close" data-modal-close aria-label="Close">&times;</button>
+    <h3 class="modal__title" data-i18n="co.title">Secure Your Order</h3>
+    <p class="modal__sub" data-i18n="co.sub">Pay your deposit to unlock the dedicated group chat</p>
+    <div class="checkout__summary">
+      <div class="checkout__row">
+        <span data-i18n="co.service">Service</span>
+        <span id="checkoutService">—</span>
+      </div>
+      <div class="checkout__row checkout__row--total">
+        <span data-i18n="co.total">Total due</span>
+        <span id="checkoutPrice">—</span>
+      </div>
+    </div>
+    <div class="checkout__requirements" id="checkoutRequirements" style="display:none">
+      <label class="checkout__label" data-i18n="co.requirements.label">Describe your requirements</label>
+      <textarea id="requirementInput" class="checkout__textarea" rows="4" data-i18n-placeholder="co.requirements.ph"></textarea>
+      <label class="checkout__label" data-i18n="co.requirements.material">Material / style (optional)</label>
+      <input type="text" id="materialInput" class="checkout__input" data-i18n-placeholder="co.requirements.material.ph">
+      <label class="checkout__label" data-i18n="co.requirements.image">Reference image (optional)</label>
+      <input type="file" id="referenceImageInput" accept="image/*">
+    </div>
+    <button class="btn btn--gold btn--lg checkout__pay" id="payDeposit" data-i18n="co.pay">Pay deposit</button>
+    <p class="checkout__secure" data-i18n="co.secure">256-bit encrypted · secure payment</p>
+    <div class="checkout__success" id="checkoutSuccess">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1DC981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      <p data-i18n="co.success">Deposit received — your group chat is ready!</p>
+      <a href="order-workspace.html" class="btn btn--gold" data-i18n="co.enter">Enter Order Workspace</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/api.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

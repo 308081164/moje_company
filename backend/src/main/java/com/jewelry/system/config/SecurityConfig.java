@@ -36,6 +36,8 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/b2b/client/register", "/b2b/client/login").permitAll()
                         .requestMatchers("/portal/c/account/register", "/portal/c/account/login").permitAll()
+                        .requestMatchers("/portal/c/account/send-verification-code", "/portal/c/account/login-by-code", "/portal/c/account/register-by-code").permitAll()
+                        .requestMatchers("/oauth/**").permitAll()
                         .requestMatchers(new AntPathRequestMatcher("/public/customer-order/*/hint", HttpMethod.GET.name())).permitAll()
                         .requestMatchers("/public/portal/**").permitAll()
                         .requestMatchers("/b2b/agent/welcome", "/b2b/agent/sessions", "/b2b/agent/sessions/**").permitAll()

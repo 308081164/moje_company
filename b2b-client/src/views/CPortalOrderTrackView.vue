@@ -13,7 +13,7 @@
           <a-empty :description="err" />
         </div>
         <template v-else-if="data">
-          <CustomerProgressBody :data="data" />
+          <CustomerProgressBody :data="data" :order-id="Number(route.params.orderId)" @changed="load" />
         </template>
       </a-card>
     </div>

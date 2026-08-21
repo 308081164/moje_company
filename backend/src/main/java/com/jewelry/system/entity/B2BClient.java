@@ -33,6 +33,10 @@ public class B2BClient {
     @Column(length = 255)
     private String email;
 
+    /** 语言偏好（用于聊天消息自动翻译） */
+    @Column(length = 16)
+    private String lang = "zh-CN";
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private ClientStatus status = ClientStatus.ACTIVE;

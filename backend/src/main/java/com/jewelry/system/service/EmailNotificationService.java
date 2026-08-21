@@ -4,7 +4,9 @@ import com.jewelry.system.entity.SysConfig;
 import com.jewelry.system.repository.SysConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.mail.*;
 import jakarta.mail.internet.InternetAddress;
@@ -93,6 +95,25 @@ public class EmailNotificationService {
             log.info("订单提醒邮件已发送至管理员邮箱: {}", adminEmail);
         } catch (Exception e) {
             log.error("发送提醒邮件失败", e);
+        }
+    }
+
+    public void sendVerificationCode(String email, String code) {
+        try {
+            String subject = "【珠宝定制】邮箱登录验证码";
+            String content = String.format(
+                "<html><body>" +
+                "<h3>邮箱验证码</h3>" +
+                "<p>您的验证码是：<b>%s</b></p>" +
+                "<p>验证码 5 分钟内有效，请勿泄露给他人。</p>" +
+                "</body></html>",
+                code
+            );
+            sendEmail(email, subject, content);
+            log.info("验证码邮件已发送至: {}", email);
+        } catch (MessagingException e) {
+            log.error("发送验证码邮件失败", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "验证码邮件发送失败，请稍后重试");
         }
     }
 

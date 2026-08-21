@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>duxury · Order Workspace</title>
+  <meta name="description" content="duxury order workspace — one order, one dedicated group chat.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="app-body">
+
+<header class="app-header">
+  <div class="app-header__inner">
+    <a href="index.html" class="brand">
+      <span class="brand__name">duxury</span>
+    </a>
+    <nav class="nav nav--app" id="nav">
+      <a href="index.html#services" class="nav__link" data-i18n="nav.services">Services</a>
+      <a href="index.html#works" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
+      <a href="index.html#process" class="nav__link" data-i18n="nav.process">Process</a>
+      <a href="index.html#craft" class="nav__link" data-i18n="nav.craft">Craft</a>
+      <a href="order-workspace.html" class="nav__link nav__link--active" data-i18n="nav.orders">Orders</a>
+    </nav>
+    <div class="header__actions">
+      <div class="lang" id="langSwitcher">
+        <button class="lang__btn" id="langBtn" aria-label="Language" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span data-lang-current>EN</span>
+          <svg class="lang__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="lang__menu" id="langMenu"></div>
+      </div>
+      <a href="index.html#cta" class="btn btn--gold btn--sm header__cta" data-i18n="nav.cta">Start Custom</a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<div class="app-shell">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__head">
+      <h1 class="sidebar__title" data-i18n="ws.title">Order Workspace</h1>
+      <p class="sidebar__sub" data-i18n="ws.sub">One order, one dedicated group chat</p>
+      <div class="sidebar__search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="conversationSearch" placeholder="Search orders…" data-i18n-placeholder="ws.search">
+      </div>
+      <div class="sidebar__filters" id="filterBar">
+        <span class="ws-filter active" data-filter="all" data-i18n="ws.filter.all">All</span>
+        <span class="ws-filter" data-filter="design" data-i18n="ws.filter.design">Designing</span>
+        <span class="ws-filter" data-filter="producing" data-i18n="ws.filter.producing">Producing</span>
+      </div>
+    </div>
+
+    <div class="conversation-list" id="conversationList">
+      <!-- 会话列表由真实后端数据动态渲染，无静态假数据 -->
+    </div>
+  </aside>
+
+  <!-- ============ Chat ============ -->
+  <main class="chat" id="chat">
+    <!-- 订单进度面板（可折叠） -->
+    <div class="chat__progress" id="chatProgress" style="display:none">
+      <div class="chat__progress-head">
+        <span class="chat__progress-title" data-i18n="ws.progress.title">Order Progress</span>
+        <button class="chat__progress-toggle" id="chatProgressToggle" aria-label="Toggle">▲</button>
+      </div>
+      <div class="chat__progress-body" id="chatProgressBody"></div>
+    </div>
+    <!-- Chat header -->
+    <div class="chat__header">
+      <div class="chat__header-left">
+        <button class="chat__back" id="chatBack" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="chat__avatar chat__avatar--ring" id="chatAvatar">#</div>
+        <div class="chat__title-group">
+          <h2 class="chat__title" id="chatTitle">—</h2>
+          <span class="chat__order-id" id="chatOrderId"></span>
+        </div>
+        <span class="chat__stage" id="chatStage"></span>
+      </div>
+      <div class="chat__header-right">
+        <div class="chat__members" id="chatMembers">
+          <!-- 成员头像由真实后端数据动态渲染 -->
+        </div>
+        <button class="chat__action" aria-label="More">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="chat__body" id="chatBody">
+      <!-- 聊天消息由真实后端数据动态渲染，无静态假数据 -->
+    </div>
+
+    <!-- Typing indicator -->
+    <div class="chat__typing" id="chatTyping">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      <span class="typing-label" id="typingLabel" data-i18n="ws.typing">typing…</span>
+    </div>
+
+    <!-- Composer -->
+    <div class="chat__composer">
+      <button class="composer__action" aria-label="Attach">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <button class="composer__action" aria-label="Emoji">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      </button>
+      <input type="text" class="composer__input" id="chatInput" placeholder="Type a message…" data-i18n-placeholder="ws.input">
+      <button class="composer__send" id="chatSend" data-i18n="ws.send">Send</button>
+    </div>
+  </main>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/api.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -27,7 +27,7 @@
           />
 
           <template v-if="data">
-            <CustomerProgressBody :data="data" />
+            <CustomerProgressBody :data="data" :order-id="hint!.orderId" @changed="() => loadSummary(hint!.orderId)" />
           </template>
 
           <template v-else>

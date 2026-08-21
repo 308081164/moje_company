@@ -12,14 +12,20 @@ import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
 import com.jewelry.system.dto.customer.CustomerOrderPublicMilestoneDto;
 import com.jewelry.system.dto.customer.CustomerOrderRegistrationHintDto;
 import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
+import com.jewelry.system.dto.customer.ModelFilePublicDto;
+import com.jewelry.system.dto.customer.QuotationPublicDto;
 import com.jewelry.system.entity.DesignInfo;
+import com.jewelry.system.entity.ModelingInfo;
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.OrderCustomerViewLink;
 import com.jewelry.system.entity.OrderCustomerViewLink.LinkStatus;
+import com.jewelry.system.entity.Quotation;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.DesignInfoRepository;
+import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderCustomerViewLinkRepository;
 import com.jewelry.system.repository.OrderRepository;
+import com.jewelry.system.repository.QuotationRepository;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,6 +69,8 @@ public class CustomerOrderViewService {
     private final OrderCustomerViewLinkRepository linkRepository;
     private final OrderRepository orderRepository;
     private final DesignInfoRepository designInfoRepository;
+    private final ModelingInfoRepository modelingInfoRepository;
+    private final QuotationRepository quotationRepository;
     private final ObjectMapper objectMapper;
 
     /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
@@ -183,8 +191,20 @@ public class CustomerOrderViewService {
     @Transactional(readOnly = true)
     public CustomerOrderPublicDto buildPublicProgressDto(Order order) {
         DesignInfo di = designInfoRepository.findByOrderId(order.getId()).orElse(null);
+        ModelingInfo mi = modelingInfoRepository.findByOrderId(order.getId()).orElse(null);
+        Quotation quotation = quotationRepository.findByOrderId(order.getId()).orElse(null);
         List<String> images = parseDesignImages(di);
         String firstImg = images.isEmpty() ? null : images.get(0);
+
+        QuotationPublicDto quotationDto = null;
+        if (quotation != null && Boolean.TRUE.equals(quotation.getFinalized())) {
+            quotationDto = QuotationPublicDto.builder()
+                    .laborCost(quotation.getLaborCost())
+                    .additionalLaborCost(quotation.getAdditionalLaborCost())
+                    .totalAmount(quotation.getTotalAmount())
+                    .finalized(true)
+                    .build();
+        }
 
         return CustomerOrderPublicDto.builder()
                 .orderNumber(order.getOrderNumber())
@@ -195,7 +215,38 @@ public class CustomerOrderViewService {
                 .currentStatusLabel(order.getStatus().getDescription())
                 .firstDesignImageUrl(firstImg)
                 .milestones(buildMilestones(order))
+                .designApproved(di != null ? di.getCustomerApproved() : null)
+                .modelApproved(mi != null ? mi.getCustomerApproved() : null)
+                .quotation(quotationDto)
+                .modelFiles(parseModelFiles(mi))
                 .build();
+    }
+
+    private List<ModelFilePublicDto> parseModelFiles(ModelingInfo mi) {
+        if (mi == null || mi.getModelFilesJson() == null || mi.getModelFilesJson().isBlank()) {
+            return List.of();
+        }
+        try {
+            List<Map<String, Object>> refs = objectMapper.readValue(
+                    mi.getModelFilesJson().getBytes(StandardCharsets.UTF_8),
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class)
+            );
+            List<ModelFilePublicDto> out = new ArrayList<>();
+            for (Map<String, Object> ref : refs) {
+                if (ref == null) continue;
+                Object url = ref.get("fileUrl");
+                Object name = ref.get("fileName");
+                if (url != null) {
+                    out.add(ModelFilePublicDto.builder()
+                            .fileName(name != null ? String.valueOf(name) : null)
+                            .fileUrl(String.valueOf(url))
+                            .build());
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private void assertLinkNotExpired(OrderCustomerViewLink link) {

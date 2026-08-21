@@ -18,6 +18,10 @@ public class PortalJewelryCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** B 端门户 / C 端独立站 */
+    @Column(name = "scope", nullable = false, length = 1)
+    private String scope = "B";
+
     @Column(name = "slug", nullable = false, length = 64, unique = true)
     private String slug;
 

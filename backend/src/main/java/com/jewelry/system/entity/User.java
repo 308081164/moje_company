@@ -38,7 +38,11 @@ public class User {
     
     @Column(length = 100)
     private String email;
-    
+
+    /** 语言偏好（用于聊天消息自动翻译） */
+    @Column(length = 16)
+    private String lang = "zh-CN";
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserStatus status = UserStatus.ACTIVE;

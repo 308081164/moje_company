@@ -2,8 +2,12 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.b2b.*;
 import com.jewelry.system.dto.order.FileInfoDto;
+import com.jewelry.system.dto.order.OrderEventDto;
 import com.jewelry.system.dto.order.OrderInfoDto;
 import com.jewelry.system.dto.portal.PortalBindOrderRequest;
+import com.jewelry.system.entity.Order;
+import com.jewelry.system.enums.OrderEventType;
+import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.service.*;
 import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +39,7 @@ public class B2BController {
     private final ModelerWorkStatusService workStatusService;
     private final TaskAssignmentService taskAssignmentService;
     private final OrderFileService orderFileService;
+    private final OrderEventService orderEventService;
 
     @PostMapping("/client/register")
     @Operation(summary = "B端客户注册")
@@ -88,6 +93,28 @@ public class B2BController {
     public ResponseEntity<List<FileInfoDto>> getOrderFilesByToken(@PathVariable String token) {
         Long orderId = linkService.getOrderEntityByToken(token).getId();
         return ResponseEntity.ok(orderFileService.listForOrder(orderId));
+    }
+
+    @GetMapping("/order/{token}/events")
+    @Operation(summary = "通过链接获取订单事件卡片列表")
+    public ResponseEntity<List<OrderEventDto>> getOrderEventsByToken(@PathVariable String token) {
+        Order order = linkService.getOrderEntityByToken(token);
+        return ResponseEntity.ok(orderEventService.listByOrder(order.getId()));
+    }
+
+    @PostMapping("/order/{token}/reject")
+    @Operation(summary = "B端客户驳回建模稿")
+    public ResponseEntity<OrderEventDto> rejectByToken(@PathVariable String token, @RequestBody Map<String, String> body) {
+        Order order = linkService.getOrderEntityByToken(token);
+        OrderEventType type;
+        try {
+            type = OrderEventType.fromString(body.get("eventType"));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        Long clientId = order.getB2bClient() != null ? order.getB2bClient().getId() : 0L;
+        return ResponseEntity.ok(orderEventService.rejectByCustomer(
+                order.getId(), type, AccountKind.B2B_CLIENT, clientId, "CUSTOMER", body.get("reason")));
     }
 
     @GetMapping("/client/orders")

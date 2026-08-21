@@ -10,11 +10,18 @@ import java.time.LocalDateTime;
 @Table(name = "portal_site_settings")
 public class PortalSiteSettings {
 
-    public static final long SINGLETON_ID = 1L;
+    public static final long B_ID = 1L;
+    public static final long C_ID = 2L;
+    public static final String SCOPE_B = "B";
+    public static final String SCOPE_C = "C";
 
     @Id
     @Column(name = "id")
-    private Long id = SINGLETON_ID;
+    private Long id;
+
+    /** B 端门户 / C 端独立站 */
+    @Column(name = "scope", nullable = false, length = 1)
+    private String scope = SCOPE_B;
 
     @Column(name = "hero_title", length = 200)
     private String heroTitle;

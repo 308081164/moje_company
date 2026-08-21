@@ -19,4 +19,6 @@ public class PortalHomePublicDto {
     private List<PortalImageDto> carousel;
     private List<PortalImageDto> companyPhotos;
     private List<PortalCategoryPublicDto> categories;
+    /** 首页区块（process/haute/craft/about 等，多语言+图片） */
+    private List<HomeBlockDto> blocks;
 }
