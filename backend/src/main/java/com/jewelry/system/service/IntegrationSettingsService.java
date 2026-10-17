@@ -20,10 +20,27 @@ public class IntegrationSettingsService {
 
     public record WeComContext(String corpId, String customerSecret, List<String> templateChatIds) {}
 
+    public static final String KEY_LLM_PROVIDER = "integration.llm.provider";
     public static final String KEY_DASHSCOPE_API_KEY = "integration.dashscope.apiKey";
     public static final String KEY_DASHSCOPE_ENABLED = "integration.dashscope.enabled";
     public static final String KEY_DASHSCOPE_MODEL = "integration.dashscope.vlModel";
     public static final String KEY_DASHSCOPE_CHAT_MODEL = "integration.dashscope.chatModel";
+    public static final String KEY_KIMI_API_KEY = "integration.kimi.apiKey";
+    public static final String KEY_KIMI_BASE_URL = "integration.kimi.baseUrl";
+    public static final String KEY_KIMI_CHAT_MODEL = "integration.kimi.chatModel";
+    public static final String KEY_KIMI_VL_MODEL = "integration.kimi.vlModel";
+
+    public static final String DEFAULT_KIMI_BASE_URL = "https://api.moonshot.cn/v1";
+    public static final String DEFAULT_KIMI_CHAT_MODEL = "kimi-k3";
+    public static final String DEFAULT_KIMI_VL_MODEL = "kimi-k3";
+
+    public record LlmRuntime(
+            String provider,
+            String apiKey,
+            String chatCompletionsUrl,
+            String chatModel,
+            String visionModel
+    ) {}
     public static final String KEY_B2B_SUPPORT_WECOM_QR = "portal.b2b.supportWecomQrUrl";
 
     public static final String KEY_WECOM_CORP_ID = "integration.wecom.corpId";
@@ -37,11 +54,17 @@ public class IntegrationSettingsService {
     @Transactional(readOnly = true)
     public IntegrationSettingsViewDto getView() {
         String key = read(KEY_DASHSCOPE_API_KEY, "");
+        String kimiKey = read(KEY_KIMI_API_KEY, "");
         return IntegrationSettingsViewDto.builder()
+                .llmProvider(normalizeProvider(read(KEY_LLM_PROVIDER, "kimi")))
                 .dashscopeEnabled(parseBool(read(KEY_DASHSCOPE_ENABLED, "false"), false))
                 .dashscopeApiKeyConfigured(key != null && !key.isBlank())
                 .dashscopeImageModel(read(KEY_DASHSCOPE_MODEL, "qwen-vl-plus"))
                 .dashscopeChatModel(read(KEY_DASHSCOPE_CHAT_MODEL, "qwen-plus"))
+                .kimiApiKeyConfigured(kimiKey != null && !kimiKey.isBlank())
+                .kimiBaseUrl(read(KEY_KIMI_BASE_URL, DEFAULT_KIMI_BASE_URL))
+                .kimiChatModel(read(KEY_KIMI_CHAT_MODEL, DEFAULT_KIMI_CHAT_MODEL))
+                .kimiImageModel(read(KEY_KIMI_VL_MODEL, DEFAULT_KIMI_VL_MODEL))
                 .b2bSupportWecomQrUrl(read(KEY_B2B_SUPPORT_WECOM_QR, ""))
                 .wecomEnabled(parseBool(read(KEY_WECOM_ENABLED, "false"), false))
                 .wecomCustomerSecretConfigured(!read(KEY_WECOM_CUSTOMER_SECRET, "").isBlank())
@@ -55,8 +78,11 @@ public class IntegrationSettingsService {
         if (body == null || body.isEmpty()) {
             return getView();
         }
+        if (body.containsKey("llmProvider")) {
+            upsert(KEY_LLM_PROVIDER, normalizeProvider(String.valueOf(body.get("llmProvider"))), "大模型引擎");
+        }
         if (body.containsKey("dashscopeEnabled")) {
-            upsert(KEY_DASHSCOPE_ENABLED, String.valueOf(body.get("dashscopeEnabled")), "DashScope 识图开关");
+            upsert(KEY_DASHSCOPE_ENABLED, String.valueOf(body.get("dashscopeEnabled")), "大模型能力开关");
         }
         if (body.containsKey("dashscopeImageModel")) {
             upsert(KEY_DASHSCOPE_MODEL, String.valueOf(body.get("dashscopeImageModel")), "DashScope 视觉模型名");
@@ -73,6 +99,24 @@ public class IntegrationSettingsService {
                 String s = String.valueOf(v).trim();
                 if (!s.isEmpty() && !"__UNCHANGED__".equals(s)) {
                     upsert(KEY_DASHSCOPE_API_KEY, s, "DashScope API Key");
+                }
+            }
+        }
+        if (body.containsKey("kimiBaseUrl")) {
+            upsert(KEY_KIMI_BASE_URL, String.valueOf(body.get("kimiBaseUrl")), "Kimi API 基址");
+        }
+        if (body.containsKey("kimiChatModel")) {
+            upsert(KEY_KIMI_CHAT_MODEL, String.valueOf(body.get("kimiChatModel")), "Kimi 对话模型名");
+        }
+        if (body.containsKey("kimiImageModel")) {
+            upsert(KEY_KIMI_VL_MODEL, String.valueOf(body.get("kimiImageModel")), "Kimi 视觉模型名");
+        }
+        if (body.containsKey("kimiApiKey")) {
+            Object v = body.get("kimiApiKey");
+            if (v != null) {
+                String s = String.valueOf(v).trim();
+                if (!s.isEmpty() && !"__UNCHANGED__".equals(s)) {
+                    upsert(KEY_KIMI_API_KEY, s, "Kimi API Key");
                 }
             }
         }
@@ -99,11 +143,62 @@ public class IntegrationSettingsService {
 
     @Transactional(readOnly = true)
     public String requireDashScopeApiKey() {
+        LlmRuntime llm = requireLlm();
+        return llm == null ? null : llm.apiKey();
+    }
+
+    @Transactional(readOnly = true)
+    public LlmRuntime requireLlm() {
         if (!parseBool(read(KEY_DASHSCOPE_ENABLED, "false"), false)) {
             return null;
         }
-        String k = read(KEY_DASHSCOPE_API_KEY, "");
-        return k.isBlank() ? null : k;
+        String provider = normalizeProvider(read(KEY_LLM_PROVIDER, "kimi"));
+        if ("kimi".equals(provider)) {
+            String key = read(KEY_KIMI_API_KEY, "");
+            if (key.isBlank()) {
+                return null;
+            }
+            return new LlmRuntime(
+                    "kimi",
+                    key,
+                    chatCompletionsUrl(read(KEY_KIMI_BASE_URL, DEFAULT_KIMI_BASE_URL)),
+                    read(KEY_KIMI_CHAT_MODEL, DEFAULT_KIMI_CHAT_MODEL),
+                    read(KEY_KIMI_VL_MODEL, DEFAULT_KIMI_VL_MODEL)
+            );
+        }
+        String key = read(KEY_DASHSCOPE_API_KEY, "");
+        if (key.isBlank()) {
+            return null;
+        }
+        return new LlmRuntime(
+                "dashscope",
+                key,
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                dashScopeChatModel(),
+                dashScopeModel()
+        );
+    }
+
+    private static String normalizeProvider(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "kimi";
+        }
+        String p = raw.trim().toLowerCase();
+        if (p.contains("kimi") || p.contains("moonshot")) {
+            return "kimi";
+        }
+        return "dashscope";
+    }
+
+    private static String chatCompletionsUrl(String base) {
+        String b = base == null || base.isBlank() ? DEFAULT_KIMI_BASE_URL : base.trim().replaceAll("/+$", "");
+        if (b.endsWith("/chat/completions")) {
+            return b;
+        }
+        if (b.endsWith("/v1")) {
+            return b + "/chat/completions";
+        }
+        return b + "/v1/chat/completions";
     }
 
     @Transactional(readOnly = true)

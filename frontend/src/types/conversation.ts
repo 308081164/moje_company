@@ -3,6 +3,10 @@ export interface Conversation {
   orderId: number;
   orderNumber?: string;
   title?: string;
+  orderStatus?: string;
+  orderStatusLabel?: string;
+  serviceType?: string;
+  serviceTypeLabel?: string;
   lastMessage?: string;
   lastMessageAt?: string;
   unreadCount: number;
@@ -32,5 +36,25 @@ export interface ConversationMessage {
   translatedLang?: string;
   fileIds?: number[];
   eventId?: number;
+  event?: OrderEventCard;
+  createdAt?: string;
+}
+
+export interface OrderEventCard {
+  id: number;
+  orderId: number;
+  eventType: string;
+  actorType?: string;
+  actorId?: number;
+  actorRole?: string;
+  actorName?: string;
+  title?: string;
+  content?: string;
+  reason?: string;
+  fileIds?: number[];
+  images?: string[];
+  actionable?: boolean;
+  resolution?: string;
+  resolutionLabel?: string;
   createdAt?: string;
 }

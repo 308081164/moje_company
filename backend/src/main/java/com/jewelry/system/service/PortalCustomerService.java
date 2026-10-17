@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
 import com.jewelry.system.dto.order.OrderEventDto;
+import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.dto.portal.*;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.OrderEventType;
@@ -13,6 +14,7 @@ import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.PortalCustomerAccountRepository;
 import com.jewelry.system.repository.PortalCustomerOrderBindingRepository;
 import com.jewelry.system.enums.OrderStatus;
+import com.jewelry.system.enums.ServiceType;
 import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.security.JwtTokenProvider;
 import com.jewelry.system.util.SecurityUtils;
@@ -47,6 +49,9 @@ public class PortalCustomerService {
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailVerificationService emailVerificationService;
     private final OrderEventService orderEventService;
+    private final ShipmentService shipmentService;
+    private final StorefrontService storefrontService;
+    private final StorefrontWalletService storefrontWalletService;
 
     @Transactional
     public PortalCustomerLoginResponse register(PortalCustomerRegisterRequest req) {
@@ -117,6 +122,21 @@ public class PortalCustomerService {
     }
 
     @Transactional
+    public void updateProfile(PortalCustomerProfileRequest req) {
+        Long accountId = SecurityUtils.currentPortalCustomerId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录"));
+        PortalCustomerAccount acc = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "账号不存在"));
+        if (req.getDisplayName() != null) {
+            acc.setDisplayName(req.getDisplayName().trim());
+        }
+        if (req.getContact() != null) {
+            acc.setContact(req.getContact().trim());
+        }
+        accountRepository.save(acc);
+    }
+
+    @Transactional
     public void bindViewToken(PortalBindViewTokenRequest body) {
         Long accountId = SecurityUtils.currentPortalCustomerId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录"));
@@ -170,7 +190,11 @@ public class PortalCustomerService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该订单或未绑定"));
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
-        return customerOrderViewService.buildPublicProgressDto(order);
+        CustomerOrderPublicDto dto = customerOrderViewService.buildPublicProgressDto(order);
+        dto.setServiceType(order.getServiceType() != null ? order.getServiceType().name() : null);
+        dto.setSalePrice(order.getSalePrice());
+        dto.setCanPublishToStorefront(storefrontService.canPublish(accountId, orderId));
+        return dto;
     }
 
     @Transactional
@@ -209,6 +233,11 @@ public class PortalCustomerService {
             designInfoRepository.save(di);
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                     type.getDescription(), null, null, null);
+            // 设计确认后进入建模前，生成尾款支付卡片
+            orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
+                    AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
+                    OrderEventType.BALANCE_PAYMENT.getDescription(),
+                    "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
         } else if (type == OrderEventType.MODEL_CONFIRM) {
             ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElseGet(() -> {
                 ModelingInfo m = new ModelingInfo();
@@ -221,6 +250,15 @@ public class PortalCustomerService {
             modelingInfoRepository.save(mi);
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                     type.getDescription(), null, null, null);
+            // 来图定制：确认建模后进入生产前收尾款（设计师设计在确认设计后已收）
+            Order modelOrder = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+            if (modelOrder.getServiceType() == ServiceType.CUSTOM_IMAGE) {
+                orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
+                        AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
+                        OrderEventType.BALANCE_PAYMENT.getDescription(),
+                        "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
+            }
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认类型仅支持 DESIGN_CONFIRM / MODEL_CONFIRM");
         }
@@ -229,6 +267,21 @@ public class PortalCustomerService {
     /**
      * 客户确认收货/付尾款（mock）：仅 PRODUCING 状态可推进到 COMPLETED。
      */
+    /** 默认尾款金额（美元）。 */
+    private static final int BALANCE_AMOUNT_USD = 399;
+
+    /**
+     * 客户支付尾款（mock）：记录尾款已支付事件卡片，锁定尾款支付卡片。
+     */
+    @Transactional
+    public void payBalance(long orderId) {
+        Long accountId = requireBoundAccount(orderId);
+        orderEventService.record(orderId, OrderEventType.BALANCE_PAID,
+                AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
+                OrderEventType.BALANCE_PAID.getDescription(),
+                "尾款 $" + BALANCE_AMOUNT_USD + " 已支付（模拟）", null, null);
+    }
+
     @Transactional
     public void confirmDelivery(long orderId) {
         Long accountId = requireBoundAccount(orderId);
@@ -243,6 +296,7 @@ public class PortalCustomerService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
+        storefrontWalletService.settleOnCompleted(orderId);
         orderEventService.record(orderId, OrderEventType.DELIVERY_CONFIRM,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 "客户确认收货，订单已交付", "尾款已结清（mock）", null, null);
@@ -252,6 +306,12 @@ public class PortalCustomerService {
     public List<OrderEventDto> listOrderEvents(long orderId) {
         requireBoundAccount(orderId);
         return orderEventService.listByOrder(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderShipmentDto getOrderShipment(long orderId) {
+        requireBoundAccount(orderId);
+        return shipmentService.getShipmentForCustomer(orderId);
     }
 
     private Long requireBoundAccount(long orderId) {
@@ -317,7 +377,8 @@ public class PortalCustomerService {
         acc.setEmail(email);
         // 邮箱验证码账号不使用密码登录，填充不可猜测的占位密码
         acc.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
-        acc.setDisplayName(StringUtils.hasText(displayName) ? displayName.trim() : email);
+        // 称呼默认置空，登录后由前端引导补全；未提供时不再回填邮箱
+        acc.setDisplayName(StringUtils.hasText(displayName) ? displayName.trim() : null);
         return accountRepository.save(acc);
     }
 

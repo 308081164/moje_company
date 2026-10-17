@@ -27,6 +27,7 @@ import {
   type PortalScope,
   type PortalShowcaseItemAdmin,
 } from '@/services/portalAdminService';
+import { resolvePublicSites } from '@/utils/publicSites';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -79,9 +80,8 @@ const PortalShowcaseAdminPage: React.FC = () => {
   const [scope, setScope] = useState<PortalScope>('B');
   const [iframeKey, setIframeKey] = useState(0);
 
-  // 使用 127.0.0.1 而非 localhost：避免 localhost 解析为 IPv6 ::1 时，
-  // Docker Desktop 的 wslrelay 对 ::1 端口转发在浏览器 iframe 里偶发失败（curl 可通但 iframe 白屏）。
-  const previewUrl = scope === 'B' ? 'http://127.0.0.1:8852' : 'http://127.0.0.1:8853';
+  const { portal, cend } = resolvePublicSites();
+  const previewUrl = scope === 'B' ? portal : cend;
 
   const refreshPreview = () => setIframeKey((k) => k + 1);
 

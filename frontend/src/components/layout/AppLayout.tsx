@@ -86,7 +86,7 @@ const AppLayout: React.FC = () => {
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
-            label: '镶嵌结构库',
+            label: '珠宝结构库',
           },
           {
             key: '/orders',
@@ -163,6 +163,11 @@ const AppLayout: React.FC = () => {
               { key: '/workbench/modeling-archive', label: '建模归档任务池' },
             ],
           },
+          {
+            key: '/social-publish',
+            icon: <HighlightOutlined />,
+            label: '社媒发布',
+          },
         ];
       case 'DESIGNER':
         return [
@@ -189,7 +194,7 @@ const AppLayout: React.FC = () => {
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
-            label: '镶嵌结构库',
+            label: '珠宝结构库',
           },
           {
             key: '/workbench',
@@ -236,7 +241,7 @@ const AppLayout: React.FC = () => {
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
-            label: '镶嵌结构库',
+            label: '珠宝结构库',
           },
           {
             key: '/workbench/modeling-archive',
@@ -263,17 +268,7 @@ const AppLayout: React.FC = () => {
   };
 
   const handleSocialPublish = () => {
-    if (window.electronAPI?.openSocialPublisher) {
-      // 桌面端：内嵌 social_publisher，打开社媒发布子窗口
-      window.electronAPI.openSocialPublisher().catch((e) => {
-        console.error('打开社媒发布失败', e);
-        message.error('打开社媒发布失败');
-      });
-    } else {
-      // 网页版：唤起 social_publisher 桌面 app（自定义协议）
-      window.location.href = 'socialpublisher://';
-      message.info('正在唤起社媒发布桌面应用，若未安装请先安装 SocialPublisher');
-    }
+    navigateAndCloseMobile('/social-publish');
   };
 
   const handleMenuClick = ({ key }: { key: string }) => {
@@ -366,6 +361,9 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/inlay-structure-library')) {
       return ['/inlay-structure-library'];
+    }
+    if (path.startsWith('/social-publish')) {
+      return ['/social-publish'];
     }
     if (path.startsWith('/workbench/modeling-archive')) {
       return ['/workbench/modeling-archive'];
@@ -550,13 +548,13 @@ const AppLayout: React.FC = () => {
             </Dropdown>
 
             {user?.role === 'MODELER' && (
-              <Tooltip title="镶嵌结构库">
+              <Tooltip title="珠宝结构库">
                 <Button
                   type="text"
                   icon={<DatabaseOutlined />}
                   style={{ fontSize: 16 }}
                   onClick={() => navigate('/inlay-structure-library')}
-                  aria-label="镶嵌结构库"
+                  aria-label="珠宝结构库"
                 />
               </Tooltip>
             )}
@@ -588,10 +586,18 @@ const AppLayout: React.FC = () => {
             minHeight: 0,
             background: 'transparent',
             borderRadius: borderRadiusLG,
-            overflow: 'auto',
+            overflow: location.pathname.startsWith('/social-publish') ? 'hidden' : 'auto',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          <div className="content-wrapper">
+          <div
+            className={
+              location.pathname.startsWith('/social-publish')
+                ? 'content-wrapper content-wrapper--fill'
+                : 'content-wrapper'
+            }
+          >
             <Outlet />
           </div>
         </Content>

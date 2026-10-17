@@ -43,7 +43,7 @@ public class B2bAgentService {
     private final DashScopeChatService dashScopeChatService;
     private final DashScopeAsrService dashScopeAsrService;
     private final DashScopeChatImageDraftService imageDraftService;
-    private final AliyunOssService aliyunOssService;
+    private final MinioStorageService minioStorageService;
     private final B2BOrderService b2bOrderService;
     private final OrderFileService orderFileService;
     private final IntegrationSettingsService integrationSettingsService;
@@ -277,11 +277,11 @@ public class B2bAgentService {
 
     private String uploadReferenceImage(long sessionId, MultipartFile file) {
         try {
-            if (!aliyunOssService.isEnabled()) {
+            if (!minioStorageService.isEnabled()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件存储未配置，无法上传参考图");
             }
             String key = "b2b-agent/" + sessionId + "/" + UUID.randomUUID() + suffix(file.getOriginalFilename());
-            return aliyunOssService.uploadObject(key, file);
+            return minioStorageService.uploadObject(key, file);
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {

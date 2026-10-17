@@ -15,7 +15,11 @@ public enum OrderEventType {
     QUOTATION("报价"),
     PRODUCTION_LOG("生产跟单"),
     STATUS_CHANGE("状态变更"),
-    DELIVERY_CONFIRM("客户确认收货");
+    DELIVERY_CONFIRM("客户确认收货"),
+    SHIPPED("已发货"),
+    DELIVERED("已签收"),
+    BALANCE_PAYMENT("支付尾款"),
+    BALANCE_PAID("尾款已支付");
 
     private final String description;
 

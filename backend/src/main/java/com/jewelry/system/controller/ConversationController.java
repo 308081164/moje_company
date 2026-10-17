@@ -32,8 +32,10 @@ public class ConversationController {
 
     @GetMapping("/{conversationId}/messages")
     @Operation(summary = "会话消息列表")
-    public ResponseEntity<List<ConversationMessageDto>> listMessages(@PathVariable Long conversationId) {
-        return ResponseEntity.ok(conversationService.listMessages(conversationId));
+    public ResponseEntity<List<ConversationMessageDto>> listMessages(
+            @PathVariable Long conversationId,
+            @RequestParam(defaultValue = "false") boolean includeAll) {
+        return ResponseEntity.ok(conversationService.listMessages(conversationId, includeAll));
     }
 
     @GetMapping("/{conversationId}/members")

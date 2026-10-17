@@ -1,0 +1,63 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>duxury 路 Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=20261017b">
+</head>
+<body class="storefront-page">
+
+<header class="header scrolled" id="header">
+  <div class="header__inner">
+    <a href="index.html" class="brand"><span class="brand__name">duxury</span></a>
+    <nav class="nav" id="nav">
+      <a href="index.html#services" class="nav__link" data-i18n="nav.services">Services</a>
+      <a href="index.html#works" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
+      <a href="shop.html" class="nav__link nav__link--active" data-i18n="nav.shop">Shop</a>
+      <a href="order-workspace.html" class="nav__link" data-i18n="nav.orders">Orders</a>
+      <a href="seller.html" class="nav__link" data-i18n="nav.studio">Studio</a>
+    </nav>
+    <div class="header__actions">
+      <div class="lang" id="langSwitcher">
+        <button class="lang__btn" id="langBtn" aria-label="Language" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span data-lang-current>EN</span>
+          <svg class="lang__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="lang__menu" id="langMenu"></div>
+      </div>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<section class="section shop-hero">
+  <div class="container">
+    <div class="section__head">
+      <p class="section__eyebrow" data-i18n="shop.eyebrow">MAKER SHOP</p>
+      <h1 class="section__title" data-i18n="shop.title">Pieces from our community</h1>
+      <p class="section__sub" data-i18n="shop.sub">Buy a published design. The studio produces and ships it for you.</p>
+    </div>
+    <div class="shop-fees" id="shopFeeGuide"></div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <span class="brand__name">duxury</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/i18n.js?v=20261017b"></script>
+<script src="js/api.js?v=20261017b"></script>
+<script src="js/main.js?v=20261017b"></script>
+<script src="js/storefront.js?v=20261017b"></script>
+</body>
+</html>

@@ -94,6 +94,23 @@ public class OrderStatisticsService {
         return dto;
     }
 
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> trend(int days) {
+        int safeDays = Math.min(Math.max(days, 1), 365);
+        LocalDate start = LocalDate.now().minusDays(safeDays - 1L);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (OrderStatisticsViewRepository.DailyTrendRow row : orderStatisticsViewRepository.dailyTrend(start)) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("date", row.getDate().toString());
+            m.put("newOrders", row.getNewOrders());
+            m.put("completed", row.getCompleted());
+            m.put("cancelled", row.getCancelled());
+            m.put("revenue", nz(row.getRevenue()).doubleValue());
+            result.add(m);
+        }
+        return result;
+    }
+
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
     }

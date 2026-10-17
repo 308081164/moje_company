@@ -117,6 +117,7 @@ const UserManagementPage: React.FC = () => {
       const v = await editForm.validateFields();
       setEditSubmitting(true);
       await userService.updateUser(editing.id, {
+        username: v.username,
         realName: v.realName,
         phone: v.phone,
         email: v.email,
@@ -186,6 +187,7 @@ const UserManagementPage: React.FC = () => {
             onClick={() => {
               setEditing(record);
               editForm.setFieldsValue({
+                username: record.username,
                 realName: record.realName,
                 phone: record.phone,
                 email: record.email,
@@ -359,6 +361,9 @@ const UserManagementPage: React.FC = () => {
         okButtonProps={{ disabled: editSubmitting }}
       >
         <Form form={editForm} layout="vertical">
+          <Form.Item name="username" label="登录用户名" rules={[{ required: true, message: '请输入登录用户名' }]}>
+            <Input maxLength={50} autoComplete="off" />
+          </Form.Item>
           <Form.Item name="realName" label="姓名">
             <Input />
           </Form.Item>

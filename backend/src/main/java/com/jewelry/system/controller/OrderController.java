@@ -39,6 +39,7 @@ public class OrderController {
     private final DashScopeChatImageDraftService dashScopeChatImageDraftService;
     private final CustomerOrderViewService customerOrderViewService;
     private final OrderProductionFollowService orderProductionFollowService;
+    private final ShipmentService shipmentService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -132,6 +133,18 @@ public class OrderController {
     @Operation(summary = "生产完成，关闭订单")
     public OrderInfoDto completeProduction(@PathVariable long id) {
         return orderCommandService.completeProduction(id);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment")
+    @Operation(summary = "发货（跟单员录入快递单号）")
+    public OrderShipmentDto ship(@PathVariable long id, @RequestBody ShipOrderRequest body) {
+        return shipmentService.ship(id, body);
+    }
+
+    @GetMapping("/{id:\\d+}/shipment")
+    @Operation(summary = "查询订单物流（员工）")
+    public OrderShipmentDto getShipment(@PathVariable long id) {
+        return shipmentService.getShipment(id);
     }
 
     @PostMapping(value = "/{id:\\d+}/production-follow/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -247,6 +260,12 @@ public class OrderController {
     @Operation(summary = "订单统计")
     public OrderStatisticsDto statistics() {
         return orderStatisticsService.statistics();
+    }
+
+    @GetMapping("/statistics/trend")
+    @Operation(summary = "订单每日趋势（近 N 天）")
+    public List<Map<String, Object>> statisticsTrend(@RequestParam(defaultValue = "30") int days) {
+        return orderStatisticsService.trend(days);
     }
 
     @GetMapping("/search")

@@ -6,7 +6,8 @@ package com.jewelry.system.enums;
 public enum ServiceType {
     CUSTOM_IMAGE("来图定制"),
     DESIGNER_DESIGN("设计师设计"),
-    B2B_MODEL("B端建模订单");
+    B2B_MODEL("B端建模订单"),
+    STOREFRONT("独立站寄售复产");
 
     private final String description;
 

@@ -12,5 +12,7 @@ public interface ConversationMessageRepository extends JpaRepository<Conversatio
 
     Optional<ConversationMessage> findTopByConversationIdOrderByIdDesc(Long conversationId);
 
+    Optional<ConversationMessage> findFirstByConversationIdAndEventId(Long conversationId, Long eventId);
+
     long countByConversationIdAndIdGreaterThan(Long conversationId, Long messageId);
 }

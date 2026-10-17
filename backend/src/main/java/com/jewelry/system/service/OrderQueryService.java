@@ -144,7 +144,7 @@ public class OrderQueryService {
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
-            predicates.add(cb.equal(root.get("status"), OrderStatus.PRODUCING));
+            predicates.add(root.get("status").in(OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
             if (isB2b != null) {
                 predicates.add(cb.equal(root.get("isB2b"), isB2b));
             }

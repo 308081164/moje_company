@@ -20,6 +20,7 @@ import InlayStructureLibraryPage from '@/pages/InlayStructureLibraryPage';
 import ChatPage from '@/pages/ChatPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
+import SocialPublishPage from '@/pages/SocialPublishPage';
 import AppLayout from '@/components/layout/AppLayout';
 import './App.css';
 
@@ -234,6 +235,16 @@ const App: React.FC = () => {
             />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route
+              path="social-publish"
+              element={
+                user?.role === 'ADMIN' || user?.role === 'PRE_SALES' || user?.role === 'SALES' ? (
+                  <SocialPublishPage />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
             <Route path="orders/*" element={<OrderManagementPage />} />
             <Route
               path="users/*"

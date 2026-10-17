@@ -1,6 +1,6 @@
 {
   "name": "jewelry-system-frontend",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "珠宝定制管理系统 - Electron前端",
   "main": "dist/main.js",
   "scripts": {
@@ -12,10 +12,10 @@
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "webpack --config webpack.main.config.js --mode production",
     "build:renderer": "webpack --config webpack.renderer.config.js --mode production",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux"
+    "package": "node scripts/prepare-package.js && npm run build && electron-builder",
+    "package:win": "node scripts/prepare-package.js && npm run build && electron-builder --win",
+    "package:mac": "node scripts/prepare-package.js && npm run build && electron-builder --mac",
+    "package:linux": "node scripts/prepare-package.js && npm run build && electron-builder --linux"
   },
   "keywords": [
     "electron",
@@ -83,12 +83,8 @@
         "to": "api-config.json"
       },
       {
-        "from": "../social_publisher/sidecar/dist/publisher-engine.exe",
-        "to": "social-publisher/publisher-engine.exe"
-      },
-      {
-        "from": "../social_publisher/electron/dist",
-        "to": "social-publisher/dist"
+        "from": "embedded/social-publisher",
+        "to": "social-publisher"
       }
     ],
     "win": {

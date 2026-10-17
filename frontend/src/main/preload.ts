@@ -48,12 +48,14 @@ const inlayEnvOrigin = process.env.JEWELRY_INLAY_API_ORIGIN?.trim() || process.e
 const env = {
   /** 供 axios 使用：带 /api 后缀的基址（与现有 api.ts 归一化逻辑兼容） */
   API_URL: resolvedOrigin ? toApiUrlWithApiSuffix(resolvedOrigin) : process.env.API_URL,
-  /** 镶嵌结构库 NAS 基址（不含 /api），员工端内网直连 */
+  /** 珠宝结构库 NAS 基址（不含 /api），员工端内网直连 */
   INLAY_API_ORIGIN: inlayArgvOrigin || inlayEnvOrigin || 'http://192.168.1.10:8871',
 };
 
 const electronAPI = {
   getInlayAuth: () => ipcRenderer.invoke('get-inlay-auth') as Promise<{ origin: string; username: string; password: string }>,
+  setInlayAuth: (payload: { username: string; password: string }) =>
+    ipcRenderer.invoke('set-inlay-auth', payload) as Promise<{ ok: boolean }>,
   onMenuNewOrder: (handler: () => void) => ipcRenderer.on('menu-new-order', handler),
   removeMenuNewOrderListener: (handler: () => void) => ipcRenderer.removeListener('menu-new-order', handler),
   onShowAbout: (handler: () => void) => ipcRenderer.on('show-about', handler),
@@ -64,6 +66,8 @@ const electronAPI = {
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
 
   openSocialPublisher: () => ipcRenderer.invoke('open-social-publisher'),
+  embedSocialPublisher: () =>
+    ipcRenderer.invoke('embed-social-publisher') as Promise<{ ok: boolean; url?: string; error?: string }>,
 
   checkForUpdates: () => ipcRenderer.invoke('check-updates'),
   quitAndInstallUpdate: () => ipcRenderer.invoke('quit-and-install-update'),

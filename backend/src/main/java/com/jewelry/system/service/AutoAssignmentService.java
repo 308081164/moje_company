@@ -68,6 +68,18 @@ public class AutoAssignmentService {
     }
 
     /**
+     * 独立站寄售复产：跳过设计/建模，分配售中与跟单员后进入生产。
+     */
+    @Transactional
+    public void autoAssignMarketplaceOrder(Order order) {
+        assignSalesMid(order);
+        ensureTrackerAssigned(order);
+        orderRepository.save(order);
+        auditLogService.log("ORDER_AUTO_ASSIGN", "ORDER", order.getId(),
+                "独立站寄售复产自动分配（售中/跟单员）；跳过设计与建模");
+    }
+
+    /**
      * C 端来图定制建单：跳过设计师，直接进入「建模中」并分配建模师（C2C 建模师池）。
      */
     @Transactional

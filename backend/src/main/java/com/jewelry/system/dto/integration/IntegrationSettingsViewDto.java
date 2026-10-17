@@ -8,10 +8,16 @@ import lombok.Data;
 @Builder
 public class IntegrationSettingsViewDto {
 
+    /** dashscope | kimi */
+    private String llmProvider;
     private boolean dashscopeEnabled;
     private boolean dashscopeApiKeyConfigured;
     private String dashscopeImageModel;
     private String dashscopeChatModel;
+    private boolean kimiApiKeyConfigured;
+    private String kimiBaseUrl;
+    private String kimiChatModel;
+    private String kimiImageModel;
     private String b2bSupportWecomQrUrl;
 
     private boolean wecomEnabled;

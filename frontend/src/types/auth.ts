@@ -72,6 +72,7 @@ export interface UserCreateRequest {
 }
 
 export interface UserUpdateRequest {
+  username?: string;
   realName?: string;
   email?: string;
   phone?: string;

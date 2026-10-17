@@ -14,6 +14,8 @@ import {
   OrderQueryParams,
   OrderStatistics,
   EmployeeWorkStatistics,
+  OrderTrendPoint,
+  DashboardOverview,
   OrderReminder,
   OrderOperationLog,
   PaginatedResponse,
@@ -25,6 +27,7 @@ import {
   ModelingArchiveData,
   OrderProductionFollowLogDto,
   OrderProductionFollowCreateRequest,
+  OrderShipmentDto,
 } from '@/types/order';
 
 // 订单服务
@@ -75,6 +78,22 @@ export const orderService = {
 
   async completeProduction(orderId: number): Promise<OrderInfo> {
     return api.post(`/orders/${orderId}/production-complete`, {});
+  },
+
+  // 发货（跟单员录入快递单号）
+  async shipOrder(orderId: number, body: { trackingNumber: string; carrierCode?: number }): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment`, body);
+  },
+
+  // 查询订单物流（员工）
+  async getShipment(orderId: number): Promise<OrderShipmentDto | null> {
+    try {
+      const response = await api.get<OrderShipmentDto | null>(`/orders/${orderId}/shipment`);
+      return response;
+    } catch (error) {
+      console.error('获取物流信息失败:', error);
+      throw error;
+    }
   },
 
   async uploadProductionFollowImage(orderId: number, file: File, notes?: string): Promise<FileInfo> {
@@ -347,6 +366,28 @@ export const orderService = {
       return response;
     } catch (error) {
       console.error('获取员工工作统计失败:', error);
+      throw error;
+    }
+  },
+
+  // 获取订单每日趋势（近 N 天）
+  async getOrderTrend(days: number = 30): Promise<OrderTrendPoint[]> {
+    try {
+      const response = await api.get<OrderTrendPoint[]>('/orders/statistics/trend', { params: { days } });
+      return response;
+    } catch (error) {
+      console.error('获取订单每日趋势失败:', error);
+      throw error;
+    }
+  },
+
+  // 获取仪表盘 C端/B端 概览（管理员）
+  async getDashboardOverview(): Promise<DashboardOverview> {
+    try {
+      const response = await api.get<DashboardOverview>('/admin/dashboard');
+      return response;
+    } catch (error) {
+      console.error('获取仪表盘概览失败:', error);
       throw error;
     }
   },

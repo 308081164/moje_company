@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Button, Card, Form, Select, Space, Switch, Typography, message } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Button, Card, Form, Input, Select, Space, Switch, Table, Typography, message } from 'antd';
+import { CopyOutlined } from '@ant-design/icons';
+import { resolvePublicSites } from '@/utils/publicSites';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 type SettingsForm = {
   theme: 'light' | 'dark' | 'system';
@@ -10,6 +12,13 @@ type SettingsForm = {
 };
 
 const STORAGE_KEY = 'app_settings_v1';
+
+type ShareLink = {
+  key: string;
+  name: string;
+  usage: string;
+  url: string;
+};
 
 const SettingsPage: React.FC = () => {
   const [form] = Form.useForm<SettingsForm>();
@@ -22,9 +31,31 @@ const SettingsPage: React.FC = () => {
     ...(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<SettingsForm>),
   };
 
+  const shareLinks = useMemo<ShareLink[]>(() => {
+    const { portal, cend } = resolvePublicSites();
+    return [
+      { key: 'b2b-home', name: 'B2B 客户门户', usage: '发给企业客户浏览门户首页', url: `${portal}/` },
+      { key: 'b2b-portal', name: 'B2B 下单入口', usage: '企业客户登录后提交定制需求', url: `${portal}/portal` },
+      { key: 'b2b-orders', name: 'B2B 我的订单', usage: '企业客户查看自己的订单列表', url: `${portal}/portal/b2b/my-orders` },
+      { key: 'b2b-chat', name: '客户沟通页', usage: '客户与工作室在线沟通', url: `${portal}/portal/chat` },
+      { key: 'c-home', name: 'C 端官网', usage: '发给终端客户看品牌官网', url: `${cend}/` },
+      { key: 'c-workspace', name: 'C 端订单工作台', usage: '终端客户查看/跟进自己的订单', url: `${cend}/order-workspace.html` },
+      { key: 'c-my-orders', name: 'C 端我的订单', usage: '终端客户登录后的订单列表', url: `${portal}/portal/c/my-orders` },
+    ];
+  }, []);
+
   const handleSave = (values: SettingsForm) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
     message.success('设置已保存');
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success('已复制到剪贴板');
+    } catch {
+      message.error('复制失败，请手动选择链接');
+    }
   };
 
   const handleCheckUpdate = async () => {
@@ -54,6 +85,38 @@ const SettingsPage: React.FC = () => {
       <Title level={4} style={{ margin: 0 }}>
         设置
       </Title>
+
+      <Card bordered={false} title="分享链接">
+        <Paragraph type="secondary" style={{ marginTop: 0 }}>
+          复制后可发给客户或同事。链接根据当前员工端连接的服务器自动生成。
+        </Paragraph>
+        <Table<ShareLink>
+          rowKey="key"
+          size="small"
+          pagination={false}
+          dataSource={shareLinks}
+          columns={[
+            { title: '页面', dataIndex: 'name', width: 160 },
+            { title: '用途', dataIndex: 'usage' },
+            {
+              title: '链接',
+              dataIndex: 'url',
+              render: (url: string) => (
+                <Input value={url} readOnly onFocus={(e) => e.target.select()} />
+              ),
+            },
+            {
+              title: '',
+              width: 88,
+              render: (_, row) => (
+                <Button type="link" icon={<CopyOutlined />} onClick={() => { void copyText(row.url); }}>
+                  复制
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
 
       <Card bordered={false}>
         <Form<SettingsForm>

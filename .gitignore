@@ -42,8 +42,15 @@ out/
 
 # Electron 安装包输出
 **/release/
+frontend/release-*/
 coverage/
 .nyc_output/
+
+# 本地备份与端到端测试产物
+backups/
+e2e/playwright-report/
+e2e/test-results/
+e2e/node_modules/
 
 # TypeScript 缓存
 *.tsbuildinfo
@@ -52,6 +59,7 @@ coverage/
 frontend/node_modules/
 frontend/dist/
 frontend/release/
+frontend/embedded/
 
 b2b-client/node_modules/
 b2b-client/dist/

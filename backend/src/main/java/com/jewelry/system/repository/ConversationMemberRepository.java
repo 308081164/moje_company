@@ -18,4 +18,8 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
             Long conversationId, AccountKind accountType, Long accountId);
 
     List<ConversationMember> findByAccountTypeAndAccountId(AccountKind accountType, Long accountId);
+
+    List<ConversationMember> findByConversationIdAndRole(Long conversationId, String role);
+
+    void deleteByConversationIdAndAccountTypeAndAccountId(Long conversationId, AccountKind accountType, Long accountId);
 }

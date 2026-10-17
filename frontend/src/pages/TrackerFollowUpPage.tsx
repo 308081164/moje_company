@@ -18,7 +18,8 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import { DownloadOutlined, PlusOutlined, ReloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import type { OrderInfo, OrderProductionFollowLogDto } from '@/types/order';
-import { orderStatusLabel } from '@/utils/orderLabels';
+import { OrderSource } from '@/types/order';
+import { orderStatusLabel, orderSourceLabel } from '@/utils/orderLabels';
 import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
 import dayjs from 'dayjs';
 
@@ -213,6 +214,7 @@ const TrackerFollowUpPage: React.FC = () => {
                   {order.baseInfo.orderNumber}
                 </Title>
                 <Text type="secondary">{orderStatusLabel(order.currentStatus)}</Text>
+                <Text type="secondary">{orderSourceLabel(order.baseInfo.source)}</Text>
                 <Text type="secondary">{order.baseInfo.customerName || '-'}</Text>
               </Space>
             }
@@ -241,6 +243,21 @@ const TrackerFollowUpPage: React.FC = () => {
             }
           >
             <Space direction="vertical" style={{ width: '100%' }} size="large">
+              {order.baseInfo.source === OrderSource.MARKETPLACE ? (
+                <div style={{ background: '#fff7e8', padding: 12, borderRadius: 8, border: '1px solid #f0d9a6' }}>
+                  <Text strong>独立站寄售复产</Text>
+                  <div style={{ marginTop: 6 }}>
+                    <Text type="secondary">
+                      跳过设计/打样，按已确认建模稿生产并代为邮寄。发货请进入订单详情录入快递单号。
+                    </Text>
+                  </div>
+                  {order.baseInfo.basicRequirements ? (
+                    <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                      <Text>{order.baseInfo.basicRequirements}</Text>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div style={{ background: '#fafafa', padding: 12, borderRadius: 8 }}>
                 <Text strong>设计图</Text>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
@@ -389,7 +406,7 @@ const TrackerFollowUpPage: React.FC = () => {
             <Title level={3} style={{ margin: 0 }}>
               跟单记录
             </Title>
-            <Text type="secondary">生产中订单 · 过程记录与生产完成</Text>
+            <Text type="secondary">待生产 / 生产中订单（含独立站寄售复产）· 过程记录、发货与生产完成</Text>
           </div>
           <Space wrap>
             <Select
@@ -411,7 +428,7 @@ const TrackerFollowUpPage: React.FC = () => {
 
         {!loading && orders.length === 0 ? (
           <Card style={{ marginTop: 16 }}>
-            <Text type="secondary">暂无生产中订单。工艺评审通过后，订单会出现在此处。</Text>
+            <Text type="secondary">暂无待生产/生产中订单。工艺评审通过或独立站寄售下单后，会出现在此处。</Text>
           </Card>
         ) : null}
 

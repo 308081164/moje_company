@@ -58,6 +58,8 @@ public class OrderCommandService {
     private final WeComCustomerGroupService weComCustomerGroupService;
     private final SensitiveOperationService sensitiveOperationService;
     private final OrderEventService orderEventService;
+    private final ConversationService conversationService;
+    private final StorefrontWalletService storefrontWalletService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -182,6 +184,9 @@ public class OrderCommandService {
         if (req.getEngravingText() != null) {
             od.setEngravingText(req.getEngravingText());
         }
+        if (req.getEngravingImages() != null) {
+            od.setEngravingImagesJson(toJson(req.getEngravingImages()));
+        }
         if (req.getMaterialType() != null) {
             od.setMaterialType(req.getMaterialType());
         }
@@ -213,12 +218,18 @@ public class OrderCommandService {
         }
         designInfoRepository.save(di);
 
+        Long oldDesignerId = order.getDesigner() != null ? order.getDesigner().getId() : null;
         if (req.getDesignerId() != null) {
             order.setDesigner(userRepository.getReferenceById(req.getDesignerId()));
         } else if (order.getDesigner() == null && "DESIGNER".equals(SecurityUtils.currentRoleApi().orElse(""))) {
             // 请求体未带 designerId 时（常见：表单未回填），仍允许本角色保存；须写入订单设计师，
             // 否则无法匹配「指派设计师本人」条件，建模阶段与建模师自动分配不会触发。
             SecurityUtils.currentStaffUserId().ifPresent(uid -> order.setDesigner(userRepository.getReferenceById(uid)));
+        }
+        // 改派设计师时同步群成员：旧设计师出群、新设计师进群可看历史
+        Long newDesignerId = order.getDesigner() != null ? order.getDesigner().getId() : null;
+        if (!Objects.equals(oldDesignerId, newDesignerId)) {
+            conversationService.syncDesignerMember(orderId, newDesignerId);
         }
 
         boolean advanced = tryAdvanceOrderAfterDesignerDesignSave(order);
@@ -525,6 +536,7 @@ public class OrderCommandService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         orderRepository.save(order);
+        storefrontWalletService.settleOnCompleted(orderId);
         auditLogService.log("ORDER_PRODUCTION_COMPLETED", "ORDER", orderId, "生产完成，订单已关闭");
         return orderQueryService.getOrder(orderId);
     }
@@ -941,13 +953,18 @@ public class OrderCommandService {
         if (Objects.equals(newDesignerId, cur)) {
             return;
         }
-        if (isAdminRole()) {
+        // 管理员与售中客服可改派；设计师本人不可改
+        if (isAdminRole() || isSalesRole()) {
             return;
         }
         if (cur == null && newDesignerId.equals(requireUserId())) {
             return;
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可变更指派设计师");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员或售中客服可变更指派设计师");
+    }
+
+    private boolean isSalesRole() {
+        return "SALES".equals(SecurityUtils.currentRoleApi().orElse(""));
     }
 
     private void assertCanEditModel(Order order) {

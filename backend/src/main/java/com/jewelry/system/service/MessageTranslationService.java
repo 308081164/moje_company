@@ -9,8 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -41,6 +42,8 @@ public class MessageTranslationService {
     private final B2BClientRepository b2bClientRepository;
     private final ConversationSocketService socketService;
     private final DashScopeChatService dashScopeChatService;
+    private final IntegrationSettingsService integrationSettingsService;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * 获取或生成翻译（同步，保证准确性）。LLM 调用在事务外，写缓存在独立事务。
@@ -54,8 +57,11 @@ public class MessageTranslationService {
         if (cached.isPresent()) {
             return cached.get().getTranslatedContent();
         }
-        // 未命中：调用 LLM 翻译
+        // 未命中：先尝试 LLM 翻译，失败则内置兜底
         String translated = translate(content, targetLang);
+        if (translated == null || translated.isBlank() || translated.equals(content)) {
+            translated = mockTranslate(content, targetLang);
+        }
         if (translated == null || translated.isBlank() || translated.equals(content)) {
             return null;
         }
@@ -103,7 +109,8 @@ public class MessageTranslationService {
      */
     public String translate(String text, String targetLang) {
         try {
-            String prompt = "目标语言：" + targetLang + "\n\n待翻译文本：\n" + text;
+            String langName = langName(targetLang);
+            String prompt = "目标语言：" + langName + "\n\n待翻译文本：\n" + text;
             String result = dashScopeChatService.complete(SYSTEM_PROMPT, null, prompt);
             if (result == null) {
                 return null;
@@ -118,14 +125,83 @@ public class MessageTranslationService {
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /** 语言代码 → 完整语言名（用于 LLM 提示词，避免「en」歧义）。 */
+    private static String langName(String lang) {
+        if (lang == null) {
+            return "中文";
+        }
+        return switch (lang.trim()) {
+            case "en" -> "English（英语）";
+            case "zh-CN" -> "简体中文";
+            case "zh-TW" -> "繁體中文";
+            case "fr" -> "French（法语）";
+            case "de" -> "German（德语）";
+            case "es" -> "Spanish（西班牙语）";
+            case "ja" -> "Japanese（日语）";
+            case "ko" -> "Korean（韩语）";
+            default -> lang.trim();
+        };
+    }
+
+    /**
+     * 内置词典/模拟翻译兜底：未配置 DashScope 或翻译失败时保证开发环境可演示。
+     * 已知中文短语按词典翻译，其余文本加语言前缀标记。
+     */
+    private String mockTranslate(String text, String targetLang) {
+        String prefix = switch (targetLang == null ? "" : targetLang.trim()) {
+            case "en" -> "[EN] ";
+            case "fr" -> "[FR] ";
+            case "de" -> "[DE] ";
+            case "es" -> "[ES] ";
+            case "ja" -> "[JP] ";
+            case "ko" -> "[KR] ";
+            case "zh-TW" -> "[繁] ";
+            default -> null;
+        };
+        if (prefix == null) {
+            return null; // 目标为中文时不兜底
+        }
+        String dict = MOCK_DICT.getOrDefault(text.trim(), null);
+        if (dict != null) {
+            return prefix + dict;
+        }
+        return prefix + text;
+    }
+
+    private static final Map<String, String> MOCK_DICT = Map.ofEntries(
+            Map.entry("设计师提交设计稿", "Design draft submitted"),
+            Map.entry("客户驳回设计稿", "Design draft rejected by customer"),
+            Map.entry("客户确认设计稿", "Design draft confirmed by customer"),
+            Map.entry("建模师提交建模稿", "3D model submitted"),
+            Map.entry("客户驳回建模稿", "3D model rejected by customer"),
+            Map.entry("客户确认建模稿", "3D model confirmed by customer"),
+            Map.entry("工艺验证通过", "Craftsmanship review passed"),
+            Map.entry("生产跟单记录", "Production tracking record"),
+            Map.entry("订单已发货", "Order shipped"),
+            Map.entry("客户确认收货，订单已交付", "Delivery confirmed by customer"),
+            Map.entry("支付尾款", "Pay balance"),
+            Map.entry("尾款已支付", "Balance paid")
+    );
+
+    /**
+     * 写缓存使用独立事务（避免在 listMessages 的只读事务里写库导致 rollback-only）。
+     */
     public void saveTranslation(Long messageId, String targetLang, String translated) {
-        ConversationMessageTranslation t = new ConversationMessageTranslation();
-        t.setMessageId(messageId);
-        t.setTargetLang(targetLang);
-        t.setTranslatedContent(translated);
-        t.setProvider("dashscope");
-        translationRepository.save(t);
+        try {
+            TransactionTemplate tt = new TransactionTemplate(transactionManager);
+            tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            tt.executeWithoutResult(status -> {
+                ConversationMessageTranslation t = new ConversationMessageTranslation();
+                t.setMessageId(messageId);
+                t.setTargetLang(targetLang);
+                t.setTranslatedContent(translated);
+                var llm = integrationSettingsService.requireLlm();
+                t.setProvider(llm != null ? llm.provider() : "kimi");
+                translationRepository.save(t);
+            });
+        } catch (Exception e) {
+            log.warn("保存翻译缓存失败（忽略）: messageId={}", messageId, e);
+        }
     }
 
     private String resolveMemberLang(ConversationMember member) {

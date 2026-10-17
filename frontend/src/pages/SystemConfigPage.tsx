@@ -13,6 +13,7 @@ import {
   Typography,
   message,
   Switch,
+  Select,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -38,11 +39,16 @@ const SystemConfigPage: React.FC = () => {
   const [integrationUi, setIntegrationUi] = useState<{
     hydrated: boolean;
     dashscopeApiKeyConfigured: boolean;
+    kimiApiKeyConfigured: boolean;
+    llmProvider: string;
   }>({
     hydrated: false,
     dashscopeApiKeyConfigured: false,
+    kimiApiKeyConfigured: false,
+    llmProvider: 'kimi',
   });
   const [integrationLastSavedAt, setIntegrationLastSavedAt] = useState<number | null>(null);
+  const llmProvider = Form.useWatch('llmProvider', integrationForm) || 'kimi';
 
   const loadPrice = useCallback(async () => {
     setLoadingPrice(true);
@@ -99,12 +105,19 @@ const SystemConfigPage: React.FC = () => {
       setIntegrationUi({
         hydrated: true,
         dashscopeApiKeyConfigured: Boolean(s.dashscopeApiKeyConfigured),
+        kimiApiKeyConfigured: Boolean(s.kimiApiKeyConfigured),
+        llmProvider: s.llmProvider || 'kimi',
       });
       integrationForm.setFieldsValue({
+        llmProvider: s.llmProvider || 'kimi',
         dashscopeEnabled: s.dashscopeEnabled,
         dashscopeImageModel: s.dashscopeImageModel || 'qwen-vl-plus',
         dashscopeChatModel: s.dashscopeChatModel || 'qwen-plus',
         dashscopeApiKey: '',
+        kimiBaseUrl: s.kimiBaseUrl || 'https://api.moonshot.cn/v1',
+        kimiChatModel: s.kimiChatModel || 'kimi-k3',
+        kimiImageModel: s.kimiImageModel || 'kimi-k3',
+        kimiApiKey: '',
       });
     } catch {
       message.error('加载 API 配置失败');
@@ -118,12 +131,19 @@ const SystemConfigPage: React.FC = () => {
       const v = await integrationForm.validateFields();
       setLoadingIntegration(true);
       const body: Record<string, unknown> = {
+        llmProvider: v.llmProvider,
         dashscopeEnabled: v.dashscopeEnabled,
         dashscopeImageModel: v.dashscopeImageModel,
         dashscopeChatModel: v.dashscopeChatModel,
+        kimiBaseUrl: v.kimiBaseUrl,
+        kimiChatModel: v.kimiChatModel,
+        kimiImageModel: v.kimiImageModel,
       };
       if (v.dashscopeApiKey && String(v.dashscopeApiKey).trim()) {
         body.dashscopeApiKey = String(v.dashscopeApiKey).trim();
+      }
+      if (v.kimiApiKey && String(v.kimiApiKey).trim()) {
+        body.kimiApiKey = String(v.kimiApiKey).trim();
       }
       await integrationService.updateSettings(body);
       message.success('API 配置已保存');
@@ -445,7 +465,7 @@ const SystemConfigPage: React.FC = () => {
               >
                 <Card bordered={false} loading={loadingIntegration}>
                   <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                    配置各类大语言模型（DashScope / 通义千问）API 接入，用于截图识图填单、聊天消息自动翻译等能力。密钥不会在加载后回显，下方状态来自服务端是否已保存过敏感配置。
+                    配置大语言模型 API 接入（默认 Kimi K3），用于截图识图填单、聊天消息自动翻译等能力。密钥不会在加载后回显，下方状态来自服务端是否已保存过敏感配置。
                   </Text>
                   {integrationUi.hydrated ? (
                     <Alert
@@ -454,6 +474,10 @@ const SystemConfigPage: React.FC = () => {
                       showIcon
                       message={
                         <Space size={[8, 8]} wrap>
+                          <Tag color="blue">当前引擎：{integrationUi.llmProvider === 'dashscope' ? '通义千问' : 'Kimi K3'}</Tag>
+                          <Tag color={integrationUi.kimiApiKeyConfigured ? 'success' : 'default'}>
+                            Kimi API Key：{integrationUi.kimiApiKeyConfigured ? '已配置' : '未配置'}
+                          </Tag>
                           <Tag color={integrationUi.dashscopeApiKeyConfigured ? 'success' : 'default'}>
                             DashScope API Key：{integrationUi.dashscopeApiKeyConfigured ? '已配置' : '未配置'}
                           </Tag>
@@ -475,49 +499,103 @@ const SystemConfigPage: React.FC = () => {
                       valuePropName="checked"
                       extra={
                         <Text type="secondary">
-                          开启后，订单截图识图填单、聊天消息自动翻译等能力通过 DashScope 接口调用。
+                          开启后，订单截图识图填单、聊天消息自动翻译等能力走下方所选引擎。
                         </Text>
                       }
                     >
                       <Switch />
                     </Form.Item>
                     <Form.Item
-                      name="dashscopeImageModel"
-                      label="视觉模型名"
-                      rules={[{ required: true, message: '请输入模型名' }]}
-                      extra={
-                        <Text type="secondary">
-                          与百炼控制台中开通的多模态模型名一致，例如 qwen-vl-plus；修改后保存生效。
-                        </Text>
-                      }
+                      name="llmProvider"
+                      label="AI 引擎"
+                      extra={<Text type="secondary">切换后请填写对应引擎的 API Key 并保存。</Text>}
                     >
-                      <Input placeholder="如 qwen-vl-plus" />
+                      <Select
+                        options={[
+                          { value: 'kimi', label: 'Kimi K3（月之暗面 Moonshot）' },
+                          { value: 'dashscope', label: '通义千问（阿里云 DashScope）' },
+                        ]}
+                      />
                     </Form.Item>
-                    <Form.Item
-                      name="dashscopeChatModel"
-                      label="对话模型名"
-                      rules={[{ required: true, message: '请输入模型名' }]}
-                      extra={
-                        <Text type="secondary">
-                          用于文本对话 / 聊天消息翻译，例如 qwen-plus；修改后保存生效。
-                        </Text>
-                      }
-                    >
-                      <Input placeholder="如 qwen-plus" />
-                    </Form.Item>
-                    <Form.Item
-                      name="dashscopeApiKey"
-                      label="DashScope API Key（留空表示不修改）"
-                      extra={
-                        <Text type="secondary">
-                          在阿里云百炼（Model Studio）创建 API Key 可参考：
-                          https://help.aliyun.com/zh/model-studio/get-api-key
-                          。上传截图请勿超过约 8MB（与服务端图片大小限制一致）。留空提交不会覆盖已保存的 Key。
-                        </Text>
-                      }
-                    >
-                      <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
-                    </Form.Item>
+                    {llmProvider !== 'dashscope' ? (
+                      <>
+                        <Form.Item
+                          name="kimiBaseUrl"
+                          label="Kimi API 基址"
+                          rules={[{ required: true, message: '请输入 API 基址' }]}
+                          extra={<Text type="secondary">OpenAI 兼容接口，默认 https://api.moonshot.cn/v1</Text>}
+                        >
+                          <Input placeholder="https://api.moonshot.cn/v1" />
+                        </Form.Item>
+                        <Form.Item
+                          name="kimiChatModel"
+                          label="Kimi 对话模型"
+                          rules={[{ required: true, message: '请输入模型名' }]}
+                          extra={<Text type="secondary">用于翻译与文本对话，默认 kimi-k3。</Text>}
+                        >
+                          <Input placeholder="kimi-k3" />
+                        </Form.Item>
+                        <Form.Item
+                          name="kimiImageModel"
+                          label="Kimi 视觉模型"
+                          rules={[{ required: true, message: '请输入模型名' }]}
+                          extra={<Text type="secondary">用于截图识图填单；Kimi K3 可与对话模型同名。</Text>}
+                        >
+                          <Input placeholder="kimi-k3" />
+                        </Form.Item>
+                        <Form.Item
+                          name="kimiApiKey"
+                          label="Kimi API Key（留空表示不修改）"
+                          extra={
+                            <Text type="secondary">
+                              在月之暗面开放平台创建密钥：https://platform.moonshot.cn 。留空提交不会覆盖已保存的 Key。
+                            </Text>
+                          }
+                        >
+                          <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
+                        </Form.Item>
+                      </>
+                    ) : (
+                      <>
+                        <Form.Item
+                          name="dashscopeImageModel"
+                          label="视觉模型名"
+                          rules={[{ required: true, message: '请输入模型名' }]}
+                          extra={
+                            <Text type="secondary">
+                              与百炼控制台中开通的多模态模型名一致，例如 qwen-vl-plus；修改后保存生效。
+                            </Text>
+                          }
+                        >
+                          <Input placeholder="如 qwen-vl-plus" />
+                        </Form.Item>
+                        <Form.Item
+                          name="dashscopeChatModel"
+                          label="对话模型名"
+                          rules={[{ required: true, message: '请输入模型名' }]}
+                          extra={
+                            <Text type="secondary">
+                              用于文本对话 / 聊天消息翻译，例如 qwen-plus；修改后保存生效。
+                            </Text>
+                          }
+                        >
+                          <Input placeholder="如 qwen-plus" />
+                        </Form.Item>
+                        <Form.Item
+                          name="dashscopeApiKey"
+                          label="DashScope API Key（留空表示不修改）"
+                          extra={
+                            <Text type="secondary">
+                              在阿里云百炼（Model Studio）创建 API Key 可参考：
+                              https://help.aliyun.com/zh/model-studio/get-api-key
+                              。上传截图请勿超过约 8MB（与服务端图片大小限制一致）。留空提交不会覆盖已保存的 Key。
+                            </Text>
+                          }
+                        >
+                          <Input.Password placeholder="不在界面回显已保存的密钥" autoComplete="new-password" />
+                        </Form.Item>
+                      </>
+                    )}
                     <Form.Item>
                       <Space>
                         <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>

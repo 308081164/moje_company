@@ -10,8 +10,10 @@ export const conversationService = {
     return api.post<Conversation>(`/conversations/by-order/${orderId}`);
   },
 
-  async getMessages(conversationId: number): Promise<ConversationMessage[]> {
-    return api.get<ConversationMessage[]>(`/conversations/${conversationId}/messages`);
+  async getMessages(conversationId: number, includeAll: boolean = false): Promise<ConversationMessage[]> {
+    return api.get<ConversationMessage[]>(
+      `/conversations/${conversationId}/messages?includeAll=${includeAll}`
+    );
   },
 
   async getMembers(conversationId: number): Promise<ConversationMember[]> {

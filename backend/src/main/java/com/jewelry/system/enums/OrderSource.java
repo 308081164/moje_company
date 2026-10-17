@@ -8,7 +8,8 @@ public enum OrderSource {
     XIANYU("咸鱼"),
     INFLUENCER("达人推荐"),
     C2C("C端客户"),
-    B2B("B端客户");
+    B2B("B端客户"),
+    MARKETPLACE("独立站寄售");
     
     private final String description;
     

@@ -8,6 +8,7 @@ export enum OrderSource {
   RECOMMEND = 'RECOMMEND',     // 达人推荐（API 与后端 INFLUENCER 映射）
   C2C = 'C2C',                 // C端客户
   B2B = 'B2B',                 // B端客户
+  MARKETPLACE = 'MARKETPLACE', // 独立站寄售
   OTHER = 'OTHER',             // 其他
 }
 
@@ -143,6 +144,7 @@ export interface OrderDesignInfo {
   designerId: number;         // 设计师ID
   designerName?: string;      // 设计师姓名
   engravingText?: string;     // 字印
+  engravingImages?: string[]; // 字印图片URL列表
   materialType?: MaterialType; // 材质类型
   materialDetail?: string;    // 材质详情
   handSize?: string;          // 手寸/链长
@@ -243,6 +245,26 @@ export interface OrderProductionInfo {
   trackingNumber?: string;      // 物流单号
   createdAt: string;
   updatedAt: string;
+}
+
+// 订单物流（发货/17TRACK 跟踪）
+export interface OrderShipmentDto {
+  id: number;
+  orderId: number;
+  trackingNumber: string;
+  carrierCode?: number | null;
+  carrierName?: string | null;
+  status?: string | null;
+  statusLabel?: string | null;
+  events: Array<{
+    time?: string | null;
+    location?: string | null;
+    description?: string | null;
+    statusCode?: string | null;
+  }>;
+  queryUrl?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
 }
 
 // 完整订单信息
@@ -372,6 +394,7 @@ export interface OrderUpdateRequest {
 // 订单设计更新请求
 export interface OrderDesignUpdateRequest {
   engravingText?: string;
+  engravingImages?: string[];
   materialType?: MaterialType;
   materialDetail?: string;
   handSize?: string;
@@ -473,6 +496,33 @@ export interface EmployeeWorkStatistics {
   monthlyCompletion: Array<{ month: string; count: number }>;
   qualityScore: number; // 质量评分（0-100）
   customerSatisfaction: number; // 客户满意度（0-100）
+}
+
+// 订单每日趋势点（GET /orders/statistics/trend）
+export interface OrderTrendPoint {
+  date: string; // YYYY-MM-DD
+  newOrders: number;
+  completed: number;
+  cancelled: number;
+  revenue: number;
+}
+
+// 仪表盘 C端/B端 概览（GET /admin/dashboard）
+export interface DashboardOverview {
+  totalOrders: number;
+  completedOrders: number;
+  pendingOrders: number;
+  totalRevenue: number;
+  c2cTotalOrders: number;
+  c2cCompletedOrders: number;
+  c2cPendingOrders: number;
+  c2cRevenue: number;
+  b2bTotalOrders: number;
+  b2bCompletedOrders: number;
+  b2bPendingOrders: number;
+  b2bRevenue: number;
+  todayNewOrders: number;
+  todayCompletedOrders: number;
 }
 
 // 订单导出配置

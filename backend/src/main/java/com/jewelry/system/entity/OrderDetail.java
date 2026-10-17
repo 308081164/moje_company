@@ -25,6 +25,9 @@ public class OrderDetail {
     @Column(name = "engraving_text", length = 500)
     private String engravingText;
 
+    @Column(name = "engraving_images", columnDefinition = "json")
+    private String engravingImagesJson;
+
     @Column(name = "material_type", length = 50)
     private String materialType;
 

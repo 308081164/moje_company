@@ -23,5 +23,7 @@ public class ConversationMessageDto {
     private String translatedLang;
     private List<Long> fileIds;
     private Long eventId;
+    /** msgType=event 时携带的订单事件卡片详情 */
+    private com.jewelry.system.dto.order.OrderEventDto event;
     private LocalDateTime createdAt;
 }

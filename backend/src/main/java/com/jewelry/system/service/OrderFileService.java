@@ -34,7 +34,7 @@ public class OrderFileService {
 
     private final FileEntityRepository fileEntityRepository;
     private final FileStorageService fileStorageService;
-    private final AliyunOssService aliyunOssService;
+    private final MinioStorageService minioStorageService;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
 
@@ -70,17 +70,17 @@ public class OrderFileService {
         if (ossUrl == null || ossUrl.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片地址无效");
         }
-        if (!aliyunOssService.isEnabled()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储 OSS 未就绪，无法关联参考图");
+        if (!minioStorageService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储未就绪，无法关联参考图");
         }
         requireOrder(orderId);
 
-        String sourceKey = aliyunOssService.resolveObjectKeyFromUrl(ossUrl.strip());
+        String sourceKey = minioStorageService.resolveObjectKeyFromUrl(ossUrl.strip());
         if (sourceKey == null || sourceKey.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析 OSS 对象 key: " + ossUrl);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法解析对象 key: " + ossUrl);
         }
-        if (!aliyunOssService.objectExists(sourceKey)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "参考图在 OSS 中不存在: " + sourceKey);
+        if (!minioStorageService.objectExists(sourceKey)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "参考图在对象存储中不存在: " + sourceKey);
         }
 
         String original = fileNameFromObjectKey(sourceKey);
@@ -89,14 +89,14 @@ public class OrderFileService {
         String destKey = "order/" + orderId + "/design/" + storedFileName;
 
         if (!sourceKey.equals(destKey)) {
-            aliyunOssService.copyObject(sourceKey, destKey);
+            minioStorageService.copyObject(sourceKey, destKey);
         }
 
         FileEntity e = new FileEntity();
         e.setFileName(storedFileName);
         e.setOriginalName(original);
         e.setFilePath(destKey);
-        e.setFileUrl(aliyunOssService.publicUrl(destKey));
+        e.setFileUrl(minioStorageService.publicUrl(destKey));
         e.setFileSize(null);
         e.setFileType("DESIGN");
         if (!ext.isBlank()) {
@@ -184,13 +184,8 @@ public class OrderFileService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
-        if (!aliyunOssService.isEnabled()) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "对象存储 OSS 未就绪：请配置 OSS_ACCESS_KEY_ID、OSS_ACCESS_KEY_SECRET、桶名（OSS_BUCKET_NAME 或 OSS_BUCKET）、"
-                            + "地域节点（ALIYUN_OSS_ENDPOINT 或 OSS_ENDPOINT，勿含 https://）。GitHub Actions 部署时 Secret 名需与 application.yml 一致，"
-                            + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
-            );
+        if (!minioStorageService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储未就绪");
         }
         NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
         MultipartFile uploadFile = normalized.file();
@@ -204,12 +199,12 @@ public class OrderFileService {
         String storedFileName = buildStandardStoredFileName(orderId, fileType, original, ext);
         String objectKey = "order/" + orderId + "/" + subDir + "/" + storedFileName;
 
-        // 所有文件强制上传到 OSS，不再保留本地副本
+        // 所有文件统一上传到对象存储
         String url;
         try {
-            url = aliyunOssService.uploadObject(objectKey, uploadFile);
+            url = minioStorageService.uploadObject(objectKey, uploadFile);
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到对象存储失败", e);
         }
 
         FileEntity e = new FileEntity();
@@ -250,13 +245,8 @@ public class OrderFileService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
         }
-        if (!aliyunOssService.isEnabled()) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "对象存储 OSS 未就绪：请配置 OSS_ACCESS_KEY_ID、OSS_ACCESS_KEY_SECRET、桶名（OSS_BUCKET_NAME 或 OSS_BUCKET）、"
-                            + "地域节点（ALIYUN_OSS_ENDPOINT 或 OSS_ENDPOINT，勿含 https://）。GitHub Actions 部署时 Secret 名需与 application.yml 一致，"
-                            + "或在服务器 /mnt/newdisk/app/MOJE/.env 中填写后重新部署。"
-            );
+        if (!minioStorageService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储未就绪");
         }
         NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
         MultipartFile uploadFile = normalized.file();
@@ -273,9 +263,9 @@ public class OrderFileService {
 
         String url;
         try {
-            url = aliyunOssService.uploadObject(objectKey, uploadFile);
+            url = minioStorageService.uploadObject(objectKey, uploadFile);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到 OSS 失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到对象存储失败", ex);
         }
 
         FileEntity ent = new FileEntity();

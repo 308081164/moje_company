@@ -39,7 +39,7 @@ public class AdminBulkExportService {
 
     private final OrderRepository orderRepository;
     private final FileEntityRepository fileEntityRepository;
-    private final AliyunOssService aliyunOssService;
+    private final MinioStorageService minioStorageService;
     private final ModelingArchiveService modelingArchiveService;
     private final ObjectMapper objectMapper;
 
@@ -177,11 +177,11 @@ public class AdminBulkExportService {
     }
 
     private void addOssFile(ZipOutputStream zos, String entryName, FileEntity f) {
-        if (f.getFilePath() == null || f.getFilePath().isBlank() || !aliyunOssService.isEnabled()) {
+        if (f.getFilePath() == null || f.getFilePath().isBlank() || !minioStorageService.isEnabled()) {
             return;
         }
         try {
-            byte[] bytes = aliyunOssService.readObjectBytes(f.getFilePath());
+            byte[] bytes = minioStorageService.readObjectBytes(f.getFilePath());
             zos.putNextEntry(new ZipEntry(entryName));
             zos.write(bytes);
             zos.closeEntry();

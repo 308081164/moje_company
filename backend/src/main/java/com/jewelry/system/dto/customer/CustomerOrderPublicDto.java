@@ -1,5 +1,6 @@
 package com.jewelry.system.dto.customer;
 
+import com.jewelry.system.dto.order.OrderShipmentDto;
 import lombok.Builder;
 import lombok.Data;
 
@@ -33,4 +34,16 @@ public class CustomerOrderPublicDto {
 
     /** 建模源文件下载（文件名 + URL 列表） */
     private List<ModelFilePublicDto> modelFiles;
+
+    /** 物流信息（未发货为 null） */
+    private OrderShipmentDto shipment;
+
+    /** 服务类型：CUSTOM_IMAGE / DESIGNER_DESIGN / B2B_MODEL / STOREFRONT */
+    private String serviceType;
+
+    /** 当前账号是否可将此订单一键上架到独立站 */
+    private Boolean canPublishToStorefront;
+
+    /** 寄售买家实付售价（非寄售单为 null） */
+    private BigDecimal salePrice;
 }

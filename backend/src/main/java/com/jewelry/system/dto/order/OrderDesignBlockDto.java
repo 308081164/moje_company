@@ -13,6 +13,7 @@ public class OrderDesignBlockDto {
     private Long designerId;
     private String designerName;
     private String engravingText;
+    private List<String> engravingImages;
     private String materialType;
     private String materialDetail;
     private String handSize;

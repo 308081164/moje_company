@@ -52,6 +52,10 @@
     updateLang: function (lang) {
       return put('/portal/c/account/lang', { lang: lang });
     },
+    // 更新客户预留基础资料（称呼、联系方式）
+    updateProfile: function (displayName, contact) {
+      return put('/portal/c/account/profile', { displayName: displayName, contact: contact });
+    },
     // 门户首页
     getHome: function () {
       return get('/public/portal/home');
@@ -80,6 +84,13 @@
     confirmDelivery: function (orderId) {
       return post('/portal/c/orders/' + orderId + '/confirm-delivery', {});
     },
+    payBalance: function (orderId) {
+      return post('/portal/c/orders/' + orderId + '/pay-balance', {});
+    },
+    // 查询订单物流（须已绑定）
+    getShipment: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/shipment');
+    },
     // 站内聊天
     listConversations: function () {
       return get('/conversations');
@@ -101,6 +112,30 @@
     },
     translateMessage: function (messageId, targetLang) {
       return post('/conversations/messages/' + messageId + '/translate', { targetLang: targetLang });
+    },
+    listStorefront: function () {
+      return get('/public/storefront/listings');
+    },
+    getStorefrontListing: function (id) {
+      return get('/public/storefront/listings/' + id);
+    },
+    getStorefrontFeeGuide: function () {
+      return get('/public/storefront/fee-guide');
+    },
+    publishStorefront: function (body) {
+      return post('/portal/c/storefront/publish', body);
+    },
+    pauseStorefrontListing: function (id) {
+      return post('/portal/c/storefront/listings/' + id + '/pause', {});
+    },
+    purchaseStorefront: function (id, body) {
+      return post('/portal/c/storefront/listings/' + id + '/purchase', body || {});
+    },
+    getSellerDashboard: function () {
+      return get('/portal/c/storefront/seller');
+    },
+    withdrawSeller: function (amount) {
+      return post('/portal/c/storefront/seller/withdraw', { amount: amount });
     }
   };
 })();

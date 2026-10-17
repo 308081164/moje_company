@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Tabs,
   Card,
@@ -21,6 +21,8 @@ import {
   Row,
   Col,
   Alert,
+  Modal,
+  Switch,
 } from 'antd';
 import {
   SearchOutlined,
@@ -31,9 +33,22 @@ import {
   ScanOutlined,
   PlusOutlined,
   DeleteOutlined,
+  UserOutlined,
+  PictureOutlined,
+  SendOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { inlayDbService, type InlayDbItem, type InlayCategoryNode, type RegionBox, type SearchHit } from '@/services/inlayDbService';
+import {
+  inlayDbService,
+  setJewelryStructureAuthPrompt,
+  InlayAuthRequiredError,
+  type InlayDbItem,
+  type InlayCategoryNode,
+  type RegionBox,
+  type SearchHit,
+  type LibraryAgentHit,
+} from '@/services/inlayDbService';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -74,6 +89,9 @@ const BrowseTab: React.FC = () => {
       setItems((data as any).items || []);
       setTotal((data as any).total || 0);
     } catch (e: any) {
+      if (e?.name === 'InlayAuthRequiredError' || e instanceof InlayAuthRequiredError) {
+        return;
+      }
       message.error(e?.message || '加载结构列表失败');
     } finally {
       setLoading(false);
@@ -476,7 +494,376 @@ const UploadTab: React.FC = () => {
   );
 };
 
-// ============ 识结构 Tab ============
+// ============ Agent 查询 Tab ============
+type AgentChatMessage = {
+  id: string;
+  role: 'user' | 'agent';
+  text: string;
+  understood?: string;
+  images?: string[];
+  hits?: LibraryAgentHit[];
+  loading?: boolean;
+};
+
+const AgentQueryTab: React.FC = () => {
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [categories, setCategories] = useState<InlayCategoryNode[]>([]);
+  const [deepseekAvailable, setDeepseekAvailable] = useState<boolean | null>(null);
+  const [messages, setMessages] = useState<AgentChatMessage[]>([]);
+  const [pending, setPending] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [detail, setDetail] = useState<InlayDbItem | null>(null);
+  const [detailThumb, setDetailThumb] = useState<string | undefined>();
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const canSend = (!!draft.trim() || pending.length > 0) && !sending;
+
+  useEffect(() => {
+    inlayDbService.listCategories().then(setCategories).catch(() => {});
+    inlayDbService
+      .deepseekStatus()
+      .then((s) => setDeepseekAvailable(Boolean(s?.available)))
+      .catch(() => setDeepseekAvailable(null));
+  }, []);
+
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  const addFiles = (files: File[]) => {
+    setPending((prev) => {
+      const next = [...prev];
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        if (next.length >= 6) {
+          message.warning('最多上传 6 张参考图');
+          break;
+        }
+        next.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          file,
+          url: URL.createObjectURL(file),
+        });
+      }
+      return next;
+    });
+  };
+
+  const removePending = (id: string) => {
+    setPending((prev) => {
+      const found = prev.find((p) => p.id === id);
+      if (found) URL.revokeObjectURL(found.url);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  const loadHitThumb = async (id: string) => {
+    if (!id || thumbs[id]) return;
+    try {
+      const url = await inlayDbService.imageBlobUrl(`/inlay-db/items/${id}/thumbnail`);
+      setThumbs((prev) => (prev[id] ? prev : { ...prev, [id]: url }));
+    } catch {
+      /* 无缩略图 */
+    }
+  };
+
+  const send = async () => {
+    if (!canSend) return;
+    const query = draft.trim();
+    const images = pending.map((p) => p.file);
+    const previewUrls = pending.map((p) => p.url);
+    setDraft('');
+    setPending([]);
+    const userMsg: AgentChatMessage = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      text: query,
+      images: previewUrls,
+    };
+    const loadingId = `a-${Date.now()}`;
+    setMessages((prev) => [...prev, userMsg, { id: loadingId, role: 'agent', text: '', loading: true }]);
+    setSending(true);
+    try {
+      const data = await inlayDbService.agentSearch({
+        query,
+        images,
+        category_id: categoryId,
+        only_mine: onlyMine || undefined,
+        top_k: 16,
+      });
+      if (data.deepseek_available != null) {
+        setDeepseekAvailable(Boolean(data.deepseek_available));
+      }
+      const hits = data.hits || [];
+      hits.forEach((h) => void loadHitThumb(h.id));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingId
+            ? {
+                ...m,
+                loading: false,
+                text: data.reply || (hits.length ? '检索完成。' : '没有找到足够接近的现成结构。'),
+                understood:
+                  data.understood_query && data.understood_query !== query ? data.understood_query : undefined,
+                hits,
+              }
+            : m
+        )
+      );
+    } catch (e: any) {
+      if (e?.name === 'InlayAuthRequiredError' || e instanceof InlayAuthRequiredError) {
+        setMessages((prev) => prev.filter((m) => m.id !== loadingId && m.id !== userMsg.id));
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingId
+            ? { ...m, loading: false, text: e?.message || '检索失败，请稍后重试。' }
+            : m
+        )
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const openDetail = async (hit: LibraryAgentHit) => {
+    try {
+      const item = await inlayDbService.getItem(hit.id);
+      setDetail(item);
+      if (thumbs[hit.id]) setDetailThumb(thumbs[hit.id]);
+      else {
+        const url = await inlayDbService.imageBlobUrl(`/inlay-db/items/${hit.id}/thumbnail`).catch(() => undefined);
+        setDetailThumb(url);
+      }
+    } catch (e: any) {
+      message.error(e?.message || '加载详情失败');
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 280px)', minHeight: 480 }}>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="结构检索 Agent"
+        description="口语也可以，例如：「帮我找几个现成的四爪镶口」。会自动去掉废话、按结构名召回；可同时粘贴或上传参考图。"
+      />
+      {deepseekAvailable === false ? (
+        <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+          DeepSeek 未配置，将降级为关键词匹配；上传参考图时仍会走视觉检索。
+        </Text>
+      ) : null}
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Select
+          allowClear
+          placeholder="限定大类"
+          style={{ width: 180 }}
+          value={categoryId}
+          onChange={setCategoryId}
+          options={(categories || []).map((c) => ({ value: c.id, label: c.name }))}
+        />
+        <Space>
+          <Switch checked={onlyMine} onChange={setOnlyMine} />
+          <Text>仅看我的</Text>
+        </Space>
+      </Space>
+
+      <div
+        ref={threadRef}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          background: '#fafafa',
+          border: '1px solid #f0f0f0',
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 12,
+        }}
+      >
+        {!messages.length ? (
+          <Empty
+            image={<RobotOutlined style={{ fontSize: 36, color: '#bfbfbf' }} />}
+            description="用自然语言描述要找的结构，Enter 发送"
+          />
+        ) : (
+          messages.map((msg) => (
+            <div
+              key={msg.id}
+              style={{
+                marginBottom: 16,
+                display: 'flex',
+                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: '86%',
+                  background: msg.role === 'user' ? '#1677ff' : '#fff',
+                  color: msg.role === 'user' ? '#fff' : 'inherit',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                }}
+              >
+                {msg.images?.length ? (
+                  <Space wrap style={{ marginBottom: 8 }}>
+                    {msg.images.map((src, i) => (
+                      <Image key={i} src={src} width={72} height={72} style={{ objectFit: 'cover', borderRadius: 6 }} />
+                    ))}
+                  </Space>
+                ) : null}
+                {msg.understood ? (
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    理解为「{msg.understood}」
+                  </Text>
+                ) : null}
+                {msg.loading ? <Spin size="small" /> : null}
+                {msg.text ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : null}
+                {msg.hits?.length ? (
+                  <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                    {msg.hits.map((hit) => (
+                      <Card key={hit.id} size="small" hoverable onClick={() => void openDetail(hit)}>
+                        {thumbs[hit.id] ? (
+                          <Image
+                            src={thumbs[hit.id]}
+                            preview={false}
+                            width="100%"
+                            height={110}
+                            style={{ objectFit: 'cover', borderRadius: 4 }}
+                          />
+                        ) : (
+                          <div style={{ width: '100%', height: 110, background: '#f5f5f5', borderRadius: 4 }} />
+                        )}
+                        <Text strong style={{ display: 'block', marginTop: 8 }}>
+                          {hit.display_name || hit.id}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {[hit.category, hit.uploader].filter(Boolean).join(' · ') || '—'}
+                          {hit.score != null ? ` · ${hit.score.toFixed(3)}` : ''}
+                        </Text>
+                        {hit.matched_reason ? (
+                          <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                            {hit.matched_reason}
+                          </Text>
+                        ) : null}
+                        <Space size="small" style={{ marginTop: 6 }}>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void openDetail(hit);
+                            }}
+                          >
+                            详情
+                          </Button>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void inlayDbService.downloadFile(
+                                `/inlay-db/items/${hit.id}/download?format=step`,
+                                `${hit.display_name || hit.id}.step`
+                              );
+                            }}
+                          >
+                            下载 STEP
+                          </Button>
+                        </Space>
+                      </Card>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {pending.length > 0 ? (
+        <Space wrap style={{ marginBottom: 8 }}>
+          {pending.map((p) => (
+            <div key={p.id} style={{ position: 'relative' }}>
+              <img src={p.url} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
+              <Button
+                size="small"
+                type="text"
+                danger
+                style={{ position: 'absolute', top: -8, right: -8 }}
+                onClick={() => removePending(p.id)}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+        </Space>
+      ) : null}
+
+      <div
+        style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}
+        onPaste={(e) => {
+          const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'));
+          if (!files.length) return;
+          e.preventDefault();
+          addFiles(files);
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            addFiles(Array.from(e.target.files || []));
+            e.target.value = '';
+          }}
+        />
+        <Button icon={<PictureOutlined />} onClick={() => fileInputRef.current?.click()} title="添加参考图" />
+        <Input.TextArea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          autoSize={{ minRows: 2, maxRows: 4 }}
+          placeholder="描述要找的结构，Enter 发送，Shift+Enter 换行"
+          disabled={sending}
+          onPressEnter={(e) => {
+            if (!e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+        />
+        <Button type="primary" icon={<SendOutlined />} loading={sending} disabled={!canSend} onClick={() => void send()}>
+          发送
+        </Button>
+      </div>
+
+      <Drawer
+        title={detail?.displayName || '结构详情'}
+        open={!!detail}
+        width={720}
+        onClose={() => setDetail(null)}
+        destroyOnClose
+      >
+        {detail && <DetailBody item={detail} thumb={detailThumb} />}
+      </Drawer>
+    </div>
+  );
+};
+
+// ============ 识结构 Tab（暂时不开放） ============
+const RECOGNIZE_ENABLED = false;
+
 const RecognizeTab: React.FC = () => {
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -684,22 +1071,121 @@ const HitsList: React.FC<{ hits?: SearchHit[] }> = ({ hits }) => {
 
 // ============ 主页面 ============
 const InlayStructureLibraryPage: React.FC = () => {
+  const [ready, setReady] = useState(false);
+  const [sessionUser, setSessionUser] = useState('');
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMsg, setAuthMsg] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authForm] = Form.useForm();
+  const authResolver = useRef<((v: { username: string; password: string } | null) => void) | null>(null);
+
+  useLayoutEffect(() => {
+    setJewelryStructureAuthPrompt(({ username, message }) => {
+      return new Promise((resolve) => {
+        authResolver.current = resolve;
+        setAuthMsg(message || '请输入珠宝结构库账号和密码');
+        authForm.setFieldsValue({ username: username || '', password: '' });
+        setAuthOpen(true);
+      });
+    });
+    return () => {
+      setJewelryStructureAuthPrompt(null);
+      authResolver.current?.(null);
+      authResolver.current = null;
+    };
+  }, [authForm]);
+
+  const bootstrap = useCallback(async () => {
+    try {
+      await inlayDbService.ensureSession();
+      setSessionUser(inlayDbService.currentUsername());
+      setReady(true);
+    } catch (e: any) {
+      setReady(false);
+      if (e?.name !== 'InlayAuthRequiredError' && !(e instanceof InlayAuthRequiredError)) {
+        message.error(e?.message || '珠宝结构库登录失败');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
+
+  const finishAuth = (value: { username: string; password: string } | null) => {
+    const resolve = authResolver.current;
+    authResolver.current = null;
+    setAuthOpen(false);
+    resolve?.(value);
+  };
+
+  const submitAuth = async () => {
+    try {
+      const v = await authForm.validateFields();
+      setAuthLoading(true);
+      finishAuth({ username: v.username.trim(), password: v.password });
+    } catch {
+      /* form */
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
-      <Title level={3}>镶嵌结构库</Title>
-      <Paragraph type="secondary">
-        对接 AI_3d_DataBase：支持结构浏览/搜索、上传（STEP 建模）、识结构（多区域视觉检索）与多格式下载。
-      </Paragraph>
+      <Space align="start" style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div>
+          <Title level={3} style={{ marginBottom: 4 }}>珠宝结构库</Title>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            对接公司内网结构库：支持 Agent 口语检索、结构浏览/搜索、上传（STEP 建模）与多格式下载。
+          </Paragraph>
+        </div>
+        <Button icon={<UserOutlined />} onClick={() => { void inlayDbService.relogin().then(() => { setSessionUser(inlayDbService.currentUsername()); setReady(true); }).catch(() => {}); }}>
+          {sessionUser ? `账号：${sessionUser}` : '登录珠宝结构库'}
+        </Button>
+      </Space>
       <Card>
-        <Tabs
-          defaultActiveKey="browse"
-          items={[
-            { key: 'browse', label: '浏览', children: <BrowseTab /> },
-            { key: 'upload', label: '上传', children: <UploadTab /> },
-            { key: 'recognize', label: '识结构', children: <RecognizeTab /> },
-          ]}
-        />
+        {ready ? (
+          <Tabs
+            defaultActiveKey="browse"
+            items={[
+              { key: 'browse', label: '浏览', children: <BrowseTab /> },
+              { key: 'agent', label: 'Agent 查询', children: <AgentQueryTab /> },
+              { key: 'upload', label: '上传', children: <UploadTab /> },
+              ...(RECOGNIZE_ENABLED
+                ? [{ key: 'recognize', label: '识结构', children: <RecognizeTab /> }]
+                : []),
+            ]}
+          />
+        ) : (
+          <Empty description="登录珠宝结构库后即可浏览和上传结构">
+            <Button type="primary" onClick={() => { void bootstrap(); }}>
+              登录
+            </Button>
+          </Empty>
+        )}
       </Card>
+      <Modal
+        title="登录珠宝结构库"
+        open={authOpen}
+        onCancel={() => finishAuth(null)}
+        onOk={() => { void submitAuth(); }}
+        confirmLoading={authLoading}
+        okText="登录"
+        cancelText="取消"
+        destroyOnClose={false}
+        maskClosable={false}
+      >
+        {authMsg ? <Alert type="info" showIcon message={authMsg} style={{ marginBottom: 16 }} /> : null}
+        <Form form={authForm} layout="vertical">
+          <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+            <Input prefix={<UserOutlined />} autoComplete="username" placeholder="请输入珠宝结构库用户名" />
+          </Form.Item>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+            <Input.Password autoComplete="current-password" placeholder="请输入密码" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

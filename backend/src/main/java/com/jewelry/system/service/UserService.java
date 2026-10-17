@@ -86,6 +86,13 @@ public class UserService {
     public UserResponse update(long id, UserUpdateRequest req) {
         User u = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        if (req.getUsername() != null && !req.getUsername().isBlank()) {
+            String next = req.getUsername().trim();
+            if (!next.equals(u.getUsername()) && userRepository.existsByUsername(next)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在");
+            }
+            u.setUsername(next);
+        }
         if (req.getRealName() != null) {
             u.setRealName(req.getRealName());
         }

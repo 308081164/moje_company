@@ -97,6 +97,26 @@ export interface CustomerOrderPublicDto {
   modelApproved?: boolean | null
   quotation?: QuotationPublicDto | null
   modelFiles?: ModelFilePublicDto[]
+  shipment?: OrderShipmentDto | null
+}
+
+export interface OrderShipmentDto {
+  id: number
+  orderId: number
+  trackingNumber: string
+  carrierCode?: number | null
+  carrierName?: string | null
+  status?: string | null
+  statusLabel?: string | null
+  events: Array<{
+    time?: string | null
+    location?: string | null
+    description?: string | null
+    statusCode?: string | null
+  }>
+  queryUrl?: string | null
+  shippedAt?: string | null
+  deliveredAt?: string | null
 }
 
 export interface CustomerOrderRegistrationHintDto {
@@ -294,6 +314,10 @@ export interface Conversation {
   orderId: number
   orderNumber?: string
   title?: string
+  orderStatus?: string
+  orderStatusLabel?: string
+  serviceType?: string
+  serviceTypeLabel?: string
   lastMessage?: string
   lastMessageAt?: string
   unreadCount: number
@@ -323,6 +347,26 @@ export interface ConversationMessage {
   translatedLang?: string
   fileIds?: number[]
   eventId?: number
+  event?: OrderEventCard
+  createdAt?: string
+}
+
+export interface OrderEventCard {
+  id: number
+  orderId: number
+  eventType: string
+  actorType?: string
+  actorId?: number
+  actorRole?: string
+  actorName?: string
+  title?: string
+  content?: string
+  reason?: string
+  fileIds?: number[]
+  images?: string[]
+  actionable?: boolean
+  resolution?: string
+  resolutionLabel?: string
   createdAt?: string
 }
 

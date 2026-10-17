@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
 import com.jewelry.system.dto.order.OrderEventDto;
+import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.dto.portal.CustomerOrderConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerOrderRejectRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
@@ -74,5 +75,18 @@ public class PortalCustomerOrderController {
     public ResponseEntity<Void> confirmDelivery(@PathVariable long orderId) {
         portalCustomerService.confirmDelivery(orderId);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{orderId}/pay-balance")
+    @Operation(summary = "客户支付尾款（mock）")
+    public ResponseEntity<Void> payBalance(@PathVariable long orderId) {
+        portalCustomerService.payBalance(orderId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{orderId}/shipment")
+    @Operation(summary = "查询订单物流（客户，须已绑定）")
+    public ResponseEntity<OrderShipmentDto> shipment(@PathVariable long orderId) {
+        return ResponseEntity.ok(portalCustomerService.getOrderShipment(orderId));
     }
 }

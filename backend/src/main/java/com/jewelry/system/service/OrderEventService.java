@@ -1,6 +1,5 @@
 package com.jewelry.system.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.OrderEventDto;
 import com.jewelry.system.entity.*;
@@ -35,6 +34,7 @@ public class OrderEventService {
     private final B2BClientRepository b2bClientRepository;
     private final WebSocketService webSocketService;
     private final ConversationService conversationService;
+    private final OrderEventCardService orderEventCardService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -52,7 +52,7 @@ public class OrderEventService {
         event.setFileIdsJson(serializeFileIds(fileIds));
         event = eventRepository.save(event);
         if (StringUtils.hasText(title)) {
-            conversationService.pushEventMessage(orderId, event.getId(), title);
+            conversationService.pushEventMessage(orderId, event.getId(), title, actorType, actorId, actorRole);
         }
         return event;
     }
@@ -113,20 +113,9 @@ public class OrderEventService {
     }
 
     private OrderEventDto toDto(OrderEvent event) {
-        return OrderEventDto.builder()
-                .id(event.getId())
-                .orderId(event.getOrderId())
-                .eventType(event.getEventType().name())
-                .actorType(event.getActorType().name())
-                .actorId(event.getActorId())
-                .actorRole(event.getActorRole())
-                .actorName(resolveActorName(event.getActorType(), event.getActorId()))
-                .title(event.getTitle())
-                .content(event.getContent())
-                .reason(event.getReason())
-                .fileIds(parseFileIds(event.getFileIdsJson()))
-                .createdAt(event.getCreatedAt())
-                .build();
+        OrderEventDto dto = orderEventCardService.assemble(event);
+        dto.setActorName(resolveActorName(event.getActorType(), event.getActorId()));
+        return dto;
     }
 
     private String resolveActorName(AccountKind type, Long accountId) {
@@ -158,18 +147,6 @@ public class OrderEventService {
             return objectMapper.writeValueAsString(fileIds);
         } catch (Exception e) {
             log.warn("序列化事件附件ID失败", e);
-            return null;
-        }
-    }
-
-    private List<Long> parseFileIds(String json) {
-        if (!StringUtils.hasText(json)) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
-        } catch (Exception e) {
-            log.warn("解析事件附件ID失败: {}", json, e);
             return null;
         }
     }

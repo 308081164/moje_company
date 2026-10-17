@@ -67,4 +67,11 @@ public class PortalCustomerAccountController {
         portalCustomerService.updateLang(req);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/profile")
+    @Operation(summary = "更新客户预留基础资料（称呼、联系方式）")
+    public ResponseEntity<Void> updateProfile(@RequestBody PortalCustomerProfileRequest req) {
+        portalCustomerService.updateProfile(req);
+        return ResponseEntity.ok().build();
+    }
 }

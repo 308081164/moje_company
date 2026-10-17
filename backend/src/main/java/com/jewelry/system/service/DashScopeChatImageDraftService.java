@@ -27,7 +27,6 @@ import java.util.Set;
 @Slf4j
 public class DashScopeChatImageDraftService {
 
-    private static final String COMPAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
     private static final int MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
     /** 与前端 OrderSource 一致（含 RECOMMEND / OTHER） */
@@ -54,12 +53,13 @@ public class DashScopeChatImageDraftService {
         if (uploadFile.getSize() > MAX_IMAGE_BYTES) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片过大，请压缩后上传（最大 8MB）");
         }
-        String apiKey = integrationSettingsService.requireDashScopeApiKey();
-        if (apiKey == null) {
+        var llm = integrationSettingsService.requireLlm();
+        if (llm == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "未启用或未配置通义千问 API Key，请联系管理员在「系统配置 → 销售助手集成」中配置");
+                    "未启用或未配置大模型 API Key，请联系管理员在「系统配置 → API 配置」中配置");
         }
-        String model = integrationSettingsService.dashScopeModel();
+        String apiKey = llm.apiKey();
+        String model = llm.visionModel();
 
         String mime = ImageUploadSupport.resolveImageMimeType(uploadFile);
         String b64 = Base64.getEncoder().encodeToString(uploadFile.getBytes());
@@ -101,7 +101,7 @@ public class DashScopeChatImageDraftService {
                                                 .put("text", userText)))))
                 .toString();
 
-        HttpRequest req = HttpRequest.newBuilder(URI.create(COMPAT_URL))
+        HttpRequest req = HttpRequest.newBuilder(URI.create(llm.chatCompletionsUrl()))
                 .timeout(Duration.ofSeconds(120))
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
@@ -111,16 +111,16 @@ public class DashScopeChatImageDraftService {
         try {
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                log.warn("DashScope HTTP {} body {}", resp.statusCode(), truncate(resp.body(), 800));
+                log.warn("{} vision HTTP {} body {}", llm.provider(), resp.statusCode(), truncate(resp.body(), 800));
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                        "通义千问接口调用失败（HTTP " + resp.statusCode() + "）");
+                        "大模型识图失败（HTTP " + resp.statusCode() + "）");
             }
             return parseDraft(resp.body());
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
-            log.error("DashScope request error", e);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "通义千问接口调用异常: " + e.getMessage());
+            log.error("LLM vision request error", e);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "大模型识图异常: " + e.getMessage());
         }
     }
 
@@ -128,7 +128,7 @@ public class DashScopeChatImageDraftService {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode err = root.path("error");
         if (!err.isMissingNode() && err.path("message").isTextual()) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "通义千问返回错误: " + err.get("message").asText());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "大模型返回错误: " + err.get("message").asText());
         }
         String content = root.path("choices").path(0).path("message").path("content").asText(null);
         if (content == null || content.isBlank()) {

@@ -45,11 +45,16 @@ public class DashScopeAsrService {
         if (audio.getSize() > MAX_BYTES) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "语音文件过大（最大 10MB）");
         }
-        String apiKey = integrationSettingsService.requireDashScopeApiKey();
-        if (apiKey == null) {
+        var llm = integrationSettingsService.requireLlm();
+        if (llm == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "未启用或未配置通义千问 API Key，无法使用语音输入");
+                    "未启用或未配置大模型 API Key，无法使用语音输入");
         }
+        if ("kimi".equals(llm.provider())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "当前引擎为 Kimi K3，暂不支持语音识别，请改用文字输入或切换回通义千问");
+        }
+        String apiKey = llm.apiKey();
         String mime = resolveMime(audio.getContentType(), audio.getOriginalFilename());
         String dataUrl;
         try {

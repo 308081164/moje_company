@@ -21,6 +21,7 @@ import com.jewelry.system.entity.OrderCustomerViewLink;
 import com.jewelry.system.entity.OrderCustomerViewLink.LinkStatus;
 import com.jewelry.system.entity.Quotation;
 import com.jewelry.system.enums.OrderStatus;
+import com.jewelry.system.enums.ServiceType;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderCustomerViewLinkRepository;
@@ -72,6 +73,7 @@ public class CustomerOrderViewService {
     private final ModelingInfoRepository modelingInfoRepository;
     private final QuotationRepository quotationRepository;
     private final ObjectMapper objectMapper;
+    private final ShipmentService shipmentService;
 
     /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
     @Value("${app.portal.base-url:http://localhost:8852}")
@@ -194,7 +196,10 @@ public class CustomerOrderViewService {
         ModelingInfo mi = modelingInfoRepository.findByOrderId(order.getId()).orElse(null);
         Quotation quotation = quotationRepository.findByOrderId(order.getId()).orElse(null);
         List<String> images = parseDesignImages(di);
-        String firstImg = images.isEmpty() ? null : images.get(0);
+        // 来图定制：参考图不应作为「设计图」展示在进度面板；设计师设计才展示最新设计稿
+        String firstImg = (order.getServiceType() == ServiceType.CUSTOM_IMAGE)
+                ? null
+                : (images.isEmpty() ? null : images.get(0));
 
         QuotationPublicDto quotationDto = null;
         if (quotation != null && Boolean.TRUE.equals(quotation.getFinalized())) {
@@ -219,6 +224,7 @@ public class CustomerOrderViewService {
                 .modelApproved(mi != null ? mi.getCustomerApproved() : null)
                 .quotation(quotationDto)
                 .modelFiles(parseModelFiles(mi))
+                .shipment(shipmentService.getShipmentForCustomer(order.getId()))
                 .build();
     }
 

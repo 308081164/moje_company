@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { pathToFileURL } from 'url';
 import { spawn, type ChildProcess } from 'child_process';
 import { autoUpdater } from 'electron-updater';
 
@@ -19,7 +20,7 @@ type InlayDesktopAuth = {
   password: string;
 };
 
-/** 员工端直连 NAS 镶嵌库（默认公司内网 192.168.1.10:8871） */
+/** 员工端直连 NAS 珠宝结构库（默认公司内网 192.168.1.10:8871） */
 let cachedInlayAuth: InlayDesktopAuth = {
   origin: 'http://192.168.1.10:8871',
   username: 'moje',
@@ -99,7 +100,7 @@ function loadInlayAuthFromFiles(): Partial<InlayDesktopAuth> {
       found.password = j.INLAY_PASSWORD;
     }
     if (found.origin || found.username || found.password) {
-      console.log('[jewelry] 已从配置文件加载镶嵌库连接:', p);
+      console.log('[jewelry] 已从配置文件加载珠宝结构库连接:', p);
       return found;
     }
   }
@@ -221,6 +222,7 @@ function createWindow() {
       webSecurity: !isDev,
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: extraArgs,
+      webviewTag: true,
     },
     show: false, // 先隐藏，等加载完成再显示
     frame: true,
@@ -291,12 +293,15 @@ function resolveSocialPublisherDistDir(): string {
 }
 
 /** 拉起 social_publisher sidecar（无安全层模式，仅内嵌场景） */
-function startSocialPublisherSidecar() {
+function startSocialPublisherSidecar(): boolean {
+  if (socialPublisherSidecar && !socialPublisherSidecar.killed) {
+    return true;
+  }
   try {
     const exe = resolveSocialPublisherSidecarExe();
     if (!fs.existsSync(exe)) {
       console.warn('[social-publisher] sidecar 可执行文件不存在（跳过内嵌）:', exe);
-      return;
+      return false;
     }
     const dataDir = path.join(app.getPath('userData'), 'social-publisher');
     socialPublisherSidecar = spawn(exe, ['--host', '127.0.0.1', '--port', '8854'], {
@@ -317,8 +322,10 @@ function startSocialPublisherSidecar() {
       socialPublisherSidecar = null;
     });
     console.log('[social-publisher] sidecar 已启动，端口 8854');
+    return true;
   } catch (e) {
     console.error('[social-publisher] 启动 sidecar 异常', e);
+    return false;
   }
 }
 
@@ -443,7 +450,7 @@ app.whenReady().then(() => {
       cachedInlayAuth.username,
     password: process.env.JEWELRY_INLAY_PASSWORD || inlayFromFile.password || '',
   };
-  console.log('[jewelry] 镶嵌库直连:', cachedInlayAuth.origin, 'user=', cachedInlayAuth.username);
+  console.log('[jewelry] 珠宝结构库直连:', cachedInlayAuth.origin, 'user=', cachedInlayAuth.username);
   if (!cachedJewelryApiOrigin && app.isPackaged) {
     console.error(
       '[jewelry] 未配置后端 API 基址，桌面端将仍回退 localhost（仅本机联调可用）。' +
@@ -457,7 +464,6 @@ app.whenReady().then(() => {
 
   createWindow();
   setupAutoUpdater();
-  startSocialPublisherSidecar();
   
   // macOS 应用激活
   app.on('activate', () => {
@@ -588,6 +594,34 @@ ipcMain.handle('get-inlay-auth', () => ({
   password: cachedInlayAuth.password,
 }));
 
+ipcMain.handle('set-inlay-auth', (_evt, payload: { username?: string; password?: string }) => {
+  const username = typeof payload?.username === 'string' ? payload.username.trim() : '';
+  const password = typeof payload?.password === 'string' ? payload.password : '';
+  cachedInlayAuth = {
+    ...cachedInlayAuth,
+    username: username || cachedInlayAuth.username,
+    password,
+  };
+  try {
+    const filePath = path.join(app.getPath('userData'), 'api-config.json');
+    const existing = readDesktopConfigFile(filePath) || {};
+    const next: DesktopApiFile = {
+      ...existing,
+      INLAY_API_ORIGIN: cachedInlayAuth.origin,
+      INLAY_USERNAME: cachedInlayAuth.username,
+      INLAY_PASSWORD: cachedInlayAuth.password,
+    };
+    if (cachedJewelryApiOrigin) {
+      next.API_ORIGIN = cachedJewelryApiOrigin;
+    }
+    fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[jewelry] 写入珠宝结构库账号失败', e);
+    return { ok: false };
+  }
+  return { ok: true };
+});
+
 ipcMain.handle('get-app-info', () => {
   return {
     name: app.getName(),
@@ -600,6 +634,27 @@ ipcMain.handle('get-app-info', () => {
 ipcMain.handle('open-social-publisher', () => {
   openSocialPublisherWindow();
   return { opened: true };
+});
+
+ipcMain.handle('embed-social-publisher', async () => {
+  const distDir = resolveSocialPublisherDistDir();
+  const indexHtml = path.join(distDir, 'index.html');
+  if (!fs.existsSync(indexHtml)) {
+    return {
+      ok: false,
+      error: '社媒发布界面未打入当前安装包。请用包含 social_publisher 产物的流程重新打包员工端。',
+    };
+  }
+  const sidecarOk = startSocialPublisherSidecar();
+  if (!sidecarOk) {
+    return {
+      ok: false,
+      error: '社媒发布引擎未打入当前安装包（缺少 publisher-engine）。请重新打包员工端。',
+    };
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  const url = `${pathToFileURL(indexHtml).href}?sidecar=8854`;
+  return { ok: true, url };
 });
 
 ipcMain.handle('minimize-window', () => {

@@ -39,7 +39,7 @@ import {
   savedImageUrlsToUploadFileList,
 } from '@/utils/orderUploadFileList';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
-import type { CustomerProgressLinkResponse, FileInfo, OrderInfo, ProcessInfo } from '@/types/order';
+import type { CustomerProgressLinkResponse, FileInfo, OrderInfo, OrderShipmentDto, ProcessInfo } from '@/types/order';
 import { OrderSource, OrderStatus, ProcessType } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
@@ -161,6 +161,7 @@ const OrderDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [designImageFileList, setDesignImageFileList] = useState<UploadFile[]>([]);
+  const [engravingImageFileList, setEngravingImageFileList] = useState<UploadFile[]>([]);
   const [modelEffectImageFileList, setModelEffectImageFileList] = useState<UploadFile[]>([]);
   const [modelSourceFileList, setModelSourceFileList] = useState<UploadFile[]>([]);
   const [rejectDesignerAttachList, setRejectDesignerAttachList] = useState<UploadFile[]>([]);
@@ -178,6 +179,8 @@ const OrderDetailPage: React.FC = () => {
   const [customerCardPreviewUrl, setCustomerCardPreviewUrl] = useState<string | null>(null);
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
   const [modelSaveLoading, setModelSaveLoading] = useState(false);
+  const [shipment, setShipment] = useState<OrderShipmentDto | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(false);
   const [flipTodoOnly, setFlipTodoOnly] = useState(() => {
     try {
       return window.localStorage.getItem('orderDetailFlipTodoOnly') === '1';
@@ -200,6 +203,7 @@ const OrderDetailPage: React.FC = () => {
   const [rejectDesignerForm] = Form.useForm();
   const [reviewForm] = Form.useForm();
   const [quoteForm] = Form.useForm();
+  const [shipForm] = Form.useForm();
 
   /** 供 loadRelatedOrders 合并进翻页列表；勿把 order 放进 loadRelatedOrders 的 deps，否则会与 refresh 形成死循环请求 */
   const latestOrderRef = useRef<OrderInfo | null>(null);
@@ -291,6 +295,7 @@ const OrderDetailPage: React.FC = () => {
       latestOrderRef.current = o;
       setOrder(o);
       setDesignImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.designImages || [], '设计图'));
+      setEngravingImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.engravingImages || [], '字印图'));
       setModelEffectImageFileList(savedImageUrlsToUploadFileList(o.modelInfo?.modelEffectImages || [], '效果图'));
       setModelSourceFileList(modelSourceUploadListFromSaved(o.modelInfo?.modelFiles));
 
@@ -343,6 +348,14 @@ const OrderDetailPage: React.FC = () => {
       
       const fl = await orderService.getOrderFiles(orderId);
       setFiles(fl);
+
+      // 物流信息（发货后展示；未发货/无权限时静默）
+      try {
+        const sh = await orderService.getShipment(orderId);
+        setShipment(sh);
+      } catch {
+        setShipment(null);
+      }
     } catch (error) {
       latestOrderRef.current = null;
       message.error('加载订单失败');
@@ -461,6 +474,32 @@ const OrderDetailPage: React.FC = () => {
   const handleDesignUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
     setDesignImageFileList(normalizeDoneImageUploadFileList(fileList));
   }, []);
+
+  const handleEngravingUploadChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
+    setEngravingImageFileList(normalizeDoneImageUploadFileList(fileList));
+  }, []);
+
+  const handleEngravingCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
+    async (options) => {
+      const { file, onError, onSuccess } = options;
+      try {
+        const res = await orderService.uploadDesignFile(orderId, file as File);
+        let url = res.fileUrl?.trim();
+        if (!url) {
+          url = (await orderService.previewFile(res.id))?.trim();
+        }
+        if (!url) {
+          throw new Error('未返回图片地址');
+        }
+        onSuccess?.({ ...res, url });
+        message.success('字印图片上传成功');
+      } catch {
+        message.error('字印图片上传失败');
+        onError?.(new Error('上传失败'));
+      }
+    },
+    [orderId]
+  );
 
   const handleDesignCustomRequest = useCallback<NonNullable<UploadProps['customRequest']>>(
     async (options) => {
@@ -587,6 +626,7 @@ const OrderDetailPage: React.FC = () => {
     await orderService.updateOrderDesign(orderId, {
       designerId: v.designerId,
       engravingText: v.engravingText,
+      engravingImages: collectDoneImageUrlsFromFileList(engravingImageFileList),
       materialType: v.materialType,
       handSize: v.handSize,
       designNotes: v.designNotes,
@@ -743,6 +783,30 @@ const OrderDetailPage: React.FC = () => {
     refresh();
   };
 
+  const submitShipment = async () => {
+    const v = await shipForm.validateFields();
+    const trackingNumber = String(v.trackingNumber || '').trim();
+    if (!trackingNumber) {
+      message.warning('请输入快递单号');
+      return;
+    }
+    setShipmentLoading(true);
+    try {
+      const sh = await orderService.shipOrder(orderId, {
+        trackingNumber,
+        carrierCode: v.carrierCode,
+      });
+      setShipment(sh);
+      message.success('发货成功');
+      shipForm.resetFields();
+      await refresh();
+    } catch (e) {
+      message.error('发货失败，请重试');
+    } finally {
+      setShipmentLoading(false);
+    }
+  };
+
   const previewFile = async (fileId: number) => {
     const url = await orderService.previewFile(fileId);
     if (url && /^https?:\/\//i.test(url)) {
@@ -827,7 +891,8 @@ const OrderDetailPage: React.FC = () => {
           <Form form={designForm} layout="vertical" disabled={!canOperateDesign}>
           <Form.Item name="designerId" label="设计师">
             <Select
-              allowClear
+              allowClear={!isDesigner}
+              disabled={isDesigner && !isAdmin && !isSales}
               options={designers.map((u) => ({
                 value: u.id,
                 label: `${u.realName || u.username}`,
@@ -835,7 +900,20 @@ const OrderDetailPage: React.FC = () => {
             />
           </Form.Item>
           <Form.Item name="engravingText" label="字印">
-            <Input />
+            <Input placeholder="文字内容，如姓名 / 日期 / 字母" />
+          </Form.Item>
+          <Form.Item label="字印图片（最多 5 张）" extra="支持文字与图片；图片最多 5 张，上传后点「保存设计信息」写入订单。">
+            <UploadWithImagePreview
+              listType="picture-card"
+              multiple
+              maxCount={5}
+              accept="image/*"
+              fileList={engravingImageFileList}
+              onChange={handleEngravingUploadChange}
+              customRequest={handleEngravingCustomRequest}
+            >
+              <div style={{ marginTop: 8 }}>上传</div>
+            </UploadWithImagePreview>
           </Form.Item>
           <Form.Item name="materialType" label="材质类型">
             <Select
@@ -1089,6 +1167,69 @@ const OrderDetailPage: React.FC = () => {
             保存评审
           </Button>
         </Form>
+
+        <Divider />
+
+        {/* 物流发货（仅生产中） */}
+        {order?.currentStatus === OrderStatus.PRODUCING && !shipment && (
+          <Card size="small" title="发货（录入快递单号）" style={{ marginTop: 16 }}>
+            <Form form={shipForm} layout="vertical">
+              <Form.Item
+                name="trackingNumber"
+                label="快递单号"
+                rules={[{ required: true, message: '请输入快递单号' }]}
+              >
+                <Input placeholder="如：RR123456789CN" />
+              </Form.Item>
+              <Form.Item name="carrierCode" label="承运商编码（可选，留空自动识别）">
+                <Input placeholder="如：100003（17TRACK 承运商编码）" />
+              </Form.Item>
+              <Button type="primary" loading={shipmentLoading} onClick={submitShipment}>
+                确认发货
+              </Button>
+            </Form>
+          </Card>
+        )}
+
+        {/* 物流轨迹展示 */}
+        {shipment && (
+          <Card size="small" title="物流信息" style={{ marginTop: 16 }}>
+            <Descriptions column={2} size="small" bordered>
+              <Descriptions.Item label="快递单号">{shipment.trackingNumber}</Descriptions.Item>
+              <Descriptions.Item label="承运商">
+                {shipment.carrierName || shipment.carrierCode || '自动识别'}
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={shipment.statusLabel === '已签收' ? 'green' : 'processing'}>
+                  {shipment.statusLabel || '已发货（待物流更新）'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="发货时间">{shipment.shippedAt || '-'}</Descriptions.Item>
+            </Descriptions>
+            {shipment.queryUrl && (
+              <div style={{ marginTop: 12 }}>
+                <a href={shipment.queryUrl} target="_blank" rel="noopener noreferrer">
+                  前往 17TRACK 查询物流轨迹
+                </a>
+              </div>
+            )}
+            {shipment.events && shipment.events.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <Text strong>物流轨迹</Text>
+                {shipment.events.map((e, i) => (
+                  <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {e.time || '-'} {e.location ? `· ${e.location}` : ''}
+                      </Text>
+                    </div>
+                    <div>{e.description || '-'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
         </div>
       );
     }
@@ -1264,6 +1405,24 @@ const OrderDetailPage: React.FC = () => {
                 </Descriptions.Item>
               </Descriptions>
               
+              {order.designInfo.engravingImages && order.designInfo.engravingImages.length > 0 && (
+                <>
+                  <Divider style={{ margin: '16px 0 8px 0' }}>字印图片</Divider>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {order.designInfo.engravingImages.map((url, index) => (
+                      <Image
+                        key={index}
+                        width={120}
+                        height={120}
+                        style={{ objectFit: 'cover', borderRadius: 4 }}
+                        src={url}
+                        alt={`字印图 ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
               {order.designInfo.designImages && order.designInfo.designImages.length > 0 && (
                 <>
                   <Divider style={{ margin: '16px 0 8px 0' }}>设计图片</Divider>

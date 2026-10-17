@@ -2,12 +2,15 @@
   'use strict';
 
   /* ============================================================
-     Workspace gate: order chat requires paid deposit
+     Workspace gate: orders page requires email sign-in
   ============================================================ */
   var isWorkspace = !!document.querySelector('.app-shell');
-  if (isWorkspace && !localStorage.getItem('duxury-paid')) {
-    window.location.replace('index.html#services');
-    return;
+  var workspaceLoggedIn = !isWorkspace || !!localStorage.getItem('duxury-token');
+  if (isWorkspace && !workspaceLoggedIn) {
+    var gateEl = document.getElementById('orderGate');
+    var shellEl = document.querySelector('.app-shell');
+    if (gateEl) gateEl.style.display = '';
+    if (shellEl) shellEl.style.display = 'none';
   }
 
   /* ============================================================
@@ -325,7 +328,7 @@
           displayName: data.displayName || email
         }));
         closeModal(loginModal);
-        showCheckout();
+        maybeShowProfilePrompt(data, email);
       }).catch(function (err) {
         if (emailCodeHint) {
           emailCodeHint.textContent = err.message || window.I18N.t('login.code.error');
@@ -345,11 +348,88 @@
     }
   }
 
+  // 登录后检查预留基础信息（称呼、联系方式）是否齐全，缺失则引导填写
+  function maybeShowProfilePrompt(data, email) {
+    var missingDisplayName = !data.displayName || !data.displayName.trim();
+    var missingContact = !data.contact || !data.contact.trim();
+    if (!missingDisplayName && !missingContact) {
+      afterLogin();
+      return;
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog profile-prompt';
+    dialog.innerHTML =
+      '<button class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="profile-prompt__title">完善您的资料</h3>' +
+      '<p class="profile-prompt__sub">为了更好的服务，请补充以下信息</p>' +
+      '<label class="profile-prompt__label">称呼</label>' +
+      '<input type="text" id="profileDisplayName" class="checkout__input" placeholder="如何称呼您" value="' + escapeAttr(data.displayName || '') + '">' +
+      '<label class="profile-prompt__label">联系方式</label>' +
+      '<input type="text" id="profileContact" class="checkout__input" placeholder="手机号 / 微信 / 邮箱" value="' + escapeAttr(data.contact || email || '') + '">' +
+      '<div class="profile-prompt__actions">' +
+        '<button class="prog-btn prog-btn--ok" id="profileSave">保存并继续</button>' +
+        '<button class="prog-btn prog-btn--no" id="profileSkip">暂时跳过</button>' +
+      '</div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.querySelector('#profileSkip').addEventListener('click', function () { close(); afterLogin(); });
+    dialog.querySelector('#profileSave').addEventListener('click', function () {
+      var dn = document.getElementById('profileDisplayName').value.trim();
+      var ct = document.getElementById('profileContact').value.trim();
+      if (!dn) { alert('请填写称呼'); return; }
+      if (!ct) { alert('请填写联系方式'); return; }
+      window.DUXURY_API.updateProfile(dn, ct)
+        .then(function () {
+          var user = { method: 'email', email: data.email || email, displayName: dn };
+          localStorage.setItem('duxury-user', JSON.stringify(user));
+          close();
+          afterLogin();
+        })
+        .catch(function (err) {
+          alert(err.message || '保存失败');
+        });
+    });
+  }
+
+  // 登录成功后：首页进入结算；订单工作台进入工作台视图
+  function afterLogin() {
+    document.dispatchEvent(new CustomEvent('duxury:login'));
+    if (isWorkspace) {
+      var gate = document.getElementById('orderGate');
+      var shell = document.querySelector('.app-shell');
+      if (gate) gate.style.display = 'none';
+      if (shell) shell.style.display = '';
+      startWorkspace();
+      return;
+    }
+    if (document.body.classList.contains('storefront-page')) {
+      return;
+    }
+    showCheckout();
+  }
+
+  // 订单工作台登录引导按钮
+  var orderGateLogin = document.getElementById('orderGateLogin');
+  if (orderGateLogin) {
+    orderGateLogin.addEventListener('click', function () {
+      resetEmailLogin();
+      openModal(loginModal);
+    });
+  }
+
   // Checkout
   var checkoutService = document.getElementById('checkoutService');
   var checkoutPrice = document.getElementById('checkoutPrice');
   var payDeposit = document.getElementById('payDeposit');
   var checkoutSuccess = document.getElementById('checkoutSuccess');
+  var selectedImages = [];
+  var MAX_IMAGES = 5;
 
   function showCheckout() {
     if (!checkoutModal) return;
@@ -360,6 +440,8 @@
     payDeposit.style.display = '';
     var reqBox = document.getElementById('checkoutRequirements');
     if (reqBox) reqBox.style.display = '';
+    selectedImages = [];
+    renderImagePreview();
     openModal(checkoutModal);
   }
 
@@ -372,12 +454,100 @@
     });
   }
 
+  function renderImagePreview() {
+    var grid = document.getElementById('imagePreviewGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    selectedImages.forEach(function (dataUrl, idx) {
+      var item = document.createElement('div');
+      item.className = 'image-preview__item';
+      var img = document.createElement('img');
+      img.className = 'image-preview__img';
+      img.src = dataUrl;
+      img.alt = 'reference-' + (idx + 1);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'image-preview__remove';
+      btn.setAttribute('aria-label', 'Remove');
+      btn.textContent = '×';
+      btn.addEventListener('click', function () {
+        selectedImages.splice(idx, 1);
+        renderImagePreview();
+      });
+      item.appendChild(img);
+      item.appendChild(btn);
+      grid.appendChild(item);
+    });
+  }
+
+  // 上传区交互
+  var uploadZone = document.getElementById('uploadZone');
+  var referenceImageInput = document.getElementById('referenceImageInput');
+  if (uploadZone && referenceImageInput) {
+    uploadZone.addEventListener('click', function () {
+      referenceImageInput.click();
+    });
+    uploadZone.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        referenceImageInput.click();
+      }
+    });
+    referenceImageInput.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(referenceImageInput.files || []);
+      if (!files.length) return;
+      var remaining = MAX_IMAGES - selectedImages.length;
+      if (remaining <= 0) {
+        alert(window.I18N.t('co.requirements.image.max'));
+        referenceImageInput.value = '';
+        return;
+      }
+      var toAdd = files.slice(0, remaining);
+      if (files.length > remaining) {
+        alert(window.I18N.t('co.requirements.image.max'));
+      }
+      Promise.all(toAdd.map(fileToDataUrl)).then(function (dataUrls) {
+        selectedImages = selectedImages.concat(dataUrls);
+        renderImagePreview();
+        referenceImageInput.value = '';
+      }).catch(function () {
+        referenceImageInput.value = '';
+      });
+    });
+    // 拖拽上传
+    ['dragover', 'dragleave', 'drop'].forEach(function (evt) {
+      uploadZone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (evt === 'dragover') uploadZone.classList.add('upload-zone--dragover');
+        else uploadZone.classList.remove('upload-zone--dragover');
+      });
+    });
+    uploadZone.addEventListener('drop', function (e) {
+      var files = Array.prototype.slice.call(e.dataTransfer.files || [])
+        .filter(function (f) { return f.type.indexOf('image/') === 0; });
+      if (!files.length) return;
+      var remaining = MAX_IMAGES - selectedImages.length;
+      if (remaining <= 0) {
+        alert(window.I18N.t('co.requirements.image.max'));
+        return;
+      }
+      var toAdd = files.slice(0, remaining);
+      if (files.length > remaining) {
+        alert(window.I18N.t('co.requirements.image.max'));
+      }
+      Promise.all(toAdd.map(fileToDataUrl)).then(function (dataUrls) {
+        selectedImages = selectedImages.concat(dataUrls);
+        renderImagePreview();
+      });
+    });
+  }
+
   if (payDeposit) {
     payDeposit.addEventListener('click', function () {
       var serviceType = selectedService === 'custom' ? 'CUSTOM_IMAGE' : 'DESIGNER_DESIGN';
       var reqInput = document.getElementById('requirementInput');
       var matInput = document.getElementById('materialInput');
-      var imgInput = document.getElementById('referenceImageInput');
       var requirement = reqInput ? reqInput.value.trim() : '';
       var material = matInput ? matInput.value.trim() : '';
       var titleKey = serviceType === 'CUSTOM_IMAGE' ? 'svc.custom.title' : 'svc.designer.title';
@@ -409,15 +579,7 @@
         });
       }
 
-      if (imgInput && imgInput.files && imgInput.files.length) {
-        fileToDataUrl(imgInput.files[0]).then(function (dataUrl) {
-          doCreate([dataUrl]);
-        }).catch(function () {
-          doCreate(null);
-        });
-      } else {
-        doCreate(null);
-      }
+      doCreate(selectedImages.length ? selectedImages : null);
     });
   }
 
@@ -436,45 +598,95 @@
   // Per-conversation runtime state
   var workspace = {
     currentId: null,
-    members: {}
+    orderId: null,
+    members: {},
+    allConversations: [],
+    filter: 'all',
+    searchQuery: ''
   };
 
   function chatApiReady() {
     return !!(window.DUXURY_API && window.DUXURY_API.listConversations && window.DUXURY_API.sendMessage);
   }
 
+  function matchesFilter(c) {
+    var f = workspace.filter || 'all';
+    if (f === 'all') return true;
+    if (f === 'design') {
+      return c.orderStatus === 'PENDING_DESIGN' || c.orderStatus === 'DESIGNING';
+    }
+    if (f === 'producing') {
+      return c.orderStatus === 'PENDING_PRODUCTION' || c.orderStatus === 'PRODUCING';
+    }
+    return true;
+  }
+
   function renderConversationList(items) {
     if (!conversationList) return;
+    workspace.allConversations = items || [];
+    var q = (workspace.searchQuery || '').trim().toLowerCase();
+    var filtered = workspace.allConversations.filter(function (c) {
+      if (!matchesFilter(c)) return false;
+      if (!q) return true;
+      var name = (c.orderNumber || c.title || '').toLowerCase();
+      return name.indexOf(q) !== -1;
+    });
     conversationList.innerHTML = '';
-    (items || []).forEach(function (c) {
+    if (!filtered.length) {
+      conversationList.innerHTML = '<div class="conversation__empty">' + window.I18N.t('ws.empty') + '</div>';
+    }
+    filtered.forEach(function (c) {
       var el = document.createElement('div');
       el.className = 'conversation';
       el.setAttribute('data-id', c.id);
       el.setAttribute('data-order', c.orderNumber || '');
-      var letter = (c.title || c.orderNumber || '?').charAt(0).toUpperCase();
+      var letter = (c.orderNumber || c.title || '?').charAt(0).toUpperCase();
+      var statusColor = STATUS_COLORS[c.orderStatus] || '#6b7280';
+      var statusPill = c.orderStatusLabel
+        ? '<span class="conversation__status" style="background:' + statusColor + '">' + escapeHtml(c.orderStatusLabel) + '</span>'
+        : '';
       var badge = c.unreadCount > 0
         ? '<span class="conversation__badge">' + c.unreadCount + '</span>'
         : '<span class="conversation__badge conversation__badge--muted">✓✓</span>';
+      var typePill = c.serviceType
+        ? '<span class="conversation__type conversation__type--' + c.serviceType.toLowerCase() + '">' + escapeHtml(c.serviceTypeLabel || c.serviceType) + '</span>'
+        : '';
+      var avatarHtml = c.avatarUrl
+        ? '<div class="conversation__avatar conversation__avatar--ring conversation__avatar--img-wrap"><img class="conversation__avatar-img" src="' + escapeAttr(c.avatarUrl) + '" alt=""></div>'
+        : '<div class="conversation__avatar conversation__avatar--ring" style="background:' + statusColor + '">' + letter + '</div>';
       el.innerHTML =
-        '<div class="conversation__avatar conversation__avatar--ring">' + letter + '</div>' +
+        avatarHtml +
         '<div class="conversation__main">' +
-          '<div class="conversation__top"><span class="conversation__name">' + (c.title || c.orderNumber || '') + '</span><span class="conversation__time"></span></div>' +
-          '<div class="conversation__bottom"><span class="conversation__preview">' + (c.lastMessage || '') + '</span>' + badge + '</div>' +
+          '<div class="conversation__top"><span class="conversation__name">' + escapeHtml(c.orderNumber || c.title || '') + '</span>' + typePill + '</div>' +
+          '<div class="conversation__bottom"><span class="conversation__preview">' + escapeHtml(c.lastMessage || '') + '</span>' + statusPill + badge + '</div>' +
         '</div>';
-      el.addEventListener('click', function () { openConversation(c.id, c.title, c.orderNumber); });
+      el.addEventListener('click', function () { openConversation(c.id, c.title, c.orderNumber, c.orderId, c.orderStatus, c.orderStatusLabel); });
       conversationList.appendChild(el);
     });
-    if (items && items.length && !workspace.currentId) {
-      openConversation(items[0].id, items[0].title, items[0].orderNumber);
+    if (filtered.length && !workspace.currentId) {
+      var first = filtered[0];
+      openConversation(first.id, first.title, first.orderNumber, first.orderId, first.orderStatus, first.orderStatusLabel);
     }
   }
 
-  function openConversation(id, title, orderNumber) {
+  function openConversation(id, title, orderNumber, orderId, orderStatus, orderStatusLabel) {
     workspace.currentId = id;
+    workspace.orderId = orderId || null;
     var chatTitle = document.getElementById('chatTitle');
     var chatOrderId = document.getElementById('chatOrderId');
+    var chatStage = document.getElementById('chatStage');
     if (chatTitle) chatTitle.textContent = title || '';
     if (chatOrderId) chatOrderId.textContent = orderNumber ? '#' + orderNumber : '';
+    if (chatStage) {
+      if (orderStatusLabel) {
+        chatStage.textContent = orderStatusLabel;
+        chatStage.style.display = '';
+        chatStage.style.background = STATUS_COLORS[orderStatus] || '#6b7280';
+        chatStage.style.color = '#fff';
+      } else {
+        chatStage.style.display = 'none';
+      }
+    }
     if (conversationList) {
       conversationList.querySelectorAll('.conversation').forEach(function (c) { c.classList.remove('active'); });
       var el = conversationList.querySelector('[data-id="' + id + '"]');
@@ -499,7 +711,8 @@
     (members || []).forEach(function (m) {
       var role = m.role || 'CUSTOMER';
       var cls = role === 'DESIGNER' ? 'member-avatar--designer'
-        : (role === 'CUSTOMER' ? 'member-avatar--client' : 'member-avatar--tracker');
+        : (role === 'CUSTOMER' ? 'member-avatar--client'
+        : (role === 'SUPER_SERVICE' ? 'member-avatar--super-service' : 'member-avatar--tracker'));
       var span = document.createElement('span');
       span.className = 'member-avatar ' + cls;
       span.title = m.displayName || role;
@@ -512,10 +725,331 @@
     if (!chatBody) return;
     chatBody.innerHTML = '<div class="chat__day"><span>' + window.I18N.t('ws.day.today') + '</span></div>';
     (messages || []).forEach(function (m) {
+      if (m.msgType === 'event' && m.event) {
+        appendEventCard(m);
+        return;
+      }
       var mine = m.senderType === 'C_PORTAL_CUSTOMER';
       appendChatMsg(m.content || '', mine ? 'out' : 'in', m.role || 'CUSTOMER', m.displayName || m.role || '', m.createdAt, m.translatedContent, m.id);
     });
     chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function appendEventCard(m) {
+    if (!chatBody) return;
+    var ev = m.event || {};
+    var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
+    var role = ev.actorRole || m.role || 'SYSTEM';
+    var senderName = ev.actorName || m.displayName || role;
+
+    // 普通聊天气泡发送形式：昵称 + 时间，气泡部分替换为卡片（无头像圆球）
+    // 自己发送的（客户操作类事件）靠右，他人发送的靠左
+    var mine = ev.actorType === 'C_PORTAL_CUSTOMER';
+    var msg = document.createElement('div');
+    msg.className = 'msg msg--no-avatar ' + (mine ? 'msg--out' : 'msg--in');
+
+    var content = document.createElement('div');
+    content.className = 'msg__content';
+
+    var meta = document.createElement('div');
+    meta.className = 'msg__meta' + (mine ? ' msg__meta--out' : '');
+    var roleTag = document.createElement('span');
+    roleTag.className = 'msg__role';
+    roleTag.style.color = ROLE_COLORS[role] || '#999';
+    roleTag.textContent = senderName;
+    var time = document.createElement('span');
+    time.className = 'msg__time';
+    time.textContent = formatTime(m.createdAt);
+    meta.appendChild(roleTag);
+    meta.appendChild(time);
+    content.appendChild(meta);
+
+    // 尾款支付卡片：长条形，区别于其他卡片
+    var isBalance = ev.eventType === 'BALANCE_PAYMENT' || ev.eventType === 'BALANCE_PAID';
+
+    // 卡片（替代气泡）
+    var card = document.createElement('div');
+    card.className = 'msg-card msg-card--' + (ev.eventType || 'default') + (isBalance ? ' msg-card--balance' : '');
+    card.style.borderTop = '3px solid ' + style.color;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.title = '点击查看详情';
+
+    if (ev.title) {
+      var title = document.createElement('div');
+      title.className = 'msg-card__title';
+      title.style.color = style.color;
+      title.textContent = ev.title;
+      card.appendChild(title);
+    }
+    var images = ev.images || [];
+    if (images.length) {
+      var imgs = document.createElement('div');
+      imgs.className = 'msg-card__imgs';
+      var first = images[0];
+      var img = document.createElement('img');
+      img.className = 'msg-card__img';
+      img.src = first;
+      img.alt = ev.title || 'design';
+      img.loading = 'lazy';
+      imgs.appendChild(img);
+      if (images.length > 1) {
+        var more = document.createElement('span');
+        more.className = 'msg-card__more';
+        more.textContent = '+' + (images.length - 1);
+        imgs.appendChild(more);
+      }
+      card.appendChild(imgs);
+    }
+    if (ev.content) {
+      var contentEl = document.createElement('div');
+      contentEl.className = 'msg-card__content';
+      contentEl.textContent = ev.content;
+      card.appendChild(contentEl);
+    }
+    if (ev.reason) {
+      var reason = document.createElement('div');
+      reason.className = 'msg-card__reason';
+      reason.textContent = ev.reason;
+      card.appendChild(reason);
+    }
+
+    // 已决策锁定徽标
+    if (ev.resolution && ev.resolutionLabel) {
+      var lock = document.createElement('div');
+      lock.className = 'msg-card__lock msg-card__lock--' + ev.resolution.toLowerCase();
+      lock.textContent = ev.resolutionLabel + (ev.resolution === 'CONFIRM' ? ' ✓' : (ev.resolution === 'REJECT' ? ' ✗' : ''));
+      card.appendChild(lock);
+    }
+
+    // 操作按钮（阻止冒泡，避免触发详情）
+    if (ev.actionable && ev.eventType) {
+      var confirmAct, rejectAct, confirmLabel, rejectLabel;
+      if (ev.eventType === 'DESIGN_SUBMIT') {
+        confirmAct = 'DESIGN_CONFIRM'; rejectAct = 'DESIGN_REJECT';
+        confirmLabel = '确认设计稿'; rejectLabel = '驳回设计稿';
+      } else if (ev.eventType === 'MODEL_SUBMIT') {
+        confirmAct = 'MODEL_CONFIRM'; rejectAct = 'MODEL_REJECT';
+        confirmLabel = '确认建模稿'; rejectLabel = '驳回建模稿';
+      } else if (ev.eventType === 'BALANCE_PAYMENT') {
+        confirmAct = 'BALANCE_PAY'; rejectAct = null;
+        confirmLabel = '立即支付 $399'; rejectLabel = null;
+      }
+      if (confirmAct) {
+        var actions = document.createElement('div');
+        actions.className = 'msg-card__actions';
+        if (confirmAct === 'BALANCE_PAY') {
+          var payBtn = document.createElement('button');
+          payBtn.className = 'prog-btn prog-btn--pay msg-card__btn';
+          payBtn.textContent = confirmLabel;
+          payBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            openBalancePayModal();
+          });
+          actions.appendChild(payBtn);
+        } else {
+          var okBtn = document.createElement('button');
+          okBtn.className = 'prog-btn prog-btn--ok msg-card__btn';
+          okBtn.textContent = confirmLabel;
+          okBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var orderId = workspace.orderId;
+            if (!orderId) return;
+            window.DUXURY_API.confirmOrder(orderId, confirmAct)
+              .then(reloadChatAndProgress)
+              .catch(function (err) { alert(err.message); });
+          });
+          actions.appendChild(okBtn);
+          if (rejectAct) {
+            var noBtn = document.createElement('button');
+            noBtn.className = 'prog-btn prog-btn--no msg-card__btn';
+            noBtn.textContent = rejectLabel;
+            noBtn.addEventListener('click', function (e) {
+              e.stopPropagation();
+              var reason = prompt(window.I18N.t('ws.progress.reject.ph'));
+              if (!reason) return;
+              var orderId = workspace.orderId;
+              if (!orderId) return;
+              window.DUXURY_API.rejectOrder(orderId, rejectAct, reason)
+                .then(reloadChatAndProgress)
+                .catch(function (err) { alert(err.message); });
+            });
+            actions.appendChild(noBtn);
+          }
+        }
+        card.appendChild(actions);
+      }
+    }
+
+    // 点击卡片查看详情
+    card.addEventListener('click', function () { openEventDetail(m); });
+    content.appendChild(card);
+    msg.appendChild(content);
+    chatBody.appendChild(msg);
+  }
+
+  function openPublishModal(orderId, summary) {
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog';
+    dialog.innerHTML =
+      '<button class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('pub.title')) + '</h3>' +
+      '<p class="shop-fees__note" id="publishFeeNote"></p>' +
+      '<label class="listing-label">' + escapeHtml(window.I18N.t('pub.title')) + '</label>' +
+      '<input class="checkout__input" id="publishTitle" value="' + escapeAttr(summary.displayTitle || summary.orderNumber || '') + '">' +
+      '<label class="listing-label">' + escapeHtml(window.I18N.t('pub.price')) + '</label>' +
+      '<input class="checkout__input" id="publishPrice" type="number" min="1" step="0.01" placeholder="399">' +
+      '<textarea class="checkout__input" id="publishDesc" rows="3" placeholder="..."></textarea>' +
+      '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="publishConfirm">' + escapeHtml(window.I18N.t('pub.submit')) + '</button></div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    window.DUXURY_API.getStorefrontFeeGuide().then(function (fees) {
+      var note = document.getElementById('publishFeeNote');
+      if (note && fees) {
+        note.textContent = window.I18N.t('shop.fees') + ': ' +
+          window.I18N.t('shop.prod') + ' $' + fees.productionFeeMin + '–$' + fees.productionFeeMax +
+          ' · ' + window.I18N.t('shop.ship') + ' $' + fees.shippingFeeMin + '–$' + fees.shippingFeeMax;
+      }
+    }).catch(function () {});
+    dialog.querySelector('#publishConfirm').addEventListener('click', function () {
+      var price = Number(document.getElementById('publishPrice').value);
+      if (!price || price <= 0) { alert(window.I18N.t('pub.price')); return; }
+      window.DUXURY_API.publishStorefront({
+        sourceOrderId: orderId,
+        title: document.getElementById('publishTitle').value.trim(),
+        description: document.getElementById('publishDesc').value.trim(),
+        salePrice: price
+      }).then(function () {
+        close();
+        location.href = 'seller.html';
+      }).catch(function (err) { alert(err.message); });
+    });
+  }
+
+  // 模拟支付尾款弹窗
+  function openBalancePayModal() {
+    var orderId = workspace.orderId;
+    if (!orderId) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog balance-pay';
+    dialog.innerHTML =
+      '<button class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="balance-pay__title">支付尾款</h3>' +
+      '<div class="balance-pay__amount">$399</div>' +
+      '<div class="balance-pay__hint">模拟支付流程，点击确认即视为支付成功</div>' +
+      '<div class="balance-pay__actions">' +
+        '<button class="prog-btn prog-btn--pay" id="balancePayConfirm">确认支付</button>' +
+        '<button class="prog-btn prog-btn--no" id="balancePayCancel">取消</button>' +
+      '</div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.querySelector('#balancePayCancel').addEventListener('click', close);
+    dialog.querySelector('#balancePayConfirm').addEventListener('click', function () {
+      window.DUXURY_API.payBalance(orderId)
+        .then(function () {
+          dialog.innerHTML =
+            '<div class="balance-pay__success">✓</div>' +
+            '<h3 class="balance-pay__title">支付成功</h3>' +
+            '<div class="balance-pay__hint">尾款 $399 已支付</div>' +
+            '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="balancePayDone">完成</button></div>';
+          dialog.querySelector('#balancePayDone').addEventListener('click', function () {
+            close();
+            reloadChatAndProgress();
+          });
+        })
+        .catch(function (err) { alert(err.message); });
+    });
+  }
+
+  function openEventDetail(m) {
+    var ev = m.event || {};
+    var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
+    var role = ev.actorRole || m.role || 'SYSTEM';
+    var senderName = ev.actorName || m.displayName || role;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog';
+    var html = '<button class="event-detail__close" aria-label="Close">&times;</button>';
+    html += '<div class="event-detail__badge" style="background:' + style.color + '">' + escapeHtml(style.label) + '</div>';
+    html += '<h3 class="event-detail__title" style="color:' + style.color + '">' + escapeHtml(ev.title || style.label) + '</h3>';
+    html += '<div class="event-detail__meta">' + escapeHtml(senderName) + ' · ' + escapeHtml(formatTime(m.createdAt)) + '</div>';
+    var images = ev.images || [];
+    if (images.length) {
+      html += '<div class="event-detail__imgs">';
+      images.forEach(function (u) {
+        html += '<img class="event-detail__img" src="' + escapeAttr(u) + '" alt="">';
+      });
+      html += '</div>';
+    }
+    if (ev.content) html += '<div class="event-detail__content">' + escapeHtml(ev.content) + '</div>';
+    if (ev.reason) html += '<div class="event-detail__reason">驳回原因：' + escapeHtml(ev.reason) + '</div>';
+    // 物流事件：展示物流轨迹
+    if (ev.eventType === 'SHIPPED' || ev.eventType === 'DELIVERED') {
+      html += '<div class="event-detail__shipment" id="eventShipment">加载物流信息…</div>';
+    }
+    dialog.innerHTML = html;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+
+    // 拉取物流并渲染
+    if ((ev.eventType === 'SHIPPED' || ev.eventType === 'DELIVERED') && workspace.orderId) {
+      var shipBox = dialog.querySelector('#eventShipment');
+      window.DUXURY_API.getShipment(workspace.orderId).then(function (s) {
+        if (!shipBox || !s) {
+          if (shipBox) shipBox.textContent = '暂无物流信息';
+          return;
+        }
+        var sh = '';
+        sh += '<div class="event-detail__shipment-row">快递单号：' + escapeHtml(s.trackingNumber || '-') + '</div>';
+        if (s.carrierName || s.carrierCode) {
+          sh += '<div class="event-detail__shipment-row">承运商：' + escapeHtml(s.carrierName || s.carrierCode) + '</div>';
+        }
+        sh += '<div class="event-detail__shipment-row">状态：' + escapeHtml(s.statusLabel || '已发货（待物流更新）') + '</div>';
+        if (s.events && s.events.length) {
+          sh += '<div class="event-detail__timeline">';
+          s.events.forEach(function (e) {
+            sh += '<div class="event-detail__tl-item"><div class="event-detail__tl-desc">' + escapeHtml(e.description || '-') + '</div>';
+            sh += '<div class="event-detail__tl-meta">' + escapeHtml(e.time || '') + (e.location ? ' · ' + escapeHtml(e.location) : '') + '</div></div>';
+          });
+          sh += '</div>';
+        }
+        if (s.queryUrl) {
+          sh += '<a class="prog-file" href="' + escapeAttr(s.queryUrl) + '" target="_blank">在 17TRACK 查看完整轨迹</a>';
+        }
+        shipBox.innerHTML = sh;
+      }).catch(function () {
+        if (shipBox) shipBox.textContent = '物流信息加载失败';
+      });
+    }
+  }
+
+  function reloadChatAndProgress() {
+    if (workspace.currentId) {
+      window.DUXURY_API.getMessages(workspace.currentId).then(renderMessages).catch(function () {});
+    }
+    if (workspace.orderId) {
+      var body = document.getElementById('chatProgressBody');
+      if (body) renderOrderProgress(workspace.orderId, body);
+    }
+    loadConversations();
   }
 
   function loadConversations() {
@@ -529,12 +1063,14 @@
     });
   }
 
-  // Filters (visual only; conversations are order-bound, not status-bound)
+  // Filters：按订单状态过滤会话列表
   if (filterBar) {
     filterBar.querySelectorAll('.ws-filter').forEach(function (f) {
       f.addEventListener('click', function () {
         filterBar.querySelectorAll('.ws-filter').forEach(function (x) { x.classList.remove('active'); });
         f.classList.add('active');
+        workspace.filter = f.getAttribute('data-filter') || 'all';
+        renderConversationList(workspace.allConversations);
       });
     });
   }
@@ -542,14 +1078,64 @@
   // Search
   if (conversationSearch) {
     conversationSearch.addEventListener('input', function () {
-      var q = conversationSearch.value.trim().toLowerCase();
-      conversationList.querySelectorAll('.conversation').forEach(function (conv) {
-        var name = conv.querySelector('.conversation__name').textContent.toLowerCase();
-        var id = conv.getAttribute('data-order').toLowerCase();
-        conv.style.display = (name.indexOf(q) !== -1 || id.indexOf(q) !== -1) ? '' : 'none';
-      });
+      workspace.searchQuery = conversationSearch.value;
+      renderConversationList(workspace.allConversations);
     });
   }
+
+  // 不同角色的昵称颜色（统一三端）
+  var ROLE_COLORS = {
+    CUSTOMER: '#2ea043',
+    DESIGNER: '#c9a96e',
+    MODELER: '#4a6fff',
+    SALES_MID: '#8b5cf6',
+    SALES_PRE: '#f59e0b',
+    FOLLOW_UP: '#22a5f7',
+    SUPER_SERVICE: '#c026d3',
+    ADMIN: '#c026d3',
+    SYSTEM: '#999999'
+  };
+
+  // 订单流程状态颜色
+  var STATUS_COLORS = {
+    PENDING_DESIGN: '#f59e0b',
+    DESIGNING: '#f59e0b',
+    PENDING_MODEL: '#4a6fff',
+    MODELING: '#4a6fff',
+    PENDING_REVIEW: '#8b5cf6',
+    PENDING_PRODUCTION: '#8b5cf6',
+    PRODUCING: '#22a5f7',
+    COMPLETED: '#2ea043',
+    CANCELLED: '#999999'
+  };
+
+  // 订单服务类型颜色
+  var SERVICE_TYPE_COLORS = {
+    CUSTOM_IMAGE: '#f59e0b',
+    DESIGNER_DESIGN: '#c9a96e',
+    B2B_MODEL: '#8b5cf6'
+  };
+
+  // 事件卡片环节风格（颜色 + 标签）
+  var EVENT_STYLE = {
+    DESIGN_SUBMIT: { color: '#c9a96e', label: '设计稿' },
+    DESIGN_REJECT: { color: '#e05d5d', label: '驳回设计' },
+    DESIGN_CONFIRM: { color: '#2ea043', label: '确认设计' },
+    MODEL_SUBMIT: { color: '#4a6fff', label: '建模稿' },
+    MODEL_REJECT: { color: '#e05d5d', label: '驳回建模' },
+    MODEL_CONFIRM: { color: '#2ea043', label: '确认建模' },
+    REVIEW_PASS: { color: '#8b5cf6', label: '工艺验证' },
+    REVIEW_REJECT: { color: '#e05d5d', label: '工艺驳回' },
+    QUOTATION: { color: '#f59e0b', label: '报价' },
+    PRODUCTION_LOG: { color: '#22a5f7', label: '生产跟单' },
+    SHIPPED: { color: '#2ea043', label: '已发货' },
+    DELIVERED: { color: '#2ea043', label: '已签收' },
+    STATUS_CHANGE: { color: '#6b7280', label: '状态' },
+    DELIVERY_CONFIRM: { color: '#2ea043', label: '交付' },
+    BALANCE_PAYMENT: { color: '#d97706', label: '支付尾款' },
+    BALANCE_PAID: { color: '#2ea043', label: '已支付' },
+    _default: { color: '#6b7280', label: '事件' }
+  };
 
   function appendChatMsg(text, dir, role, roleName, timeText, translated, messageId) {
     if (!chatBody) return;
@@ -561,7 +1147,8 @@
     if (dir === 'in' && role) {
       var avatar = document.createElement('span');
       var avatarCls = role === 'DESIGNER' ? 'msg__avatar--designer'
-        : (role === 'CUSTOMER' ? 'msg__avatar--client' : 'msg__avatar--tracker');
+        : (role === 'CUSTOMER' ? 'msg__avatar--client'
+        : (role === 'SUPER_SERVICE' ? 'msg__avatar--super-service' : 'msg__avatar--tracker'));
       avatar.className = 'msg__avatar ' + avatarCls;
       avatar.textContent = (roleName || role || '?').charAt(0).toUpperCase();
       msg.appendChild(avatar);
@@ -573,6 +1160,7 @@
       meta.className = 'msg__meta';
       var roleTag = document.createElement('span');
       roleTag.className = 'msg__role';
+      roleTag.style.color = ROLE_COLORS[role] || '';
       roleTag.textContent = roleName || role || '';
       var time = document.createElement('span');
       time.className = 'msg__time';
@@ -604,9 +1192,45 @@
       metaOut.appendChild(read);
       content.appendChild(metaOut);
     }
+    // 他人文本消息：显示翻译按钮
+    if (dir === 'in' && text && messageId != null) {
+      attachTranslateButton(content, messageId, text);
+    }
     msg.appendChild(content);
     chatBody.appendChild(msg);
     chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function attachTranslateButton(content, messageId, text) {
+    var btn = document.createElement('button');
+    btn.className = 'msg__translate-btn';
+    btn.type = 'button';
+    var showing = !!content.querySelector('.msg__translation');
+    btn.textContent = showing ? window.I18N.t('msg.showOriginal') : window.I18N.t('msg.translate');
+    btn.addEventListener('click', function () {
+      var existing = content.querySelector('.msg__translation');
+      if (existing) {
+        existing.remove();
+        btn.textContent = window.I18N.t('msg.translate');
+        return;
+      }
+      btn.textContent = '…';
+      window.DUXURY_API.translateMessage(messageId, window.I18N.current)
+        .then(function (dto) {
+          var trans = document.createElement('div');
+          trans.className = 'msg__translation';
+          trans.textContent = dto.translatedContent || dto.content || text;
+          var bubble = content.querySelector('.msg__bubble');
+          if (bubble) bubble.insertAdjacentElement('afterend', trans);
+          else content.appendChild(trans);
+          btn.textContent = window.I18N.t('msg.showOriginal');
+        })
+        .catch(function () {
+          btn.textContent = window.I18N.t('msg.translate');
+          alert(window.I18N.t('msg.translate.failed'));
+        });
+    });
+    content.appendChild(btn);
   }
 
   // 更新指定消息的翻译行（MESSAGE_TRANSLATED 事件）
@@ -667,8 +1291,12 @@
         if (payload && payload.type === 'MESSAGE' && payload.data) {
           var m = payload.data;
           if (workspace.currentId === m.conversationId) {
-            var mine = m.senderType === 'C_PORTAL_CUSTOMER';
-            appendChatMsg(m.content, mine ? 'out' : 'in', m.role || 'CUSTOMER', m.displayName || m.role, m.createdAt, m.translatedContent, m.id);
+            if (m.msgType === 'event' && m.event) {
+              appendEventCard(m);
+            } else {
+              var mine = m.senderType === 'C_PORTAL_CUSTOMER';
+              appendChatMsg(m.content, mine ? 'out' : 'in', m.role || 'CUSTOMER', m.displayName || m.role, m.createdAt, m.translatedContent, m.id);
+            }
           }
           loadConversations();
         }
@@ -679,10 +1307,14 @@
     } catch (e) { /* ignore */ }
   }
 
-  if (chatBody) {
+  function startWorkspace() {
     connectChatSocket();
     loadConversations();
     loadOrderProgress();
+  }
+
+  if (chatBody && workspaceLoggedIn) {
+    startWorkspace();
   }
 
   /* ============================================================
@@ -726,6 +1358,29 @@
         });
         html += '</div>';
       }
+      // 物流信息（发货后展示）
+      if (summary.shipment) {
+        html += '<div class="prog-shipment">';
+        html += '<div class="prog-shipment-title">物流信息</div>';
+        html += '<div class="prog-shipment-row">快递单号：' + esc(summary.shipment.trackingNumber) + '</div>';
+        if (summary.shipment.carrierName || summary.shipment.carrierCode) {
+          html += '<div class="prog-shipment-row">承运商：' + esc(summary.shipment.carrierName || summary.shipment.carrierCode) + '</div>';
+        }
+        html += '<div class="prog-shipment-row">状态：' + esc(summary.shipment.statusLabel || '已发货（待物流更新）') + '</div>';
+        if (summary.shipment.queryUrl) {
+          html += '<a href="' + esc(summary.shipment.queryUrl) + '" target="_blank" class="prog-file">查询物流轨迹</a>';
+        }
+        if (summary.shipment.events && summary.shipment.events.length) {
+          html += '<div class="prog-shipment-events">';
+          summary.shipment.events.forEach(function (e) {
+            html += '<div class="prog-event"><div class="prog-event-title">' + esc(e.description || e.time || '-') + '</div>';
+            if (e.time) html += '<div class="prog-event-content">' + esc(e.time) + (e.location ? ' · ' + esc(e.location) : '') + '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
       if (events && events.length) {
         html += '<div class="prog-events">';
         events.slice().reverse().forEach(function (ev) {
@@ -746,8 +1401,15 @@
       if (!summary.modelApproved && lastModel && lastModel.eventType === 'MODEL_SUBMIT') {
         actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM">确认建模稿</button><button class="prog-btn prog-btn--no" data-act="MODEL_REJECT">驳回建模稿</button>';
       }
+      if (summary.canPublishToStorefront) {
+        actions += '<button class="prog-btn prog-btn--ok" data-act="PUBLISH">' + (window.I18N.t('pub.title')) + '</button>';
+      }
       if (summary.currentStatus === 'PRODUCING') {
-        actions += '<button class="prog-btn prog-btn--ok" data-act="DELIVERY">确认收货 / 付尾款</button>';
+        if (summary.serviceType === 'STOREFRONT') {
+          actions += '<button class="prog-btn prog-btn--ok" data-act="DELIVERY">确认收货</button>';
+        } else {
+          actions += '<button class="prog-btn prog-btn--ok" data-act="DELIVERY">确认收货 / 付尾款</button>';
+        }
       }
       if (actions) html += '<div class="prog-actions">' + actions + '</div>';
       body.innerHTML = html;
@@ -755,6 +1417,10 @@
       body.querySelectorAll('[data-act]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var act = btn.getAttribute('data-act');
+          if (act === 'PUBLISH') {
+            openPublishModal(orderId, summary);
+            return;
+          }
           if (act === 'DELIVERY') {
             if (!confirm(window.I18N.t('ws.progress.delivery.confirm'))) return;
             window.DUXURY_API.confirmDelivery(orderId).then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });

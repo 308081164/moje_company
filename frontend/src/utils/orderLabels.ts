@@ -2,7 +2,7 @@ import { OrderSource, OrderStatus } from '@/types/order';
 
 /** 管理端「新建订单」可选来源（B2B/C2C 由门户录入） */
 export const INTERNAL_ORDER_CREATE_SOURCES = (Object.values(OrderSource) as OrderSource[]).filter(
-  (s) => s !== OrderSource.B2B && s !== OrderSource.C2C
+  (s) => s !== OrderSource.B2B && s !== OrderSource.C2C && s !== OrderSource.MARKETPLACE
 );
 
 export function orderStatusLabel(status: string): string {
@@ -52,6 +52,7 @@ export function orderSourceLabel(source: OrderSource | string): string {
     INFLUENCER: '达人推荐',
     C2C: 'C端客户',
     B2B: 'B端客户',
+    MARKETPLACE: '独立站寄售',
   };
   return map[source] ?? String(source);
 }

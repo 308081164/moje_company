@@ -39,6 +39,8 @@
       ja: '注文を始める', ko: '주문 시작', 'zh-TW': '開始定制', 'zh-CN': '开始定制'
     },
     'nav.services': { en: 'Services', fr: 'Services', de: 'Leistungen', es: 'Servicios', ja: 'サービス', ko: '서비스', 'zh-TW': '服務', 'zh-CN': '服务' },
+    'nav.shop': { en: 'Shop', fr: 'Boutique', de: 'Shop', es: 'Tienda', ja: 'ショップ', ko: '스토어', 'zh-TW': '獨立站商城', 'zh-CN': '独立站商城' },
+    'nav.studio': { en: 'Studio', fr: 'Studio', de: 'Studio', es: 'Estudio', ja: 'スタジオ', ko: '스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台' },
 
     /* ---------- Hero ---------- */
     'hero.eyebrow': {
@@ -242,6 +244,7 @@
     },
     'ws.orders': { en: 'My Orders', fr: 'Mes commandes', de: 'Meine Bestellungen', es: 'Mis pedidos', ja: 'マイ注文', ko: '내 주문', 'zh-TW': '我的訂單', 'zh-CN': '我的订单' },
     'ws.search': { en: 'Search orders…', fr: 'Rechercher…', de: 'Suchen…', es: 'Buscar…', ja: '注文を検索…', ko: '주문 검색…', 'zh-TW': '搜尋訂單…', 'zh-CN': '搜索订单…' },
+    'ws.empty': { en: 'No orders found', fr: 'Aucune commande trouvée', de: 'Keine Bestellungen gefunden', es: 'No se encontraron pedidos', ja: '注文が見つかりません', ko: '주문을 찾을 수 없습니다', 'zh-TW': '未找到訂單', 'zh-CN': '暂无符合条件的订单' },
     'ws.filter.all': { en: 'All', fr: 'Tous', de: 'Alle', es: 'Todos', ja: 'すべて', ko: '전체', 'zh-TW': '全部', 'zh-CN': '全部' },
     'ws.filter.design': { en: 'Designing', fr: 'Conception', de: 'Entwurf', es: 'Diseñando', ja: 'デザイン中', ko: '디자인 중', 'zh-TW': '設計中', 'zh-CN': '设计中' },
     'ws.filter.producing': { en: 'Producing', fr: 'Production', de: 'Produktion', es: 'Produciendo', ja: '制作中', ko: '제작 중', 'zh-TW': '製作中', 'zh-CN': '制作中' },
@@ -331,6 +334,26 @@
     'ws.typing': {
       en: 'typing…', fr: 'écrit…', de: 'schreibt…', es: 'escribiendo…',
       ja: '入力中…', ko: '입력 중…', 'zh-TW': '輸入中…', 'zh-CN': '输入中…'
+    },
+
+    /* ---------- Message translate ---------- */
+    'msg.translate': {
+      en: 'Translate', fr: 'Traduire', de: 'Übersetzen', es: 'Traducir',
+      ja: '翻訳', ko: '번역', 'zh-TW': '翻譯', 'zh-CN': '翻译'
+    },
+    'msg.showOriginal': {
+      en: 'Show original', fr: 'Voir l’original', de: 'Original anzeigen', es: 'Ver original',
+      ja: '原文を表示', ko: '원문 보기', 'zh-TW': '顯示原文', 'zh-CN': '显示原文'
+    },
+    'msg.translate.failed': {
+      en: 'Translation failed. Please try again later.',
+      fr: 'Traduction échouée. Veuillez réessayer.',
+      de: 'Übersetzung fehlgeschlagen. Bitte erneut versuchen.',
+      es: 'Error de traducción. Inténtelo de nuevo.',
+      ja: '翻訳に失敗しました。後でもう一度お試しください。',
+      ko: '번역에 실패했습니다. 나중에 다시 시도해주세요.',
+      'zh-TW': '翻譯失敗，請稍後再試。',
+      'zh-CN': '翻译失败，请稍后再试。'
     },
 
     /* ---------- Services ---------- */
@@ -496,7 +519,10 @@
     'co.requirements.ph': { en: 'e.g. 18K gold diamond ring, size 12, princess cut…', fr: 'ex. bague diamant or 18K, taille 12…', de: 'z.B. 18K Gold-Diamantring, Größe 12…', es: 'ej. anillo de diamante oro 18K, talla 12…', ja: '例：18Kゴールド ダイヤリング 12号…', ko: '예: 18K 골드 다이아 반지 12호…', 'zh-TW': '例：18K金鑽石戒指 12號…', 'zh-CN': '例：18K金钻石戒指 12号…' },
     'co.requirements.material': { en: 'Material / style (optional)', fr: 'Matériau / style (optionnel)', de: 'Material / Stil (optional)', es: 'Material / estilo (opcional)', ja: '素材 / スタイル（任意）', ko: '소재 / 스타일 (선택)', 'zh-TW': '材質 / 款式（可選）', 'zh-CN': '材质 / 款式（可选）' },
     'co.requirements.material.ph': { en: 'e.g. 18K white gold, halo setting', fr: 'ex. or blanc 18K, halo', de: 'z.B. 18K Weißgold, Halo-Fassung', es: 'ej. oro blanco 18K, halo', ja: '例：18Kホワイトゴールド ハロー', ko: '예: 18K 화이트골드, 헤일로', 'zh-TW': '例：18K白金 光環鑲嵌', 'zh-CN': '例：18K白金 光环镶嵌' },
-    'co.requirements.image': { en: 'Reference image (optional)', fr: 'Image de référence (optionnelle)', de: 'Referenzbild (optional)', es: 'Imagen de referencia (opcional)', ja: '参考画像（任意）', ko: '참고 이미지 (선택)', 'zh-TW': '參考圖（可選）', 'zh-CN': '参考图（可选）' },
+    'co.requirements.image': { en: 'Reference images (up to 5)', fr: 'Images de référence (jusqu’à 5)', de: 'Referenzbilder (bis zu 5)', es: 'Imágenes de referencia (hasta 5)', ja: '参考画像（最大5枚）', ko: '참고 이미지 (최대 5장)', 'zh-TW': '參考圖（最多5張）', 'zh-CN': '参考图（最多5张）' },
+    'co.requirements.image.upload': { en: 'Click or drag images here · up to 5', fr: 'Cliquez ou déposez des images · jusqu’à 5', de: 'Klicken oder ziehen · bis zu 5 Bilder', es: 'Haz clic o arrastra imágenes · hasta 5', ja: 'クリックまたはドラッグで画像 · 最大5枚', ko: '클릭 또는 드래그로 이미지 · 최대 5장', 'zh-TW': '點擊或拖曳圖片 · 最多5張', 'zh-CN': '点击或拖拽图片 · 最多5张' },
+    'co.requirements.image.max': { en: 'You can upload up to 5 images', fr: 'Vous pouvez téléverser jusqu’à 5 images', de: 'Sie können bis zu 5 Bilder hochladen', es: 'Puede subir hasta 5 imágenes', ja: '最大5枚までアップロードできます', ko: '최대 5장까지 업로드할 수 있습니다', 'zh-TW': '最多可上傳5張圖片', 'zh-CN': '最多可上传5张图片' },
+    'co.requirements.image.remove': { en: 'Remove', fr: 'Supprimer', de: 'Entfernen', es: 'Eliminar', ja: '削除', ko: '삭제', 'zh-TW': '刪除', 'zh-CN': '删除' },
     'co.login.required': {
       en: 'Please sign in before paying your deposit.',
       fr: 'Veuillez vous connecter avant de payer l’acompte.',
@@ -544,21 +570,52 @@
 
     /* ---------- Gate ---------- */
     'gate.title': {
-      en: 'Sign in & pay to unlock', fr: 'Connectez-vous et payez pour débloquer',
-      de: 'Anmelden & zahlen zum Freischalten', es: 'Inicie sesión y pague para desbloquear',
-      ja: 'ログインと支払いが必要です', ko: '로그인 및 결제 후 이용 가능',
-      'zh-TW': '登入並支付後解鎖', 'zh-CN': '登录并支付后解锁'
+      en: 'Sign in to view your orders', fr: 'Connectez-vous pour voir vos commandes',
+      de: 'Anmelden, um Bestellungen zu sehen', es: 'Inicie sesión para ver sus pedidos',
+      ja: 'ログインして注文を見る', ko: '로그인하여 주문 보기',
+      'zh-TW': '登入查看您的訂單', 'zh-CN': '登录查看您的订单'
     },
     'gate.desc': {
-      en: 'The order workspace opens after sign-in and deposit payment.', fr: 'L’espace s’ouvre après connexion et paiement.',
-      de: 'Der Workspace öffnet nach Anmeldung und Zahlung.', es: 'El espacio se abre tras iniciar sesión y pagar.',
-      ja: 'ワークスペースはログインと内金支払い後に利用可能です。', ko: '워크스페이스는 로그인과 예약금 결제 후 열립니다.',
-      'zh-TW': '登入並支付定金後，訂單工作台才會開啟。', 'zh-CN': '登录并支付定金后，订单工作台才会开启。'
+      en: 'Sign in with your email to view your orders and chat with our team.', fr: 'Connectez-vous avec votre e-mail pour voir vos commandes et discuter avec notre équipe.',
+      de: 'Melden Sie sich mit Ihrer E-Mail an, um Bestellungen zu sehen und mit unserem Team zu chatten.', es: 'Inicie sesión con su correo para ver sus pedidos y chatear con nuestro equipo.',
+      ja: 'メールでログインして、注文の確認とチームとのチャットができます。', ko: '이메일로 로그인하여 주문을 확인하고 팀과 채팅하세요.',
+      'zh-TW': '使用郵箱登入，即可查看您的訂單並與團隊溝通。', 'zh-CN': '使用邮箱登录，即可查看您的订单并与团队沟通。'
     },
     'gate.cta': {
-      en: 'Go to services', fr: 'Voir les services', de: 'Zu den Services', es: 'Ver servicios',
-      ja: 'サービスを見る', ko: '서비스 보기', 'zh-TW': '前往服務', 'zh-CN': '前往服务'
-    }
+      en: 'Sign in to view my orders', fr: 'Se connecter pour voir mes commandes',
+      de: 'Anmelden, um meine Bestellungen zu sehen', es: 'Iniciar sesión para ver mis pedidos',
+      ja: 'ログインして注文を見る', ko: '로그인하여 내 주문 보기',
+      'zh-TW': '登入查看我的訂單', 'zh-CN': '登录并查看我的订单'
+    },
+
+    /* ---------- Storefront ---------- */
+    'shop.eyebrow': { en: 'MAKER SHOP', fr: 'BOUTIQUE', de: 'SHOP', es: 'TIENDA', ja: 'ショップ', ko: '스토어', 'zh-TW': '創作者商城', 'zh-CN': '创作者商城' },
+    'shop.title': { en: 'Pieces from our community', fr: 'Créations de la communauté', de: 'Werke aus der Community', es: 'Piezas de la comunidad', ja: 'コミュニティの作品', ko: '커뮤니티 작품', 'zh-TW': '來自社區創作者的作品', 'zh-CN': '来自社区创作者的作品' },
+    'shop.sub': { en: 'Buy a published design. The studio produces and ships it for you.', fr: 'Achetez un design publié. L’atelier produit et expédie.', de: 'Kaufe ein veröffentlichtes Design. Das Atelier produziert und versendet.', es: 'Compra un diseño publicado. El taller produce y envía.', ja: '公開されたデザインを購入。工房が製作・発送します。', ko: '게시된 디자인을 구매하세요. 공방이 제작하고 배송합니다.', 'zh-TW': '購買已上架的設計，由工坊代工生產並郵寄。', 'zh-CN': '购买已上架的设计，由工坊代工生产并邮寄。' },
+    'shop.empty': { en: 'No pieces listed yet.', fr: 'Aucun article pour le moment.', de: 'Noch keine Stücke.', es: 'Aún no hay piezas.', ja: 'まだ出品がありません。', ko: '아직 상품이 없습니다.', 'zh-TW': '暫無上架作品。', 'zh-CN': '暂无上架作品。' },
+    'shop.sold': { en: 'sold', fr: 'vendu', de: 'verkauft', es: 'vendido', ja: '販売', ko: '판매', 'zh-TW': '已售', 'zh-CN': '已售' },
+    'shop.fees': { en: 'Studio production & shipping (reference)', fr: 'Production et envoi (indicatif)', de: 'Produktion & Versand (Richtwert)', es: 'Producción y envío (referencia)', ja: '製作・発送費（目安）', ko: '제작·배송비(참고)', 'zh-TW': '工坊代工與代郵參考價', 'zh-CN': '工坊代工与代邮参考价' },
+    'shop.prod': { en: 'Production', fr: 'Production', de: 'Produktion', es: 'Producción', ja: '製作', ko: '제작', 'zh-TW': '代工', 'zh-CN': '代工' },
+    'shop.ship': { en: 'Shipping', fr: 'Livraison', de: 'Versand', es: 'Envío', ja: '発送', ko: '배송', 'zh-TW': '代郵', 'zh-CN': '代邮' },
+    'shop.buy': { en: 'Buy now', fr: 'Acheter', de: 'Jetzt kaufen', es: 'Comprar', ja: '購入する', ko: '구매하기', 'zh-TW': '立即購買', 'zh-CN': '立即购买' },
+    'shop.pay.mock': { en: 'Mock payment — you will be charged the sale price in full.', fr: 'Paiement simulé — le prix de vente est débité en totalité.', de: 'Simulierte Zahlung — der Verkaufspreis wird vollständig belastet.', es: 'Pago simulado: se cobra el precio de venta completo.', ja: '模擬決済 — 販売価格を全額お支払いいただきます。', ko: '모의 결제 — 판매가가 전액 결제됩니다.', 'zh-TW': '模擬支付 — 將按售價全額扣款。', 'zh-CN': '模拟支付 — 将按售价全额扣款。' },
+    'shop.addr': { en: 'Shipping address', fr: 'Adresse de livraison', de: 'Lieferadresse', es: 'Dirección de envío', ja: '配送先', ko: '배송지', 'zh-TW': '收貨地址', 'zh-CN': '收货地址' },
+    'shop.note': { en: 'Note (optional)', fr: 'Remarque (optionnel)', de: 'Hinweis (optional)', es: 'Nota (opcional)', ja: '備考（任意）', ko: '메모(선택)', 'zh-TW': '備註（選填）', 'zh-CN': '备注（选填）' },
+    'shop.name': { en: 'Your name', fr: 'Votre nom', de: 'Ihr Name', es: 'Su nombre', ja: 'お名前', ko: '이름', 'zh-TW': '稱呼', 'zh-CN': '称呼' },
+    'shop.contact': { en: 'Contact', fr: 'Contact', de: 'Kontakt', es: 'Contacto', ja: '連絡先', ko: '연락처', 'zh-TW': '聯繫方式', 'zh-CN': '联系方式' },
+    'studio.title': { en: 'Seller studio', fr: 'Espace vendeur', de: 'Verkäuferstudio', es: 'Estudio del vendedor', ja: '出品者スタジオ', ko: '판매자 스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台' },
+    'studio.sub': { en: 'Sales, listings and withdrawable balance', fr: 'Ventes, annonces et solde retirable', de: 'Verkäufe, Angebote und auszahlbares Guthaben', es: 'Ventas, listados y saldo retirable', ja: '売上・出品・出金可能残高', ko: '판매·상품·출금 가능 잔액', 'zh-TW': '銷售、上架作品與可提現餘額', 'zh-CN': '销售、上架作品与可提现金额' },
+    'studio.available': { en: 'Withdrawable', fr: 'Retirable', de: 'Auszahlbar', es: 'Retirable', ja: '出金可能', ko: '출금 가능', 'zh-TW': '可提現', 'zh-CN': '可提现' },
+    'studio.pending': { en: 'Pending', fr: 'En attente', de: 'Ausstehend', es: 'Pendiente', ja: '保留中', ko: '대기 중', 'zh-TW': '待結算', 'zh-CN': '待结算' },
+    'studio.earned': { en: 'Total earned', fr: 'Total gagné', de: 'Gesamtverdienst', es: 'Total ganado', ja: '累計収益', ko: '총수익', 'zh-TW': '累計收益', 'zh-CN': '累计收益' },
+    'studio.withdraw': { en: 'Withdraw', fr: 'Retirer', de: 'Auszahlen', es: 'Retirar', ja: '出金', ko: '출금', 'zh-TW': '提現', 'zh-CN': '提现' },
+    'studio.listings': { en: 'My listings', fr: 'Mes annonces', de: 'Meine Angebote', es: 'Mis listados', ja: '出品一覧', ko: '내 상품', 'zh-TW': '我的上架', 'zh-CN': '我的上架' },
+    'studio.sales': { en: 'Recent sales', fr: 'Ventes récentes', de: 'Letzte Verkäufe', es: 'Ventas recientes', ja: '最近の販売', ko: '최근 판매', 'zh-TW': '近期銷售', 'zh-CN': '近期销售' },
+    'studio.pause': { en: 'Unlist', fr: 'Retirer', de: 'Abmelden', es: 'Retirar', ja: '非公開', ko: '내리기', 'zh-TW': '下架', 'zh-CN': '下架' },
+    'studio.gate': { en: 'Sign in to manage your shop', fr: 'Connectez-vous pour gérer votre boutique', de: 'Melden Sie sich an, um Ihren Shop zu verwalten', es: 'Inicia sesión para gestionar tu tienda', ja: 'ショップ管理にはログインが必要です', ko: '스토어 관리를 위해 로그인하세요', 'zh-TW': '登入後管理您的商店', 'zh-CN': '登录后管理您的商店' },
+    'pub.title': { en: 'Publish to shop', fr: 'Publier en boutique', de: 'Im Shop veröffentlichen', es: 'Publicar en la tienda', ja: 'ショップに公開', ko: '스토어에 게시', 'zh-TW': '一鍵上架獨立站', 'zh-CN': '一键上架独立站' },
+    'pub.price': { en: 'Your sale price (USD)', fr: 'Votre prix de vente (USD)', de: 'Ihr Verkaufspreis (USD)', es: 'Su precio de venta (USD)', ja: '販売価格（USD）', ko: '판매가(USD)', 'zh-TW': '您的售價（美元）', 'zh-CN': '您的售价（美元）' },
+    'pub.submit': { en: 'Publish', fr: 'Publier', de: 'Veröffentlichen', es: 'Publicar', ja: '公開する', ko: '게시', 'zh-TW': '發布', 'zh-CN': '发布' }
   };
 
   var current = localStorage.getItem('duxury-lang') || 'en';

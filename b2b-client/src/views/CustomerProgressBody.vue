@@ -66,6 +66,44 @@
       </a-space>
     </template>
 
+    <!-- 物流信息 -->
+    <template v-if="data.shipment">
+      <a-divider orientation="left">物流信息</a-divider>
+      <div class="info-block">
+        <div class="desc-row">
+          <span class="desc-label">快递单号</span>
+          <span class="desc-value">{{ data.shipment.trackingNumber }}</span>
+        </div>
+        <div v-if="data.shipment.carrierName || data.shipment.carrierCode" class="desc-row">
+          <span class="desc-label">承运商</span>
+          <span class="desc-value">{{ data.shipment.carrierName || data.shipment.carrierCode }}</span>
+        </div>
+        <div class="desc-row">
+          <span class="desc-label">状态</span>
+          <span class="desc-value">{{ data.shipment.statusLabel || '已发货（待物流更新）' }}</span>
+        </div>
+        <div v-if="data.shipment.shippedAt" class="desc-row">
+          <span class="desc-label">发货时间</span>
+          <span class="desc-value">{{ dayjs(data.shipment.shippedAt).format('YYYY-MM-DD HH:mm') }}</span>
+        </div>
+      </div>
+      <div v-if="data.shipment.queryUrl" style="margin-top: 8px; text-align: center">
+        <a-button size="small" type="link" :href="data.shipment.queryUrl" target="_blank">
+          前往 17TRACK 查询物流轨迹
+        </a-button>
+      </div>
+      <template v-if="data.shipment.events && data.shipment.events.length > 0">
+        <a-timeline style="margin-top: 12px">
+          <a-timeline-item v-for="(e, i) in data.shipment.events" :key="i">
+            <div>{{ e.description || '-' }}</div>
+            <div style="color: #888; font-size: 12px">
+              {{ e.time || '' }}{{ e.location ? ' · ' + e.location : '' }}
+            </div>
+          </a-timeline-item>
+        </a-timeline>
+      </template>
+    </template>
+
     <!-- 事件卡片流 -->
     <template v-if="events.length > 0">
       <a-divider orientation="left">进度动态</a-divider>

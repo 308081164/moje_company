@@ -1,14 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>duxury · Order Workspace</title>
-  <meta name="description" content="duxury order workspace — one order, one dedicated group chat.">
+  <title>duxury 路 Order Workspace</title>
+  <meta name="description" content="duxury order workspace 鈥?one order, one dedicated group chat.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20261017b">
 </head>
 <body class="app-body">
 
@@ -22,7 +22,9 @@
       <a href="index.html#works" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
       <a href="index.html#process" class="nav__link" data-i18n="nav.process">Process</a>
       <a href="index.html#craft" class="nav__link" data-i18n="nav.craft">Craft</a>
+      <a href="shop.html" class="nav__link" data-i18n="nav.shop">Shop</a>
       <a href="order-workspace.html" class="nav__link nav__link--active" data-i18n="nav.orders">Orders</a>
+      <a href="seller.html" class="nav__link" data-i18n="nav.studio">Studio</a>
     </nav>
     <div class="header__actions">
       <div class="lang" id="langSwitcher">
@@ -41,6 +43,19 @@
   </div>
 </header>
 
+<!-- 鏈櫥褰曢棬妲涳細澶у箙瀹ｄ紶鍥?+ 鐧诲綍寮曞 -->
+<div class="order-gate" id="orderGate" style="display:none">
+  <div class="order-gate__bg">
+    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Luxury%20custom%20diamond%20ring%20on%20dark%20velvet%2C%20editorial%20jewelry%20photography%2C%20warm%20golden%20light%2C%20premium%20artisanal%20feel&image_size=landscape_16_9" alt="Bespoke jewelry" class="order-gate__img">
+    <div class="order-gate__overlay"></div>
+  </div>
+  <div class="order-gate__content">
+    <h2 class="order-gate__title" data-i18n="gate.title">Sign in to view your orders</h2>
+    <p class="order-gate__desc" data-i18n="gate.desc">Sign in with your email to view your orders and chat with our team.</p>
+    <button class="btn btn--gold btn--lg order-gate__cta" id="orderGateLogin" data-i18n="gate.cta">Sign in to view my orders</button>
+  </div>
+</div>
+
 <div class="app-shell">
   <!-- ============ Sidebar ============ -->
   <aside class="sidebar" id="sidebar">
@@ -49,7 +64,7 @@
       <p class="sidebar__sub" data-i18n="ws.sub">One order, one dedicated group chat</p>
       <div class="sidebar__search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="conversationSearch" placeholder="Search orders…" data-i18n-placeholder="ws.search">
+        <input type="text" id="conversationSearch" placeholder="Search orders鈥? data-i18n-placeholder="ws.search">
       </div>
       <div class="sidebar__filters" id="filterBar">
         <span class="ws-filter active" data-filter="all" data-i18n="ws.filter.all">All</span>
@@ -59,17 +74,17 @@
     </div>
 
     <div class="conversation-list" id="conversationList">
-      <!-- 会话列表由真实后端数据动态渲染，无静态假数据 -->
+      <!-- 浼氳瘽鍒楄〃鐢辩湡瀹炲悗绔暟鎹姩鎬佹覆鏌擄紝鏃犻潤鎬佸亣鏁版嵁 -->
     </div>
   </aside>
 
   <!-- ============ Chat ============ -->
   <main class="chat" id="chat">
-    <!-- 订单进度面板（可折叠） -->
+    <!-- 璁㈠崟杩涘害闈㈡澘锛堝彲鎶樺彔锛?-->
     <div class="chat__progress" id="chatProgress" style="display:none">
       <div class="chat__progress-head">
         <span class="chat__progress-title" data-i18n="ws.progress.title">Order Progress</span>
-        <button class="chat__progress-toggle" id="chatProgressToggle" aria-label="Toggle">▲</button>
+        <button class="chat__progress-toggle" id="chatProgressToggle" aria-label="Toggle">鈻?/button>
       </div>
       <div class="chat__progress-body" id="chatProgressBody"></div>
     </div>
@@ -81,14 +96,14 @@
         </button>
         <div class="chat__avatar chat__avatar--ring" id="chatAvatar">#</div>
         <div class="chat__title-group">
-          <h2 class="chat__title" id="chatTitle">—</h2>
+          <h2 class="chat__title" id="chatTitle">鈥?/h2>
           <span class="chat__order-id" id="chatOrderId"></span>
         </div>
         <span class="chat__stage" id="chatStage"></span>
       </div>
       <div class="chat__header-right">
         <div class="chat__members" id="chatMembers">
-          <!-- 成员头像由真实后端数据动态渲染 -->
+          <!-- 鎴愬憳澶村儚鐢辩湡瀹炲悗绔暟鎹姩鎬佹覆鏌?-->
         </div>
         <button class="chat__action" aria-label="More">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -98,13 +113,13 @@
 
     <!-- Messages -->
     <div class="chat__body" id="chatBody">
-      <!-- 聊天消息由真实后端数据动态渲染，无静态假数据 -->
+      <!-- 鑱婂ぉ娑堟伅鐢辩湡瀹炲悗绔暟鎹姩鎬佹覆鏌擄紝鏃犻潤鎬佸亣鏁版嵁 -->
     </div>
 
     <!-- Typing indicator -->
     <div class="chat__typing" id="chatTyping">
       <div class="typing-dots"><span></span><span></span><span></span></div>
-      <span class="typing-label" id="typingLabel" data-i18n="ws.typing">typing…</span>
+      <span class="typing-label" id="typingLabel" data-i18n="ws.typing">typing鈥?/span>
     </div>
 
     <!-- Composer -->
@@ -115,14 +130,39 @@
       <button class="composer__action" aria-label="Emoji">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
       </button>
-      <input type="text" class="composer__input" id="chatInput" placeholder="Type a message…" data-i18n-placeholder="ws.input">
+      <input type="text" class="composer__input" id="chatInput" placeholder="Type a message鈥? data-i18n-placeholder="ws.input">
       <button class="composer__send" id="chatSend" data-i18n="ws.send">Send</button>
     </div>
   </main>
 </div>
 
-<script src="js/i18n.js"></script>
-<script src="js/api.js"></script>
-<script src="js/main.js"></script>
+<!-- Login modal -->
+<div class="modal" id="loginModal" aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="modal__dialog">
+    <button class="modal__close" data-modal-close aria-label="Close">&times;</button>
+    <div class="modal__brand">duxury</div>
+    <h3 class="modal__title" data-i18n="login.title">Sign in to continue</h3>
+    <p class="modal__sub" data-i18n="login.sub">Sign in is required to view your orders</p>
+    <button class="login-google" id="googleLogin">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      <span data-i18n="login.google">Continue with Google</span>
+    </button>
+    <div class="modal__divider"><span data-i18n="login.or">or</span></div>
+    <div class="login-email">
+      <input type="email" id="emailInput" placeholder="you@example.com" data-i18n-placeholder="login.email.ph">
+      <button class="btn btn--gold" id="emailContinue" data-i18n="login.continue">Continue</button>
+    </div>
+    <div class="login-email" id="emailCodeStep" style="display:none">
+      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
+      <button class="btn btn--gold" id="codeConfirm" data-i18n="login.verify">Verify</button>
+    </div>
+    <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
+  </div>
+</div>
+
+<script src="js/i18n.js?v=20261017b"></script>
+<script src="js/api.js?v=20261017b"></script>
+<script src="js/main.js?v=20261017b"></script>
 </body>
 </html>

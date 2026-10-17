@@ -9,6 +9,7 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderDesignUpdateRequest {
     private String engravingText;
+    private List<String> engravingImages;
     private String materialType;
     private String materialDetail;
     private String handSize;

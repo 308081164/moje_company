@@ -25,6 +25,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findWithGraphById(@Param("id") Long id);
 
+    List<Order> findByMarketplaceSellerIdOrderByCreatedAtDesc(Long marketplaceSellerId);
+
     long countByOrderNumberStartingWith(String prefix);
 
     long countByStatus(OrderStatus status);

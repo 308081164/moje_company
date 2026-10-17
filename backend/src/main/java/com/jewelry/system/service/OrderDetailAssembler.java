@@ -78,6 +78,7 @@ public class OrderDetailAssembler {
                 .designerId(designerId)
                 .designerName(designerName)
                 .engravingText(od != null ? od.getEngravingText() : null)
+                .engravingImages(od != null ? parseStringList(od.getEngravingImagesJson()) : null)
                 .materialType(od != null ? od.getMaterialType() : null)
                 .materialDetail(null)
                 .handSize(od != null ? firstNonBlank(od.getHandSize(), od.getChainLength()) : null)

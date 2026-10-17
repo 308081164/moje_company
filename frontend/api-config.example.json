@@ -1,5 +1,5 @@
 {
-  "API_ORIGIN": "http://YOUR_SERVER_HOST:8851",
+  "API_ORIGIN": "http://62.234.174.95:8851",
   "INLAY_API_ORIGIN": "http://192.168.1.10:8871",
   "INLAY_USERNAME": "moje",
   "INLAY_PASSWORD": ""

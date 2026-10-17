@@ -1,7 +1,7 @@
 package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.integration.IntegrationSettingsViewDto;
-import com.jewelry.system.service.AliyunOssService;
+import com.jewelry.system.service.MinioStorageService;
 import com.jewelry.system.service.IntegrationSettingsService;
 import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,11 +20,11 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/integrations")
 @RequiredArgsConstructor
-@Tag(name = "销售助手集成", description = "通义千问识图、企业微信进群方式等配置")
+@Tag(name = "销售助手集成", description = "大模型（Kimi K3 / 通义千问）与企业微信进群方式等配置")
 public class IntegrationController {
 
     private final IntegrationSettingsService integrationSettingsService;
-    private final AliyunOssService aliyunOssService;
+    private final MinioStorageService minioStorageService;
 
     @GetMapping("/settings")
     @Operation(summary = "获取集成配置（管理员）")
@@ -48,11 +48,11 @@ public class IntegrationController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传图片");
         }
         try {
-            if (!aliyunOssService.isEnabled()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OSS 未配置");
+            if (!minioStorageService.isEnabled()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "对象存储未配置");
             }
             String key = "portal/b2b/support-wecom/" + UUID.randomUUID() + ".png";
-            String url = aliyunOssService.uploadObject(key, file);
+            String url = minioStorageService.uploadObject(key, file);
             Map<String, Object> patch = new HashMap<>();
             patch.put("b2bSupportWecomQrUrl", url);
             integrationSettingsService.patch(patch);

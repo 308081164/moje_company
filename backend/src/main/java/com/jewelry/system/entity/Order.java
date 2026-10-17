@@ -94,6 +94,26 @@ public class Order {
     /** 关联的站内聊天室 ID */
     @Column(name = "conversation_id")
     private Long conversationId;
+
+    /** 寄售商品 ID（买家复产单） */
+    @Column(name = "listing_id")
+    private Long listingId;
+
+    /** 寄售卖家门户账号 ID */
+    @Column(name = "marketplace_seller_id")
+    private Long marketplaceSellerId;
+
+    @Column(name = "sale_price", precision = 12, scale = 2)
+    private BigDecimal salePrice;
+
+    @Column(name = "production_fee", precision = 12, scale = 2)
+    private BigDecimal productionFee;
+
+    @Column(name = "shipping_fee", precision = 12, scale = 2)
+    private BigDecimal shippingFee;
+
+    @Column(name = "seller_payout", precision = 12, scale = 2)
+    private BigDecimal sellerPayout;
     
     // 时间信息
     @Column(name = "order_time")
