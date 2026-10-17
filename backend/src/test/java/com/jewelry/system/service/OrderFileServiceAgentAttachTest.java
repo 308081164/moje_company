@@ -29,7 +29,7 @@ class OrderFileServiceAgentAttachTest {
     @Mock
     FileStorageService fileStorageService;
     @Mock
-    AliyunOssService aliyunOssService;
+    MinioStorageService minioStorageService;
     @Mock
     UserRepository userRepository;
     @Mock
@@ -40,19 +40,19 @@ class OrderFileServiceAgentAttachTest {
 
     @Test
     void attachGuestDesignFromOssUrl_copiesToOrderDesignAndPersists() {
-        when(aliyunOssService.isEnabled()).thenReturn(true);
+        when(minioStorageService.isEnabled()).thenReturn(true);
         when(orderRepository.findById(42L)).thenReturn(Optional.of(new Order()));
-        when(aliyunOssService.resolveObjectKeyFromUrl("https://bucket.oss-cn-hangzhou.aliyuncs.com/b2b-agent/1/a.jpg"))
+        when(minioStorageService.resolveObjectKeyFromUrl("https://bucket.oss-cn-hangzhou.aliyuncs.com/b2b-agent/1/a.jpg"))
                 .thenReturn("b2b-agent/1/a.jpg");
-        when(aliyunOssService.objectExists("b2b-agent/1/a.jpg")).thenReturn(true);
-        when(aliyunOssService.publicUrl(any())).thenAnswer(inv -> "https://bucket.oss-cn-hangzhou.aliyuncs.com/" + inv.getArgument(0));
+        when(minioStorageService.objectExists("b2b-agent/1/a.jpg")).thenReturn(true);
+        when(minioStorageService.publicUrl(any())).thenAnswer(inv -> "https://bucket.oss-cn-hangzhou.aliyuncs.com/" + inv.getArgument(0));
 
         orderFileService.attachGuestDesignFromOssUrl(
                 42L,
                 "https://bucket.oss-cn-hangzhou.aliyuncs.com/b2b-agent/1/a.jpg",
                 "Agent 上传参考图");
 
-        verify(aliyunOssService).copyObject(eq("b2b-agent/1/a.jpg"), org.mockito.ArgumentMatchers.startsWith("order/42/design/"));
+        verify(minioStorageService).copyObject(eq("b2b-agent/1/a.jpg"), org.mockito.ArgumentMatchers.startsWith("order/42/design/"));
 
         ArgumentCaptor<FileEntity> cap = ArgumentCaptor.forClass(FileEntity.class);
         verify(fileEntityRepository).save(cap.capture());

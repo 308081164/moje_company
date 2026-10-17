@@ -25,7 +25,7 @@ class OrderFileServiceGuestUploadTest {
     @Mock
     FileStorageService fileStorageService;
     @Mock
-    AliyunOssService aliyunOssService;
+    MinioStorageService minioStorageService;
     @Mock
     UserRepository userRepository;
 
@@ -34,8 +34,8 @@ class OrderFileServiceGuestUploadTest {
 
     @Test
     void uploadDesignFileForGuest_persistsNullUploader() throws Exception {
-        when(aliyunOssService.isEnabled()).thenReturn(true);
-        when(aliyunOssService.uploadObject(any(), any())).thenReturn("https://oss.example/bucket/x.png");
+        when(minioStorageService.isEnabled()).thenReturn(true);
+        when(minioStorageService.uploadObject(any(), any())).thenReturn("https://oss.example/bucket/x.png");
         var file = new MockMultipartFile("files", "a.png", "image/png", new byte[]{1, 2, 3});
 
         orderFileService.uploadDesignFileForGuest(99L, file, "B端客户上传");
