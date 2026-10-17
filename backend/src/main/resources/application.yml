@@ -57,7 +57,7 @@ jwt:
   expiration: 86400000 # 24 hours in milliseconds (access token)
   refresh-expiration: 604800000 # 7 days in milliseconds (refresh token)
 
-# AliCloud OSS Configuration
+# AliCloud OSS Configuration（兼容保留，主存储已切 MinIO）
 aliyun:
   oss:
     # 兼容 .env / 旧文档中的 OSS_ENDPOINT；桶名兼容 OSS_BUCKET（与 OSS_BUCKET_NAME 二选一）
@@ -67,6 +67,8 @@ aliyun:
     bucket-name: ${OSS_BUCKET_NAME:${OSS_BUCKET:}}
     max-size: 104857600 # 100MB
     allowed-extensions: .jpg,.jpeg,.png,.gif,.bmp,.pdf,.stl,.obj,.jad
+
+# 统一对象存储（MinIO / 本地降级，预留 CDN）——配置项已合并进下方 app 节点
 
 # Logging Configuration
 logging:
@@ -98,6 +100,15 @@ management:
 # Application Configuration
 app:
   upload-dir: ${APP_UPLOAD_DIR:uploads/jewelry}
+  # 统一对象存储（MinIO / 本地降级，预留 CDN）
+  storage:
+    mode: ${STORAGE_MODE:local}
+    local-root: ${STORAGE_LOCAL_ROOT:uploads/jewelry}
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+    access-key: ${STORAGE_ACCESS_KEY:minioadmin}
+    secret-key: ${STORAGE_SECRET_KEY:minioadmin}
+    bucket: ${STORAGE_BUCKET:jewelry}
+    public-base-url: ${STORAGE_PUBLIC_BASE_URL:http://localhost:9000}
   # Default admin user
   default-admin:
     username: ${DEFAULT_ADMIN_USERNAME:kuangjun}
@@ -128,3 +139,9 @@ app:
     api-base: ${INLAY_DB_API_BASE:http://192.168.1.10:8871/api}
     username: ${INLAY_DB_USERNAME:moje}
     password: ${INLAY_DB_PASSWORD:}
+  # 国际物流：17TRACK 跟踪（未启用或查询失败时降级为「已发货（待物流更新）」）
+  logistics:
+    seventeen-track:
+      enabled: ${SEVENTEEN_TRACK_ENABLED:false}
+      api-key: ${SEVENTEEN_TRACK_API_KEY:}
+      base-url: ${SEVENTEEN_TRACK_BASE_URL:https://api.17track.net/track/v2.4}

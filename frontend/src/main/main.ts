@@ -10,8 +10,21 @@ let tray: Tray | null = null;
 let socialPublisherWindow: BrowserWindow | null = null;
 let socialPublisherSidecar: ChildProcess | null = null;
 
-/** 解析后的 HTTP(S) 基址，不含 /api，例如 http://192.168.1.10:8851 */
+/** 解析后的 HTTP(S) 基址，不含 /api，例如 http://62.234.174.95:8851 */
 let cachedJewelryApiOrigin: string | undefined;
+
+type InlayDesktopAuth = {
+  origin: string;
+  username: string;
+  password: string;
+};
+
+/** 员工端直连 NAS 镶嵌库（默认公司内网 192.168.1.10:8871） */
+let cachedInlayAuth: InlayDesktopAuth = {
+  origin: 'http://192.168.1.10:8871',
+  username: 'moje',
+  password: '',
+};
 
 // 开发环境判断
 const isDev = process.env.NODE_ENV === 'development';
@@ -24,21 +37,73 @@ function normalizeApiOriginString(raw: string): string {
   return u;
 }
 
-function readApiOriginFromJsonFile(filePath: string): string | undefined {
+type DesktopApiFile = {
+  API_ORIGIN?: string;
+  apiOrigin?: string;
+  API_URL?: string;
+  INLAY_API_ORIGIN?: string;
+  inlayApiOrigin?: string;
+  INLAY_USERNAME?: string;
+  INLAY_PASSWORD?: string;
+};
+
+function readDesktopConfigFile(filePath: string): DesktopApiFile | undefined {
   try {
     if (!fs.existsSync(filePath)) {
       return undefined;
     }
     const text = fs.readFileSync(filePath, 'utf-8');
-    const j = JSON.parse(text) as { API_ORIGIN?: string; apiOrigin?: string; API_URL?: string };
-    const v = j.API_ORIGIN || j.apiOrigin || j.API_URL;
-    if (typeof v === 'string' && v.trim()) {
-      return normalizeApiOriginString(v);
-    }
+    return JSON.parse(text) as DesktopApiFile;
   } catch (e) {
     console.warn('[jewelry] 读取 api 配置文件失败:', filePath, e);
+    return undefined;
+  }
+}
+
+function readApiOriginFromJsonFile(filePath: string): string | undefined {
+  const j = readDesktopConfigFile(filePath);
+  const v = j?.API_ORIGIN || j?.apiOrigin || j?.API_URL;
+  if (typeof v === 'string' && v.trim()) {
+    return normalizeApiOriginString(v);
   }
   return undefined;
+}
+
+function loadInlayAuthFromFiles(): Partial<InlayDesktopAuth> {
+  const candidates: string[] = [];
+  try {
+    candidates.push(path.join(app.getPath('userData'), 'api-config.json'));
+  } catch {
+    /* ignore */
+  }
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'api-config.json'));
+  }
+  try {
+    candidates.push(path.join(path.dirname(app.getPath('exe')), 'api-config.json'));
+  } catch {
+    /* ignore */
+  }
+  for (const p of candidates) {
+    const j = readDesktopConfigFile(p);
+    if (!j) continue;
+    const originRaw = j.INLAY_API_ORIGIN || j.inlayApiOrigin;
+    const found: Partial<InlayDesktopAuth> = {};
+    if (typeof originRaw === 'string' && originRaw.trim()) {
+      found.origin = normalizeApiOriginString(originRaw);
+    }
+    if (typeof j.INLAY_USERNAME === 'string' && j.INLAY_USERNAME.trim()) {
+      found.username = j.INLAY_USERNAME.trim();
+    }
+    if (typeof j.INLAY_PASSWORD === 'string' && j.INLAY_PASSWORD) {
+      found.password = j.INLAY_PASSWORD;
+    }
+    if (found.origin || found.username || found.password) {
+      console.log('[jewelry] 已从配置文件加载镶嵌库连接:', p);
+      return found;
+    }
+  }
+  return {};
 }
 
 /**
@@ -139,6 +204,7 @@ function createWindow() {
   if (cachedJewelryApiOrigin) {
     extraArgs.push(`--jewelry-api-origin=${encodeURIComponent(cachedJewelryApiOrigin)}`);
   }
+  extraArgs.push(`--inlay-api-origin=${encodeURIComponent(cachedInlayAuth.origin)}`);
 
   // 创建浏览器窗口
   mainWindow = new BrowserWindow({
@@ -359,6 +425,25 @@ function createTray() {
 // 应用准备就绪
 app.whenReady().then(() => {
   cachedJewelryApiOrigin = resolveJewelryApiOrigin();
+  const inlayFromEnv =
+    process.env.JEWELRY_INLAY_API_ORIGIN?.trim() ||
+    process.env.INLAY_API_ORIGIN?.trim();
+  const inlayBaked =
+    typeof __JEWELRY_INLAY_API_ORIGIN_BAKED__ !== 'undefined'
+      ? String(__JEWELRY_INLAY_API_ORIGIN_BAKED__).trim()
+      : '';
+  const inlayFromFile = loadInlayAuthFromFiles();
+  cachedInlayAuth = {
+    origin: normalizeApiOriginString(
+      inlayFromEnv || inlayFromFile.origin || inlayBaked || cachedInlayAuth.origin
+    ),
+    username:
+      process.env.JEWELRY_INLAY_USERNAME?.trim() ||
+      inlayFromFile.username ||
+      cachedInlayAuth.username,
+    password: process.env.JEWELRY_INLAY_PASSWORD || inlayFromFile.password || '',
+  };
+  console.log('[jewelry] 镶嵌库直连:', cachedInlayAuth.origin, 'user=', cachedInlayAuth.username);
   if (!cachedJewelryApiOrigin && app.isPackaged) {
     console.error(
       '[jewelry] 未配置后端 API 基址，桌面端将仍回退 localhost（仅本机联调可用）。' +
@@ -497,6 +582,12 @@ function createApplicationMenu() {
 }
 
 // IPC 通信处理
+ipcMain.handle('get-inlay-auth', () => ({
+  origin: cachedInlayAuth.origin,
+  username: cachedInlayAuth.username,
+  password: cachedInlayAuth.password,
+}));
+
 ipcMain.handle('get-app-info', () => {
   return {
     name: app.getName(),

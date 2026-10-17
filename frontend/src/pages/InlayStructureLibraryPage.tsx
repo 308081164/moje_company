@@ -34,7 +34,6 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { inlayDbService, type InlayDbItem, type InlayCategoryNode, type RegionBox, type SearchHit } from '@/services/inlayDbService';
-import { downloadWithAuth } from '@/utils/download';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -164,7 +163,7 @@ const BrowseTab: React.FC = () => {
             type="link"
             size="small"
             icon={<DownloadOutlined />}
-            onClick={() => downloadWithAuth(`/inlay-db/items/${row.id}/download?format=step`, `${row.displayName || row.id}.step`)}
+            onClick={() => inlayDbService.downloadFile(`/inlay-db/items/${row.id}/download?format=step`, `${row.displayName || row.id}.step`)}
           >
             下载
           </Button>
@@ -290,13 +289,13 @@ const DetailBody: React.FC<{ item: InlayDbItem; thumb?: string }> = ({ item, thu
       )}
       <Divider />
       <Space>
-        <Button icon={<DownloadOutlined />} onClick={() => downloadWithAuth(`/inlay-db/items/${item.id}/download?format=jcd`, `${item.displayName || item.id}.jcd`)}>
+        <Button icon={<DownloadOutlined />} onClick={() => inlayDbService.downloadFile(`/inlay-db/items/${item.id}/download?format=jcd`, `${item.displayName || item.id}.jcd`)}>
           下载 JCD
         </Button>
-        <Button icon={<DownloadOutlined />} onClick={() => downloadWithAuth(`/inlay-db/items/${item.id}/download?format=step`, `${item.displayName || item.id}.step`)}>
+        <Button icon={<DownloadOutlined />} onClick={() => inlayDbService.downloadFile(`/inlay-db/items/${item.id}/download?format=step`, `${item.displayName || item.id}.step`)}>
           下载 STEP
         </Button>
-        <Button icon={<DownloadOutlined />} onClick={() => downloadWithAuth(`/inlay-db/items/${item.id}/download?format=stl`, `${item.displayName || item.id}.stl`)}>
+        <Button icon={<DownloadOutlined />} onClick={() => inlayDbService.downloadFile(`/inlay-db/items/${item.id}/download?format=stl`, `${item.displayName || item.id}.stl`)}>
           下载 STL
         </Button>
       </Space>
@@ -672,7 +671,7 @@ const HitsList: React.FC<{ hits?: SearchHit[] }> = ({ hits }) => {
             <Button
               size="small"
               icon={<DownloadOutlined />}
-              onClick={() => downloadWithAuth(`/inlay-db/items/${h.id}/download?format=step`, `${h.display_name || h.id}.step`)}
+              onClick={() => inlayDbService.downloadFile(`/inlay-db/items/${h.id}/download?format=step`, `${h.display_name || h.id}.step`)}
             >
               下载 STEP
             </Button>

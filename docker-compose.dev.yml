@@ -37,6 +37,12 @@ services:
       - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET:-}
       - OSS_BUCKET_NAME=${OSS_BUCKET_NAME:-${OSS_BUCKET:-}}
       - ALIYUN_OSS_ENDPOINT=${ALIYUN_OSS_ENDPOINT:-${OSS_ENDPOINT:-oss-cn-guangzhou.aliyuncs.com}}
+      - STORAGE_MODE=${STORAGE_MODE:-local}
+      - STORAGE_ENDPOINT=${STORAGE_ENDPOINT:-http://minio:9000}
+      - STORAGE_ACCESS_KEY=${STORAGE_ACCESS_KEY:-minioadmin}
+      - STORAGE_SECRET_KEY=${STORAGE_SECRET_KEY:-minioadmin}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-jewelry}
+      - STORAGE_PUBLIC_BASE_URL=${STORAGE_PUBLIC_BASE_URL:-http://localhost:9000}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:?请在 .env 中设置 DEFAULT_ADMIN_PASSWORD}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-kuangjun}
       - JEWELRY_PUBLIC_BASE_URL=${JEWELRY_PUBLIC_BASE_URL:-http://localhost:8851}
@@ -54,7 +60,7 @@ services:
     networks:
       - jewelry-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8851/api/actuator/health"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8851'"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -105,8 +111,26 @@ services:
       - jewelry-network
     restart: unless-stopped
 
+  # MinIO 对象存储（S3 兼容）
+  minio:
+    image: minio/minio:latest
+    container_name: jewelry-minio-dev
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${STORAGE_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${STORAGE_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - jewelry-network
+    restart: unless-stopped
+
 volumes:
   mysql_data:
+  minio_data:
 
 networks:
   jewelry-network:

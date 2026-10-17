@@ -10,6 +10,9 @@ Thumbs.db
 # Cursor / 本地工具（若误放在仓库根目录）
 .cursor/
 
+# 本机服务器登录信息等（禁止提交）
+.local/
+
 # Logs
 *.log
 logs/

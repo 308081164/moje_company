@@ -43,10 +43,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write desktop api-config.json
+        env:
+          JEWELRY_API_ORIGIN: ${{ secrets.JEWELRY_API_ORIGIN }}
+          JEWELRY_INLAY_API_ORIGIN: ${{ secrets.JEWELRY_INLAY_API_ORIGIN }}
+          JEWELRY_INLAY_USERNAME: ${{ secrets.JEWELRY_INLAY_USERNAME }}
+          JEWELRY_INLAY_PASSWORD: ${{ secrets.JEWELRY_INLAY_PASSWORD }}
+        shell: pwsh
+        run: |
+          $cfg = @{
+            API_ORIGIN = if ($env:JEWELRY_API_ORIGIN) { $env:JEWELRY_API_ORIGIN } else { "http://62.234.174.95:8851" }
+            INLAY_API_ORIGIN = if ($env:JEWELRY_INLAY_API_ORIGIN) { $env:JEWELRY_INLAY_API_ORIGIN } else { "http://192.168.1.10:8871" }
+            INLAY_USERNAME = if ($env:JEWELRY_INLAY_USERNAME) { $env:JEWELRY_INLAY_USERNAME } else { "moje" }
+            INLAY_PASSWORD = if ($env:JEWELRY_INLAY_PASSWORD) { $env:JEWELRY_INLAY_PASSWORD } else { "" }
+          }
+          $cfg | ConvertTo-Json | Set-Content -Encoding utf8 api-config.example.json
+          Get-Content api-config.example.json
+
       - name: Build windows release files
         env:
           # 在仓库 Settings → Secrets 中配置，值为后端基址（不含 /api），例如 http://your-server:8851
           JEWELRY_API_ORIGIN: ${{ secrets.JEWELRY_API_ORIGIN }}
+          JEWELRY_INLAY_API_ORIGIN: ${{ secrets.JEWELRY_INLAY_API_ORIGIN }}
         run: npm run package:win
 
       - name: Upload release artifacts for OSS

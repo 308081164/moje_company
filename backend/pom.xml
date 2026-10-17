@@ -132,7 +132,14 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- AliCloud OSS -->
+        <!-- MinIO S3-compatible storage（本地 filesystem 降级，统一 URL 入口预留 CDN） -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.9</version>
+        </dependency>
+
+        <!-- AliCloud OSS（保留兼容，后续可移除） -->
         <dependency>
             <groupId>com.aliyun.oss</groupId>
             <artifactId>aliyun-sdk-oss</artifactId>

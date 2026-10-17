@@ -4,9 +4,11 @@ declare global {
   interface Window {
     env?: {
       API_URL?: string;
+      INLAY_API_ORIGIN?: string;
     };
 
     electronAPI?: {
+      getInlayAuth?: () => Promise<{ origin: string; username: string; password: string }>;
       onMenuNewOrder: (handler: () => void) => void;
       removeMenuNewOrderListener: (handler: () => void) => void;
       onShowAbout: (handler: () => void) => void;

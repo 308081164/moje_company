@@ -2,7 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.entity.FileEntity;
 import com.jewelry.system.repository.FileEntityRepository;
-import com.jewelry.system.service.AliyunOssService;
+import com.jewelry.system.service.MinioStorageService;
 import com.jewelry.system.service.AuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,8 +27,28 @@ import java.nio.file.Path;
 public class FileController {
 
     private final FileEntityRepository fileEntityRepository;
-    private final AliyunOssService aliyunOssService;
+    private final MinioStorageService minioStorageService;
     private final AuditLogService auditLogService;
+
+    @GetMapping("/by-key/{*objectKey}")
+    @Operation(summary = "按对象键读取本地存储文件（STORAGE_MODE=local）")
+    public ResponseEntity<byte[]> getByKey(@PathVariable("objectKey") String objectKey) throws IOException {
+        String key = objectKey == null ? "" : objectKey.replaceFirst("^/+", "");
+        if (key.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在");
+        }
+        byte[] body = minioStorageService.readObjectBytes(key);
+        MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        try {
+            String probed = Files.probeContentType(Path.of(key));
+            if (probed != null && !probed.isBlank()) {
+                mediaType = MediaType.parseMediaType(probed);
+            }
+        } catch (Exception ignored) {
+            /* keep octet-stream */
+        }
+        return ResponseEntity.ok().contentType(mediaType).body(body);
+    }
 
     @GetMapping("/{id:\\d+}/download")
     @Operation(summary = "下载文件")
@@ -61,8 +81,8 @@ public class FileController {
     public void delete(@PathVariable long id) throws IOException {
         FileEntity e = fileEntityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
-        // filePath 存的是 OSS objectKey
-        aliyunOssService.deleteObject(e.getFilePath());
+        // filePath 存的是对象存储 objectKey
+        minioStorageService.deleteObject(e.getFilePath());
         fileEntityRepository.delete(e);
         auditLogService.log("FILE_DELETE", "FILE", e.getId(), "删除文件: " + e.getOriginalName());
     }

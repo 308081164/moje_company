@@ -10,6 +10,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/jewelry-backend
   B2B_IMAGE_NAME: ${{ github.repository }}/moje-b2b-client
+  B2C_IMAGE_NAME: ${{ github.repository }}/moje-b2c-web
 
 jobs:
   build-and-push:
@@ -54,6 +55,15 @@ jobs:
         tags: |
           ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
           ${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:${{ github.sha }}
+
+    - name: Build and push C-end web image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./b2c-web
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.B2C_IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.B2C_IMAGE_NAME }}:${{ github.sha }}
     
     - name: Run tests
       run: mvn -f backend/pom.xml test
@@ -61,6 +71,9 @@ jobs:
   deploy-to-server:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     # 与下方 ssh-action command_timeout 对齐，避免整 job 先于远程脚本结束
     timeout-minutes: 150
     if: github.ref == 'refs/heads/main'
@@ -93,6 +106,18 @@ jobs:
         fi
         echo "Deploy secrets 校验通过（已配置 DB_PASSWORD、JWT_SECRET、DEFAULT_ADMIN_PASSWORD）。"
 
+    - name: Ensure remote app directory
+      uses: appleboy/ssh-action@v1.2.5
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        port: ${{ secrets.SSH_PORT || '22' }}
+        username: ${{ secrets.SSH_USERNAME }}
+        password: ${{ secrets.SSH_PASSWORD }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        passphrase: ${{ secrets.SSH_PASSPHRASE }}
+        timeout: 5m
+        script: mkdir -p /opt/moje/b2b-client /opt/moje/logs
+
     - name: Copy docker-compose to server
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -103,7 +128,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         source: "docker-compose.prod.yml,b2b-client/nginx.prod.conf"
-        target: "/mnt/newdisk/app/MOJE/"
+        target: "/opt/moje/"
         overwrite: true
 
     - name: Copy B2B nginx config to subfolder
@@ -116,7 +141,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         passphrase: ${{ secrets.SSH_PASSPHRASE }}
         source: "b2b-client/nginx.prod.conf"
-        target: "/mnt/newdisk/app/MOJE/b2b-client/"
+        target: "/opt/moje/b2b-client/"
         overwrite: true
 
     # appleboy/ssh-action 默认「建连」仅 30s；网络抖动或跨境链路易 dial timeout。先 TCP 探测可快速给出防火墙/安全组提示。
@@ -161,6 +186,9 @@ jobs:
         OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
         OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
         JEWELRY_PORTAL_BASE_URL: ${{ secrets.JEWELRY_PORTAL_BASE_URL }}
+        JEWELRY_PUBLIC_BASE_URL: ${{ secrets.JEWELRY_PUBLIC_BASE_URL }}
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GHCR_USER: ${{ github.actor }}
       with:
         host: ${{ secrets.SSH_HOST }}
         port: ${{ secrets.SSH_PORT || '22' }}
@@ -172,7 +200,7 @@ jobs:
         timeout: 5m
         # 默认 10m，远程 docker pull 大镜像易超时，放宽至 2 小时
         command_timeout: 2h
-        envs: DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL
+        envs: DB_PASSWORD,JWT_SECRET,DEFAULT_ADMIN_PASSWORD,DEFAULT_ADMIN_USERNAME,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET_NAME,OSS_BUCKET,ALIYUN_OSS_ENDPOINT,OSS_ENDPOINT,JEWELRY_PORTAL_BASE_URL,JEWELRY_PUBLIC_BASE_URL,GHCR_TOKEN,GHCR_USER
         script: |
           set -euo pipefail
           : "${DB_PASSWORD:?DB_PASSWORD is empty (missing GitHub secret DB_PASSWORD)}"
@@ -182,7 +210,7 @@ jobs:
           # ========== 1. 准备环境 ==========
           echo "=== 开始部署珠宝定制系统 ==="
           
-          JEWELRY_DIR="/mnt/newdisk/app/MOJE"
+          JEWELRY_DIR="/opt/moje"
           APP_DIR="$JEWELRY_DIR"
           mkdir -p "$APP_DIR"
           cd "$APP_DIR"
@@ -194,14 +222,27 @@ jobs:
             exit 1
           fi
 
-          for port in 8851 8852; do
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "安装 Docker Compose 插件..."
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          fi
+          docker compose version
+
+          if [ -n "${GHCR_TOKEN:-}" ]; then
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-github}" --password-stdin >/dev/null
+          fi
+
+          for port in 8851 8852 8853; do
             if ss -tlnp | grep -q ":${port} "; then
               echo "端口 ${port} 已被占用，检查冲突..."
               ss -tlnp | grep ":${port} " || true
             fi
           done
 
-          # 合并服务器本机 .env：当 GitHub Secrets 中 OSS_BUCKET_NAME 等为空（或仅配置了 OSS_BUCKET 旧名）时，使用 /mnt/newdisk/app/MOJE/.env 中的值
+          # 合并服务器本机 .env：当 GitHub Secrets 中 OSS_BUCKET_NAME 等为空（或仅配置了 OSS_BUCKET 旧名）时，使用 /opt/moje/.env 中的值
           # 注意：若在 Windows 记事本等编辑 .env 会带 CRLF，直接 source 会报 $'\r': command not found；先去掉 \r 再加载
           if [ -f .env ]; then
             echo "加载本机 .env（与 CI 环境变量合并，用于 OSS 等补全；已自动去除 CRLF）"
@@ -217,9 +258,15 @@ jobs:
           fi
 
           # 让 docker compose 能读取到用于变量替换的环境变量（${DB_PASSWORD} 等）
-          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME OSS_BUCKET ALIYUN_OSS_ENDPOINT OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL
+          export DB_PASSWORD JWT_SECRET DEFAULT_ADMIN_PASSWORD DEFAULT_ADMIN_USERNAME OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_BUCKET_NAME OSS_BUCKET ALIYUN_OSS_ENDPOINT OSS_ENDPOINT JEWELRY_PORTAL_BASE_URL JEWELRY_PUBLIC_BASE_URL
           export IMAGE_BACKEND=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           export IMAGE_B2B=${{ env.REGISTRY }}/${{ env.B2B_IMAGE_NAME }}:latest
+          export IMAGE_B2C=${{ env.REGISTRY }}/${{ env.B2C_IMAGE_NAME }}:latest
+          : "${JEWELRY_PUBLIC_BASE_URL:=http://${{ secrets.SSH_HOST }}:8851}"
+          : "${JEWELRY_PORTAL_BASE_URL:=http://${{ secrets.SSH_HOST }}:8852}"
+          export JEWELRY_CUSTOMER_ORDER_FRONTEND_URL="${JEWELRY_CUSTOMER_ORDER_FRONTEND_URL:-http://${{ secrets.SSH_HOST }}:8853}"
+          export STORAGE_MODE=local
+          export STORAGE_PUBLIC_BASE_URL="$JEWELRY_PUBLIC_BASE_URL"
 
           echo "OSS 配置检查: OSS_BUCKET_NAME 字符数=$(printf %s "${OSS_BUCKET_NAME:-}" | wc -c) ALIYUN_OSS_ENDPOINT=${ALIYUN_OSS_ENDPOINT:-<未设置>} OSS_ACCESS_KEY_ID 字符数=$(printf %s "${OSS_ACCESS_KEY_ID:-}" | wc -c)"
           
@@ -230,7 +277,7 @@ jobs:
 
           # 强制清理历史残留（避免固定 container_name 与 compose down 项目名不一致导致冲突）
           cleanup_jewelry_stack() {
-            for name in jewelry-mysql jewelry-backend moje-b2b-client; do
+            for name in jewelry-mysql jewelry-backend moje-b2b-client moje-b2c-web; do
               docker rm -f "$name" 2>/dev/null || true
             done
             for net in moje_jewelry-network jewelry-network; do
@@ -338,9 +385,9 @@ jobs:
           docker image prune -f
           
           echo "=== 部署完成 ==="
-          echo "后端地址: http://${{ secrets.SSH_HOST }}:8851"
-          echo "后端健康检查: http://${{ secrets.SSH_HOST }}:8851/actuator/health"
-          echo "B2B 前端门户: http://${{ secrets.SSH_HOST }}"
-          echo "B2B 前端健康检查: http://${{ secrets.SSH_HOST }}"
+          echo "后端地址: http://${{ secrets.SSH_HOST }}:8851/api"
+          echo "后端健康检查: http://${{ secrets.SSH_HOST }}:8851/api/actuator/health"
+          echo "B2B 门户: http://${{ secrets.SSH_HOST }}:8852"
+          echo "C 端独立站: http://${{ secrets.SSH_HOST }}:8853"
           echo ""
           echo "提示: 如需启用 HTTPS，请配置 SSL 证书并重新部署"

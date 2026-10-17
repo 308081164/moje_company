@@ -29,12 +29,31 @@ const envOrigin =
 
 const resolvedOrigin = argvOrigin || (envOrigin ? envOrigin.replace(/\/+$/, '').replace(/\/api$/, '') : undefined);
 
+function readInlayOriginFromArgv(): string | undefined {
+  const prefix = '--inlay-api-origin=';
+  const hit = process.argv.find((a) => typeof a === 'string' && a.startsWith(prefix));
+  if (!hit) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(hit.slice(prefix.length)).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+const inlayArgvOrigin = readInlayOriginFromArgv();
+const inlayEnvOrigin = process.env.JEWELRY_INLAY_API_ORIGIN?.trim() || process.env.INLAY_API_ORIGIN?.trim();
+
 const env = {
   /** 供 axios 使用：带 /api 后缀的基址（与现有 api.ts 归一化逻辑兼容） */
   API_URL: resolvedOrigin ? toApiUrlWithApiSuffix(resolvedOrigin) : process.env.API_URL,
+  /** 镶嵌结构库 NAS 基址（不含 /api），员工端内网直连 */
+  INLAY_API_ORIGIN: inlayArgvOrigin || inlayEnvOrigin || 'http://192.168.1.10:8871',
 };
 
 const electronAPI = {
+  getInlayAuth: () => ipcRenderer.invoke('get-inlay-auth') as Promise<{ origin: string; username: string; password: string }>,
   onMenuNewOrder: (handler: () => void) => ipcRenderer.on('menu-new-order', handler),
   removeMenuNewOrderListener: (handler: () => void) => ipcRenderer.removeListener('menu-new-order', handler),
   onShowAbout: (handler: () => void) => ipcRenderer.on('show-about', handler),

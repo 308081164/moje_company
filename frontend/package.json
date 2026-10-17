@@ -58,7 +58,10 @@
     "webpack-dev-server": "^5.2.3",
     "zustand": "^4.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6"
+  },
   "build": {
     "appId": "com.jewelry.system",
     "productName": "珠宝定制管理系统",
@@ -77,7 +80,7 @@
       },
       {
         "from": "api-config.example.json",
-        "to": "api-config.example.json"
+        "to": "api-config.json"
       },
       {
         "from": "../social_publisher/sidecar/dist/publisher-engine.exe",

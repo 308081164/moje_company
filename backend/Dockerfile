@@ -15,12 +15,9 @@ COPY src src
 # 构建应用
 RUN mvn -B package -DskipTests
 
-# 运行时镜像
+# 运行时镜像（不 apt-get，避免构建时依赖 Ubuntu 软件源）
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-
-# 安装网络工具（用于健康检查）
-RUN apt-get update && apt-get install -y netcat curl && rm -rf /var/lib/apt/lists/*
 
 # 复制构建产物
 COPY --from=builder /app/target/*.jar app.jar
@@ -34,7 +31,7 @@ set -e\n\
 \n\
 # 等待数据库就绪\n\
 echo "等待MySQL数据库就绪..."\n\
-while ! nc -z mysql 3306; do\n\
+while ! bash -c "echo > /dev/tcp/mysql/3306" >/dev/null 2>&1; do\n\
   sleep 1\n\
 done\n\
 \n\
