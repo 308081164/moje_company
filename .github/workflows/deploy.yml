@@ -275,17 +275,18 @@ jobs:
           
           COMPOSE="docker compose -f docker-compose.prod.yml -p moje"
 
-          # 强制清理历史残留（避免固定 container_name 与 compose down 项目名不一致导致冲突）
-          cleanup_jewelry_stack() {
+          # 只清理已停止的同名残留。禁止在 pull 成功前 docker rm -f 正在服务的容器，
+          # 否则 GHCR 拉取 EOF 时会把 8851/8852/8853 打成 502。
+          remove_stale_stopped() {
             for name in jewelry-mysql jewelry-backend moje-b2b-client moje-b2c-web; do
-              docker rm -f "$name" 2>/dev/null || true
-            done
-            for net in moje_jewelry-network jewelry-network; do
-              docker network rm "$net" 2>/dev/null || true
+              running="$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || true)"
+              if [ "$running" = "false" ]; then
+                docker rm -f "$name" 2>/dev/null || true
+              fi
             done
           }
 
-          cleanup_jewelry_stack
+          remove_stale_stopped
 
           # ========== 4. 修复 Flyway 状态 ==========
           # 说明：正式库结构迭代由后端镜像内 Flyway 在 Spring Boot 启动时自动执行（见 backend/src/main/resources/db/migration）。
@@ -300,13 +301,24 @@ jobs:
           # 不在此处 down：避免残留同名容器；后续 up --force-recreate 会滚动更新各服务
           
           # ========== 5. 部署服务 ==========
-          echo "拉取最新镜像..."
-          $COMPOSE pull
+          echo "拉取最新镜像（失败则保留现网容器，不切换）..."
+          pull_ok=0
+          for a in 1 2 3 4 5; do
+            if $COMPOSE pull; then
+              pull_ok=1
+              break
+            fi
+            echo "docker compose pull 失败 (${a}/5)，30 秒后重试..."
+            sleep 30
+          done
+          if [ "$pull_ok" != "1" ]; then
+            echo "::error::镜像拉取失败，已保留现网容器。"
+            docker ps --filter "name=jewelry" --filter "name=moje" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" || true
+            exit 1
+          fi
 
-          cleanup_jewelry_stack
-
-          echo "启动服务..."
-          $COMPOSE up -d --force-recreate --remove-orphans || {
+          echo "启动服务（镜像已在本地，不再 pull）..."
+          $COMPOSE up -d --pull never --force-recreate --remove-orphans || {
             echo "docker compose up 失败，输出诊断信息..."
             docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
             echo "--- jewelry-mysql logs ---"
