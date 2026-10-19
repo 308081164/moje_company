@@ -38,6 +38,7 @@
   function post(path, body) { return request('POST', path, body); }
   function get(path) { return request('GET', path); }
   function put(path, body) { return request('PUT', path, body); }
+  function patch(path, body) { return request('PATCH', path, body); }
 
   window.DUXURY_API = {
     base: BASE,
@@ -127,6 +128,15 @@
     },
     pauseStorefrontListing: function (id) {
       return post('/portal/c/storefront/listings/' + id + '/pause', {});
+    },
+    republishStorefrontListing: function (id) {
+      return post('/portal/c/storefront/listings/' + id + '/republish', {});
+    },
+    listSellerListings: function () {
+      return get('/portal/c/storefront/seller/listings');
+    },
+    updateSellerListing: function (id, body) {
+      return patch('/portal/c/storefront/seller/listings/' + id, body);
     },
     purchaseStorefront: function (id, body) {
       return post('/portal/c/storefront/listings/' + id + '/purchase', body || {});

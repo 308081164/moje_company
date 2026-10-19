@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +38,24 @@ public class PortalStorefrontController {
     @Operation(summary = "下架自己的寄售商品")
     public StorefrontListingDto pause(@PathVariable long id) {
         return storefrontService.pause(id);
+    }
+
+    @PostMapping("/listings/{id}/republish")
+    @Operation(summary = "重新上架自己的寄售商品")
+    public StorefrontListingDto republish(@PathVariable long id) {
+        return storefrontService.republish(id);
+    }
+
+    @GetMapping("/seller/listings")
+    @Operation(summary = "卖家后台：我的全部寄售商品")
+    public java.util.List<StorefrontListingDto> sellerListings() {
+        return storefrontService.sellerListings();
+    }
+
+    @PatchMapping("/seller/listings/{id}")
+    @Operation(summary = "卖家编辑自己的寄售商品（标题/描述/售价/封面图）")
+    public StorefrontListingDto updateListing(@PathVariable long id, @RequestBody StorefrontListingUpdateRequest req) {
+        return storefrontService.updateListing(id, req);
     }
 
     @PostMapping("/listings/{id}/purchase")

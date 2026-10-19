@@ -124,6 +124,51 @@ public class StorefrontService {
     }
 
     @Transactional
+    public StorefrontListingDto republish(long listingId) {
+        StorefrontListing listing = requireOwnListing(listingId);
+        listing.setStatus("PUBLISHED");
+        listingRepository.save(listing);
+        return toDto(listing);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StorefrontListingDto> sellerListings() {
+        Long accountId = requireCustomer();
+        return listingRepository.findBySellerAccountIdOrderByUpdatedAtDesc(accountId)
+                .stream().map(this::toDto).toList();
+    }
+
+    @Transactional
+    public StorefrontListingDto updateListing(long listingId, StorefrontListingUpdateRequest req) {
+        StorefrontListing listing = requireOwnListing(listingId);
+        if (req == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少修改内容");
+        }
+        if (req.getTitle() != null) {
+            if (!StringUtils.hasText(req.getTitle())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
+            }
+            String title = req.getTitle().trim();
+            listing.setTitle(title.length() > 200 ? title.substring(0, 200) : title);
+        }
+        if (req.getDescription() != null) {
+            listing.setDescription(req.getDescription());
+        }
+        if (req.getSalePrice() != null) {
+            if (req.getSalePrice().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "售价必须大于 0");
+            }
+            listing.setSalePrice(req.getSalePrice().setScale(2, RoundingMode.HALF_UP));
+        }
+        if (req.getCoverImageUrl() != null) {
+            String url = req.getCoverImageUrl().trim();
+            listing.setCoverImageUrl(url.length() > 1000 ? url.substring(0, 1000) : url);
+        }
+        listingRepository.save(listing);
+        return toDto(listing);
+    }
+
+    @Transactional
     public StorefrontPurchaseResponse purchase(long listingId, StorefrontPurchaseRequest req) {
         Long buyerId = requireCustomer();
         StorefrontListing listing = listingRepository.findById(listingId)

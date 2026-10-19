@@ -128,6 +128,116 @@
 
   function usd(v) { return money(v); }
 
+  var sellerListingCache = {};
+  var editingListingId = null;
+
+  function listingEditEls() {
+    return {
+      modal: document.getElementById('listingEditModal'),
+      title: document.getElementById('slEditTitle'),
+      desc: document.getElementById('slEditDesc'),
+      price: document.getElementById('slEditPrice'),
+      cover: document.getElementById('slEditCover'),
+      preview: document.getElementById('slEditPreview'),
+      save: document.getElementById('slEditSave')
+    };
+  }
+
+  function updateCoverPreview(els) {
+    if (!els.preview) return;
+    var url = els.cover ? els.cover.value.trim() : '';
+    if (url) {
+      els.preview.src = url;
+      els.preview.style.display = '';
+    } else {
+      els.preview.removeAttribute('src');
+      els.preview.style.display = 'none';
+    }
+  }
+
+  function openListingEdit(listing) {
+    var els = listingEditEls();
+    if (!els.modal || !listing) return;
+    editingListingId = listing.id;
+    els.title.value = listing.title || '';
+    els.desc.value = listing.description || '';
+    els.price.value = listing.salePrice != null ? listing.salePrice : '';
+    els.cover.value = listing.coverImageUrl || '';
+    updateCoverPreview(els);
+    els.modal.classList.add('open');
+    els.modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeListingEdit() {
+    var els = listingEditEls();
+    editingListingId = null;
+    if (els.modal) {
+      els.modal.classList.remove('open');
+      els.modal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function initListingEditModal() {
+    var els = listingEditEls();
+    if (!els.modal || els.modal.__slBound) return;
+    els.modal.__slBound = true;
+    els.modal.querySelectorAll('[data-sl-close]').forEach(function (el) {
+      el.addEventListener('click', closeListingEdit);
+    });
+    if (els.cover) {
+      els.cover.addEventListener('input', function () { updateCoverPreview(els); });
+    }
+    if (els.preview) {
+      els.preview.addEventListener('error', function () { els.preview.style.display = 'none'; });
+    }
+    if (els.save) {
+      els.save.addEventListener('click', function () {
+        if (!editingListingId) return;
+        var price = Number(els.price.value);
+        if (!els.title.value.trim() || !price || price <= 0) {
+          alert(t('studio.form.invalid'));
+          return;
+        }
+        els.save.disabled = true;
+        window.DUXURY_API.updateSellerListing(editingListingId, {
+          title: els.title.value.trim(),
+          description: els.desc.value,
+          salePrice: price,
+          coverImageUrl: els.cover.value.trim()
+        }).then(function () {
+          closeListingEdit();
+          loadSeller();
+        }).catch(function (e) {
+          alert(e.message);
+        }).finally(function () {
+          els.save.disabled = false;
+        });
+      });
+    }
+  }
+
+  function sellerCard(l) {
+    var img = coverUrl(l);
+    var published = l.status === 'PUBLISHED';
+    sellerListingCache[String(l.id)] = l;
+    var html = '<div class="sl-card">';
+    html += '<div class="sl-card__img">' +
+      (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="sl-card__ph"></div>') +
+      '<span class="sl-badge ' + (published ? 'sl-badge--live' : 'sl-badge--paused') + '">' +
+      esc(t(published ? 'studio.status.published' : 'studio.status.paused')) + '</span></div>';
+    html += '<div class="sl-card__body">';
+    html += '<h3 class="sl-card__title">' + esc(l.title) + '</h3>';
+    html += '<div class="sl-card__row"><span class="sl-card__price">' + esc(usd(l.salePrice)) + '</span>' +
+      '<span class="sl-card__meta">' + esc(t('shop.sold')) + ' ' + esc(l.soldCount || 0) + '</span></div>';
+    html += '<div class="sl-card__actions">';
+    html += '<button class="sl-btn" data-edit="' + esc(l.id) + '">' + esc(t('studio.edit')) + '</button>';
+    html += published
+      ? '<button class="sl-btn sl-btn--warn" data-pause="' + esc(l.id) + '">' + esc(t('studio.pause')) + '</button>'
+      : '<button class="sl-btn sl-btn--gold" data-republish="' + esc(l.id) + '">' + esc(t('studio.republish')) + '</button>';
+    html += '</div></div></div>';
+    return html;
+  }
+
   function renderSeller(data) {
     var body = document.getElementById('sellerBody');
     if (!body) return;
@@ -153,16 +263,7 @@
     if (!listings.length) {
       html += '<p class="shop-empty">' + esc(t('shop.empty')) + '</p>';
     } else {
-      html += '<div class="seller-table">';
-      listings.forEach(function (l) {
-        html += '<div class="seller-row"><div><strong>' + esc(l.title) + '</strong><div class="seller-muted">' + esc(l.status) + ' · ' + esc(t('shop.sold')) + ' ' + esc(l.soldCount || 0) + '</div></div>';
-        html += '<div>' + esc(usd(l.salePrice)) + '</div>';
-        html += l.status === 'PUBLISHED'
-          ? '<button class="prog-btn prog-btn--no" data-pause="' + esc(l.id) + '">' + esc(t('studio.pause')) + '</button>'
-          : '<span class="seller-muted">' + esc(l.status) + '</span>';
-        html += '</div>';
-      });
-      html += '</div>';
+      html += '<div class="sl-cards">' + listings.map(sellerCard).join('') + '</div>';
     }
     html += '<h2 class="seller-h">' + esc(t('studio.sales')) + '</h2>';
     if (!sales.length) {
@@ -194,6 +295,18 @@
           .catch(function (e) { alert(e.message); });
       });
     });
+    body.querySelectorAll('[data-republish]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        window.DUXURY_API.republishStorefrontListing(btn.getAttribute('data-republish'))
+          .then(loadSeller)
+          .catch(function (e) { alert(e.message); });
+      });
+    });
+    body.querySelectorAll('[data-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openListingEdit(sellerListingCache[btn.getAttribute('data-edit')]);
+      });
+    });
   }
 
   function loadSeller() {
@@ -214,6 +327,7 @@
 
   function initSeller() {
     if (!document.getElementById('sellerBody')) return;
+    initListingEditModal();
     var loginBtn = document.getElementById('sellerGateLogin');
     if (loginBtn) {
       loginBtn.addEventListener('click', function () {
