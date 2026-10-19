@@ -93,11 +93,6 @@
         '<h1 class="listing-title">' + esc(item.title) + '</h1>' +
         '<div class="listing-price">' + esc(money(item.salePrice)) + '</div>' +
         '<p class="listing-desc">' + esc(item.description || '') + '</p>' +
-        '<div class="shop-fees">' +
-        '<div class="shop-fees__title">' + esc(t('shop.fees')) + '</div>' +
-        '<div class="shop-fees__row">' + esc(t('shop.prod')) + ': ' + esc(range(item.productionFeeMin, item.productionFeeMax)) + '</div>' +
-        '<div class="shop-fees__row">' + esc(t('shop.ship')) + ': ' + esc(range(item.shippingFeeMin, item.shippingFeeMax)) + '</div>' +
-        '</div>' +
         '<p class="shop-fees__note">' + esc(t('shop.pay.mock')) + '</p>' +
         '<label class="listing-label">' + esc(t('shop.name')) + '</label>' +
         '<input class="checkout__input" id="buyName">' +
