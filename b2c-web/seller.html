@@ -1,13 +1,49 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>duxury &middot; Seller studio</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261019h">
+  <link rel="stylesheet" href="css/style.css?v=20261019j">
+  <style>
+    /* 「我的上架」卡片与编辑弹窗（scoped，仅本页使用） */
+    .sl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; margin-bottom: 32px; }
+    .sl-card { background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; }
+    .sl-card__img { position: relative; aspect-ratio: 1; background: #efe8dc; }
+    .sl-card__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sl-card__ph { width: 100%; height: 100%; background: linear-gradient(135deg, #efe8dc, #e2d7c3); }
+    .sl-badge { position: absolute; top: 10px; left: 10px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.04em; }
+    .sl-badge--live { background: rgba(46, 125, 78, 0.92); color: #fff; }
+    .sl-badge--paused { background: rgba(90, 88, 84, 0.88); color: #fff; }
+    .sl-card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .sl-card__title { font-family: var(--font-serif); font-size: 1.05rem; margin: 0; line-height: 1.35; }
+    .sl-card__row { display: flex; justify-content: space-between; align-items: baseline; }
+    .sl-card__price { color: var(--gold-dark); font-weight: 600; }
+    .sl-card__meta { font-size: 0.8rem; color: var(--text-muted); }
+    .sl-card__actions { display: flex; gap: 8px; margin-top: auto; }
+    .sl-btn { padding: 7px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-light); background: #fff; color: inherit; }
+    .sl-btn:hover { border-color: var(--gold); }
+    .sl-btn--gold { background: var(--gold); border-color: var(--gold); color: #1a1814; }
+    .sl-btn--warn { background: transparent; color: #e05d5d; border: 1px solid #e05d5d; }
+    .sl-modal { position: fixed; inset: 0; display: none; z-index: 120; }
+    .sl-modal.open { display: block; }
+    .sl-modal__backdrop { position: absolute; inset: 0; background: rgba(20, 18, 14, 0.55); }
+    .sl-modal__dialog { position: relative; margin: 6vh auto; max-width: 720px; width: calc(100% - 32px); background: #fff; border-radius: var(--radius-lg); padding: 26px 28px; max-height: 88vh; overflow-y: auto; }
+    .sl-modal__close { position: absolute; top: 14px; right: 16px; border: none; background: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted-dark); }
+    .sl-modal__title { font-family: var(--font-serif); margin: 0 0 16px; font-size: 1.4rem; }
+    .sl-edit { display: grid; grid-template-columns: 1fr 220px; gap: 20px; }
+    .sl-label { display: block; font-size: 0.8rem; color: var(--text-muted-dark); margin: 10px 0 4px; }
+    .sl-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-light); border-radius: 8px; font: inherit; background: #fff; box-sizing: border-box; }
+    .sl-input:focus { outline: none; border-color: var(--gold); }
+    .sl-edit__preview { aspect-ratio: 1; background: #efe8dc; border-radius: 8px; overflow: hidden; }
+    .sl-edit__preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sl-modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    @media (max-width: 640px) { .sl-edit { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body class="storefront-page">
 
@@ -70,9 +106,37 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261019h"></script>
-<script src="js/api.js?v=20261019h"></script>
-<script src="js/main.js?v=20261019h"></script>
-<script src="js/storefront.js?v=20261019h"></script>
+<div class="sl-modal" id="listingEditModal" aria-hidden="true">
+  <div class="sl-modal__backdrop" data-sl-close></div>
+  <div class="sl-modal__dialog">
+    <button class="sl-modal__close" data-sl-close aria-label="Close">&times;</button>
+    <h3 class="sl-modal__title" data-i18n="studio.edit.title">Edit listing</h3>
+    <div class="sl-edit">
+      <div class="sl-edit__form">
+        <label class="sl-label" for="slEditTitle" data-i18n="studio.field.title">Title</label>
+        <input class="sl-input" id="slEditTitle" maxlength="200">
+        <label class="sl-label" for="slEditDesc" data-i18n="studio.field.desc">Description</label>
+        <textarea class="sl-input" id="slEditDesc" rows="4"></textarea>
+        <label class="sl-label" for="slEditPrice" data-i18n="studio.field.price">Sale price (USD)</label>
+        <input class="sl-input" id="slEditPrice" type="number" min="0.01" step="0.01">
+        <label class="sl-label" for="slEditCover" data-i18n="studio.field.cover">Cover image URL</label>
+        <input class="sl-input" id="slEditCover" placeholder="https://…">
+      </div>
+      <div class="sl-edit__side">
+        <span class="sl-label" data-i18n="studio.preview">Preview</span>
+        <div class="sl-edit__preview"><img id="slEditPreview" alt="" style="display:none"></div>
+      </div>
+    </div>
+    <div class="sl-modal__actions">
+      <button class="sl-btn" data-sl-close data-i18n="studio.cancel">Cancel</button>
+      <button class="sl-btn sl-btn--gold" id="slEditSave" data-i18n="studio.save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/i18n.js?v=20261019j"></script>
+<script src="js/api.js?v=20261019j"></script>
+<script src="js/main.js?v=20261019j"></script>
+<script src="js/storefront.js?v=20261019j"></script>
 </body>
 </html>
