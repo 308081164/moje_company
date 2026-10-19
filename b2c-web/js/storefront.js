@@ -47,9 +47,6 @@
   function initShop() {
     var grid = document.getElementById('shopGrid');
     if (!grid || !window.DUXURY_API) return;
-    window.DUXURY_API.getStorefrontFeeGuide().then(function (fees) {
-      renderFeeGuide(document.getElementById('shopFeeGuide'), fees);
-    }).catch(function () {});
     window.DUXURY_API.listStorefront().then(function (list) {
       if (!list || !list.length) {
         grid.innerHTML = '<p class="shop-empty">' + esc(t('shop.empty')) + '</p>';

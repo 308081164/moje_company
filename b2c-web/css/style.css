@@ -112,6 +112,48 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   transition: var(--transition); border-radius: 2px;
 }
 
+/* ---------- Light storefront header (shop / listing / seller) ---------- */
+/* 浅色商城页：任何滚动位置都保持浅色玻璃拟态头部 + 深色文字，
+   避免 main.js 在页面顶部移除 .scrolled 后浅字透明底落在浅背景上 */
+.storefront-page .header {
+  background: rgba(255, 253, 249, 0.86);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border-light);
+}
+.storefront-page .header.scrolled {
+  background: rgba(255, 253, 249, 0.94);
+  border-bottom-color: rgba(23, 20, 15, 0.12);
+}
+.storefront-page .header .brand__name,
+.storefront-page .header.scrolled .brand__name { color: var(--gold-dark); }
+.storefront-page .header .nav__link { color: rgba(27, 23, 18, 0.72); }
+.storefront-page .header .nav__link:hover { color: var(--text-dark); }
+.storefront-page .header .nav__link--active { color: var(--gold-dark) !important; }
+.storefront-page .header .lang__btn,
+.storefront-page .header .auth-chip__btn {
+  color: var(--text-dark);
+  border-color: rgba(23, 20, 15, 0.2);
+}
+.storefront-page .header .lang__btn:hover,
+.storefront-page .header .lang.open .lang__btn,
+.storefront-page .header .auth-chip__btn:hover,
+.storefront-page .header .auth-chip.open .auth-chip__btn {
+  border-color: var(--gold-dark);
+  color: var(--gold-dark);
+}
+.storefront-page .header .auth-chip__avatar { color: var(--gold-dark); border-color: var(--gold-dark); }
+.storefront-page .header .menu-toggle span { background: var(--text-dark); }
+
+@media (max-width: 767px) {
+  .storefront-page .header .nav.open {
+    background: rgba(255, 253, 249, 0.97);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom-color: rgba(23, 20, 15, 0.1);
+  }
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -311,7 +353,7 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .shop-spot__bg > img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s var(--ease); }
 .shop-spot:hover .shop-spot__bg > img { transform: scale(1.05); }
 
-/* 海量商品预览墙：两行反向无限滚动 */
+/* 海量商品预览墙：三排正-反-正无限滚动（图片宽度随 vh 自适应，保证三排铺满 92vh） */
 .shop-wall {
   position: absolute;
   inset: -12% -6%;
@@ -332,8 +374,12 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
   animation-name: shopWallScrollReverse;
   animation-duration: 70s;
 }
+.shop-wall__row--c {
+  animation-duration: 62s;
+}
 .shop-wall__row img {
-  width: 230px;
+  /* 随视口高度自适应：保证三排总高 >= 92vh 铺满整屏，小屏不低于 230px */
+  width: clamp(230px, calc(24vh - 10px), 340px);
   aspect-ratio: 3 / 4;
   object-fit: cover;
   border-radius: 16px;
