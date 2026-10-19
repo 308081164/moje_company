@@ -42,6 +42,7 @@ public class PortalCustomerOrderService {
     private final AutoAssignmentService autoAssignmentService;
     private final ConversationService conversationService;
     private final OrderEventService orderEventService;
+    private final ReferralService referralService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -85,6 +86,9 @@ public class PortalCustomerOrderService {
         binding.setOrderId(order.getId());
         binding.setBindSource("SELF_CREATE");
         bindingRepository.save(binding);
+
+        // 个人推广码（选填）：以定金为佣金基数，统一 5%
+        referralService.bindOnOrder(accountId, req.getReferralCode(), order, order.getDeposit());
 
         if (type == ServiceType.CUSTOM_IMAGE) {
             autoAssignmentService.autoAssignC2cImageOrder(order.getId());

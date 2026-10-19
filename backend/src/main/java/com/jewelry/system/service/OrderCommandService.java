@@ -60,6 +60,7 @@ public class OrderCommandService {
     private final OrderEventService orderEventService;
     private final ConversationService conversationService;
     private final StorefrontWalletService storefrontWalletService;
+    private final ReferralService referralService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -537,6 +538,7 @@ public class OrderCommandService {
         }
         orderRepository.save(order);
         storefrontWalletService.settleOnCompleted(orderId);
+        referralService.settleOnCompleted(orderId);
         auditLogService.log("ORDER_PRODUCTION_COMPLETED", "ORDER", orderId, "生产完成，订单已关闭");
         return orderQueryService.getOrder(orderId);
     }

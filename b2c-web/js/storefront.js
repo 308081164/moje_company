@@ -58,17 +58,26 @@
     });
   }
 
+  function storedReferralCode() {
+    var v = localStorage.getItem('duxury-ref');
+    return v && v.trim() ? v.trim().toUpperCase() : '';
+  }
+
   function doPurchase(id) {
     var nameEl = document.getElementById('buyName');
     var contactEl = document.getElementById('buyContact');
     var addrEl = document.getElementById('buyAddress');
     var noteEl = document.getElementById('buyNote');
+    var refEl = document.getElementById('buyReferral');
+    var referralCode = refEl && refEl.value.trim() ? refEl.value.trim().toUpperCase() : '';
     window.DUXURY_API.purchaseStorefront(id, {
       customerName: nameEl ? nameEl.value.trim() : '',
       customerContact: contactEl ? contactEl.value.trim() : '',
       shippingAddress: addrEl ? addrEl.value.trim() : '',
-      note: noteEl ? noteEl.value.trim() : ''
+      note: noteEl ? noteEl.value.trim() : '',
+      referralCode: referralCode || undefined
     }).then(function (res) {
+      if (referralCode) localStorage.removeItem('duxury-ref');
       localStorage.setItem('duxury-order', JSON.stringify(res));
       location.href = 'order-workspace.html';
     }).catch(function (e) {
@@ -102,8 +111,14 @@
         '<textarea class="checkout__input" id="buyAddress" rows="3"></textarea>' +
         '<label class="listing-label">' + esc(t('shop.note')) + '</label>' +
         '<textarea class="checkout__input" id="buyNote" rows="2"></textarea>' +
+        '<label class="listing-label">' + esc(t('co.referral')) + '</label>' +
+        '<input class="checkout__input" id="buyReferral" maxlength="16" placeholder="' + esc(t('co.referral.ph')) + '">' +
         '<button class="btn btn--gold btn--lg listing-buy" id="buyNow">' + esc(t('shop.buy')) + '</button>' +
         '</div>';
+      var buyRefEl = document.getElementById('buyReferral');
+      if (buyRefEl && storedReferralCode()) {
+        buyRefEl.value = storedReferralCode();
+      }
       document.getElementById('buyNow').addEventListener('click', function () {
         if (!localStorage.getItem('duxury-token')) {
           sessionStorage.setItem('duxury-pending-buy', id);

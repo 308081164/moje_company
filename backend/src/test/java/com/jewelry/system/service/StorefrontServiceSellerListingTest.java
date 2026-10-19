@@ -47,6 +47,7 @@ class StorefrontServiceSellerListingTest {
     @Mock StorefrontWalletService walletService;
     @Mock SellerWalletRepository walletRepository;
     @Mock SellerWithdrawRequestRepository withdrawRepository;
+    @Mock ReferralService referralService;
 
     @InjectMocks
     StorefrontService storefrontService;

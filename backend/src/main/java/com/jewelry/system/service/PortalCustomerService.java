@@ -52,6 +52,7 @@ public class PortalCustomerService {
     private final ShipmentService shipmentService;
     private final StorefrontService storefrontService;
     private final StorefrontWalletService storefrontWalletService;
+    private final ReferralService referralService;
 
     @Transactional
     public PortalCustomerLoginResponse register(PortalCustomerRegisterRequest req) {
@@ -297,6 +298,7 @@ public class PortalCustomerService {
         }
         orderRepository.save(order);
         storefrontWalletService.settleOnCompleted(orderId);
+        referralService.settleOnCompleted(orderId);
         orderEventService.record(orderId, OrderEventType.DELIVERY_CONFIRM,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 "客户确认收货，订单已交付", "尾款已结清（mock）", null, null);

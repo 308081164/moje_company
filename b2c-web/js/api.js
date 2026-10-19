@@ -146,6 +146,16 @@
     },
     withdrawSeller: function (amount) {
       return post('/portal/c/storefront/seller/withdraw', { amount: amount });
+    },
+    // 个人推广码
+    getReferralCode: function () {
+      return get('/portal/c/referral/code');
+    },
+    getReferralDashboard: function () {
+      return get('/portal/c/referral/dashboard');
+    },
+    withdrawReferral: function (amount) {
+      return post('/portal/c/referral/withdraw', { amount: amount });
     }
   };
 })();

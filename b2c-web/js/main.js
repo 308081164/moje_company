@@ -2,6 +2,23 @@
   'use strict';
 
   /* ============================================================
+     推广码落地：捕获 ?ref=CODE 并暂存，下单时随单提交
+  ============================================================ */
+  (function captureReferralRef() {
+    try {
+      var ref = new URLSearchParams(location.search).get('ref');
+      if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref.trim())) {
+        localStorage.setItem('duxury-ref', ref.trim().toUpperCase());
+      }
+    } catch (e) { /* 忽略异常参数 */ }
+  })();
+
+  function getStoredReferralCode() {
+    var v = localStorage.getItem('duxury-ref');
+    return v && v.trim() ? v.trim().toUpperCase() : '';
+  }
+
+  /* ============================================================
      Workspace gate: orders page requires email sign-in
   ============================================================ */
   var isWorkspace = !!document.querySelector('.app-shell');
@@ -129,6 +146,7 @@
         '<div class="auth-chip__menu">' +
           '<a class="auth-chip__item" href="order-workspace.html" data-i18n="auth.orders"></a>' +
           '<a class="auth-chip__item" href="seller.html" data-i18n="auth.studio"></a>' +
+          '<a class="auth-chip__item" href="promo.html" data-i18n="auth.promo"></a>' +
           '<button class="auth-chip__item auth-chip__item--danger" type="button" data-auth-logout data-i18n="auth.logout"></button>' +
         '</div>';
       actions.appendChild(chip);
@@ -526,6 +544,11 @@
     payDeposit.style.display = '';
     var reqBox = document.getElementById('checkoutRequirements');
     if (reqBox) reqBox.style.display = '';
+    // 推广码（选填）：带来路 ref 参数访问时自动带出
+    var refInput = document.getElementById('referralCodeInput');
+    if (refInput && !refInput.value.trim()) {
+      refInput.value = getStoredReferralCode();
+    }
     selectedImages = [];
     renderImagePreview();
     openModal(checkoutModal);
@@ -660,14 +683,20 @@
         var customerName = currentUser && currentUser.displayName && currentUser.displayName !== currentUser.email
           ? currentUser.displayName : undefined;
         var depositAmount = selectedService === 'designer' ? 99 : 49;
+        var refInput = document.getElementById('referralCodeInput');
+        var referralCode = refInput && refInput.value.trim() ? refInput.value.trim().toUpperCase() : undefined;
         window.DUXURY_API.createOrder({
           serviceType: serviceType,
           customerName: customerName,
           depositAmount: depositAmount,
           basicRequirements: requirement,
           materialInfo: material || undefined,
-          referenceImages: referenceImages || undefined
-        }).then(finish).catch(function (err) {
+          referenceImages: referenceImages || undefined,
+          referralCode: referralCode
+        }).then(function (order) {
+          if (referralCode) localStorage.removeItem('duxury-ref');
+          finish(order);
+        }).catch(function (err) {
           alert(err.message || 'order create failed');
         });
       }

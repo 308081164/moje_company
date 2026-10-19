@@ -61,6 +61,10 @@
       en: 'Sign Out', fr: 'Se déconnecter', de: 'Abmelden', es: 'Cerrar sesión',
       ja: 'ログアウト', ko: '로그아웃', 'zh-TW': '登出', 'zh-CN': '退出登录'
     },
+    'auth.promo': {
+      en: 'Refer & Earn', fr: 'Parrainage', de: 'Empfehlen & Verdienen', es: 'Invita y gana',
+      ja: '紹介で稼ぐ', ko: '추천하고 수익', 'zh-TW': '推廣賺佣', 'zh-CN': '推广赚佣'
+    },
 
     /* ---------- Hero ---------- */
     'hero.eyebrow': {
@@ -618,6 +622,8 @@
     'co.summary': { en: 'Order summary', fr: 'Récapitulatif', de: 'Zusammenfassung', es: 'Resumen del pedido', ja: '注文内容', ko: '주문 요약', 'zh-TW': '訂單摘要', 'zh-CN': '订单摘要' },
     'co.service': { en: 'Service', fr: 'Service', de: 'Leistung', es: 'Servicio', ja: 'サービス', ko: '서비스', 'zh-TW': '服務', 'zh-CN': '服务' },
     'co.total': { en: 'Total due', fr: 'Total à payer', de: 'Fälliger Betrag', es: 'Total a pagar', ja: 'お支払い額', ko: '결제 금액', 'zh-TW': '應付金額', 'zh-CN': '应付金额' },
+    'co.referral': { en: 'Referral code (optional)', fr: 'Code de parrainage (optionnel)', de: 'Empfehlungscode (optional)', es: 'Código de referido (opcional)', ja: '紹介コード（任意）', ko: '추천 코드 (선택)', 'zh-TW': '推廣碼（選填）', 'zh-CN': '推广码（选填）' },
+    'co.referral.ph': { en: 'Friend’s code — they earn 5%', fr: 'Code d’un ami — il gagne 5 %', de: 'Code eines Freundes — er erhält 5 %', es: 'Código de un amigo — gana 5 %', ja: '友達のコード — 5%還元', ko: '친구 코드 — 5% 적립', 'zh-TW': '好友推廣碼，TA 可獲 5% 佣金', 'zh-CN': '好友推广码，TA 可获 5% 佣金' },
     'co.pay': { en: 'Pay deposit', fr: 'Payer l’acompte', de: 'Anzahlung zahlen', es: 'Pagar depósito', ja: '内金を支払う', ko: '예약금 결제', 'zh-TW': '支付定金', 'zh-CN': '支付定金' },
     'co.secure': { en: '256-bit encrypted · secure payment', fr: 'Chiffrement 256 bits · paiement sécurisé', de: '256-Bit-Verschlüsselung · sichere Zahlung', es: 'Cifrado de 256 bits · pago seguro', ja: '256bit暗号化 · 安全な決済', ko: '256비트 암호화 · 안전 결제', 'zh-TW': '256位元加密 · 安全支付', 'zh-CN': '256位加密 · 安全支付' },
     'co.back': { en: 'Back', fr: 'Retour', de: 'Zurück', es: 'Volver', ja: '戻る', ko: '뒤로', 'zh-TW': '返回', 'zh-CN': '返回' },

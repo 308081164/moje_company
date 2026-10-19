@@ -45,6 +45,7 @@ public class StorefrontService {
     private final StorefrontWalletService walletService;
     private final SellerWalletRepository walletRepository;
     private final SellerWithdrawRequestRepository withdrawRepository;
+    private final ReferralService referralService;
 
     @Transactional(readOnly = true)
     public StorefrontFeeGuideDto feeGuide() {
@@ -229,6 +230,9 @@ public class StorefrontService {
         binding.setOrderId(order.getId());
         binding.setBindSource("STOREFRONT_PURCHASE");
         bindingRepository.save(binding);
+
+        // 个人推广码（选填）：以售价为佣金基数，统一 5%
+        referralService.bindOnOrder(buyerId, req != null ? req.getReferralCode() : null, order, listing.getSalePrice());
 
         copyDesignAndModel(source.getId(), order.getId());
 

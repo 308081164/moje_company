@@ -1,0 +1,4 @@
+-- 修复：V32 引入 OrderSource.MARKETPLACE（独立站寄售复产单），但 orders.source 的 ENUM 未包含该值。
+ALTER TABLE orders
+    MODIFY COLUMN source ENUM('DOUYIN','BILIBILI','XIAOHONGSHU','TAOBAO','XIANYU','INFLUENCER','C2C','B2B','MARKETPLACE') NOT NULL
+    COMMENT '来源';
