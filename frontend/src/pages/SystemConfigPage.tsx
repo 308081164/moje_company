@@ -495,11 +495,12 @@ const SystemConfigPage: React.FC = () => {
                   <Form form={integrationForm} layout="vertical" style={{ maxWidth: 640 }} onFinish={saveIntegration}>
                     <Form.Item
                       name="dashscopeEnabled"
-                      label="启用大模型能力"
+                      label="启用大模型能力（总开关）"
                       valuePropName="checked"
                       extra={
                         <Text type="secondary">
                           开启后，订单截图识图填单、聊天消息自动翻译等能力走下方所选引擎。
+                          <Text type="danger">关闭时即使已配置 API Key，翻译与识图也不会工作。</Text>
                         </Text>
                       }
                     >

@@ -26,10 +26,12 @@ import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
   DownloadOutlined,
+  MessageOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { orderService } from '@/services/orderService';
+import { conversationService } from '@/services/conversationService';
 import { userService } from '@/services/userService';
 import UploadWithImagePreview from '@/components/UploadWithImagePreview';
 import {
@@ -178,6 +180,7 @@ const OrderDetailPage: React.FC = () => {
   const [customerProgressLink, setCustomerProgressLink] = useState<CustomerProgressLinkResponse | null>(null);
   const [customerCardPreviewUrl, setCustomerCardPreviewUrl] = useState<string | null>(null);
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
+  const [openChatLoading, setOpenChatLoading] = useState(false);
   const [modelSaveLoading, setModelSaveLoading] = useState(false);
   const [shipment, setShipment] = useState<OrderShipmentDto | null>(null);
   const [shipmentLoading, setShipmentLoading] = useState(false);
@@ -657,6 +660,18 @@ const OrderDetailPage: React.FC = () => {
       if (customerCardPreviewUrl) URL.revokeObjectURL(customerCardPreviewUrl);
     };
   }, [customerCardPreviewUrl]);
+
+  const openOrderChat = async () => {
+    setOpenChatLoading(true);
+    try {
+      const conv = await conversationService.ensureByOrder(orderId);
+      navigate('/chat', { state: { conversationId: conv.id } });
+    } catch (e: unknown) {
+      message.error(`打开会话失败：${String((e as Error)?.message || e)}`);
+    } finally {
+      setOpenChatLoading(false);
+    }
+  };
 
   const onGenerateCustomerProgress = async () => {
     setCustomerProgressBusy(true);
@@ -1599,6 +1614,13 @@ const OrderDetailPage: React.FC = () => {
             </Tag>
           )}
           <Space size={4} align="center">
+            <Button
+              icon={<MessageOutlined />}
+              loading={openChatLoading}
+              onClick={() => void openOrderChat()}
+            >
+              联系客户
+            </Button>
             <Button
               type="primary"
               icon={<DownloadOutlined />}
