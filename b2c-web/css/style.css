@@ -1002,6 +1002,72 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .lang__option.active { color: var(--gold); font-weight: 600; }
 .lang__option .lang__check { color: var(--gold); font-size: 0.8rem; }
 
+/* ---------- Auth chip (signed-in header) ---------- */
+.auth-chip { position: relative; }
+.auth-chip__btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border: 1px solid rgba(245, 240, 232, 0.25);
+  border-radius: 999px;
+  color: var(--text-light);
+  font-size: 0.8rem; font-weight: 500;
+  letter-spacing: 0.03em;
+  transition: var(--transition);
+  background: transparent;
+}
+.auth-chip__btn:hover { border-color: var(--gold); color: var(--gold); }
+.auth-chip.open .auth-chip__btn { border-color: var(--gold); color: var(--gold); }
+.auth-chip__avatar {
+  width: 28px; height: 28px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  background: rgba(192, 160, 96, 0.14);
+  color: var(--gold);
+  font-family: var(--font-serif);
+  font-size: 0.82rem; font-weight: 600;
+}
+.auth-chip__name {
+  max-width: 140px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.auth-chip__chevron { transition: transform 0.3s var(--ease); }
+.auth-chip.open .auth-chip__chevron { transform: rotate(180deg); }
+
+.auth-chip__menu {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  min-width: 168px;
+  background: #141414;
+  border: 1px solid var(--border-dark);
+  border-radius: var(--radius);
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  opacity: 0; visibility: hidden;
+  transform: translateY(-6px);
+  transition: var(--transition);
+  z-index: 120;
+}
+.auth-chip.open .auth-chip__menu { opacity: 1; visibility: visible; transform: translateY(0); }
+
+.auth-chip__item {
+  display: block; width: 100%;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  color: rgba(245, 240, 232, 0.8);
+  border-radius: 6px;
+  transition: var(--transition);
+  text-align: left;
+}
+.auth-chip__item:hover { background: rgba(192, 160, 96, 0.12); color: var(--text-light); }
+.auth-chip__item--danger { color: #d98a7e; }
+.auth-chip__item--danger:hover { background: rgba(217, 138, 126, 0.12); color: #e8a89d; }
+
+@media (max-width: 767px) {
+  .auth-chip__name { display: none; }
+  .auth-chip__chevron { display: none; }
+  .auth-chip__btn { padding: 5px; }
+}
+
 /* ---------- Order Workspace App ---------- */
 .app-body {
   background: #0f0e0d;

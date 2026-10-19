@@ -49,6 +49,18 @@
     'nav.services': { en: 'Services', fr: 'Services', de: 'Leistungen', es: 'Servicios', ja: 'サービス', ko: '서비스', 'zh-TW': '服務', 'zh-CN': '服务' },
     'nav.shop': { en: 'Shop', fr: 'Boutique', de: 'Shop', es: 'Tienda', ja: 'ショップ', ko: '스토어', 'zh-TW': '獨立站商城', 'zh-CN': '独立站商城' },
     'nav.studio': { en: 'Studio', fr: 'Studio', de: 'Studio', es: 'Estudio', ja: 'スタジオ', ko: '스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台' },
+    'auth.orders': {
+      en: 'Order Center', fr: 'Centre de commandes', de: 'Bestellcenter', es: 'Centro de pedidos',
+      ja: '注文センター', ko: '주문 센터', 'zh-TW': '訂單中心', 'zh-CN': '订单中心'
+    },
+    'auth.studio': {
+      en: 'Seller Studio', fr: 'Espace vendeur', de: 'Verkäuferstudio', es: 'Estudio del vendedor',
+      ja: '出品者スタジオ', ko: '판매자 스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台'
+    },
+    'auth.logout': {
+      en: 'Sign Out', fr: 'Se déconnecter', de: 'Abmelden', es: 'Cerrar sesión',
+      ja: 'ログアウト', ko: '로그아웃', 'zh-TW': '登出', 'zh-CN': '退出登录'
+    },
 
     /* ---------- Hero ---------- */
     'hero.eyebrow': {

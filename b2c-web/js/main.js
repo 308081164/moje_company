@@ -77,6 +77,92 @@
   });
 
   /* ============================================================
+     Auth area: signed-in user chip vs. guest CTA (shared)
+  ============================================================ */
+  var AUTH_STORAGE_KEYS = ['duxury-token', 'duxury-user', 'duxury-order', 'duxury-paid'];
+
+  function getAuthUser() {
+    if (!localStorage.getItem('duxury-token')) return null;
+    try {
+      var u = JSON.parse(localStorage.getItem('duxury-user') || 'null');
+      if (u && (u.email || u.displayName)) return u;
+    } catch (e) { /* 忽略损坏的缓存 */ }
+    return null;
+  }
+
+  function authDisplayName(user) {
+    var name = ((user && user.displayName) || '').trim();
+    if (name) return name;
+    return ((user && user.email) || '').trim();
+  }
+
+  function authAvatarLetter(user) {
+    var name = authDisplayName(user);
+    return name ? name.charAt(0).toUpperCase() : '?';
+  }
+
+  function renderAuthArea() {
+    var actions = document.querySelector('.header__actions');
+    if (!actions) return;
+    var user = getAuthUser();
+    var cta = actions.querySelector('.header__cta');
+    var chip = actions.querySelector('.auth-chip');
+
+    // 未登录：移除用户 chip，恢复「开始定制」CTA（若该页有）
+    if (!user) {
+      if (chip) chip.parentNode.removeChild(chip);
+      if (cta) cta.style.display = '';
+      return;
+    }
+
+    // 已登录：隐藏 CTA，注入/更新用户 chip（头像 + 昵称 + 下拉菜单）
+    if (cta) cta.style.display = 'none';
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.className = 'auth-chip';
+      chip.innerHTML =
+        '<button class="auth-chip__btn" type="button" aria-haspopup="true" aria-expanded="false">' +
+          '<span class="auth-chip__avatar"></span>' +
+          '<span class="auth-chip__name"></span>' +
+          '<svg class="auth-chip__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>' +
+        '<div class="auth-chip__menu">' +
+          '<a class="auth-chip__item" href="order-workspace.html" data-i18n="auth.orders"></a>' +
+          '<a class="auth-chip__item" href="seller.html" data-i18n="auth.studio"></a>' +
+          '<button class="auth-chip__item auth-chip__item--danger" type="button" data-auth-logout data-i18n="auth.logout"></button>' +
+        '</div>';
+      actions.appendChild(chip);
+
+      var chipBtn = chip.querySelector('.auth-chip__btn');
+      chipBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = chip.classList.toggle('open');
+        chipBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', function (e) {
+        if (!chip.contains(e.target)) {
+          chip.classList.remove('open');
+          chipBtn.setAttribute('aria-expanded', 'false');
+        }
+      });
+      chip.querySelector('[data-auth-logout]').addEventListener('click', function () {
+        AUTH_STORAGE_KEYS.forEach(function (k) { localStorage.removeItem(k); });
+        // 刷新回到未登录态（订单工作台会重新显示登录 gate）
+        location.reload();
+      });
+    }
+    chip.querySelector('.auth-chip__avatar').textContent = authAvatarLetter(user);
+    chip.querySelector('.auth-chip__name').textContent = authDisplayName(user);
+    // 翻译新注入的菜单项（语言切换时 i18n.apply 也会命中这些 data-i18n）
+    chip.querySelectorAll('[data-i18n]').forEach(function (el) {
+      el.textContent = window.I18N.t(el.getAttribute('data-i18n'));
+    });
+  }
+
+  renderAuthArea();
+  document.addEventListener('duxury:login', renderAuthArea);
+
+  /* ============================================================
      Header / mobile menu (shared)
   ============================================================ */
   var header = document.getElementById('header');
