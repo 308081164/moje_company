@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,7 +7,89 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261019f">
+  <link rel="stylesheet" href="css/style.css?v=20261019i">
+<style>
+  /* 定制服务引流 banner — 仅作用于 shop.html（类名前缀 shop-cta-） */
+  .shop-cta {
+    position: relative;
+    margin: 0 0 48px;
+    padding: 1px;
+    border-radius: 20px;
+    background: linear-gradient(120deg, rgba(212,175,55,.7), rgba(140,105,30,.18) 35%, rgba(212,175,55,.45) 60%, rgba(255,232,170,.8));
+    overflow: hidden;
+  }
+  .shop-cta__inner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    padding: 42px 48px;
+    border-radius: 19px;
+    background: linear-gradient(135deg, #0b0b0e 0%, #14110b 55%, #1e1910 100%);
+    overflow: hidden;
+  }
+  .shop-cta__inner::before {
+    content: '';
+    position: absolute;
+    inset: -60% 50% -60% -15%;
+    background: radial-gradient(closest-side, rgba(212,175,55,.20), transparent 70%);
+    pointer-events: none;
+  }
+  .shop-cta__text { position: relative; max-width: 660px; }
+  .shop-cta__eyebrow {
+    margin: 0 0 12px;
+    font-size: 12px;
+    letter-spacing: .34em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: #d4af37;
+  }
+  .shop-cta__title {
+    margin: 0 0 12px;
+    font-family: 'Cormorant Garamond', 'Noto Serif SC', serif;
+    font-size: clamp(24px, 3vw, 34px);
+    font-weight: 600;
+    line-height: 1.3;
+    background: linear-gradient(100deg, #f8ecd4 0%, #ecd194 45%, #c9a227 85%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .shop-cta__desc {
+    margin: 0;
+    color: rgba(240,234,220,.72);
+    font-size: 15px;
+    line-height: 1.75;
+    font-weight: 300;
+  }
+  .shop-cta__btn {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 36px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ecc96c 0%, #c9a227 52%, #a67c00 100%);
+    color: #171204;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .1em;
+    text-decoration: none;
+    box-shadow: 0 8px 28px rgba(201,162,39,.35), inset 0 1px 0 rgba(255,255,255,.45);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .shop-cta__btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 38px rgba(201,162,39,.5), inset 0 1px 0 rgba(255,255,255,.55);
+  }
+  .shop-cta__arrow { display: inline-block; transition: transform .25s ease; }
+  .shop-cta__btn:hover .shop-cta__arrow { transform: translateX(4px); }
+  @media (max-width: 720px) {
+    .shop-cta__inner { flex-direction: column; align-items: flex-start; padding: 32px 28px; }
+  }
+</style>
 </head>
 <body class="storefront-page">
 
@@ -43,7 +125,16 @@
       <h1 class="section__title" data-i18n="shop.title">Pieces from our community</h1>
       <p class="section__sub" data-i18n="shop.sub">Buy a published design. The studio produces and ships it for you.</p>
     </div>
-    <div class="shop-fees" id="shopFeeGuide"></div>
+    <div class="shop-cta">
+      <div class="shop-cta__inner">
+        <div class="shop-cta__text">
+          <p class="shop-cta__eyebrow" data-i18n="shopcta.eyebrow">BESPOKE SERVICE</p>
+          <h2 class="shop-cta__title" data-i18n="shopcta.title">Want a one-of-a-kind design made just for you?</h2>
+          <p class="shop-cta__desc" data-i18n="shopcta.desc">Our designers craft it for you — one-on-one, from inspiration to finished piece.</p>
+        </div>
+        <a class="shop-cta__btn" href="index.html#services"><span data-i18n="shopcta.btn">Start Custom</span><span class="shop-cta__arrow" aria-hidden="true">&rarr;</span></a>
+      </div>
+    </div>
     <div class="shop-grid" id="shopGrid"></div>
   </div>
 </section>
@@ -56,9 +147,9 @@
   </div>
 </footer>
 
-<script src="js/i18n.js?v=20261019f"></script>
-<script src="js/api.js?v=20261019f"></script>
-<script src="js/main.js?v=20261019f"></script>
-<script src="js/storefront.js?v=20261019f"></script>
+<script src="js/i18n.js?v=20261019i"></script>
+<script src="js/api.js?v=20261019i"></script>
+<script src="js/main.js?v=20261019i"></script>
+<script src="js/storefront.js?v=20261019i"></script>
 </body>
 </html>
