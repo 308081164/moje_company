@@ -23,7 +23,8 @@ public final class OrderApiMapper {
      */
     public static OrderInfoDto toOrderInfo(Order o, boolean includeWecomAssist) {
         String sourceApi = mapSourceToApiPublic(o.getSource());
-        String contact = firstNonBlank(o.getCustomerPhone(), o.getCustomerWechat(), "");
+        String contact = firstNonBlank(o.getCustomerPhone(), o.getCustomerWechat(),
+                o.getCustomerEmail() != null ? o.getCustomerEmail() : "");
         OrderInfoDto.OrderBaseDto base = OrderInfoDto.OrderBaseDto.builder()
                 .id(o.getId())
                 .orderNumber(o.getOrderNumber())

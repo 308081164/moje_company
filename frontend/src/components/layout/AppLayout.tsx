@@ -12,6 +12,7 @@ import {
   Tooltip,
   theme,
   message,
+  notification,
   Drawer,
 } from 'antd';
 import {
@@ -36,6 +37,8 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
+import { conversationSocket, getActiveConversationId } from '@/services/conversationSocket';
+import { playNotifySound } from '@/utils/notifySound';
 import './AppLayout.css';
 
 const { Header, Sider, Content } = Layout;
@@ -44,7 +47,7 @@ const { Text } = Typography;
 const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const { sidebarCollapsed, toggleSidebar, notifications, unreadNotifications } = useAppStore();
   const [collapsed, setCollapsed] = useState(sidebarCollapsed);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -58,6 +61,39 @@ const AppLayout: React.FC = () => {
     mq.addEventListener('change', fn);
     return () => mq.removeEventListener('change', fn);
   }, []);
+
+  useEffect(() => {
+    const accessToken = token || localStorage.getItem('access_token');
+    if (!user || !accessToken) {
+      conversationSocket.disconnect();
+      return;
+    }
+    conversationSocket.connect(accessToken);
+    const unsubscribe = conversationSocket.subscribe((payload) => {
+      if (payload?.type !== 'MESSAGE' || !payload.data) return;
+      const m = payload.data;
+      const mine = m.senderType === 'STAFF' && m.senderId === user.id;
+      if (mine) return;
+      playNotifySound();
+      if (getActiveConversationId() === m.conversationId) return;
+      const preview = (m.content || (m.msgType === 'event' ? '订单进度更新' : '收到新消息')).slice(0, 80);
+      notification.info({
+        key: `chat-${m.conversationId}-${m.id}`,
+        message: m.displayName || '新消息',
+        description: preview,
+        placement: 'bottomRight',
+        duration: 4,
+        onClick: () => {
+          notification.destroy(`chat-${m.conversationId}-${m.id}`);
+          navigate('/chat', { state: { conversationId: m.conversationId } });
+        },
+      });
+    });
+    return () => {
+      unsubscribe();
+      conversationSocket.disconnect();
+    };
+  }, [user, token, navigate]);
 
   const {
     token: { colorBgContainer, borderRadiusLG },

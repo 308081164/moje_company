@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>duxury 路 Bespoke Jewelry</title>
-  <meta name="description" content="duxury 鈥?bespoke jewelry. From design to delivery, transparent online communication.">
+  <title>duxury &middot; Bespoke Jewelry</title>
+  <meta name="description" content="duxury &mdash; bespoke jewelry, from design to delivery. Commission our atelier or publish your own designs on the maker marketplace.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261017b">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=20261019d">
 </head>
 <body>
 
@@ -18,10 +18,8 @@
       <span class="brand__name">duxury</span>
     </a>
     <nav class="nav" id="nav">
-      <a href="#services" class="nav__link" data-i18n="nav.services">Services</a>
-      <a href="#works" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
-      <a href="#process" class="nav__link" data-i18n="nav.process">Process</a>
-      <a href="#craft" class="nav__link" data-i18n="nav.craft">Craft</a>
+      <a href="#hero" class="nav__link nav__link--active" data-i18n="nav.home">Home</a>
+      <a href="works.html" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
       <a href="shop.html" class="nav__link" data-i18n="nav.shop">Shop</a>
       <a href="order-workspace.html" class="nav__link" data-i18n="nav.orders">Orders</a>
       <a href="seller.html" class="nav__link" data-i18n="nav.studio">Studio</a>
@@ -35,7 +33,7 @@
         </button>
         <div class="lang__menu" id="langMenu"></div>
       </div>
-      <a href="#cta" class="btn btn--gold btn--sm header__cta" data-i18n="nav.cta">Start Custom</a>
+      <a href="#services" class="btn btn--gold btn--sm header__cta" data-i18n="nav.cta">Start Custom</a>
     </div>
     <button class="menu-toggle" id="menuToggle" aria-label="Menu">
       <span></span><span></span><span></span>
@@ -54,7 +52,7 @@
     <p class="hero__desc" data-i18n="hero.desc">From inspiration to delivery, transparent online communication throughout. Pay a deposit to begin your bespoke journey.</p>
     <div class="hero__actions">
       <a href="#services" class="btn btn--gold" data-i18n="hero.cta1">Consult a Designer</a>
-      <a href="#works" class="btn btn--ghost" data-i18n="hero.cta2">View Portfolio</a>
+      <a href="works.html" class="btn btn--ghost" data-i18n="hero.cta2">View Portfolio</a>
     </div>
   </div>
   <div class="hero__scroll">
@@ -63,7 +61,6 @@
   </div>
 </section>
 
-<!-- ============ Services (placed early, before portfolio) ============ -->
 <section class="section services" id="services">
   <div class="container">
     <div class="section__head reveal">
@@ -72,7 +69,6 @@
       <p class="section__sub" data-i18n="svc.sub">A deposit unlocks your dedicated design team</p>
     </div>
     <div class="services__grid">
-      <!-- Custom design (bring your own drawing) -->
       <article class="service-card reveal">
         <div class="service-card__icon">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
@@ -84,10 +80,9 @@
           <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
         </div>
         <p class="service-card__note" data-i18n="svc.custom.note">Note: your drawing may not meet production standards, and the finished piece may deviate slightly from the design.</p>
-        <button class="btn btn--gold service-card__btn" data-service="custom" data-i18n="svc.select">Select & Pay</button>
+        <button class="btn btn--gold service-card__btn" data-service="custom" data-i18n="svc.select">Select &amp; Pay</button>
       </article>
 
-      <!-- Designer design -->
       <article class="service-card service-card--featured reveal">
         <span class="service-card__badge" data-i18n="svc.popular">Most popular</span>
         <div class="service-card__icon">
@@ -100,57 +95,52 @@
           <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
         </div>
         <p class="service-card__note" data-i18n="svc.designer.note">Includes one-on-one consultation, sketches and 3D preview before production.</p>
-        <button class="btn btn--gold service-card__btn" data-service="designer" data-i18n="svc.select">Select & Pay</button>
+        <button class="btn btn--gold service-card__btn" data-service="designer" data-i18n="svc.select">Select &amp; Pay</button>
       </article>
     </div>
     <p class="services__guarantee reveal" data-i18n="svc.guarantee">Fully refundable before production starts</p>
   </div>
 </section>
 
-<section class="section works" id="works">
-  <div class="container">
-    <div class="section__head reveal">
-      <p class="section__eyebrow" data-i18n="works.eyebrow">PORTFOLIO</p>
-      <h2 class="section__title" data-i18n="works.title">Selected Works</h2>
-      <p class="section__sub" data-i18n="works.sub">Every piece is a one-of-a-kind story</p>
+<section class="shop-spot" id="shop-spot">
+  <a class="shop-spot__inner" href="shop.html" data-i18n-aria="shopsp.aria">
+    <div class="shop-spot__bg">
+      <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Luxury%20jewelry%20e-commerce%20boutique%20display%2C%20rings%20and%20necklaces%20in%20glass%20case%2C%20editorial%20photography&image_size=landscape_16_9" alt="duxury marketplace" loading="lazy">
+      <div class="shop-spot__overlay"></div>
     </div>
-    <div class="works__grid">
-      <article class="work-card reveal">
-        <div class="work-card__img">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="Sapphire engagement ring" loading="lazy">
-        </div>
-        <div class="work-card__info">
-          <h3 class="work-card__name" data-i18n="work1.name">Galaxy</h3>
-          <p class="work-card__desc" data-i18n="work1.desc">Sapphire 路 18K White Gold 路 Diamond set</p>
-        </div>
-      </article>
-      <article class="work-card reveal">
-        <div class="work-card__img">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="Emerald necklace" loading="lazy">
-        </div>
-        <div class="work-card__info">
-          <h3 class="work-card__name" data-i18n="work2.name">Emerald Plume</h3>
-          <p class="work-card__desc" data-i18n="work2.desc">Emerald 路 18K Gold 路 Custom</p>
-        </div>
-      </article>
-      <article class="work-card reveal">
-        <div class="work-card__img">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="Diamond bracelet" loading="lazy">
-        </div>
-        <div class="work-card__info">
-          <h3 class="work-card__name" data-i18n="work3.name">Lustre</h3>
-          <p class="work-card__desc" data-i18n="work3.desc">Diamond 路 18K White Gold 路 Precision cut</p>
-        </div>
-      </article>
-      <article class="work-card reveal">
-        <div class="work-card__img">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="Pearl earrings" loading="lazy">
-        </div>
-        <div class="work-card__info">
-          <h3 class="work-card__name" data-i18n="work4.name">Morning Dew</h3>
-          <p class="work-card__desc" data-i18n="work4.desc">Akoya Pearl 路 18K Gold 路 Hand forged</p>
-        </div>
-      </article>
+    <div class="shop-spot__content reveal">
+      <p class="section__eyebrow" data-i18n="shopsp.eyebrow">MAKER SHOP</p>
+      <h2 class="shop-spot__title" data-i18n="shopsp.title">Enter the independent marketplace</h2>
+      <p class="shop-spot__desc" data-i18n="shopsp.desc">Browse pieces published by our clients. We produce and ship every order.</p>
+      <span class="btn btn--gold btn--lg" data-i18n="shopsp.cta">Shop now</span>
+    </div>
+  </a>
+</section>
+
+<section class="section partner" id="partner">
+  <div class="container partner__grid">
+    <div class="partner__intro reveal">
+      <p class="section__eyebrow" data-i18n="partner.eyebrow">PARTNER WITH US</p>
+      <h2 class="section__title" data-i18n="partner.title">We craft it. You can also monetize it.</h2>
+      <p class="section__sub" data-i18n="partner.sub">duxury is more than a bespoke atelier. Once your design and sample are confirmed, publish it on our independent shop at your own price &mdash; we produce and ship, you earn the margin.</p>
+      <a href="seller.html" class="btn btn--ghost-dark" data-i18n="partner.cta">Open seller studio</a>
+    </div>
+    <div class="partner__steps">
+      <div class="partner-step reveal">
+        <span class="partner-step__num">01</span>
+        <h3 data-i18n="partner.s1.title">Create</h3>
+        <p data-i18n="partner.s1.desc">Start a custom order or bring your own drawing. Confirm design and sample with our team.</p>
+      </div>
+      <div class="partner-step reveal">
+        <span class="partner-step__num">02</span>
+        <h3 data-i18n="partner.s2.title">Publish</h3>
+        <p data-i18n="partner.s2.desc">One click lists your piece on the duxury shop at the price you set, with production and shipping ranges shown up front.</p>
+      </div>
+      <div class="partner-step reveal">
+        <span class="partner-step__num">03</span>
+        <h3 data-i18n="partner.s3.title">Earn</h3>
+        <p data-i18n="partner.s3.desc">Buyers order from the marketplace; we produce and ship. Track sales and withdrawable balance in your seller studio.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -176,7 +166,7 @@
       <div class="step step--highlight reveal">
         <span class="step__num">03</span>
         <h3 class="step__title" data-i18n="step3.title">Deposit</h3>
-        <p class="step__desc" data-i18n="step3.desc">Pay a deposit to lock in service 鈥?your dedicated order chat opens instantly.</p>
+        <p class="step__desc" data-i18n="step3.desc">Pay a deposit to lock in service &mdash; your dedicated order chat opens instantly.</p>
         <span class="step__badge" data-i18n="step3.badge">Key step</span>
       </div>
       <div class="step reveal">
@@ -196,7 +186,7 @@
   <div class="craft__content reveal">
     <p class="section__eyebrow section__eyebrow--light" data-i18n="craft.eyebrow">CRAFTSMANSHIP</p>
     <h2 class="section__title section__title--light" data-i18n="craft.title">Heritage of Craft</h2>
-    <p class="craft__text" data-i18n="craft.text">Every piece is forged by hand by master artisans 鈥?from stone selection to setting, through dozens of steps. True luxury lies not in a label, but in the perfection of every detail.</p>
+    <p class="craft__text" data-i18n="craft.text">Every piece is forged by hand by master artisans &mdash; from stone selection to setting, through dozens of steps. True luxury lies not in a label, but in the perfection of every detail.</p>
   </div>
 </section>
 
@@ -208,7 +198,10 @@
   <div class="cta__content reveal">
     <h2 class="cta__title" data-i18n="cta.title">Begin Your Bespoke Journey</h2>
     <p class="cta__desc" data-i18n="cta.desc">Book a consultation and let our designers tell your story.</p>
-    <a href="#services" class="btn btn--gold btn--lg" data-i18n="hero.cta1">Consult a Designer</a>
+    <div class="cta__actions">
+      <a href="#services" class="btn btn--gold btn--lg" data-i18n="hero.cta1">Consult a Designer</a>
+      <a href="shop.html" class="btn btn--ghost btn--lg" data-i18n="shopsp.cta">Shop now</a>
+    </div>
   </div>
 </section>
 
@@ -216,19 +209,19 @@
   <div class="container footer__inner">
     <div class="footer__brand">
       <span class="brand__name">duxury</span>
-      <p class="footer__tagline" data-i18n="footer.tagline">Bespoke jewelry 路 every piece born for you</p>
+      <p class="footer__tagline" data-i18n="footer.tagline">Bespoke jewelry &middot; every piece born for you</p>
     </div>
     <div class="footer__links">
       <div class="footer__col">
         <h4 data-i18n="footer.explore">Explore</h4>
-        <a href="#works" data-i18n="nav.portfolio">Portfolio</a>
-        <a href="#process" data-i18n="nav.process">Process</a>
-        <a href="#craft" data-i18n="nav.craft">Craft</a>
+        <a href="#hero" data-i18n="nav.home">Home</a>
+        <a href="works.html" data-i18n="nav.portfolio">Portfolio</a>
+        <a href="shop.html" data-i18n="nav.shop">Shop</a>
+        <a href="#partner" data-i18n="nav.partner">Partners</a>
       </div>
       <div class="footer__col">
         <h4 data-i18n="footer.service">Service</h4>
         <a href="#services" data-i18n="nav.services">Services</a>
-        <a href="shop.html" data-i18n="nav.shop">Shop</a>
         <a href="order-workspace.html" data-i18n="footer.orders">Orders</a>
         <a href="seller.html" data-i18n="nav.studio">Studio</a>
         <a href="#" data-i18n="footer.care">Aftercare</a>
@@ -237,12 +230,12 @@
         <h4 data-i18n="footer.contact">Contact</h4>
         <a href="#">400-888-0000</a>
         <a href="#">contact@duxury.com</a>
-        <a href="#">Shanghai 路 Jing'an</a>
+        <a href="#">Shanghai &middot; Jing'an</a>
       </div>
     </div>
   </div>
   <div class="footer__bottom">
-    <p>漏 2026 duxury. All rights reserved.</p>
+    <p>&copy; 2026 duxury. All rights reserved.</p>
   </div>
 </footer>
 
@@ -260,7 +253,7 @@
       <h3 class="chat-panel__title" data-i18n="ai.title">AI Assistant</h3>
       <p class="chat-panel__status">
         <span class="ws-dot ws-dot--active"></span>
-        <span data-i18n="ai.status">AI online 路 instant reply</span>
+        <span data-i18n="ai.status">AI online &middot; instant reply</span>
       </p>
     </div>
     <button class="chat-panel__close" id="chatClose" aria-label="Close">&times;</button>
@@ -272,7 +265,7 @@
     </div>
   </div>
   <div class="chat-panel__input">
-    <input type="text" placeholder="Type a message鈥? data-i18n-placeholder="ws.input" id="panelChatInput">
+    <input type="text" placeholder="Type a message..." data-i18n-placeholder="ws.input" id="panelChatInput">
     <button class="chat-panel__send" id="panelChatSend" aria-label="Send" data-i18n="ws.send">Send</button>
   </div>
 </div>
@@ -312,11 +305,11 @@
     <div class="checkout__summary">
       <div class="checkout__row">
         <span data-i18n="co.service">Service</span>
-        <span id="checkoutService">鈥?/span>
+        <span id="checkoutService">&mdash;</span>
       </div>
       <div class="checkout__row checkout__row--total">
         <span data-i18n="co.total">Total due</span>
-        <span id="checkoutPrice">鈥?/span>
+        <span id="checkoutPrice">&mdash;</span>
       </div>
     </div>
     <div class="checkout__requirements" id="checkoutRequirements" style="display:none">
@@ -328,22 +321,22 @@
       <input type="file" id="referenceImageInput" accept="image/*" multiple style="display:none">
       <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload reference images">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span class="upload-zone__text" data-i18n="co.requirements.image.upload">Click or drag images here 路 up to 5</span>
+        <span class="upload-zone__text" data-i18n="co.requirements.image.upload">Click or drag images here &middot; up to 5</span>
       </div>
       <div class="image-preview" id="imagePreviewGrid"></div>
     </div>
     <button class="btn btn--gold btn--lg checkout__pay" id="payDeposit" data-i18n="co.pay">Pay deposit</button>
-    <p class="checkout__secure" data-i18n="co.secure">256-bit encrypted 路 secure payment</p>
+    <p class="checkout__secure" data-i18n="co.secure">256-bit encrypted &middot; secure payment</p>
     <div class="checkout__success" id="checkoutSuccess">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1DC981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      <p data-i18n="co.success">Deposit received 鈥?your group chat is ready!</p>
+      <p data-i18n="co.success">Deposit received &mdash; your group chat is ready!</p>
       <a href="order-workspace.html" class="btn btn--gold" data-i18n="co.enter">Enter Order Workspace</a>
     </div>
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261017b"></script>
-<script src="js/api.js?v=20261017b"></script>
-<script src="js/main.js?v=20261017b"></script>
+<script src="js/i18n.js?v=20261019d"></script>
+<script src="js/api.js?v=20261019d"></script>
+<script src="js/main.js?v=20261019d"></script>
 </body>
 </html>

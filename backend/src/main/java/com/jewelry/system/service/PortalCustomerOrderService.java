@@ -12,6 +12,7 @@ import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.OrderRepository;
+import com.jewelry.system.repository.PortalCustomerAccountRepository;
 import com.jewelry.system.repository.PortalCustomerOrderBindingRepository;
 import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.util.SecurityUtils;
@@ -34,6 +35,7 @@ import java.time.LocalDateTime;
 public class PortalCustomerOrderService {
 
     private final OrderRepository orderRepository;
+    private final PortalCustomerAccountRepository accountRepository;
     private final PortalCustomerOrderBindingRepository bindingRepository;
     private final DesignInfoRepository designInfoRepository;
     private final OrderCommandService orderCommandService;
@@ -57,11 +59,18 @@ public class PortalCustomerOrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "基础需求不能为空");
         }
 
+        var account = accountRepository.findById(accountId).orElse(null);
+        String accountEmail = account != null ? account.getEmail() : null;
+        String accountName = account != null ? account.getDisplayName() : null;
+
         Order order = new Order();
         order.setSource(OrderSource.C2C);
         order.setServiceType(type);
         order.setIsB2b(false);
-        order.setCustomerName(req.getCustomerName());
+        order.setCustomerName(StringUtils.hasText(req.getCustomerName())
+                ? req.getCustomerName()
+                : (StringUtils.hasText(accountName) ? accountName : accountEmail));
+        order.setCustomerEmail(accountEmail);
         order.setBasicRequirements(req.getBasicRequirements());
         order.setStyleInfo(req.getStyleInfo());
         order.setMaterialInfo(req.getMaterialInfo());

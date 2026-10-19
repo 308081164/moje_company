@@ -33,6 +33,10 @@ public class Order {
     
     @Column(name = "customer_wechat", length = 100)
     private String customerWechat;
+
+    /** 客户邮箱（C 端自助下单时自动带出） */
+    @Column(name = "customer_email", length = 100)
+    private String customerEmail;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

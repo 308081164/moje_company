@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal } from 'antd';
 import { ReloadOutlined, SendOutlined } from '@ant-design/icons';
 import { conversationService } from '@/services/conversationService';
 import { Conversation, ConversationMember, ConversationMessage, OrderEventCard } from '@/types/conversation';
 import { useAuthStore } from '@/stores/authStore';
+import { conversationSocket, setActiveConversationId } from '@/services/conversationSocket';
 
 const { Text } = Typography;
 
@@ -76,6 +78,7 @@ const serviceTypeColorOf = (type?: string) => SERVICE_TYPE_COLOR[type || ''] || 
 
 const ChatPage: React.FC = () => {
   const { user } = useAuthStore();
+  const location = useLocation();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<ConversationMember[]>([]);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -101,7 +104,9 @@ const ChatPage: React.FC = () => {
       const list = await conversationService.listConversations();
       setConversations(list);
       if (list.length && currentIdRef.current == null) {
-        void selectConversation(list[0]);
+        const pending = (location.state as { conversationId?: number } | null)?.conversationId;
+        const target = pending != null ? list.find((c) => c.id === pending) : list[0];
+        void selectConversation(target || list[0]);
       }
     } catch (e) {
       console.error('获取会话列表失败', e);
@@ -148,6 +153,46 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     void loadConversations();
+    return () => setActiveConversationId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setActiveConversationId(currentId);
+    return () => {
+      if (currentIdRef.current === currentId) {
+        setActiveConversationId(null);
+      }
+    };
+  }, [currentId]);
+
+  useEffect(() => {
+    const pending = (location.state as { conversationId?: number } | null)?.conversationId;
+    if (pending == null || pending === currentIdRef.current) return;
+    const conv = conversations.find((c) => c.id === pending);
+    if (conv) void selectConversation(conv);
+  }, [conversations, location.state]);
+
+  useEffect(() => {
+    return conversationSocket.subscribe((payload) => {
+      if (payload?.type === 'MESSAGE_TRANSLATED' && payload.data) {
+        const messageId = Number(payload.data.messageId);
+        const translatedContent = String(payload.data.translatedContent || '');
+        if (!messageId || !translatedContent) return;
+        setMessages((prev) =>
+          prev.map((item) => (item.id === messageId ? { ...item, translatedContent } : item))
+        );
+        return;
+      }
+      if (payload?.type !== 'MESSAGE' || !payload.data) return;
+      const incoming = payload.data as ConversationMessage;
+      if (!incoming?.id || incoming.conversationId == null) return;
+      if (incoming.conversationId === currentIdRef.current) {
+        setMessages((prev) => (prev.some((item) => item.id === incoming.id) ? prev : [...prev, incoming]));
+        conversationService.markRead(incoming.conversationId).catch(() => {});
+      }
+      void loadConversations();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,7 +208,7 @@ const ChatPage: React.FC = () => {
     setSending(true);
     try {
       const msg = await conversationService.sendMessage(currentId, text);
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => (prev.some((item) => item.id === msg.id) ? prev : [...prev, msg]));
       setInput('');
       void loadConversations();
     } catch (e) {

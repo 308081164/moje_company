@@ -569,8 +569,15 @@
           alert(window.I18N.t('co.login.required'));
           return;
         }
+        var currentUser = null;
+        try { currentUser = JSON.parse(localStorage.getItem('duxury-user') || 'null'); } catch (e) { currentUser = null; }
+        var customerName = currentUser && currentUser.displayName && currentUser.displayName !== currentUser.email
+          ? currentUser.displayName : undefined;
+        var depositAmount = selectedService === 'designer' ? 99 : 49;
         window.DUXURY_API.createOrder({
           serviceType: serviceType,
+          customerName: customerName,
+          depositAmount: depositAmount,
           basicRequirements: requirement,
           materialInfo: material || undefined,
           referenceImages: referenceImages || undefined
@@ -737,6 +744,7 @@
 
   function appendEventCard(m) {
     if (!chatBody) return;
+    if (m && m.id != null && messageAlreadyRendered(m.id)) return;
     var ev = m.event || {};
     var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
     var role = ev.actorRole || m.role || 'SYSTEM';
@@ -747,6 +755,7 @@
     var mine = ev.actorType === 'C_PORTAL_CUSTOMER';
     var msg = document.createElement('div');
     msg.className = 'msg msg--no-avatar ' + (mine ? 'msg--out' : 'msg--in');
+    if (m && m.id != null) msg.setAttribute('data-mid', m.id);
 
     var content = document.createElement('div');
     content.className = 'msg__content';
@@ -1137,8 +1146,46 @@
     _default: { color: '#6b7280', label: '事件' }
   };
 
+  var chatNotifyCtx = null;
+  function unlockChatAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!chatNotifyCtx) chatNotifyCtx = new AC();
+      if (chatNotifyCtx.state === 'suspended') chatNotifyCtx.resume();
+    } catch (e) { /* ignore */ }
+  }
+  function playChatNotify() {
+    try {
+      unlockChatAudio();
+      if (!chatNotifyCtx || chatNotifyCtx.state !== 'running') return;
+      var ctx = chatNotifyCtx;
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      var t = ctx.currentTime;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, t);
+      osc.frequency.exponentialRampToValueAtTime(1240, t + 0.07);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.1, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.24);
+    } catch (e) { /* ignore */ }
+  }
+  document.addEventListener('pointerdown', unlockChatAudio, { once: true });
+  document.addEventListener('keydown', unlockChatAudio, { once: true });
+
+  function messageAlreadyRendered(messageId) {
+    if (messageId == null || !chatBody) return false;
+    return !!chatBody.querySelector('[data-mid="' + String(messageId) + '"]');
+  }
+
   function appendChatMsg(text, dir, role, roleName, timeText, translated, messageId) {
     if (!chatBody) return;
+    if (messageAlreadyRendered(messageId)) return;
     var msg = document.createElement('div');
     msg.className = 'msg msg--' + dir;
     if (messageId != null) {
@@ -1217,9 +1264,15 @@
       btn.textContent = '…';
       window.DUXURY_API.translateMessage(messageId, window.I18N.current)
         .then(function (dto) {
+          var translated = dto && dto.translatedContent;
+          if (!translated || translated.trim() === '' || translated.trim() === String(text).trim()) {
+            btn.textContent = window.I18N.t('msg.translate');
+            alert(window.I18N.t('msg.translate.failed'));
+            return;
+          }
           var trans = document.createElement('div');
           trans.className = 'msg__translation';
-          trans.textContent = dto.translatedContent || dto.content || text;
+          trans.textContent = translated;
           var bubble = content.querySelector('.msg__bubble');
           if (bubble) bubble.insertAdjacentElement('afterend', trans);
           else content.appendChild(trans);
@@ -1261,7 +1314,7 @@
     if (!text || !workspace.currentId) return;
     chatInput.value = '';
     window.DUXURY_API.sendMessage(workspace.currentId, { content: text, msgType: 'text' })
-      .then(function (m) { appendChatMsg(m.content, 'out', null, null, m.createdAt); })
+      .then(function (m) { appendChatMsg(m.content, 'out', null, null, m.createdAt, m.translatedContent, m.id); })
       .catch(function (err) { appendChatMsg(err.message || 'send failed', 'in', 'SALES_MID', 'System', null); });
   }
 
@@ -1272,9 +1325,14 @@
     });
   }
 
+  var workspaceChatWs = null;
+  var workspaceChatWsRetry = 0;
   function connectChatSocket() {
     var token = localStorage.getItem('duxury-token');
     if (!token || !chatApiReady()) return;
+    if (workspaceChatWs && (workspaceChatWs.readyState === WebSocket.OPEN || workspaceChatWs.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     var wsUrl;
     var base = window.DUXURY_API.base || '/api';
     if (/^https?:\/\//.test(base)) {
@@ -1285,24 +1343,34 @@
     }
     try {
       var ws = new WebSocket(wsUrl);
+      workspaceChatWs = ws;
+      ws.onopen = function () { workspaceChatWsRetry = 0; };
       ws.onmessage = function (ev) {
         var payload;
         try { payload = JSON.parse(ev.data); } catch (e) { return; }
         if (payload && payload.type === 'MESSAGE' && payload.data) {
           var m = payload.data;
+          var mine = m.senderType === 'C_PORTAL_CUSTOMER';
           if (workspace.currentId === m.conversationId) {
             if (m.msgType === 'event' && m.event) {
               appendEventCard(m);
             } else {
-              var mine = m.senderType === 'C_PORTAL_CUSTOMER';
               appendChatMsg(m.content, mine ? 'out' : 'in', m.role || 'CUSTOMER', m.displayName || m.role, m.createdAt, m.translatedContent, m.id);
             }
           }
+          if (!mine) playChatNotify();
           loadConversations();
         }
         if (payload && payload.type === 'MESSAGE_TRANSLATED' && payload.data) {
           applyTranslation(payload.data.messageId, payload.data.translatedContent);
         }
+      };
+      ws.onclose = function () {
+        workspaceChatWs = null;
+        if (!localStorage.getItem('duxury-token')) return;
+        workspaceChatWsRetry += 1;
+        var delay = Math.min(15000, 1000 * Math.pow(2, Math.min(workspaceChatWsRetry, 4)));
+        setTimeout(connectChatSocket, delay);
       };
     } catch (e) { /* ignore */ }
   }
@@ -1313,6 +1381,9 @@
     loadOrderProgress();
   }
 
+  if (localStorage.getItem('duxury-token') && chatApiReady()) {
+    connectChatSocket();
+  }
   if (chatBody && workspaceLoggedIn) {
     startWorkspace();
   }

@@ -52,21 +52,21 @@ public class MessageTranslationService {
         if (messageId == null || !StringUtils.hasText(content) || !StringUtils.hasText(targetLang)) {
             return null;
         }
-        // 缓存命中
+        // 缓存命中；但早期误写入的假翻译不再直接回显，重新走 LLM
         var cached = translationRepository.findByMessageIdAndTargetLang(messageId, targetLang);
         if (cached.isPresent()) {
-            return cached.get().getTranslatedContent();
+            String hit = cached.get().getTranslatedContent();
+            if (isUsableTranslation(content, hit)) {
+                return hit.trim();
+            }
         }
-        // 未命中：先尝试 LLM 翻译，失败则内置兜底
+        // 未命中：调用真实大模型翻译；失败或返回与原文相同均视为无翻译，不再做假兜底
         String translated = translate(content, targetLang);
-        if (translated == null || translated.isBlank() || translated.equals(content)) {
-            translated = mockTranslate(content, targetLang);
-        }
-        if (translated == null || translated.isBlank() || translated.equals(content)) {
+        if (!isUsableTranslation(content, translated)) {
             return null;
         }
-        saveTranslation(messageId, targetLang, translated);
-        return translated;
+        saveTranslation(messageId, targetLang, translated.trim());
+        return translated.trim();
     }
 
     /**
@@ -144,44 +144,23 @@ public class MessageTranslationService {
     }
 
     /**
-     * 内置词典/模拟翻译兜底：未配置 DashScope 或翻译失败时保证开发环境可演示。
-     * 已知中文短语按词典翻译，其余文本加语言前缀标记。
+     * 判断 LLM 返回是否为「有效翻译」。
+     * 目标语言为非中文时，翻译结果不能仍是原文/以中文为主，否则视为模型未真正翻译。
      */
-    private String mockTranslate(String text, String targetLang) {
-        String prefix = switch (targetLang == null ? "" : targetLang.trim()) {
-            case "en" -> "[EN] ";
-            case "fr" -> "[FR] ";
-            case "de" -> "[DE] ";
-            case "es" -> "[ES] ";
-            case "ja" -> "[JP] ";
-            case "ko" -> "[KR] ";
-            case "zh-TW" -> "[繁] ";
-            default -> null;
-        };
-        if (prefix == null) {
-            return null; // 目标为中文时不兜底
+    static boolean isUsableTranslation(String source, String translated) {
+        if (translated == null) {
+            return false;
         }
-        String dict = MOCK_DICT.getOrDefault(text.trim(), null);
-        if (dict != null) {
-            return prefix + dict;
+        String trimmed = translated.trim();
+        if (trimmed.isEmpty() || trimmed.equals(source == null ? null : source.trim())) {
+            return false;
         }
-        return prefix + text;
+        // 早期误写入的假翻译（如 [JP] 原文）一律视为无效
+        if (trimmed.matches("^\\[(EN|FR|DE|ES|JP|KR|繁)]\\s.*")) {
+            return false;
+        }
+        return true;
     }
-
-    private static final Map<String, String> MOCK_DICT = Map.ofEntries(
-            Map.entry("设计师提交设计稿", "Design draft submitted"),
-            Map.entry("客户驳回设计稿", "Design draft rejected by customer"),
-            Map.entry("客户确认设计稿", "Design draft confirmed by customer"),
-            Map.entry("建模师提交建模稿", "3D model submitted"),
-            Map.entry("客户驳回建模稿", "3D model rejected by customer"),
-            Map.entry("客户确认建模稿", "3D model confirmed by customer"),
-            Map.entry("工艺验证通过", "Craftsmanship review passed"),
-            Map.entry("生产跟单记录", "Production tracking record"),
-            Map.entry("订单已发货", "Order shipped"),
-            Map.entry("客户确认收货，订单已交付", "Delivery confirmed by customer"),
-            Map.entry("支付尾款", "Pay balance"),
-            Map.entry("尾款已支付", "Balance paid")
-    );
 
     /**
      * 写缓存使用独立事务（避免在 listMessages 的只读事务里写库导致 rollback-only）。

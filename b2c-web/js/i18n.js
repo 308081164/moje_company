@@ -18,6 +18,14 @@
 
   var T = {
     /* ---------- Nav ---------- */
+    'nav.home': {
+      en: 'Home', fr: 'Accueil', de: 'Start', es: 'Inicio',
+      ja: 'ホーム', ko: '홈', 'zh-TW': '首頁', 'zh-CN': '首页'
+    },
+    'nav.partner': {
+      en: 'Partners', fr: 'Partenaires', de: 'Partner', es: 'Socios',
+      ja: 'パートナー', ko: '파트너', 'zh-TW': '合作模式', 'zh-CN': '合作模式'
+    },
     'nav.portfolio': {
       en: 'Portfolio', fr: 'Collection', de: 'Kollektion', es: 'Colección',
       ja: 'コレクション', ko: '컬렉션', 'zh-TW': '作品集', 'zh-CN': '作品集'
@@ -120,6 +128,99 @@
       de: 'Akoya-Perle · 18K Gold · Handgeschmiedet', es: 'Perla Akoya · Oro 18K · Forjado a mano',
       ja: 'アコヤ真珠 · 18Kゴールド · 手打ち', ko: '아코야 진주 · 18K 골드 · 수공예',
       'zh-TW': 'Akoya珍珠 · 18K黃金 · 手工鍛造', 'zh-CN': 'Akoya珍珠 · 18K黄金 · 手工锻造'
+    },
+
+    /* ---------- Shop spotlight ---------- */
+    'shopsp.eyebrow': {
+      en: 'MAKER SHOP', fr: 'BOUTIQUE DES CRÉATEURS', de: 'MAKER-SHOP', es: 'TIENDA MAKER',
+      ja: 'メイカーショップ', ko: '메이커 스토어', 'zh-TW': '獨立站商城', 'zh-CN': '独立站商城'
+    },
+    'shopsp.title': {
+      en: 'Enter the independent marketplace', fr: 'Entrez dans la boutique indépendante',
+      de: 'Entdecke den unabhängigen Shop', es: 'Entra en la tienda independiente',
+      ja: '独立商城へ', ko: '독립 스토어로 이동', 'zh-TW': '進入獨立站商城', 'zh-CN': '进入独立站商城'
+    },
+    'shopsp.desc': {
+      en: 'Browse pieces published by our clients. We produce and ship every order.',
+      fr: 'Parcourez les pièces publiées par nos clients. Nous produisons et expédions chaque commande.',
+      de: 'Stöbere in Stücken, die unsere Kunden veröffentlicht haben. Wir produzieren und versenden jede Bestellung.',
+      es: 'Explora piezas publicadas por nuestros clientes. Producimos y enviamos cada pedido.',
+      ja: 'クライアントが公開した作品をご覧ください。すべて当店が制作・発送します。',
+      ko: '고객이 직접 올린 작품을 만나보세요. 모든 주문은 저희가 제작·배송합니다.',
+      'zh-TW': '瀏覽客戶發布的作品，每一件都由我們製作並代為寄出。',
+      'zh-CN': '浏览客户发布的作品，每一件都由我们制作并代为寄出。'
+    },
+    'shopsp.cta': {
+      en: 'Shop now', fr: 'Acheter', de: 'Jetzt shoppen', es: 'Comprar',
+      ja: 'ショップへ', ko: '스토어 이동', 'zh-TW': '進入商城', 'zh-CN': '进入商城'
+    },
+    'shopsp.aria': {
+      en: 'Open the duxury marketplace', fr: 'Ouvrir la boutique duxury', de: 'duxury Shop öffnen',
+      es: 'Abrir la tienda duxury', ja: 'duxury ショップを開く', ko: 'duxury 스토어 열기',
+      'zh-TW': '打開 duxury 獨立站商城', 'zh-CN': '打开 duxury 独立站商城'
+    },
+
+    /* ---------- Partner ---------- */
+    'partner.eyebrow': {
+      en: 'PARTNER WITH US', fr: 'DEVENEZ PARTENAIRE', de: 'WERDEN SIE PARTNER', es: 'ASOCIADO',
+      ja: 'パートナー募集', ko: '파트너십', 'zh-TW': '合作模式', 'zh-CN': '合作模式'
+    },
+    'partner.title': {
+      en: 'We craft it. You can also monetize it.',
+      fr: 'Nous créons. Vous pouvez aussi en tirer profit.',
+      de: 'Wir fertigen. Sie können es auch verkaufen.',
+      es: 'Lo creamos. También puedes monetizarlo.',
+      ja: '制作は私たち。収益化はあなたにも。',
+      ko: '제작은 저희가, 수익화는 당신도.',
+      'zh-TW': '我們為你定制，也能讓你的設計變現。',
+      'zh-CN': '我们为你定制，也能让你的设计变现。'
+    },
+    'partner.sub': {
+      en: 'duxury is more than a bespoke atelier. Once your design and sample are confirmed, publish it on our independent shop at your own price — we produce and ship, you earn the margin.',
+      fr: 'duxury est plus qu’un atelier sur mesure. Une fois votre design et l’échantillon validés, publiez-le sur notre boutique à votre prix — nous produisons et expédions, vous gardez la marge.',
+      de: 'duxury ist mehr als ein Atelier. Sobald Design und Muster bestätigt sind, veröffentlichst du das Stück zu deinem Preis — wir produzieren und versenden, du verdienst den Aufschlag.',
+      es: 'duxury es más que un taller a medida. Cuando el diseño y la muestra están confirmados, publícalo en nuestra tienda con tu precio — nosotros producimos y enviamos, tú ganas el margen.',
+      ja: 'duxury はオーダーメイドだけではありません。デザインとサンプル確定後、あなたの価格で独立商城に出品できます。制作と発送は当店、利益はあなたに。',
+      ko: 'duxury는 맞춤 공방 그 이상입니다. 디자인과 샘플이 확정되면 직접 정한 가격으로 독립 스토어에 올리세요. 제작·배송은 저희가, 마진은 당신에게.',
+      'zh-TW': 'duxury 不只是定制工坊。設計與打樣確認後，一鍵發布到獨立站商城，售價由你決定；我們負責生產與代發貨，差價歸你。',
+      'zh-CN': 'duxury 不只是定制工坊。设计与打样确认后，一键发布到独立站商城，售价由你决定；我们负责生产与代发货，差价归你。'
+    },
+    'partner.cta': {
+      en: 'Open seller studio', fr: 'Ouvrir le studio vendeur', de: 'Seller-Studio öffnen',
+      es: 'Abrir estudio de vendedor', ja: '販売スタジオへ', ko: '셀러 스튜디오 열기',
+      'zh-TW': '進入商家後台', 'zh-CN': '进入商家后台'
+    },
+    'partner.s1.title': { en: 'Create', fr: 'Créer', de: 'Entwerfen', es: 'Crear', ja: '創る', ko: '제작', 'zh-TW': '創作', 'zh-CN': '创作' },
+    'partner.s1.desc': {
+      en: 'Start a custom order or bring your own drawing. Confirm design and sample with our team.',
+      fr: 'Lancez une commande sur mesure ou apportez votre dessin. Validez design et échantillon avec notre équipe.',
+      de: 'Starte eine Custom-Order oder bring deine Zeichnung mit. Bestätige Design und Muster mit unserem Team.',
+      es: 'Inicia un pedido a medida o trae tu dibujo. Confirma diseño y muestra con nuestro equipo.',
+      ja: 'オーダーメイドを申し込むか、図面をご持参ください。デザインとサンプルを当店と確定します。',
+      ko: '맞춤 주문을 하거나 도면을 가져오세요. 디자인과 샘플을 저희와 함께 확정합니다.',
+      'zh-TW': '發起定制或上傳你的手稿，與我們確認設計與打樣。', 'zh-CN': '发起定制或上传你的手稿，与我们确认设计与打样。'
+    },
+    'partner.s2.title': { en: 'Publish', fr: 'Publier', de: 'Veröffentlichen', es: 'Publicar', ja: '公開', ko: '게시', 'zh-TW': '發布', 'zh-CN': '发布' },
+    'partner.s2.desc': {
+      en: 'One click lists your piece on the duxury shop at the price you set, with production and shipping ranges shown up front.',
+      fr: 'En un clic, votre pièce est listée sur la boutique duxury au prix de votre choix, avec les fourchettes de production et d’envoi affichées.',
+      de: 'Ein Klick listet dein Stück im duxury Shop zu deinem Preis, Produktions- und Versandspannen vorab sichtbar.',
+      es: 'Con un clic, tu pieza aparece en la tienda duxury al precio que elijas, con rangos de producción y envío visibles.',
+      ja: 'ワンクリックであなたの価格で duxury ショップに出品。制作費と送料の目安も事前に表示されます。',
+      ko: '한 번의 클릭으로 원하는 가격에 duxury 스토어에 올리세요. 제작·배송 구간이 미리 표시됩니다.',
+      'zh-TW': '一鍵發布到 duxury 獨立站商城，售價自定；生產與代寄費用區間會明確展示。',
+      'zh-CN': '一键发布到 duxury 独立站商城，售价自定；生产与代寄费用区间会明确展示。'
+    },
+    'partner.s3.title': { en: 'Earn', fr: 'Gagner', de: 'Verdienen', es: 'Ganar', ja: '稼ぐ', ko: '수익', 'zh-TW': '收益', 'zh-CN': '收益' },
+    'partner.s3.desc': {
+      en: 'Buyers order from the marketplace; we produce and ship. Track sales and withdrawable balance in your seller studio.',
+      fr: 'Les acheteurs commandent sur la boutique ; nous produisons et expédions. Suivez ventes et solde retirable dans votre studio.',
+      de: 'Käufer bestellen im Shop; wir produzieren und versenden. Verkäufe und auszahlbares Guthaben siehst du im Seller-Studio.',
+      es: 'Los compradores piden en la tienda; nosotros producimos y enviamos. Sigue ventas y saldo retirable en tu estudio.',
+      ja: '購入者がショップで注文、制作と発送は当店。売上と出金可能残高は販売スタジオで確認できます。',
+      ko: '구매자는 스토어에서 주문하고, 제작·배송은 저희가 합니다. 판매와 출금 가능 잔액은 셀러 스튜디오에서 확인하세요.',
+      'zh-TW': '買家在商城下單，我們負責生產與代寄；商家後台可查看銷量與可提現餘額。',
+      'zh-CN': '买家在商城下单，我们负责生产与代寄；商家后台可查看销量与可提现余额。'
     },
 
     /* ---------- Process ---------- */
