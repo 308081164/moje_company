@@ -70,6 +70,22 @@ public class MessageTranslationService {
     }
 
     /**
+     * 只读缓存：列表渲染路径使用，绝不触发 LLM 调用，避免列表接口被同步翻译拖垮（504）。
+     */
+    public String getCached(Long messageId, String targetLang) {
+        if (messageId == null || !StringUtils.hasText(targetLang)) {
+            return null;
+        }
+        return translationRepository.findByMessageIdAndTargetLang(messageId, targetLang)
+                .map(t -> {
+                    String hit = t.getTranslatedContent();
+                    // 早期假翻译不回显
+                    return hit != null && hit.matches("^\\[(EN|FR|DE|ES|JP|KR|繁)]\\s.*") ? null : hit;
+                })
+                .orElse(null);
+    }
+
+    /**
      * 异步预翻译：消息发送后为会话内各成员的目标语言预热翻译缓存，并推送翻译完成事件。
      */
     @Async("translationExecutor")

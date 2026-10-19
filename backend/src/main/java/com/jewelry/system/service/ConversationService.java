@@ -118,7 +118,7 @@ public class ConversationService {
         Long bound = boundaryMessageId;
         return messageRepository.findByConversationIdOrderByIdAsc(conversationId).stream()
                 .filter(m -> bound == null || m.getId() <= bound)
-                .map(m -> toMessageDto(m, viewerLang))
+                .map(m -> toMessageDto(m, viewerLang, false))
                 .toList();
     }
 
@@ -128,7 +128,7 @@ public class ConversationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "消息不存在"));
         requireAccess(message.getConversationId());
         String lang = StringUtils.hasText(targetLang) ? targetLang.trim() : resolveViewerLang();
-        return toMessageDto(message, lang);
+        return toMessageDto(message, lang, true);
     }
 
     @Transactional(readOnly = true)
@@ -482,11 +482,21 @@ public class ConversationService {
     }
 
     private ConversationMessageDto toMessageDto(ConversationMessage message, String viewerLang) {
+        return toMessageDto(message, viewerLang, true);
+    }
+
+    /**
+     * @param syncLlm true 时允许同步调用 LLM 生成翻译（手动点「翻译」、发送消息广播）；
+     *                false 时只读缓存（列表渲染路径，避免每条消息同步调大模型导致列表 504）。
+     */
+    private ConversationMessageDto toMessageDto(ConversationMessage message, String viewerLang, boolean syncLlm) {
         String content = message.getContent();
         String translated = null;
         String translatedLang = null;
         if (StringUtils.hasText(content) && StringUtils.hasText(viewerLang) && "text".equals(message.getMsgType())) {
-            translated = translationService.getOrTranslate(message.getId(), content, viewerLang);
+            translated = syncLlm
+                    ? translationService.getOrTranslate(message.getId(), content, viewerLang)
+                    : translationService.getCached(message.getId(), viewerLang);
             if (translated != null) {
                 translatedLang = viewerLang;
             }
