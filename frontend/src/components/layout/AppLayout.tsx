@@ -158,6 +158,11 @@ const AppLayout: React.FC = () => {
             label: '门户展示配置',
           },
           {
+            key: '/storefront-admin',
+            icon: <ShopOutlined />,
+            label: '商城管理',
+          },
+          {
             key: '/legacy-archives',
             icon: <DatabaseOutlined />,
             label: '历史订单归档',
