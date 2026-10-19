@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Upload } from 'antd';
-import { ReloadOutlined, SendOutlined, PlusOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons';
+import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Upload, Popover } from 'antd';
+import { ReloadOutlined, SendOutlined, PlusOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
+import type { InputRef } from 'antd/es/input';
 import { conversationService } from '@/services/conversationService';
 import { orderService } from '@/services/orderService';
 import { Conversation, ConversationMember, ConversationMessage, OrderEventCard } from '@/types/conversation';
@@ -70,6 +71,26 @@ const STATUS_COLOR: Record<string, string> = {
 
 const statusColorOf = (status?: string) => STATUS_COLOR[status || ''] || '#6b7280';
 
+const EMOJI_LIST = (
+  '😀 😁 😂 🤣 😊 😍 😘 😜 🤔 😅 😭 😡 🥰 😎 🤗 🤩 🥳 😴 😢 😤 ' +
+  '👍 👎 🙏 👌 ✌️ 🤝 💪 🙌 👏 💍 💎 🌹 🌸 ⭐ ✨ 🔥 🎉 🎊 ❤️ 💖 💕 💯 ✅ ❓ ❗ 🎁'
+).split(' ');
+
+const EmojiPickerContent: React.FC<{ onPick: (emoji: string) => void }> = ({ onPick }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2, width: 300 }}>
+    {EMOJI_LIST.map((emo) => (
+      <Button
+        key={emo}
+        type="text"
+        style={{ fontSize: 20, padding: '4px 0', height: 'auto' }}
+        onClick={() => onPick(emo)}
+      >
+        {emo}
+      </Button>
+    ))}
+  </div>
+);
+
 const SERVICE_TYPE_COLOR: Record<string, string> = {
   CUSTOM_IMAGE: '#f59e0b',
   DESIGNER_DESIGN: '#c9a96e',
@@ -86,6 +107,8 @@ const ChatPage: React.FC = () => {
   const [designFiles, setDesignFiles] = useState<UploadFile[]>([]);
   const [designNotes, setDesignNotes] = useState('');
   const [designSubmitting, setDesignSubmitting] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const inputRef = useRef<InputRef>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<ConversationMember[]>([]);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -208,6 +231,27 @@ const ChatPage: React.FC = () => {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current?.input;
+    if (!el) {
+      setInput((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? input.length;
+    const end = el.selectionEnd ?? start;
+    const next = input.slice(0, start) + emoji + input.slice(end);
+    setInput(next);
+    const pos = start + emoji.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      try {
+        el.setSelectionRange(pos, pos);
+      } catch {
+        /* ignore */
+      }
+    });
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -772,7 +816,17 @@ const ChatPage: React.FC = () => {
         </div>
 
         <div style={{ padding: 12, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 8, flexShrink: 0 }}>
+          <Popover
+            content={<EmojiPickerContent onPick={(emo) => { insertEmoji(emo); setEmojiOpen(false); }} />}
+            trigger="click"
+            open={emojiOpen}
+            onOpenChange={setEmojiOpen}
+            placement="topLeft"
+          >
+            <Button icon={<SmileOutlined />} disabled={currentId == null} aria-label="表情" />
+          </Popover>
           <Input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPressEnter={() => void send()}

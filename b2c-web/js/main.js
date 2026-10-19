@@ -1325,6 +1325,53 @@
     });
   }
 
+  /* ============================================================
+     Emoji picker (order workspace chat)
+  ============================================================ */
+  var EMOJI_LIST = ('😀 😁 😂 🤣 😊 😍 😘 😜 🤔 😅 😭 😡 🥰 😎 🤗 🤩 🥳 😴 😢 😤 ' +
+    '👍 👎 🙏 👌 ✌️ 🤝 💪 🙌 👏 💍 💎 🌹 🌸 ⭐ ✨ 🔥 🎉 🎊 ❤️ 💖 💕 💯 ✅ ❓ ❗ 🎁').split(' ');
+  var emojiBtn = document.getElementById('emojiBtn');
+  var emojiPicker = document.getElementById('emojiPicker');
+
+  function insertAtCursor(input, text) {
+    var start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+    var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    var pos = start + text.length;
+    input.focus();
+    try { input.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+  }
+
+  function closeEmojiPicker() {
+    if (emojiPicker) emojiPicker.hidden = true;
+  }
+
+  if (emojiBtn && emojiPicker && chatInput) {
+    EMOJI_LIST.forEach(function (emo) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'emoji-picker__item';
+      b.textContent = emo;
+      b.addEventListener('click', function () {
+        insertAtCursor(chatInput, emo);
+        closeEmojiPicker();
+      });
+      emojiPicker.appendChild(b);
+    });
+    emojiBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      emojiPicker.hidden = !emojiPicker.hidden;
+    });
+    document.addEventListener('click', function (e) {
+      if (!emojiPicker.hidden && !emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+        closeEmojiPicker();
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeEmojiPicker();
+    });
+  }
+
   var workspaceChatWs = null;
   var workspaceChatWsRetry = 0;
   function connectChatSocket() {
