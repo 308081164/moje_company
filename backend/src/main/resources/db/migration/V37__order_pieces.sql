@@ -27,12 +27,10 @@ INSERT INTO order_piece (order_id, seq, name, design_confirmed, model_confirmed,
 SELECT o.id,
        1,
        '主件',
-       IF(COALESCE(di.customer_approved, 0) = 1, 1, 0),
-       IF(COALESCE(mi.customer_approved, 0) = 1, 1, 0),
+       IF(EXISTS(SELECT 1 FROM design_info di WHERE di.order_id = o.id AND di.is_customer_approved = 1), 1, 0),
+       IF(EXISTS(SELECT 1 FROM modeling_info mi WHERE mi.order_id = o.id AND mi.is_customer_approved = 1), 1, 0),
        COALESCE(o.created_at, NOW(6))
-FROM orders o
-LEFT JOIN design_info di ON di.order_id = o.id
-LEFT JOIN modeling_info mi ON mi.order_id = o.id;
+FROM orders o;
 
 UPDATE design_info di
     INNER JOIN order_piece op ON op.order_id = di.order_id AND op.seq = 1
@@ -43,6 +41,13 @@ UPDATE modeling_info mi
     INNER JOIN order_piece op ON op.order_id = mi.order_id AND op.seq = 1
 SET mi.piece_id = op.id
 WHERE mi.piece_id IS NULL;
+
+-- 历史脏数据：同一订单多条 design/model 行会指向同一 piece_id，须去重后再加唯一约束
+DELETE di FROM design_info di
+    INNER JOIN design_info di2 ON di.piece_id = di2.piece_id AND di.id > di2.id;
+
+DELETE mi FROM modeling_info mi
+    INNER JOIN modeling_info mi2 ON mi.piece_id = mi2.piece_id AND mi.id > mi2.id;
 
 ALTER TABLE design_info
     ADD UNIQUE KEY uk_design_info_piece_id (piece_id);
