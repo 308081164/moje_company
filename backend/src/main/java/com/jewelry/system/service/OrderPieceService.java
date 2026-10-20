@@ -2,7 +2,11 @@ package com.jewelry.system.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jewelry.system.entity.DesignInfo;
+import com.jewelry.system.entity.ModelingInfo;
 import com.jewelry.system.entity.OrderPiece;
+import com.jewelry.system.repository.DesignInfoRepository;
+import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderPieceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +25,8 @@ public class OrderPieceService {
     public static final int MAX_PIECES_PER_ORDER = 5;
 
     private final OrderPieceRepository orderPieceRepository;
+    private final DesignInfoRepository designInfoRepository;
+    private final ModelingInfoRepository modelingInfoRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -40,7 +46,9 @@ public class OrderPieceService {
         piece.setName("主件");
         piece.setDesignConfirmed(false);
         piece.setModelConfirmed(false);
-        return orderPieceRepository.save(piece);
+        piece = orderPieceRepository.save(piece);
+        ensurePieceDesignAndModelRows(orderId, piece.getId());
+        return piece;
     }
 
     @Transactional(readOnly = true)
@@ -73,7 +81,9 @@ public class OrderPieceService {
         piece.setName(pieceName);
         piece.setDesignConfirmed(false);
         piece.setModelConfirmed(false);
-        return orderPieceRepository.save(piece);
+        piece = orderPieceRepository.save(piece);
+        ensurePieceDesignAndModelRows(orderId, piece.getId());
+        return piece;
     }
 
     @Transactional
@@ -157,6 +167,23 @@ public class OrderPieceService {
             return list != null ? list : Collections.emptyList();
         } catch (Exception e) {
             return Collections.emptyList();
+        }
+    }
+
+    private void ensurePieceDesignAndModelRows(long orderId, long pieceId) {
+        if (designInfoRepository.findByPieceId(pieceId).isEmpty()) {
+            DesignInfo di = new DesignInfo();
+            di.setOrderId(orderId);
+            di.setPieceId(pieceId);
+            di.setCustomerApproved(false);
+            designInfoRepository.save(di);
+        }
+        if (modelingInfoRepository.findByPieceId(pieceId).isEmpty()) {
+            ModelingInfo mi = new ModelingInfo();
+            mi.setOrderId(orderId);
+            mi.setPieceId(pieceId);
+            mi.setCustomerApproved(false);
+            modelingInfoRepository.save(mi);
         }
     }
 

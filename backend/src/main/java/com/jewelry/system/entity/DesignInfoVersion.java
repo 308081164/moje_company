@@ -56,8 +56,8 @@ public class DesignInfoVersion {
     @Column(name = "design_images", columnDefinition = "json")
     private String designImagesJson;
 
-    @Column(name = "submitted_to_customer", nullable = false)
-    private Boolean submittedToCustomer = false;
+    @Column(name = "submitted_to_customer", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean submittedToCustomer;
 
     @Column(name = "created_by")
     private Long createdBy;

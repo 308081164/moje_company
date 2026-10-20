@@ -1,6 +1,6 @@
 {
   "name": "jewelry-system-frontend",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "珠宝定制管理系统 - Electron前端",
   "main": "dist/main.js",
   "scripts": {

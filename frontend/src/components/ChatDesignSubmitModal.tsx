@@ -6,10 +6,10 @@ import {
   Modal,
   Select,
   Space,
-  Tabs,
   Typography,
   message,
 } from 'antd';
+import OrderPieceSwitcher from '@/components/OrderPieceSwitcher';
 import { DownloadOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import UploadWithImagePreview from '@/components/UploadWithImagePreview';
@@ -69,9 +69,14 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
 
   const pieces: OrderPieceInfo[] = order?.pieces ?? [];
 
+  const activePieceDesign = useMemo(() => {
+    const p = pieces.find((x) => x.id === activePieceId) ?? pieces[0];
+    return p?.design ?? order?.designInfo;
+  }, [pieces, activePieceId, order?.designInfo]);
+
   const craftSelectOptions = useMemo(
-    () => craftSelectOptionsFrom(processConfig, order?.designInfo?.processInfo),
-    [processConfig, order?.designInfo?.processInfo]
+    () => craftSelectOptionsFrom(processConfig, activePieceDesign?.processInfo as ProcessInfo[]),
+    [processConfig, activePieceDesign?.processInfo]
   );
 
   const applyPieceToForm = useCallback(
@@ -152,6 +157,21 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     applyPieceToForm(order, pieceId);
     if (orderId != null) {
       await loadVersions(orderId, pieceId);
+    }
+  };
+
+  const afterPiecesChanged = async () => {
+    if (orderId == null) return;
+    const o = await orderService.getOrderById(orderId);
+    setOrder(o);
+    const pid =
+      activePieceId && o.pieces?.some((p) => p.id === activePieceId)
+        ? activePieceId
+        : o.pieces?.[0]?.id ?? null;
+    setActivePieceId(pid);
+    applyPieceToForm(o, pid);
+    if (pid != null) {
+      await loadVersions(orderId, pid);
     }
   };
 
@@ -309,11 +329,6 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   };
 
-  const pieceTabItems = pieces.map((p) => ({
-    key: String(p.id),
-    label: `${p.name}${p.designConfirmed ? ' ✓' : ''}`,
-  }));
-
   return (
     <Modal
       title="提交设计稿"
@@ -341,13 +356,14 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         字段与订单详情「我的任务」一致。客户需按件确认全部设计稿后订单才进入建模；可先保存版本或草稿，再提交。
       </Paragraph>
 
-      {pieces.length > 1 && (
-        <Tabs
-          size="small"
-          activeKey={activePieceId != null ? String(activePieceId) : undefined}
-          items={pieceTabItems}
-          onChange={(k) => void switchPiece(Number(k))}
-          style={{ marginBottom: 12 }}
+      {orderId != null && (
+        <OrderPieceSwitcher
+          orderId={orderId}
+          pieces={pieces}
+          activePieceId={activePieceId}
+          canEdit={!loading}
+          onSelectPiece={(pieceId) => void switchPiece(pieceId)}
+          onPiecesChanged={afterPiecesChanged}
         />
       )}
 

@@ -62,7 +62,7 @@ public class DesignVersionService {
             boolean submittedToCustomer,
             String label
     ) {
-        int nextNo = versionRepository.maxVersionNo(piece.getId()) + 1;
+        int nextNo = nextVersionNo(piece.getId());
         DesignInfoVersion v = new DesignInfoVersion();
         v.setOrderId(orderId);
         v.setPieceId(piece.getId());
@@ -128,7 +128,7 @@ public class DesignVersionService {
                 .pieceId(v.getPieceId())
                 .versionNo(v.getVersionNo())
                 .label(v.getLabel())
-                .submittedToCustomer(v.getSubmittedToCustomer())
+                .submittedToCustomer(v.isSubmittedToCustomer())
                 .createdBy(v.getCreatedBy())
                 .createdByName(resolveUserName(v.getCreatedBy()))
                 .createdAt(v.getCreatedAt() != null ? ISO.format(v.getCreatedAt()) : null)
@@ -152,11 +152,18 @@ public class DesignVersionService {
                 .processInfo(parseJson(v.getProcessInfoJson()))
                 .stoneInfo(parseJson(v.getStoneInfoJson()))
                 .designImages(parseStringList(v.getDesignImagesJson()))
-                .submittedToCustomer(v.getSubmittedToCustomer())
+                .submittedToCustomer(v.isSubmittedToCustomer())
                 .createdBy(v.getCreatedBy())
                 .createdByName(resolveUserName(v.getCreatedBy()))
                 .createdAt(v.getCreatedAt() != null ? ISO.format(v.getCreatedAt()) : null)
                 .build();
+    }
+
+    private int nextVersionNo(Long pieceId) {
+        return versionRepository.findByPieceIdOrderByVersionNoDesc(pieceId).stream()
+                .mapToInt(DesignInfoVersion::getVersionNo)
+                .findFirst()
+                .orElse(0) + 1;
     }
 
     private String resolveUserName(Long userId) {

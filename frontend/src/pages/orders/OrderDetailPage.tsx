@@ -34,6 +34,7 @@ import { orderService } from '@/services/orderService';
 import { conversationService } from '@/services/conversationService';
 import { userService } from '@/services/userService';
 import UploadWithImagePreview from '@/components/UploadWithImagePreview';
+import OrderPieceSwitcher from '@/components/OrderPieceSwitcher';
 import {
   collectDoneImageUrlsFromFileList,
   normalizeDoneImageUploadFileList,
@@ -915,51 +916,21 @@ const OrderDetailPage: React.FC = () => {
     []
   );
 
-  const onAddPiece = async () => {
-    const name = window.prompt('单件名称（如男戒、女戒、项链）');
-    if (!name?.trim()) return;
-    try {
-      await orderService.createOrderPiece(orderId, name.trim());
-      message.success('已添加单件');
-      await refresh();
-    } catch (e: unknown) {
-      message.error(String((e as Error)?.message || e));
-    }
-  };
-
   const renderPieceBar = (canEdit: boolean) => {
-    const pieces: OrderPieceInfo[] = order?.pieces ?? [];
-    if (pieces.length === 0) return null;
+    if (!order) return null;
     return (
-      <div style={{ marginBottom: 16 }}>
-        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-          单件切换（每单最多 5 件）
-        </Typography.Text>
-        <Space wrap>
-          {pieces.map((p) => (
-            <Tag
-              key={p.id}
-              color={p.id === activePieceId ? 'gold' : 'default'}
-              style={{ cursor: 'pointer', padding: '4px 10px' }}
-              onClick={() => {
-                if (!order) return;
-                activePieceIdRef.current = p.id;
-                setActivePieceId(p.id);
-                applyPieceData(order, p.id);
-              }}
-            >
-              {p.name}
-              {p.designConfirmed ? ' ·设计已确认' : ''}
-              {p.modelConfirmed ? ' ·建模已确认' : ''}
-            </Tag>
-          ))}
-          {canEdit && pieces.length < 5 && (
-            <Button size="small" icon={<PlusOutlined />} onClick={() => void onAddPiece()}>
-              添加单件
-            </Button>
-          )}
-        </Space>
-      </div>
+      <OrderPieceSwitcher
+        orderId={orderId}
+        pieces={order.pieces ?? []}
+        activePieceId={activePieceId}
+        canEdit={canEdit}
+        onSelectPiece={(pieceId) => {
+          activePieceIdRef.current = pieceId;
+          setActivePieceId(pieceId);
+          applyPieceData(order, pieceId);
+        }}
+        onPiecesChanged={refresh}
+      />
     );
   };
 

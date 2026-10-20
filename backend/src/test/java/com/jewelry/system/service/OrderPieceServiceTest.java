@@ -2,6 +2,8 @@ package com.jewelry.system.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.entity.OrderPiece;
+import com.jewelry.system.repository.DesignInfoRepository;
+import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderPieceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,13 +25,20 @@ class OrderPieceServiceTest {
     @Mock
     private OrderPieceRepository orderPieceRepository;
 
+    @Mock
+    private DesignInfoRepository designInfoRepository;
+
+    @Mock
+    private ModelingInfoRepository modelingInfoRepository;
+
     private OrderPieceService orderPieceService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        orderPieceService = new OrderPieceService(orderPieceRepository, objectMapper);
+        orderPieceService = new OrderPieceService(
+                orderPieceRepository, designInfoRepository, modelingInfoRepository, objectMapper);
     }
 
     @Test
@@ -40,7 +49,8 @@ class OrderPieceServiceTest {
 
     @Test
     void allDesignConfirmedRequiresEveryPiece() {
-        OrderPieceService svc = new OrderPieceService(orderPieceRepository, objectMapper);
+        OrderPieceService svc = new OrderPieceService(
+                orderPieceRepository, designInfoRepository, modelingInfoRepository, objectMapper);
         OrderPiece a = new OrderPiece();
         a.setDesignConfirmed(true);
         OrderPiece b = new OrderPiece();

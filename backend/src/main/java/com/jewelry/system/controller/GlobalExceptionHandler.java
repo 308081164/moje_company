@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -63,6 +64,24 @@ public class GlobalExceptionHandler {
         response.put("message", ex.getReason());
 
         return new ResponseEntity<>(response, ex.getStatusCode());
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<Map<String, Object>> handleDataAccessException(DataAccessException ex) {
+        String root = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        boolean missingDesignVersionTable = root != null && root.contains("design_info_version");
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now().toString());
+        if (missingDesignVersionTable) {
+            response.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.put("error", "Service Unavailable");
+            response.put("message", "设计稿版本功能需要数据库迁移 V38，请升级后端并执行 Flyway 迁移后再试");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+        }
+        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        response.put("error", "Database Error");
+        response.put("message", root != null ? root : "数据库操作失败");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
     @ExceptionHandler(Exception.class)
