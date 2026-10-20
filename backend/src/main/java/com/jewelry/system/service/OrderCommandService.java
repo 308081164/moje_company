@@ -63,6 +63,7 @@ public class OrderCommandService {
     private final ReferralService referralService;
     private final OrderPieceRepository orderPieceRepository;
     private final OrderPieceService orderPieceService;
+    private final DesignVersionService designVersionService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -238,10 +239,17 @@ public class OrderCommandService {
             conversationService.syncDesignerMember(orderId, newDesignerId);
         }
 
-        boolean designSubmitted = req.getDesignImages() != null && !req.getDesignImages().isEmpty();
+        boolean hasDesignImages = req.getDesignImages() != null && !req.getDesignImages().isEmpty();
+        boolean submitToCustomer = req.getSubmitToCustomer() != null
+                ? req.getSubmitToCustomer()
+                : hasDesignImages;
+        if (Boolean.TRUE.equals(req.getCreateVersion()) || submitToCustomer) {
+            designVersionService.createVersionSnapshot(
+                    orderId, piece, req, submitToCustomer, req.getVersionLabel());
+        }
         boolean advanced = tryAdvanceOrderToDesigning(order);
         orderRepository.save(order);
-        if (designSubmitted) {
+        if (submitToCustomer && hasDesignImages) {
             String snapshot = buildImageSnapshotJson(req.getDesignImages());
             String title = "设计稿 · " + piece.getName();
             orderEventService.record(orderId, OrderEventType.DESIGN_SUBMIT,
@@ -253,6 +261,16 @@ public class OrderCommandService {
             auditLogService.log("ORDER_DESIGN_IN_PROGRESS", "ORDER", orderId,
                     "设计师保存设计，订单进入设计中");
         }
+        return orderQueryService.getOrder(orderId);
+    }
+
+    @Transactional
+    public OrderInfoDto restoreDesignVersion(long orderId, long pieceId, long versionId) {
+        Order order = loadOrder(orderId);
+        assertCanEditDesign(order);
+        designVersionService.applyVersionToWorkingCopy(orderId, pieceId, versionId);
+        auditLogService.log("ORDER_RESTORE_DESIGN_VERSION", "ORDER", orderId,
+                "回退设计稿版本 piece=" + pieceId + " versionId=" + versionId);
         return orderQueryService.getOrder(orderId);
     }
 

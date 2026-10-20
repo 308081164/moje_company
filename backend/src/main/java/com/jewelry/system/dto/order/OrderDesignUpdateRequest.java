@@ -20,4 +20,13 @@ public class OrderDesignUpdateRequest {
     private Object stoneInfo;
     private String designNotes;
     private List<String> designImages;
+    /** 为 true 时写入历史版本快照（版本号自增） */
+    private Boolean createVersion;
+    /** 版本备注，如「客户驳回后修改」 */
+    private String versionLabel;
+    /**
+     * 是否向客户发起设计确认（会话设计稿卡片）。
+     * 未传时：有 designImages 则视为提交（兼容旧客户端）；显式 false 则仅保存草稿。
+     */
+    private Boolean submitToCustomer;
 }

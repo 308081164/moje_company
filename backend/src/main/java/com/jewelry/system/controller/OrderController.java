@@ -33,6 +33,7 @@ public class OrderController {
     private final OrderQueryService orderQueryService;
     private final OrderCommandService orderCommandService;
     private final OrderPieceService orderPieceService;
+    private final DesignVersionService designVersionService;
     private final OrderConfigurationService orderConfigurationService;
     private final OrderStatisticsService orderStatisticsService;
     private final EmployeeStatisticsService employeeStatisticsService;
@@ -268,6 +269,26 @@ public class OrderController {
     @Operation(summary = "更新设计信息")
     public OrderInfoDto updateDesign(@PathVariable long id, @RequestBody OrderDesignUpdateRequest body) {
         return orderCommandService.updateDesign(id, body);
+    }
+
+    @GetMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/design-versions")
+    @Operation(summary = "单件设计稿历史版本列表")
+    public List<OrderDesignVersionDto> listDesignVersions(@PathVariable long id, @PathVariable long pieceId) {
+        return designVersionService.listVersions(id, pieceId);
+    }
+
+    @GetMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/design-versions/{versionId:\\d+}")
+    @Operation(summary = "设计稿版本详情（含图片 URL，用于预览/下载）")
+    public OrderDesignVersionDto getDesignVersion(@PathVariable long id, @PathVariable long pieceId,
+                                                  @PathVariable long versionId) {
+        return designVersionService.getVersion(id, pieceId, versionId);
+    }
+
+    @PostMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/design-versions/{versionId:\\d+}/restore")
+    @Operation(summary = "将历史版本恢复为当前编辑稿（不自动提交客户）")
+    public OrderInfoDto restoreDesignVersion(@PathVariable long id, @PathVariable long pieceId,
+                                             @PathVariable long versionId) {
+        return orderCommandService.restoreDesignVersion(id, pieceId, versionId);
     }
 
     @PutMapping("/{id:\\d+}/model")

@@ -29,6 +29,7 @@ import {
   OrderProductionFollowCreateRequest,
   OrderShipmentDto,
   OrderPieceInfo,
+  OrderDesignVersion,
 } from '@/types/order';
 
 // 订单服务
@@ -197,6 +198,18 @@ export const orderService = {
 
   async renameOrderPiece(orderId: number, pieceId: number, name: string): Promise<OrderPieceInfo> {
     return api.put(`/orders/${orderId}/pieces/${pieceId}`, { name });
+  },
+
+  async listDesignVersions(orderId: number, pieceId: number): Promise<OrderDesignVersion[]> {
+    return api.get(`/orders/${orderId}/pieces/${pieceId}/design-versions`);
+  },
+
+  async getDesignVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderDesignVersion> {
+    return api.get(`/orders/${orderId}/pieces/${pieceId}/design-versions/${versionId}`);
+  },
+
+  async restoreDesignVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderInfo> {
+    return api.post(`/orders/${orderId}/pieces/${pieceId}/design-versions/${versionId}/restore`);
   },
   
   // 更新订单评审信息

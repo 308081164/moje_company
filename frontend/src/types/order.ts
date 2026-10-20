@@ -420,6 +420,32 @@ export interface OrderDesignUpdateRequest {
   stoneInfo?: StoneInfo[];
   designImages?: string[];
   designNotes?: string;
+  createVersion?: boolean;
+  versionLabel?: string;
+  submitToCustomer?: boolean;
+}
+
+/** 单件设计稿历史版本 */
+export interface OrderDesignVersion {
+  id: number;
+  orderId: number;
+  pieceId: number;
+  versionNo: number;
+  label?: string;
+  designerId?: number;
+  designerName?: string;
+  engravingText?: string;
+  engravingImages?: string[];
+  materialType?: MaterialType;
+  handSize?: string;
+  designNotes?: string;
+  processInfo?: ProcessInfo[];
+  stoneInfo?: StoneInfo[];
+  designImages?: string[];
+  submittedToCustomer?: boolean;
+  createdBy?: number;
+  createdByName?: string;
+  createdAt?: string;
 }
 
 // 订单建模更新请求

@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Upload, Popover, Select } from 'antd';
-import { ReloadOutlined, SendOutlined, PlusOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
-import type { UploadFile } from 'antd/es/upload/interface';
+import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Popover } from 'antd';
+import { ReloadOutlined, SendOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
+import ChatDesignSubmitModal from '@/components/ChatDesignSubmitModal';
 import type { InputRef } from 'antd/es/input';
 import { conversationService } from '@/services/conversationService';
-import { orderService } from '@/services/orderService';
 import { Conversation, ConversationMember, ConversationMessage, OrderEventCard } from '@/types/conversation';
 import { useAuthStore } from '@/stores/authStore';
 import { conversationSocket, setActiveConversationId } from '@/services/conversationSocket';
@@ -104,11 +103,6 @@ const ChatPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [designModalOpen, setDesignModalOpen] = useState(false);
-  const [designFiles, setDesignFiles] = useState<UploadFile[]>([]);
-  const [designNotes, setDesignNotes] = useState('');
-  const [designSubmitting, setDesignSubmitting] = useState(false);
-  const [designPieceId, setDesignPieceId] = useState<number | null>(null);
-  const [designPieceOptions, setDesignPieceOptions] = useState<{ value: number; label: string }[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const inputRef = useRef<InputRef>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -280,72 +274,16 @@ const ChatPage: React.FC = () => {
     if (currentOrderId != null) navigate(`/orders/${currentOrderId}`);
   };
 
-  const openDesignModal = async () => {
-    setDesignFiles([]);
-    setDesignNotes('');
-    if (currentOrderId != null) {
-      try {
-        const o = await orderService.getOrderById(currentOrderId);
-        const opts = (o.pieces ?? []).map((p) => ({ value: p.id, label: p.name }));
-        setDesignPieceOptions(opts);
-        setDesignPieceId(opts[0]?.value ?? null);
-      } catch {
-        setDesignPieceOptions([]);
-        setDesignPieceId(null);
-      }
-    }
+  const openDesignModal = () => {
     setDesignModalOpen(true);
   };
 
-  const collectUploadedImageUrls = async (): Promise<string[]> => {
-    const urls: string[] = [];
-    for (const f of designFiles) {
-      const res = (f.response || {}) as { id?: number; fileUrl?: string };
-      let url = res.fileUrl?.trim();
-      if (!url && res.id != null) {
-        try {
-          url = (await orderService.previewFile(res.id))?.trim();
-        } catch {
-          /* ignore */
-        }
-      }
-      if (url) urls.push(url);
+  const onDesignSubmitted = async () => {
+    if (currentIdRef.current != null) {
+      const msgs = await conversationService.getMessages(currentIdRef.current, includeAllRef.current);
+      setMessages(msgs);
     }
-    return urls;
-  };
-
-  const submitDesignDraft = async () => {
-    if (currentOrderId == null || user?.id == null) return;
-    const doneFiles = designFiles.filter((f) => f.status === 'done');
-    if (doneFiles.length === 0) {
-      message.warning('请先上传设计图片');
-      return;
-    }
-    setDesignSubmitting(true);
-    try {
-      const images = await collectUploadedImageUrls();
-      if (images.length === 0) {
-        message.error('设计图片地址获取失败，请重新上传');
-        return;
-      }
-      await orderService.updateOrderDesign(currentOrderId, {
-        pieceId: designPieceId ?? undefined,
-        designerId: user.id,
-        designImages: images,
-        designNotes: designNotes.trim() || undefined,
-      });
-      message.success('设计稿已提交，客户将在会话中收到确认卡片');
-      setDesignModalOpen(false);
-      if (currentIdRef.current != null) {
-        const msgs = await conversationService.getMessages(currentIdRef.current, includeAllRef.current);
-        setMessages(msgs);
-      }
-      void loadConversations();
-    } catch (e) {
-      message.error(`提交失败：${String((e as Error)?.message || e)}`);
-    } finally {
-      setDesignSubmitting(false);
-    }
+    void loadConversations();
   };
 
   const isSystem = (m: ConversationMessage) => m.role === 'SYSTEM' && m.msgType !== 'event';
@@ -859,59 +797,13 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      <Modal
-        title="提交设计稿"
+      <ChatDesignSubmitModal
         open={designModalOpen}
-        onCancel={() => setDesignModalOpen(false)}
-        onOk={() => void submitDesignDraft()}
-        okText="提交给客户确认"
-        cancelText="取消"
-        confirmLoading={designSubmitting}
-        width={520}
-        destroyOnHidden
-      >
-        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          客户需按件确认全部设计稿后，订单才会进入建模阶段；提交后会在本会话生成对应单件的确认卡片。
-        </Typography.Paragraph>
-        {designPieceOptions.length > 1 && (
-          <Select
-            style={{ width: '100%', marginBottom: 12 }}
-            placeholder="选择单件"
-            value={designPieceId ?? undefined}
-            options={designPieceOptions}
-            onChange={(v) => setDesignPieceId(v)}
-          />
-        )}
-        <Upload
-          listType="picture-card"
-          accept="image/*"
-          multiple
-          fileList={designFiles}
-          onChange={({ fileList }) => setDesignFiles(fileList)}
-          customRequest={async (options) => {
-            const { file, onError, onSuccess } = options;
-            try {
-              const res = await orderService.uploadDesignFile(currentOrderId!, file as File);
-              onSuccess?.(res);
-            } catch {
-              message.error('设计图片上传失败');
-              onError?.(new Error('上传失败'));
-            }
-          }}
-        >
-          <div>
-            <PlusOutlined />
-            <div style={{ marginTop: 8 }}>上传设计图</div>
-          </div>
-        </Upload>
-        <Input.TextArea
-          rows={4}
-          style={{ marginTop: 12 }}
-          placeholder="设计说明（材质、工艺、手寸等，将随设计稿一起展示给客户）"
-          value={designNotes}
-          onChange={(e) => setDesignNotes(e.target.value)}
-        />
-      </Modal>
+        orderId={currentOrderId}
+        designerUserId={user?.id}
+        onClose={() => setDesignModalOpen(false)}
+        onSubmitted={() => void onDesignSubmitted()}
+      />
 
       <Modal open={!!detail} onCancel={() => setDetail(null)} footer={null} width={480} title={null}>
         {detail && (() => {

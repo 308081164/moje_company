@@ -661,6 +661,7 @@ const OrderDetailPage: React.FC = () => {
       designNotes: v.designNotes,
       designImages: collectDoneImageUrlsFromFileList(designImageFileList),
       processInfo,
+      submitToCustomer: false,
     });
     message.success('设计信息已保存');
     refresh();

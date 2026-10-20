@@ -1,0 +1,23 @@
+CREATE TABLE design_info_version (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    piece_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    label VARCHAR(200) NULL,
+    designer_id BIGINT NULL,
+    engraving_text VARCHAR(500) NULL,
+    engraving_images JSON NULL,
+    material_type VARCHAR(50) NULL,
+    hand_size VARCHAR(50) NULL,
+    design_notes TEXT NULL,
+    process_info JSON NULL,
+    stone_info JSON NULL,
+    design_images JSON NULL,
+    submitted_to_customer TINYINT(1) NOT NULL DEFAULT 0,
+    created_by BIGINT NULL,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_div_order FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE CASCADE,
+    CONSTRAINT fk_div_piece FOREIGN KEY (piece_id) REFERENCES order_piece (id) ON DELETE CASCADE,
+    UNIQUE KEY uk_div_piece_version (piece_id, version_no),
+    INDEX idx_div_piece_id (piece_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设计稿历史版本（按单件）';
