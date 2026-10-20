@@ -53,6 +53,8 @@ public class PortalCustomerService {
     private final StorefrontService storefrontService;
     private final StorefrontWalletService storefrontWalletService;
     private final ReferralService referralService;
+    private final OrderPieceService orderPieceService;
+    private final OrderCommandService orderCommandService;
 
     @Transactional
     public PortalCustomerLoginResponse register(PortalCustomerRegisterRequest req) {
@@ -215,7 +217,16 @@ public class PortalCustomerService {
      */
     @Transactional
     public void confirmOrder(long orderId, String eventType) {
+        OrderPiece piece = orderPieceService.ensureDefaultPiece(orderId);
+        confirmPiece(orderId, piece.getId(), eventType);
+    }
+
+    @Transactional
+    public void confirmPiece(long orderId, long pieceId, String eventType) {
         Long accountId = requireBoundAccount(orderId);
+        OrderPiece piece = orderPieceService.requirePiece(orderId, pieceId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
         OrderEventType type;
         try {
             type = OrderEventType.fromString(eventType);
@@ -223,38 +234,47 @@ public class PortalCustomerService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         if (type == OrderEventType.DESIGN_CONFIRM) {
-            DesignInfo di = designInfoRepository.findByOrderId(orderId).orElseGet(() -> {
+            DesignInfo di = designInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 DesignInfo d = new DesignInfo();
                 d.setOrderId(orderId);
+                d.setPieceId(pieceId);
                 return d;
             });
             di.setCustomerApproved(true);
             di.setApprovalTime(LocalDateTime.now());
-            di.setApprovalNotes("客户已确认设计稿");
+            di.setApprovalNotes("客户已确认设计稿（" + piece.getName() + "）");
             designInfoRepository.save(di);
+            orderPieceService.markDesignConfirmed(orderId, pieceId);
+            String title = "确认设计 · " + piece.getName();
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                    type.getDescription(), null, null, null);
-            // 设计确认后进入建模前，生成尾款支付卡片
-            orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
-                    AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                    OrderEventType.BALANCE_PAYMENT.getDescription(),
-                    "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
+                    title, null, null, null, pieceId, null);
+            orderCommandService.tryAdvanceAfterAllDesignConfirmed(order);
+            Order afterDesign = orderRepository.findById(orderId).orElse(order);
+            if (orderPieceService.allDesignConfirmed(orderId)
+                    && afterDesign.getServiceType() != ServiceType.CUSTOM_IMAGE) {
+                orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
+                        AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
+                        OrderEventType.BALANCE_PAYMENT.getDescription(),
+                        "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
+            }
         } else if (type == OrderEventType.MODEL_CONFIRM) {
-            ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElseGet(() -> {
+            ModelingInfo mi = modelingInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 ModelingInfo m = new ModelingInfo();
                 m.setOrderId(orderId);
+                m.setPieceId(pieceId);
                 return m;
             });
             mi.setCustomerApproved(true);
             mi.setApprovalTime(LocalDateTime.now());
-            mi.setApprovalNotes("客户已确认建模稿");
+            mi.setApprovalNotes("客户已确认建模稿（" + piece.getName() + "）");
             modelingInfoRepository.save(mi);
+            orderPieceService.markModelConfirmed(orderId, pieceId);
+            String title = "确认建模 · " + piece.getName();
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                    type.getDescription(), null, null, null);
-            // 来图定制：确认建模后进入生产前收尾款（设计师设计在确认设计后已收）
-            Order modelOrder = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
-            if (modelOrder.getServiceType() == ServiceType.CUSTOM_IMAGE) {
+                    title, null, null, null, pieceId, null);
+            orderCommandService.tryAdvanceAfterAllModelConfirmed(order);
+            if (orderPieceService.allModelConfirmed(orderId)
+                    && order.getServiceType() == ServiceType.CUSTOM_IMAGE) {
                 orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
                         AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                         OrderEventType.BALANCE_PAYMENT.getDescription(),
@@ -262,6 +282,37 @@ public class PortalCustomerService {
             }
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认类型仅支持 DESIGN_CONFIRM / MODEL_CONFIRM");
+        }
+    }
+
+    @Transactional
+    public void rejectPiece(long orderId, long pieceId, String eventType, String reason) {
+        Long accountId = requireBoundAccount(orderId);
+        OrderPiece piece = orderPieceService.requirePiece(orderId, pieceId);
+        OrderEventType type;
+        try {
+            type = OrderEventType.fromString(eventType);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        if (type != OrderEventType.DESIGN_REJECT && type != OrderEventType.MODEL_REJECT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "驳回类型不正确");
+        }
+        String title = (type == OrderEventType.DESIGN_REJECT ? "驳回设计 · " : "驳回建模 · ") + piece.getName();
+        orderEventService.rejectByCustomer(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER", reason,
+                pieceId, title);
+        if (type == OrderEventType.DESIGN_REJECT) {
+            orderPieceService.resetDesignConfirmation(orderId, pieceId);
+            designInfoRepository.findByPieceId(pieceId).ifPresent(di -> {
+                di.setCustomerApproved(false);
+                designInfoRepository.save(di);
+            });
+        } else {
+            orderPieceService.resetModelConfirmation(orderId, pieceId);
+            modelingInfoRepository.findByPieceId(pieceId).ifPresent(mi -> {
+                mi.setCustomerApproved(false);
+                modelingInfoRepository.save(mi);
+            });
         }
     }
 

@@ -8,6 +8,8 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderDesignUpdateRequest {
+    /** 单件 ID；不传则默认第一件 */
+    private Long pieceId;
     private String engravingText;
     private List<String> engravingImages;
     private String materialType;

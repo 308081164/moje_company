@@ -11,8 +11,11 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -21,6 +24,7 @@ public class OrderDetailAssembler {
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     private final ObjectMapper objectMapper;
+    private final OrderPieceService orderPieceService;
 
     public OrderInfoDto enrich(
             OrderInfoDto base,
@@ -31,17 +35,94 @@ public class OrderDetailAssembler {
             ProcessReview pr,
             Quotation q
     ) {
+        return enrich(base, order, od, di, mi, pr, q, null, null, null);
+    }
+
+    public OrderInfoDto enrich(
+            OrderInfoDto base,
+            Order order,
+            OrderDetail od,
+            DesignInfo di,
+            ModelingInfo mi,
+            ProcessReview pr,
+            Quotation q,
+            List<OrderPiece> pieces,
+            List<DesignInfo> allDesign,
+            List<ModelingInfo> allModel
+    ) {
         if (base == null) {
             return null;
         }
-        base.setDesignInfo(buildDesign(order, od, di));
-        base.setModelInfo(buildModel(order, mi));
+        List<OrderPiece> pieceList = pieces != null ? pieces : orderPieceService.listByOrderId(order.getId());
+        Map<Long, DesignInfo> designByPiece = indexDesignByPiece(allDesign, di);
+        Map<Long, ModelingInfo> modelByPiece = indexModelByPiece(allModel, mi);
+
+        List<OrderPieceDto> pieceDtos = pieceList.stream()
+                .map(p -> {
+                    OrderDesignBlockDto design = buildDesign(order, od, designByPiece.get(p.getId()), p.getId());
+                    if (design != null) {
+                        design.setDesignPassed(Boolean.TRUE.equals(p.getDesignConfirmed()));
+                    }
+                    OrderModelBlockDto model = buildModel(order, modelByPiece.get(p.getId()), p.getId());
+                    if (model != null) {
+                        model.setModelPassed(Boolean.TRUE.equals(p.getModelConfirmed()));
+                    }
+                    return OrderPieceDto.builder()
+                            .id(p.getId())
+                            .orderId(p.getOrderId())
+                            .seq(p.getSeq())
+                            .name(p.getName())
+                            .designConfirmed(p.getDesignConfirmed())
+                            .modelConfirmed(p.getModelConfirmed())
+                            .referenceImages(orderPieceService.parseReferenceImages(p))
+                            .design(design)
+                            .model(model)
+                            .build();
+                })
+                .collect(Collectors.toList());
+        base.setPieces(pieceDtos);
+
+        DesignInfo primaryDesign = pieceList.isEmpty() ? di : designByPiece.get(pieceList.get(0).getId());
+        ModelingInfo primaryModel = pieceList.isEmpty() ? mi : modelByPiece.get(pieceList.get(0).getId());
+        Long primaryPieceId = pieceList.isEmpty() ? null : pieceList.get(0).getId();
+        base.setDesignInfo(buildDesign(order, od, primaryDesign, primaryPieceId));
+        base.setModelInfo(buildModel(order, primaryModel, primaryPieceId));
         base.setReviewInfo(buildReview(order, pr));
         base.setQuotationInfo(buildQuotation(q));
         return base;
     }
 
-    private OrderDesignBlockDto buildDesign(Order order, OrderDetail od, DesignInfo di) {
+    private Map<Long, DesignInfo> indexDesignByPiece(List<DesignInfo> allDesign, DesignInfo fallback) {
+        Map<Long, DesignInfo> map = new HashMap<>();
+        if (allDesign != null) {
+            for (DesignInfo d : allDesign) {
+                if (d.getPieceId() != null) {
+                    map.put(d.getPieceId(), d);
+                }
+            }
+        }
+        if (fallback != null && fallback.getPieceId() != null) {
+            map.putIfAbsent(fallback.getPieceId(), fallback);
+        }
+        return map;
+    }
+
+    private Map<Long, ModelingInfo> indexModelByPiece(List<ModelingInfo> allModel, ModelingInfo fallback) {
+        Map<Long, ModelingInfo> map = new HashMap<>();
+        if (allModel != null) {
+            for (ModelingInfo m : allModel) {
+                if (m.getPieceId() != null) {
+                    map.put(m.getPieceId(), m);
+                }
+            }
+        }
+        if (fallback != null && fallback.getPieceId() != null) {
+            map.putIfAbsent(fallback.getPieceId(), fallback);
+        }
+        return map;
+    }
+
+    private OrderDesignBlockDto buildDesign(Order order, OrderDetail od, DesignInfo di, Long pieceId) {
         User designer = order.getDesigner();
         Long designerId = designer != null ? designer.getId() : null;
         String designerName = designer != null
@@ -75,6 +156,7 @@ public class OrderDetailAssembler {
         return OrderDesignBlockDto.builder()
                 .id(rowId)
                 .orderId(order.getId())
+                .pieceId(pieceId)
                 .designerId(designerId)
                 .designerName(designerName)
                 .engravingText(od != null ? od.getEngravingText() : null)
@@ -93,7 +175,7 @@ public class OrderDetailAssembler {
                 .build();
     }
 
-    private OrderModelBlockDto buildModel(Order order, ModelingInfo mi) {
+    private OrderModelBlockDto buildModel(Order order, ModelingInfo mi, Long pieceId) {
         User modeler = order.getModeler();
         Long modelerId = modeler != null ? modeler.getId() : null;
         String modelerName = modeler != null
@@ -105,6 +187,7 @@ public class OrderDetailAssembler {
             return OrderModelBlockDto.builder()
                     .id(order.getId())
                     .orderId(order.getId())
+                    .pieceId(pieceId)
                     .modelerId(modelerId)
                     .modelerName(modelerName)
                     .modelEffectImages(Collections.emptyList())
@@ -113,6 +196,7 @@ public class OrderDetailAssembler {
         return OrderModelBlockDto.builder()
                 .id(mi.getId())
                 .orderId(order.getId())
+                .pieceId(pieceId)
                 .modelerId(modelerId)
                 .modelerName(modelerName)
                 .weight(mi.getWeight() != null ? mi.getWeight().doubleValue() : null)

@@ -1624,15 +1624,49 @@
         });
         html += '</div>';
       }
-      // 操作按钮
+      // 按件操作区
       var actions = '';
-      var lastDesign = events.filter(function (e) { return ['DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
-      var lastModel = events.filter(function (e) { return ['MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
-      if (!summary.designApproved && lastDesign && lastDesign.eventType === 'DESIGN_SUBMIT') {
-        actions += '<button class="prog-btn prog-btn--ok" data-act="DESIGN_CONFIRM">确认设计稿</button><button class="prog-btn prog-btn--no" data-act="DESIGN_REJECT">驳回设计稿</button>';
-      }
-      if (!summary.modelApproved && lastModel && lastModel.eventType === 'MODEL_SUBMIT') {
-        actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM">确认建模稿</button><button class="prog-btn prog-btn--no" data-act="MODEL_REJECT">驳回建模稿</button>';
+      var pieces = summary.pieces && summary.pieces.length ? summary.pieces : [];
+      var isCustomImage = summary.serviceType === 'CUSTOM_IMAGE';
+      if (pieces.length) {
+        html += '<div class="prog-piece-list">';
+        pieces.forEach(function (piece) {
+          html += '<div class="prog-piece-card"><div class="prog-piece-title"><strong>' + esc(piece.name) + '</strong>';
+          if (piece.designConfirmed) html += ' <span class="prog-tag">设计已确认</span>';
+          if (piece.modelConfirmed) html += ' <span class="prog-tag">建模已确认</span>';
+          html += '</div>';
+          if (!isCustomImage && piece.designImages && piece.designImages.length) {
+            html += '<img class="prog-img prog-img--sm" src="' + esc(piece.designImages[0]) + '" alt="design">';
+          }
+          if (piece.modelEffectImages && piece.modelEffectImages.length) {
+            html += '<img class="prog-img prog-img--sm" src="' + esc(piece.modelEffectImages[0]) + '" alt="model">';
+          }
+          var lastDesignPiece = events.filter(function (e) {
+            return e.pieceId === piece.id && ['DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM'].indexOf(e.eventType) >= 0;
+          }).slice(-1)[0];
+          var lastModelPiece = events.filter(function (e) {
+            return e.pieceId === piece.id && ['MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM'].indexOf(e.eventType) >= 0;
+          }).slice(-1)[0];
+          if (!isCustomImage && !piece.designConfirmed && lastDesignPiece && lastDesignPiece.eventType === 'DESIGN_SUBMIT') {
+            actions += '<button class="prog-btn prog-btn--ok" data-act="DESIGN_CONFIRM" data-piece-id="' + piece.id + '">确认「' + esc(piece.name) + '」设计</button>';
+            actions += '<button class="prog-btn prog-btn--no" data-act="DESIGN_REJECT" data-piece-id="' + piece.id + '">驳回设计</button>';
+          }
+          if (!piece.modelConfirmed && lastModelPiece && lastModelPiece.eventType === 'MODEL_SUBMIT') {
+            actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM" data-piece-id="' + piece.id + '">确认「' + esc(piece.name) + '」建模</button>';
+            actions += '<button class="prog-btn prog-btn--no" data-act="MODEL_REJECT" data-piece-id="' + piece.id + '">驳回建模</button>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+      } else {
+        var lastDesign = events.filter(function (e) { return ['DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
+        var lastModel = events.filter(function (e) { return ['MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
+        if (!summary.designApproved && lastDesign && lastDesign.eventType === 'DESIGN_SUBMIT') {
+          actions += '<button class="prog-btn prog-btn--ok" data-act="DESIGN_CONFIRM">确认设计稿</button><button class="prog-btn prog-btn--no" data-act="DESIGN_REJECT">驳回设计稿</button>';
+        }
+        if (!summary.modelApproved && lastModel && lastModel.eventType === 'MODEL_SUBMIT') {
+          actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM">确认建模稿</button><button class="prog-btn prog-btn--no" data-act="MODEL_REJECT">驳回建模稿</button>';
+        }
       }
       if (summary.canPublishToStorefront) {
         actions += '<button class="prog-btn prog-btn--ok" data-act="PUBLISH">' + (window.I18N.t('pub.title')) + '</button>';
@@ -1660,9 +1694,17 @@
           } else if (act.indexOf('REJECT') >= 0) {
             var reason = prompt(window.I18N.t('ws.progress.reject.ph'));
             if (!reason) return;
-            window.DUXURY_API.rejectOrder(orderId, act, reason).then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
+            var pieceId = btn.getAttribute('data-piece-id');
+            var rejectReq = pieceId
+              ? window.DUXURY_API.rejectPiece(orderId, pieceId, act, reason)
+              : window.DUXURY_API.rejectOrder(orderId, act, reason);
+            rejectReq.then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
           } else {
-            window.DUXURY_API.confirmOrder(orderId, act).then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
+            var pieceIdOk = btn.getAttribute('data-piece-id');
+            var confirmReq = pieceIdOk
+              ? window.DUXURY_API.confirmPiece(orderId, pieceIdOk, act)
+              : window.DUXURY_API.confirmOrder(orderId, act);
+            confirmReq.then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
           }
         });
       });

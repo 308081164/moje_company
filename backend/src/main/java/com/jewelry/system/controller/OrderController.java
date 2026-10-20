@@ -19,6 +19,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import com.jewelry.system.entity.OrderPiece;
+
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +32,7 @@ public class OrderController {
 
     private final OrderQueryService orderQueryService;
     private final OrderCommandService orderCommandService;
+    private final OrderPieceService orderPieceService;
     private final OrderConfigurationService orderConfigurationService;
     private final OrderStatisticsService orderStatisticsService;
     private final EmployeeStatisticsService employeeStatisticsService;
@@ -212,6 +215,53 @@ public class OrderController {
     @Operation(summary = "批量删除订单")
     public void deleteBatch(@Valid @RequestBody OrderBatchDeleteRequest body) {
         orderCommandService.deleteBatch(body.getOrderIds());
+    }
+
+    @GetMapping("/{id:\\d+}/pieces")
+    @Operation(summary = "订单单件列表")
+    public List<OrderPieceDto> listPieces(@PathVariable long id) {
+        orderQueryService.getOrder(id);
+        return orderPieceService.listByOrderId(id).stream()
+                .map(p -> OrderPieceDto.builder()
+                        .id(p.getId())
+                        .orderId(p.getOrderId())
+                        .seq(p.getSeq())
+                        .name(p.getName())
+                        .designConfirmed(p.getDesignConfirmed())
+                        .modelConfirmed(p.getModelConfirmed())
+                        .referenceImages(orderPieceService.parseReferenceImages(p))
+                        .build())
+                .toList();
+    }
+
+    @PostMapping("/{id:\\d+}/pieces")
+    @Operation(summary = "添加订单单件（最多 5 件）")
+    public OrderPieceDto createPiece(@PathVariable long id, @RequestBody OrderPieceCreateRequest body) {
+        orderQueryService.getOrder(id);
+        OrderPiece piece = orderPieceService.createPiece(id, body != null ? body.getName() : null);
+        return OrderPieceDto.builder()
+                .id(piece.getId())
+                .orderId(piece.getOrderId())
+                .seq(piece.getSeq())
+                .name(piece.getName())
+                .designConfirmed(piece.getDesignConfirmed())
+                .modelConfirmed(piece.getModelConfirmed())
+                .build();
+    }
+
+    @PutMapping("/{id:\\d+}/pieces/{pieceId:\\d+}")
+    @Operation(summary = "重命名单件")
+    public OrderPieceDto renamePiece(@PathVariable long id, @PathVariable long pieceId,
+                                     @RequestBody OrderPieceRenameRequest body) {
+        OrderPiece piece = orderPieceService.renamePiece(id, pieceId, body != null ? body.getName() : null);
+        return OrderPieceDto.builder()
+                .id(piece.getId())
+                .orderId(piece.getOrderId())
+                .seq(piece.getSeq())
+                .name(piece.getName())
+                .designConfirmed(piece.getDesignConfirmed())
+                .modelConfirmed(piece.getModelConfirmed())
+                .build();
     }
 
     @PutMapping("/{id:\\d+}/design")

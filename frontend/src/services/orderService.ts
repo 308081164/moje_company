@@ -28,6 +28,7 @@ import {
   OrderProductionFollowLogDto,
   OrderProductionFollowCreateRequest,
   OrderShipmentDto,
+  OrderPieceInfo,
 } from '@/types/order';
 
 // 订单服务
@@ -184,6 +185,18 @@ export const orderService = {
       console.error('更新订单建模信息失败:', error);
       throw error;
     }
+  },
+
+  async listOrderPieces(orderId: number): Promise<OrderPieceInfo[]> {
+    return api.get(`/orders/${orderId}/pieces`);
+  },
+
+  async createOrderPiece(orderId: number, name: string): Promise<OrderPieceInfo> {
+    return api.post(`/orders/${orderId}/pieces`, { name });
+  },
+
+  async renameOrderPiece(orderId: number, pieceId: number, name: string): Promise<OrderPieceInfo> {
+    return api.put(`/orders/${orderId}/pieces/${pieceId}`, { name });
   },
   
   // 更新订单评审信息

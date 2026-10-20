@@ -3,14 +3,13 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.conversation.ConversationDto;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
-import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.Order;
+import com.jewelry.system.entity.OrderPiece;
 import com.jewelry.system.entity.PortalCustomerOrderBinding;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
-import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.PortalCustomerAccountRepository;
 import com.jewelry.system.repository.PortalCustomerOrderBindingRepository;
@@ -37,13 +36,13 @@ public class PortalCustomerOrderService {
     private final OrderRepository orderRepository;
     private final PortalCustomerAccountRepository accountRepository;
     private final PortalCustomerOrderBindingRepository bindingRepository;
-    private final DesignInfoRepository designInfoRepository;
     private final OrderCommandService orderCommandService;
     private final AutoAssignmentService autoAssignmentService;
     private final ConversationService conversationService;
     private final OrderEventService orderEventService;
     private final ReferralService referralService;
     private final ObjectMapper objectMapper;
+    private final OrderPieceService orderPieceService;
 
     @Transactional
     public PortalCustomerOrderCreateResponse createOrder(PortalCustomerOrderCreateRequest req) {
@@ -80,6 +79,10 @@ public class PortalCustomerOrderService {
         order.setOrderNumber(orderCommandService.generateOrderNumber());
         order.setStatus(type == ServiceType.CUSTOM_IMAGE ? OrderStatus.PENDING_MODEL : OrderStatus.PENDING_DESIGN);
         orderRepository.save(order);
+        OrderPiece defaultPiece = orderPieceService.ensureDefaultPiece(order.getId());
+        if (type == ServiceType.CUSTOM_IMAGE) {
+            orderPieceService.markDesignConfirmed(order.getId(), defaultPiece.getId());
+        }
 
         PortalCustomerOrderBinding binding = new PortalCustomerOrderBinding();
         binding.setPortalCustomerId(accountId);
@@ -96,15 +99,9 @@ public class PortalCustomerOrderService {
             autoAssignmentService.autoAssignAll(order.getId());
         }
 
-        // 参考图：来图定制的「图」/ 设计师设计的灵感图，存入 design_info 供进度页与建模师查看
+        // 参考图写入默认单件（与设计师稿分离）
         if (req.getReferenceImages() != null && !req.getReferenceImages().isEmpty()) {
-            DesignInfo di = designInfoRepository.findByOrderId(order.getId()).orElseGet(() -> {
-                DesignInfo d = new DesignInfo();
-                d.setOrderId(order.getId());
-                return d;
-            });
-            di.setDesignImagesJson(toJson(req.getReferenceImages()));
-            designInfoRepository.save(di);
+            orderPieceService.setReferenceImages(defaultPiece, req.getReferenceImages());
         }
 
         ConversationDto conversation = conversationService.ensureConversationByOrder(order.getId());

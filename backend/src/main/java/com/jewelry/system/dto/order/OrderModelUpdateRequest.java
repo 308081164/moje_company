@@ -8,6 +8,8 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderModelUpdateRequest {
+    /** 单件 ID；不传则默认第一件 */
+    private Long pieceId;
     private Double weight;
     private Long modelerId;
     private String modelNotes;

@@ -22,6 +22,9 @@ public class ModelingInfo {
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
+    @Column(name = "piece_id")
+    private Long pieceId;
+
     private BigDecimal weight;
 
     @Column(name = "model_files", columnDefinition = "json")

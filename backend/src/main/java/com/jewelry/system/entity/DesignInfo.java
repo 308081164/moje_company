@@ -21,6 +21,9 @@ public class DesignInfo {
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
+    @Column(name = "piece_id")
+    private Long pieceId;
+
     @Column(name = "process_info", columnDefinition = "json")
     private String processInfoJson;
 

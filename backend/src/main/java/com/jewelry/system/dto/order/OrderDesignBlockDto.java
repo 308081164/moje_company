@@ -10,6 +10,7 @@ import java.util.List;
 public class OrderDesignBlockDto {
     private Long id;
     private Long orderId;
+    private Long pieceId;
     private Long designerId;
     private String designerName;
     private String engravingText;

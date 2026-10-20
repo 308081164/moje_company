@@ -82,6 +82,12 @@
     rejectOrder: function (orderId, eventType, reason) {
       return post('/portal/c/orders/' + orderId + '/reject', { eventType: eventType, reason: reason });
     },
+    confirmPiece: function (orderId, pieceId, eventType) {
+      return post('/portal/c/orders/' + orderId + '/pieces/' + pieceId + '/confirm', { eventType: eventType });
+    },
+    rejectPiece: function (orderId, pieceId, eventType, reason) {
+      return post('/portal/c/orders/' + orderId + '/pieces/' + pieceId + '/reject', { eventType: eventType, reason: reason });
+    },
     confirmDelivery: function (orderId) {
       return post('/portal/c/orders/' + orderId + '/confirm-delivery', {});
     },

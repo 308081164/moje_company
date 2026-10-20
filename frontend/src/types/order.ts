@@ -141,6 +141,7 @@ export interface OrderBaseInfo {
 export interface OrderDesignInfo {
   id: number;
   orderId: number;
+  pieceId?: number;
   designerId: number;         // 设计师ID
   designerName?: string;      // 设计师姓名
   engravingText?: string;     // 字印
@@ -163,6 +164,7 @@ export interface OrderDesignInfo {
 export interface OrderModelInfo {
   id: number;
   orderId: number;
+  pieceId?: number;
   modelerId: number;          // 建模师ID
   modelerName?: string;       // 建模师姓名
   weight?: number;            // 克重（克）
@@ -267,11 +269,25 @@ export interface OrderShipmentDto {
   deliveredAt?: string | null;
 }
 
+/** 订单单件（设计/建模按件） */
+export interface OrderPieceInfo {
+  id: number;
+  orderId: number;
+  seq: number;
+  name: string;
+  designConfirmed?: boolean;
+  modelConfirmed?: boolean;
+  referenceImages?: string[];
+  design?: OrderDesignInfo;
+  model?: OrderModelInfo;
+}
+
 // 完整订单信息
 export interface OrderInfo {
   baseInfo: OrderBaseInfo;
   designInfo?: OrderDesignInfo;
   modelInfo?: OrderModelInfo;
+  pieces?: OrderPieceInfo[];
   reviewInfo?: OrderReviewInfo;
   quotationInfo?: OrderQuotationInfo;
   productionInfo?: OrderProductionInfo;
@@ -393,6 +409,7 @@ export interface OrderUpdateRequest {
 
 // 订单设计更新请求
 export interface OrderDesignUpdateRequest {
+  pieceId?: number;
   engravingText?: string;
   engravingImages?: string[];
   materialType?: MaterialType;
@@ -407,6 +424,7 @@ export interface OrderDesignUpdateRequest {
 
 // 订单建模更新请求
 export interface OrderModelUpdateRequest {
+  pieceId?: number;
   weight?: number;
   modelerId?: number;
   modelNotes?: string;

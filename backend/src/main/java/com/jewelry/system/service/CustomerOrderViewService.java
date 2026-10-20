@@ -9,6 +9,7 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
+import com.jewelry.system.dto.customer.CustomerOrderPublicPieceDto;
 import com.jewelry.system.dto.customer.CustomerOrderPublicMilestoneDto;
 import com.jewelry.system.dto.customer.CustomerOrderRegistrationHintDto;
 import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
@@ -17,6 +18,7 @@ import com.jewelry.system.dto.customer.QuotationPublicDto;
 import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.ModelingInfo;
 import com.jewelry.system.entity.Order;
+import com.jewelry.system.entity.OrderPiece;
 import com.jewelry.system.entity.OrderCustomerViewLink;
 import com.jewelry.system.entity.OrderCustomerViewLink.LinkStatus;
 import com.jewelry.system.entity.Quotation;
@@ -54,6 +56,7 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -74,6 +77,7 @@ public class CustomerOrderViewService {
     private final QuotationRepository quotationRepository;
     private final ObjectMapper objectMapper;
     private final ShipmentService shipmentService;
+    private final OrderPieceService orderPieceService;
 
     /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
     @Value("${app.portal.base-url:http://localhost:8852}")
@@ -192,10 +196,38 @@ public class CustomerOrderViewService {
      */
     @Transactional(readOnly = true)
     public CustomerOrderPublicDto buildPublicProgressDto(Order order) {
+        List<OrderPiece> pieceEntities = orderPieceService.listByOrderId(order.getId());
+        List<DesignInfo> allDesign = designInfoRepository.findAllByOrderId(order.getId());
+        List<ModelingInfo> allModel = modelingInfoRepository.findAllByOrderId(order.getId());
         DesignInfo di = designInfoRepository.findByOrderId(order.getId()).orElse(null);
         ModelingInfo mi = modelingInfoRepository.findByOrderId(order.getId()).orElse(null);
         Quotation quotation = quotationRepository.findByOrderId(order.getId()).orElse(null);
-        List<String> images = parseDesignImages(di);
+
+        List<CustomerOrderPublicPieceDto> pieces = pieceEntities.stream()
+                .map(p -> {
+                    DesignInfo pdi = allDesign.stream()
+                            .filter(d -> Objects.equals(d.getPieceId(), p.getId()))
+                            .findFirst().orElse(null);
+                    ModelingInfo pmi = allModel.stream()
+                            .filter(m -> Objects.equals(m.getPieceId(), p.getId()))
+                            .findFirst().orElse(null);
+                    return CustomerOrderPublicPieceDto.builder()
+                            .id(p.getId())
+                            .seq(p.getSeq())
+                            .name(p.getName())
+                            .designConfirmed(p.getDesignConfirmed())
+                            .modelConfirmed(p.getModelConfirmed())
+                            .referenceImages(orderPieceService.parseReferenceImages(p))
+                            .designImages(parseDesignImages(pdi))
+                            .modelEffectImages(parseModelEffectImages(pmi))
+                            .build();
+                })
+                .toList();
+
+        List<String> images = pieces.isEmpty() ? parseDesignImages(di)
+                : pieces.stream()
+                .flatMap(p -> (p.getDesignImages() != null ? p.getDesignImages() : List.<String>of()).stream())
+                .toList();
         // 来图定制：参考图不应作为「设计图」展示在进度面板；设计师设计才展示最新设计稿
         String firstImg = (order.getServiceType() == ServiceType.CUSTOM_IMAGE)
                 ? null
@@ -220,12 +252,27 @@ public class CustomerOrderViewService {
                 .currentStatusLabel(order.getStatus().getDescription())
                 .firstDesignImageUrl(firstImg)
                 .milestones(buildMilestones(order))
-                .designApproved(di != null ? di.getCustomerApproved() : null)
-                .modelApproved(mi != null ? mi.getCustomerApproved() : null)
+                .designApproved(orderPieceService.allDesignConfirmed(order.getId()))
+                .modelApproved(orderPieceService.allModelConfirmed(order.getId()))
                 .quotation(quotationDto)
                 .modelFiles(parseModelFiles(mi))
                 .shipment(shipmentService.getShipmentForCustomer(order.getId()))
+                .pieces(pieces)
                 .build();
+    }
+
+    private List<String> parseModelEffectImages(ModelingInfo mi) {
+        if (mi == null || mi.getModelEffectImagesJson() == null || mi.getModelEffectImagesJson().isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(
+                    mi.getModelEffectImagesJson().getBytes(StandardCharsets.UTF_8),
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private List<ModelFilePublicDto> parseModelFiles(ModelingInfo mi) {

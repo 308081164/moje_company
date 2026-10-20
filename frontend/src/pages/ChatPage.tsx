@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Upload, Popover } from 'antd';
+import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Upload, Popover, Select } from 'antd';
 import { ReloadOutlined, SendOutlined, PlusOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { InputRef } from 'antd/es/input';
@@ -107,6 +107,8 @@ const ChatPage: React.FC = () => {
   const [designFiles, setDesignFiles] = useState<UploadFile[]>([]);
   const [designNotes, setDesignNotes] = useState('');
   const [designSubmitting, setDesignSubmitting] = useState(false);
+  const [designPieceId, setDesignPieceId] = useState<number | null>(null);
+  const [designPieceOptions, setDesignPieceOptions] = useState<{ value: number; label: string }[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const inputRef = useRef<InputRef>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -278,9 +280,20 @@ const ChatPage: React.FC = () => {
     if (currentOrderId != null) navigate(`/orders/${currentOrderId}`);
   };
 
-  const openDesignModal = () => {
+  const openDesignModal = async () => {
     setDesignFiles([]);
     setDesignNotes('');
+    if (currentOrderId != null) {
+      try {
+        const o = await orderService.getOrderById(currentOrderId);
+        const opts = (o.pieces ?? []).map((p) => ({ value: p.id, label: p.name }));
+        setDesignPieceOptions(opts);
+        setDesignPieceId(opts[0]?.value ?? null);
+      } catch {
+        setDesignPieceOptions([]);
+        setDesignPieceId(null);
+      }
+    }
     setDesignModalOpen(true);
   };
 
@@ -316,6 +329,7 @@ const ChatPage: React.FC = () => {
         return;
       }
       await orderService.updateOrderDesign(currentOrderId, {
+        pieceId: designPieceId ?? undefined,
         designerId: user.id,
         designImages: images,
         designNotes: designNotes.trim() || undefined,
@@ -857,8 +871,17 @@ const ChatPage: React.FC = () => {
         destroyOnHidden
       >
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          提交后订单将自动推进到建模阶段，客户会在本会话收到设计稿确认卡片。
+          客户需按件确认全部设计稿后，订单才会进入建模阶段；提交后会在本会话生成对应单件的确认卡片。
         </Typography.Paragraph>
+        {designPieceOptions.length > 1 && (
+          <Select
+            style={{ width: '100%', marginBottom: 12 }}
+            placeholder="选择单件"
+            value={designPieceId ?? undefined}
+            options={designPieceOptions}
+            onChange={(v) => setDesignPieceId(v)}
+          />
+        )}
         <Upload
           listType="picture-card"
           accept="image/*"

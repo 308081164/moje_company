@@ -61,6 +61,8 @@ public class OrderCommandService {
     private final ConversationService conversationService;
     private final StorefrontWalletService storefrontWalletService;
     private final ReferralService referralService;
+    private final OrderPieceRepository orderPieceRepository;
+    private final OrderPieceService orderPieceService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -91,7 +93,8 @@ public class OrderCommandService {
                 .ifPresent(uid -> o.setSalesPre(userRepository.getReferenceById(uid)));
 
         orderRepository.save(o);
-        
+        orderPieceService.ensureDefaultPiece(o.getId());
+
         // 自动分配所有成员
         autoAssignmentService.autoAssignAll(o.getId());
         
@@ -203,9 +206,11 @@ public class OrderCommandService {
         }
         orderDetailRepository.save(od);
 
-        DesignInfo di = designInfoRepository.findByOrderId(orderId).orElseGet(() -> {
+        OrderPiece piece = orderPieceService.requirePiece(orderId, req.getPieceId());
+        DesignInfo di = designInfoRepository.findByPieceId(piece.getId()).orElseGet(() -> {
             DesignInfo d = new DesignInfo();
             d.setOrderId(orderId);
+            d.setPieceId(piece.getId());
             return d;
         });
         if (req.getProcessInfo() != null) {
@@ -233,21 +238,20 @@ public class OrderCommandService {
             conversationService.syncDesignerMember(orderId, newDesignerId);
         }
 
-        boolean advanced = tryAdvanceOrderAfterDesignerDesignSave(order);
-        if (advanced) {
-            clearModelerRejectToDesignerFields(orderId);
-            autoAssignmentService.ensureModelerAssigned(order);
-        }
+        boolean designSubmitted = req.getDesignImages() != null && !req.getDesignImages().isEmpty();
+        boolean advanced = tryAdvanceOrderToDesigning(order);
         orderRepository.save(order);
-        if (advanced) {
+        if (designSubmitted) {
+            String snapshot = buildImageSnapshotJson(req.getDesignImages());
+            String title = "设计稿 · " + piece.getName();
             orderEventService.record(orderId, OrderEventType.DESIGN_SUBMIT,
                     AccountKind.STAFF, requireUserId(), "DESIGNER",
-                    "设计师提交设计稿", req.getDesignNotes(), null, null);
+                    title, req.getDesignNotes(), null, null, piece.getId(), snapshot);
         }
-        auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息");
+        auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息（单件 " + piece.getName() + "）");
         if (advanced) {
-            auditLogService.log("ORDER_DESIGN_SUBMITTED", "ORDER", orderId,
-                    "设计师提交设计，订单状态已变更为 " + order.getStatus().name());
+            auditLogService.log("ORDER_DESIGN_IN_PROGRESS", "ORDER", orderId,
+                    "设计师保存设计，订单进入设计中");
         }
         return orderQueryService.getOrder(orderId);
     }
@@ -257,7 +261,8 @@ public class OrderCommandService {
      * 其他角色（如管理员、客服）编辑设计信息不会触发自动流转。
      * 若订单此前未写入 designer_id，设计师保存前会先被补全为当前登录员工（见 updateDesign）。
      */
-    private boolean tryAdvanceOrderAfterDesignerDesignSave(Order order) {
+    /** 设计师保存时仅推进到「设计中」，进入建模须客户确认全部单件设计稿。 */
+    private boolean tryAdvanceOrderToDesigning(Order order) {
         if (!SecurityUtils.currentRoleApi().filter("DESIGNER"::equals).isPresent()) {
             return false;
         }
@@ -265,17 +270,59 @@ public class OrderCommandService {
         if (uid == null || order.getDesigner() == null || !uid.equals(order.getDesigner().getId())) {
             return false;
         }
-        OrderStatus st = order.getStatus();
-        if (st == OrderStatus.PENDING_DESIGN) {
+        if (order.getStatus() == OrderStatus.PENDING_DESIGN) {
             order.transitionTo(OrderStatus.DESIGNING);
-            order.transitionTo(OrderStatus.PENDING_MODEL);
-            return true;
-        }
-        if (st == OrderStatus.DESIGNING) {
-            order.transitionTo(OrderStatus.PENDING_MODEL);
             return true;
         }
         return false;
+    }
+
+    /**
+     * 客户确认全部单件设计后，订单从设计阶段进入待建模。
+     */
+    @Transactional
+    public void tryAdvanceAfterAllDesignConfirmed(Order order) {
+        if (!orderPieceService.allDesignConfirmed(order.getId())) {
+            return;
+        }
+        OrderStatus st = order.getStatus();
+        if (st == OrderStatus.PENDING_DESIGN || st == OrderStatus.DESIGNING) {
+            if (st == OrderStatus.PENDING_DESIGN) {
+                order.transitionTo(OrderStatus.DESIGNING);
+            }
+            order.transitionTo(OrderStatus.PENDING_MODEL);
+            clearModelerRejectToDesignerFields(order.getId());
+            autoAssignmentService.ensureModelerAssigned(order);
+            orderRepository.save(order);
+        }
+    }
+
+    /**
+     * 客户确认全部单件建模后，订单进入待工艺验证。
+     */
+    @Transactional
+    public void tryAdvanceAfterAllModelConfirmed(Order order) {
+        if (!orderPieceService.allModelConfirmed(order.getId())) {
+            return;
+        }
+        OrderStatus st = order.getStatus();
+        if (st == OrderStatus.PENDING_MODEL || st == OrderStatus.MODELING) {
+            try {
+                order.transitionTo(OrderStatus.PENDING_REVIEW);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+            autoAssignmentService.ensureTrackerAssigned(order);
+            orderRepository.save(order);
+        }
+    }
+
+    private String buildImageSnapshotJson(List<String> images) {
+        try {
+            return objectMapper.writeValueAsString(Map.of("images", images != null ? images : List.of()));
+        } catch (JsonProcessingException e) {
+            return null;
+        }
     }
 
     private void clearModelerRejectToDesignerFields(long orderId) {
@@ -291,9 +338,11 @@ public class OrderCommandService {
         Order order = loadOrder(orderId);
         assertCanEditModel(order);
         assertReassignModeler(order, req.getModelerId());
-        ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElseGet(() -> {
+        OrderPiece piece = orderPieceService.requirePiece(orderId, req.getPieceId());
+        ModelingInfo mi = modelingInfoRepository.findByPieceId(piece.getId()).orElseGet(() -> {
             ModelingInfo m = new ModelingInfo();
             m.setOrderId(orderId);
+            m.setPieceId(piece.getId());
             return m;
         });
         if (req.getWeight() != null) {
@@ -316,21 +365,19 @@ public class OrderCommandService {
             SecurityUtils.currentStaffUserId().ifPresent(uid -> order.setModeler(userRepository.getReferenceById(uid)));
         }
         OrderStatus stBefore = order.getStatus();
-        if (stBefore == OrderStatus.PENDING_MODEL || stBefore == OrderStatus.MODELING) {
-            try {
-                order.transitionTo(OrderStatus.PENDING_REVIEW);
-            } catch (IllegalStateException e) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
-            }
-            autoAssignmentService.ensureTrackerAssigned(order);
+        if (stBefore == OrderStatus.PENDING_MODEL) {
+            order.transitionTo(OrderStatus.MODELING);
+        }
+        boolean modelSubmitted = req.getModelEffectImageUrls() != null && !req.getModelEffectImageUrls().isEmpty();
+        if (modelSubmitted) {
+            String snapshot = buildImageSnapshotJson(req.getModelEffectImageUrls());
+            String title = "建模稿 · " + piece.getName();
             orderEventService.record(orderId, OrderEventType.MODEL_SUBMIT,
                     AccountKind.STAFF, requireUserId(), SecurityUtils.currentRoleApi().orElse("MODELER"),
-                    "建模师提交建模稿", req.getModelNotes(), null, null);
-            auditLogService.log("ORDER_MODEL_TO_REVIEW", "ORDER", orderId,
-                    "建模师保存建模信息，订单进入待工艺验证（自 " + stBefore.name() + "）");
+                    title, req.getModelNotes(), null, null, piece.getId(), snapshot);
         }
         orderRepository.save(order);
-        auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息");
+        auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息（单件 " + piece.getName() + "）");
         return orderQueryService.getOrder(orderId);
     }
 
@@ -660,31 +707,41 @@ public class OrderCommandService {
             n.setDesignNotes(od.getDesignNotes());
             orderDetailRepository.save(n);
         });
-        designInfoRepository.findByOrderId(sourceId).ifPresent(di -> {
-            DesignInfo n = new DesignInfo();
-            n.setOrderId(neo.getId());
-            n.setProcessInfoJson(di.getProcessInfoJson());
-            n.setStoneInfoJson(di.getStoneInfoJson());
-            n.setDesignImagesJson(di.getDesignImagesJson());
-            n.setCustomerApproved(di.getCustomerApproved());
-            n.setApprovalTime(di.getApprovalTime());
-            n.setApprovalNotes(di.getApprovalNotes());
-            designInfoRepository.save(n);
-        });
-        modelingInfoRepository.findByOrderId(sourceId).ifPresent(mi -> {
-            ModelingInfo n = new ModelingInfo();
-            n.setOrderId(neo.getId());
-            n.setWeight(mi.getWeight());
-            n.setModelFilesJson(mi.getModelFilesJson());
-            n.setModelNotes(mi.getModelNotes());
-            n.setModelEffectImagesJson(mi.getModelEffectImagesJson());
-            n.setModelerRejectToDesignerMessage(mi.getModelerRejectToDesignerMessage());
-            n.setModelerRejectToDesignerFileIdsJson(mi.getModelerRejectToDesignerFileIdsJson());
-            n.setCustomerApproved(mi.getCustomerApproved());
-            n.setApprovalTime(mi.getApprovalTime());
-            n.setApprovalNotes(mi.getApprovalNotes());
-            modelingInfoRepository.save(n);
-        });
+        List<OrderPiece> sourcePieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(sourceId);
+        if (sourcePieces.isEmpty()) {
+            orderPieceService.ensureDefaultPiece(neo.getId());
+        } else {
+            for (OrderPiece sp : sourcePieces) {
+                OrderPiece np = new OrderPiece();
+                np.setOrderId(neo.getId());
+                np.setSeq(sp.getSeq());
+                np.setName(sp.getName());
+                np.setDesignConfirmed(false);
+                np.setModelConfirmed(false);
+                np.setReferenceImagesJson(sp.getReferenceImagesJson());
+                orderPieceRepository.save(np);
+
+                designInfoRepository.findByPieceId(sp.getId()).ifPresent(di -> {
+                    DesignInfo n = new DesignInfo();
+                    n.setOrderId(neo.getId());
+                    n.setPieceId(np.getId());
+                    n.setProcessInfoJson(di.getProcessInfoJson());
+                    n.setStoneInfoJson(di.getStoneInfoJson());
+                    n.setDesignImagesJson(di.getDesignImagesJson());
+                    designInfoRepository.save(n);
+                });
+                modelingInfoRepository.findByPieceId(sp.getId()).ifPresent(mi -> {
+                    ModelingInfo n = new ModelingInfo();
+                    n.setOrderId(neo.getId());
+                    n.setPieceId(np.getId());
+                    n.setWeight(mi.getWeight());
+                    n.setModelFilesJson(mi.getModelFilesJson());
+                    n.setModelNotes(mi.getModelNotes());
+                    n.setModelEffectImagesJson(mi.getModelEffectImagesJson());
+                    modelingInfoRepository.save(n);
+                });
+            }
+        }
         quotationRepository.findByOrderId(sourceId).ifPresent(q -> {
             Quotation n = new Quotation();
             n.setOrderId(neo.getId());

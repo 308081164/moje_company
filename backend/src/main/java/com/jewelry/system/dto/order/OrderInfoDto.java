@@ -19,6 +19,8 @@ public class OrderInfoDto {
 
     private OrderDesignBlockDto designInfo;
     private OrderModelBlockDto modelInfo;
+    /** 订单下各单件（含按件设计/建模块） */
+    private java.util.List<OrderPieceDto> pieces;
     private OrderReviewBlockDto reviewInfo;
     private OrderQuotationBlockDto quotationInfo;
 

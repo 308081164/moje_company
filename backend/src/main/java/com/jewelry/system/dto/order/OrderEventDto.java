@@ -11,6 +11,7 @@ import java.util.List;
 public class OrderEventDto {
     private Long id;
     private Long orderId;
+    private Long pieceId;
     private String eventType;
     private String actorType;
     private Long actorId;

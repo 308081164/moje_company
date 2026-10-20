@@ -5,6 +5,8 @@ import com.jewelry.system.dto.order.OrderEventDto;
 import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.dto.portal.CustomerOrderConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerOrderRejectRequest;
+import com.jewelry.system.dto.portal.CustomerPieceConfirmRequest;
+import com.jewelry.system.dto.portal.CustomerPieceRejectRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
 import com.jewelry.system.dto.portal.PortalCustomerOrderListItemDto;
@@ -67,6 +69,22 @@ public class PortalCustomerOrderController {
     @Operation(summary = "客户确认设计稿/建模稿（事后认可）")
     public ResponseEntity<Void> confirm(@PathVariable long orderId, @RequestBody CustomerOrderConfirmRequest req) {
         portalCustomerService.confirmOrder(orderId, req.getEventType());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{orderId}/pieces/{pieceId}/confirm")
+    @Operation(summary = "客户按件确认设计稿/建模稿")
+    public ResponseEntity<Void> confirmPiece(@PathVariable long orderId, @PathVariable long pieceId,
+                                             @RequestBody CustomerPieceConfirmRequest req) {
+        portalCustomerService.confirmPiece(orderId, pieceId, req.getEventType());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{orderId}/pieces/{pieceId}/reject")
+    @Operation(summary = "客户按件驳回设计稿/建模稿")
+    public ResponseEntity<Void> rejectPiece(@PathVariable long orderId, @PathVariable long pieceId,
+                                            @RequestBody CustomerPieceRejectRequest req) {
+        portalCustomerService.rejectPiece(orderId, pieceId, req.getEventType(), req.getReason());
         return ResponseEntity.ok().build();
     }
 

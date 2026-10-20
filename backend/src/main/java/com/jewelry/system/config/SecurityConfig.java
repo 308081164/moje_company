@@ -49,6 +49,8 @@ public class SecurityConfig {
                         .requestMatchers("/b2b/modeler/status").permitAll()
                         // WebSocket 握手无法带 Authorization；路径为 context-path 下的 /ws/**
                         .requestMatchers("/ws/**").permitAll()
+                        // 对象 key 含时间戳+随机段，缩略图用 <img> 无法带 JWT
+                        .requestMatchers(HttpMethod.GET, "/files/by-key/**", "/api/files/by-key/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

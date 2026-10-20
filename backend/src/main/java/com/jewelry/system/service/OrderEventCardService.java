@@ -11,7 +11,9 @@ import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.repository.B2BClientRepository;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
+import com.jewelry.system.entity.OrderPiece;
 import com.jewelry.system.repository.OrderEventRepository;
+import com.jewelry.system.repository.OrderPieceRepository;
 import com.jewelry.system.repository.PortalCustomerAccountRepository;
 import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.security.AccountKind;
@@ -38,6 +40,8 @@ public class OrderEventCardService {
     private final PortalCustomerAccountRepository portalCustomerAccountRepository;
     private final B2BClientRepository b2bClientRepository;
     private final OrderEventRepository orderEventRepository;
+    private final OrderPieceRepository orderPieceRepository;
+    private final OrderPieceService orderPieceService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -55,6 +59,7 @@ public class OrderEventCardService {
         return OrderEventDto.builder()
                 .id(event.getId())
                 .orderId(event.getOrderId())
+                .pieceId(event.getPieceId())
                 .eventType(event.getEventType().name())
                 .actorType(event.getActorType() != null ? event.getActorType().name() : null)
                 .actorId(event.getActorId())
@@ -88,8 +93,12 @@ public class OrderEventCardService {
             return null;
         }
         List<OrderEvent> later = orderEventRepository.findByOrderIdOrderByIdAsc(event.getOrderId());
+        Long pieceId = event.getPieceId();
         for (OrderEvent e : later) {
             if (e.getId() <= event.getId()) {
+                continue;
+            }
+            if (pieceId != null && e.getPieceId() != null && !pieceId.equals(e.getPieceId())) {
                 continue;
             }
             if (followers.contains(e.getEventType())) {
@@ -187,6 +196,10 @@ public class OrderEventCardService {
     }
 
     private List<String> resolveImages(OrderEvent event) {
+        List<String> fromSnapshot = parseSnapshotImages(event.getSnapshotJson());
+        if (!fromSnapshot.isEmpty()) {
+            return fromSnapshot;
+        }
         OrderEventType type = event.getEventType();
         if (type == null) {
             return List.of();
@@ -194,15 +207,30 @@ public class OrderEventCardService {
         try {
             switch (type) {
                 case DESIGN_SUBMIT, DESIGN_REJECT, DESIGN_CONFIRM -> {
+                    if (event.getPieceId() != null) {
+                        DesignInfo di = designInfoRepository.findByPieceId(event.getPieceId()).orElse(null);
+                        return parseStringList(di != null ? di.getDesignImagesJson() : null);
+                    }
                     DesignInfo di = designInfoRepository.findByOrderId(event.getOrderId()).orElse(null);
                     return parseStringList(di != null ? di.getDesignImagesJson() : null);
                 }
                 case MODEL_SUBMIT, MODEL_REJECT, MODEL_CONFIRM -> {
+                    if (event.getPieceId() != null) {
+                        ModelingInfo mi = modelingInfoRepository.findByPieceId(event.getPieceId()).orElse(null);
+                        return parseStringList(mi != null ? mi.getModelEffectImagesJson() : null);
+                    }
                     ModelingInfo mi = modelingInfoRepository.findByOrderId(event.getOrderId()).orElse(null);
                     return parseStringList(mi != null ? mi.getModelEffectImagesJson() : null);
                 }
                 case STATUS_CHANGE -> {
                     // 来图定制/设计师设计的订单创建事件：展示客户上传的参考图/灵感图
+                    List<OrderPiece> pieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(event.getOrderId());
+                    if (!pieces.isEmpty()) {
+                        List<String> refs = orderPieceService.parseReferenceImages(pieces.get(0));
+                        if (!refs.isEmpty()) {
+                            return refs;
+                        }
+                    }
                     DesignInfo di = designInfoRepository.findByOrderId(event.getOrderId()).orElse(null);
                     return parseStringList(di != null ? di.getDesignImagesJson() : null);
                 }
@@ -214,6 +242,22 @@ public class OrderEventCardService {
             log.warn("解析事件卡片图片失败 eventId={}", event.getId(), e);
             return List.of();
         }
+    }
+
+    private List<String> parseSnapshotImages(String snapshotJson) {
+        if (!StringUtils.hasText(snapshotJson)) {
+            return List.of();
+        }
+        try {
+            var node = objectMapper.readTree(snapshotJson);
+            if (node.has("images") && node.get("images").isArray()) {
+                return objectMapper.convertValue(node.get("images"),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+            }
+        } catch (Exception e) {
+            log.warn("解析事件快照图片失败: {}", snapshotJson, e);
+        }
+        return List.of();
     }
 
     private List<String> parseStringList(String json) {

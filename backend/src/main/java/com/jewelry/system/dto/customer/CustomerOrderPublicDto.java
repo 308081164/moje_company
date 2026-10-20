@@ -46,4 +46,7 @@ public class CustomerOrderPublicDto {
 
     /** 寄售买家实付售价（非寄售单为 null） */
     private BigDecimal salePrice;
+
+    /** 按件进度（设计/建模确认与图片） */
+    private List<CustomerOrderPublicPieceDto> pieces;
 }

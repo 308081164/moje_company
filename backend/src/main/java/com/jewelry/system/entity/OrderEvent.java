@@ -26,6 +26,9 @@ public class OrderEvent {
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
+    @Column(name = "piece_id")
+    private Long pieceId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 30)
     private OrderEventType eventType;

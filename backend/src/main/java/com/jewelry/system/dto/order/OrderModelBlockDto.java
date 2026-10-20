@@ -10,6 +10,7 @@ import java.util.List;
 public class OrderModelBlockDto {
     private Long id;
     private Long orderId;
+    private Long pieceId;
     private Long modelerId;
     private String modelerName;
     private Double weight;

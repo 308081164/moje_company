@@ -43,6 +43,8 @@ public class StorefrontService {
     private final ConversationService conversationService;
     private final OrderEventService orderEventService;
     private final StorefrontWalletService walletService;
+    private final OrderPieceRepository orderPieceRepository;
+    private final OrderPieceService orderPieceService;
     private final SellerWalletRepository walletRepository;
     private final SellerWithdrawRequestRepository withdrawRepository;
     private final ReferralService referralService;
@@ -345,8 +347,7 @@ public class StorefrontService {
         if (order.getSource() == OrderSource.MARKETPLACE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "寄售复产订单不能再次上架");
         }
-        ModelingInfo mi = modelingInfoRepository.findByOrderId(orderId).orElse(null);
-        boolean modeled = mi != null && Boolean.TRUE.equals(mi.getCustomerApproved());
+        boolean modeled = orderPieceService.allModelConfirmed(orderId);
         boolean lateStage = order.getStatus() == OrderStatus.PENDING_PRODUCTION
                 || order.getStatus() == OrderStatus.PRODUCING
                 || order.getStatus() == OrderStatus.COMPLETED;
@@ -367,27 +368,70 @@ public class StorefrontService {
     }
 
     private void copyDesignAndModel(Long fromOrderId, Long toOrderId) {
-        designInfoRepository.findByOrderId(fromOrderId).ifPresent(src -> {
-            DesignInfo di = new DesignInfo();
-            di.setOrderId(toOrderId);
-            di.setProcessInfoJson(src.getProcessInfoJson());
-            di.setStoneInfoJson(src.getStoneInfoJson());
-            di.setDesignImagesJson(src.getDesignImagesJson());
-            di.setCustomerApproved(true);
-            di.setApprovalTime(LocalDateTime.now());
-            designInfoRepository.save(di);
-        });
-        modelingInfoRepository.findByOrderId(fromOrderId).ifPresent(src -> {
-            ModelingInfo mi = new ModelingInfo();
-            mi.setOrderId(toOrderId);
-            mi.setWeight(src.getWeight());
-            mi.setModelFilesJson(src.getModelFilesJson());
-            mi.setModelNotes(src.getModelNotes());
-            mi.setModelEffectImagesJson(src.getModelEffectImagesJson());
-            mi.setCustomerApproved(true);
-            mi.setApprovalTime(LocalDateTime.now());
-            modelingInfoRepository.save(mi);
-        });
+        List<OrderPiece> sourcePieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(fromOrderId);
+        if (sourcePieces.isEmpty()) {
+            OrderPiece np = orderPieceService.ensureDefaultPiece(toOrderId);
+            np.setDesignConfirmed(true);
+            np.setModelConfirmed(true);
+            orderPieceRepository.save(np);
+            designInfoRepository.findByOrderId(fromOrderId).ifPresent(src -> {
+                DesignInfo di = new DesignInfo();
+                di.setOrderId(toOrderId);
+                di.setPieceId(np.getId());
+                di.setProcessInfoJson(src.getProcessInfoJson());
+                di.setStoneInfoJson(src.getStoneInfoJson());
+                di.setDesignImagesJson(src.getDesignImagesJson());
+                di.setCustomerApproved(true);
+                di.setApprovalTime(LocalDateTime.now());
+                designInfoRepository.save(di);
+            });
+            modelingInfoRepository.findByOrderId(fromOrderId).ifPresent(src -> {
+                ModelingInfo mi = new ModelingInfo();
+                mi.setOrderId(toOrderId);
+                mi.setPieceId(np.getId());
+                mi.setWeight(src.getWeight());
+                mi.setModelFilesJson(src.getModelFilesJson());
+                mi.setModelNotes(src.getModelNotes());
+                mi.setModelEffectImagesJson(src.getModelEffectImagesJson());
+                mi.setCustomerApproved(true);
+                mi.setApprovalTime(LocalDateTime.now());
+                modelingInfoRepository.save(mi);
+            });
+            return;
+        }
+        for (OrderPiece sp : sourcePieces) {
+            OrderPiece np = new OrderPiece();
+            np.setOrderId(toOrderId);
+            np.setSeq(sp.getSeq());
+            np.setName(sp.getName());
+            np.setDesignConfirmed(true);
+            np.setModelConfirmed(true);
+            np.setReferenceImagesJson(sp.getReferenceImagesJson());
+            orderPieceRepository.save(np);
+            designInfoRepository.findByPieceId(sp.getId()).ifPresent(src -> {
+                DesignInfo di = new DesignInfo();
+                di.setOrderId(toOrderId);
+                di.setPieceId(np.getId());
+                di.setProcessInfoJson(src.getProcessInfoJson());
+                di.setStoneInfoJson(src.getStoneInfoJson());
+                di.setDesignImagesJson(src.getDesignImagesJson());
+                di.setCustomerApproved(true);
+                di.setApprovalTime(LocalDateTime.now());
+                designInfoRepository.save(di);
+            });
+            modelingInfoRepository.findByPieceId(sp.getId()).ifPresent(src -> {
+                ModelingInfo mi = new ModelingInfo();
+                mi.setOrderId(toOrderId);
+                mi.setPieceId(np.getId());
+                mi.setWeight(src.getWeight());
+                mi.setModelFilesJson(src.getModelFilesJson());
+                mi.setModelNotes(src.getModelNotes());
+                mi.setModelEffectImagesJson(src.getModelEffectImagesJson());
+                mi.setCustomerApproved(true);
+                mi.setApprovalTime(LocalDateTime.now());
+                modelingInfoRepository.save(mi);
+            });
+        }
     }
 
     private StorefrontListingDto toDto(StorefrontListing listing) {

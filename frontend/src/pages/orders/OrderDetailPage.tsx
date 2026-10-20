@@ -41,7 +41,14 @@ import {
   savedImageUrlsToUploadFileList,
 } from '@/utils/orderUploadFileList';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
-import type { CustomerProgressLinkResponse, FileInfo, OrderInfo, OrderShipmentDto, ProcessInfo } from '@/types/order';
+import type {
+  CustomerProgressLinkResponse,
+  FileInfo,
+  OrderInfo,
+  OrderPieceInfo,
+  OrderShipmentDto,
+  ProcessInfo,
+} from '@/types/order';
 import { OrderSource, OrderStatus, ProcessType } from '@/types/order';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
@@ -184,6 +191,9 @@ const OrderDetailPage: React.FC = () => {
   const [modelSaveLoading, setModelSaveLoading] = useState(false);
   const [shipment, setShipment] = useState<OrderShipmentDto | null>(null);
   const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [activePieceId, setActivePieceId] = useState<number | null>(null);
+  const activePieceIdRef = useRef<number | null>(null);
+
   const [flipTodoOnly, setFlipTodoOnly] = useState(() => {
     try {
       return window.localStorage.getItem('orderDetailFlipTodoOnly') === '1';
@@ -290,6 +300,36 @@ const OrderDetailPage: React.FC = () => {
     }
   }, []);
 
+  const applyPieceData = useCallback(
+    (o: OrderInfo, pieceId: number | null) => {
+      const pieces = o.pieces ?? [];
+      const piece = pieces.find((p) => p.id === pieceId) ?? pieces[0];
+      const design = piece?.design ?? o.designInfo;
+      const model = piece?.model ?? o.modelInfo;
+      setDesignImageFileList(savedImageUrlsToUploadFileList(design?.designImages || [], '设计图'));
+      setEngravingImageFileList(savedImageUrlsToUploadFileList(design?.engravingImages || [], '字印图'));
+      setModelEffectImageFileList(savedImageUrlsToUploadFileList(model?.modelEffectImages || [], '效果图'));
+      setModelSourceFileList(modelSourceUploadListFromSaved(model?.modelFiles));
+      if (design) {
+        designForm.setFieldsValue({
+          designerId: design.designerId,
+          engravingText: design.engravingText,
+          materialType: design.materialType,
+          handSize: design.handSize,
+          designNotes: design.designNotes,
+        });
+      }
+      if (model) {
+        modelForm.setFieldsValue({
+          modelerId: model.modelerId,
+          weight: model.weight,
+          modelNotes: model.modelNotes,
+        });
+      }
+    },
+    [designForm, modelForm]
+  );
+
   const refresh = useCallback(async () => {
     if (!orderId || Number.isNaN(orderId)) return;
     setLoading(true);
@@ -297,27 +337,12 @@ const OrderDetailPage: React.FC = () => {
       const o = await orderService.getOrderById(orderId);
       latestOrderRef.current = o;
       setOrder(o);
-      setDesignImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.designImages || [], '设计图'));
-      setEngravingImageFileList(savedImageUrlsToUploadFileList(o.designInfo?.engravingImages || [], '字印图'));
-      setModelEffectImageFileList(savedImageUrlsToUploadFileList(o.modelInfo?.modelEffectImages || [], '效果图'));
-      setModelSourceFileList(modelSourceUploadListFromSaved(o.modelInfo?.modelFiles));
-
-      if (o.designInfo) {
-        designForm.setFieldsValue({
-          designerId: o.designInfo.designerId,
-          engravingText: o.designInfo.engravingText,
-          materialType: o.designInfo.materialType,
-          handSize: o.designInfo.handSize,
-          designNotes: o.designInfo.designNotes,
-        });
-      }
-      if (o.modelInfo) {
-        modelForm.setFieldsValue({
-          modelerId: o.modelInfo.modelerId,
-          weight: o.modelInfo.weight,
-          modelNotes: o.modelInfo.modelNotes,
-        });
-      }
+      const prevPid = activePieceIdRef.current;
+      const nextPid =
+        prevPid && o.pieces?.some((p) => p.id === prevPid) ? prevPid : o.pieces?.[0]?.id ?? null;
+      activePieceIdRef.current = nextPid;
+      setActivePieceId(nextPid);
+      applyPieceData(o, nextPid);
       if (o.reviewInfo) {
         reviewForm.setFieldsValue({
           trackerId: o.reviewInfo.trackerId,
@@ -365,7 +390,7 @@ const OrderDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [orderId, designForm, modelForm, reviewForm, quoteForm]);
+  }, [orderId, designForm, modelForm, reviewForm, quoteForm, applyPieceData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -627,6 +652,7 @@ const OrderDetailPage: React.FC = () => {
       };
     });
     await orderService.updateOrderDesign(orderId, {
+      pieceId: activePieceId ?? undefined,
       designerId: v.designerId,
       engravingText: v.engravingText,
       engravingImages: collectDoneImageUrlsFromFileList(engravingImageFileList),
@@ -643,7 +669,9 @@ const OrderDetailPage: React.FC = () => {
   const canShareCustomerProgress = useMemo(() => {
     if (!order || (!isDesigner && !isAdmin)) return false;
     if (isDesigner && !canOperateDesign) return false;
-    const hasDesignImgs = (order.designInfo?.designImages?.length ?? 0) > 0;
+    const hasDesignImgs =
+      (order.pieces?.some((p) => (p.design?.designImages?.length ?? 0) > 0) ?? false) ||
+      (order.designInfo?.designImages?.length ?? 0) > 0;
     const st = order.currentStatus as OrderStatus;
     const lateEnough =
       st === OrderStatus.PENDING_MODEL ||
@@ -720,17 +748,14 @@ const OrderDetailPage: React.FC = () => {
         .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
       setModelSaveLoading(true);
       const updated = await orderService.updateOrderModel(orderId, {
+        pieceId: activePieceId ?? undefined,
         modelerId: v.modelerId,
         weight: v.weight,
         modelNotes: v.modelNotes,
         modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
         modelSourceFileIds: sourceIds,
       });
-      if (updated.currentStatus === OrderStatus.PENDING_REVIEW) {
-        message.success('建模信息已保存，订单已进入「待工艺验证」');
-      } else {
-        message.success('建模信息已保存');
-      }
+      message.success('建模信息已保存');
       refresh();
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) {
@@ -889,12 +914,61 @@ const OrderDetailPage: React.FC = () => {
     []
   );
 
+  const onAddPiece = async () => {
+    const name = window.prompt('单件名称（如男戒、女戒、项链）');
+    if (!name?.trim()) return;
+    try {
+      await orderService.createOrderPiece(orderId, name.trim());
+      message.success('已添加单件');
+      await refresh();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    }
+  };
+
+  const renderPieceBar = (canEdit: boolean) => {
+    const pieces: OrderPieceInfo[] = order?.pieces ?? [];
+    if (pieces.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+          单件切换（每单最多 5 件）
+        </Typography.Text>
+        <Space wrap>
+          {pieces.map((p) => (
+            <Tag
+              key={p.id}
+              color={p.id === activePieceId ? 'gold' : 'default'}
+              style={{ cursor: 'pointer', padding: '4px 10px' }}
+              onClick={() => {
+                if (!order) return;
+                activePieceIdRef.current = p.id;
+                setActivePieceId(p.id);
+                applyPieceData(order, p.id);
+              }}
+            >
+              {p.name}
+              {p.designConfirmed ? ' ·设计已确认' : ''}
+              {p.modelConfirmed ? ' ·建模已确认' : ''}
+            </Tag>
+          ))}
+          {canEdit && pieces.length < 5 && (
+            <Button size="small" icon={<PlusOutlined />} onClick={() => void onAddPiece()}>
+              添加单件
+            </Button>
+          )}
+        </Space>
+      </div>
+    );
+  };
+
   const getTaskForm = () => {
     if (!order) return null;
 
     if (isDesigner) {
       return (
         <div style={{ maxWidth: 720 }}>
+          {renderPieceBar(canOperateDesign)}
           {!canOperateDesign && (
             <Alert
               type="info"
@@ -1033,6 +1107,7 @@ const OrderDetailPage: React.FC = () => {
         order.currentStatus === OrderStatus.PENDING_MODEL || order.currentStatus === OrderStatus.MODELING;
       return (
         <div style={{ maxWidth: 720 }}>
+          {renderPieceBar(canOperateModel)}
           {!canOperateModel && (
             <Alert
               type="info"

@@ -40,8 +40,16 @@ public class OrderEventService {
     @Transactional
     public OrderEvent record(Long orderId, OrderEventType type, AccountKind actorType, Long actorId, String actorRole,
                              String title, String content, String reason, List<Long> fileIds) {
+        return record(orderId, type, actorType, actorId, actorRole, title, content, reason, fileIds, null, null);
+    }
+
+    @Transactional
+    public OrderEvent record(Long orderId, OrderEventType type, AccountKind actorType, Long actorId, String actorRole,
+                             String title, String content, String reason, List<Long> fileIds,
+                             Long pieceId, String snapshotJson) {
         OrderEvent event = new OrderEvent();
         event.setOrderId(orderId);
+        event.setPieceId(pieceId);
         event.setEventType(type);
         event.setActorType(actorType);
         event.setActorId(actorId);
@@ -50,6 +58,7 @@ public class OrderEventService {
         event.setContent(content);
         event.setReason(reason);
         event.setFileIdsJson(serializeFileIds(fileIds));
+        event.setSnapshotJson(snapshotJson);
         event = eventRepository.save(event);
         if (StringUtils.hasText(title)) {
             conversationService.pushEventMessage(orderId, event.getId(), title, actorType, actorId, actorRole);
@@ -70,6 +79,12 @@ public class OrderEventService {
     @Transactional
     public OrderEventDto rejectByCustomer(Long orderId, OrderEventType type, AccountKind actorType, Long actorId,
                                           String actorRole, String reason) {
+        return rejectByCustomer(orderId, type, actorType, actorId, actorRole, reason, null, null);
+    }
+
+    @Transactional
+    public OrderEventDto rejectByCustomer(Long orderId, OrderEventType type, AccountKind actorType, Long actorId,
+                                          String actorRole, String reason, Long pieceId, String title) {
         if (type != OrderEventType.DESIGN_REJECT && type != OrderEventType.MODEL_REJECT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "驳回类型不正确");
         }
@@ -79,8 +94,9 @@ public class OrderEventService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
 
+        String eventTitle = StringUtils.hasText(title) ? title : type.getDescription();
         OrderEvent event = record(orderId, type, actorType, actorId, actorRole,
-                type.getDescription(), reason, reason, null);
+                eventTitle, reason, reason, null, pieceId, null);
 
         OrderRejectionFlow flow = new OrderRejectionFlow();
         flow.setOrderId(orderId);

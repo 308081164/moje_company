@@ -28,6 +28,7 @@ public class OrderQueryService {
     private final ProcessReviewRepository processReviewRepository;
     private final QuotationRepository quotationRepository;
     private final OrderDetailAssembler orderDetailAssembler;
+    private final OrderPieceRepository orderPieceRepository;
 
     @Transactional(readOnly = true)
     public Page<OrderInfoDto> pageOrders(
@@ -56,9 +57,12 @@ public class OrderQueryService {
         OrderDetail od = orderDetailRepository.findByOrderId(id).orElse(null);
         DesignInfo di = designInfoRepository.findByOrderId(id).orElse(null);
         ModelingInfo mi = modelingInfoRepository.findByOrderId(id).orElse(null);
+        List<DesignInfo> allDesign = designInfoRepository.findAllByOrderId(id);
+        List<ModelingInfo> allModel = modelingInfoRepository.findAllByOrderId(id);
+        List<OrderPiece> pieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(id);
         ProcessReview pr = processReviewRepository.findTopByOrderIdOrderByIdDesc(id).orElse(null);
         Quotation q = quotationRepository.findByOrderId(id).orElse(null);
-        return orderDetailAssembler.enrich(dto, o, od, di, mi, pr, q);
+        return orderDetailAssembler.enrich(dto, o, od, di, mi, pr, q, pieces, allDesign, allModel);
     }
 
     @Transactional(readOnly = true)
