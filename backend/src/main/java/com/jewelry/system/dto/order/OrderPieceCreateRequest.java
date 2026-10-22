@@ -7,4 +7,6 @@ import lombok.Data;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderPieceCreateRequest {
     private String name;
+    /** RING / NECKLACE / EARRING / BROOCH / BRACELET / OTHER */
+    private String jewelryType;
 }

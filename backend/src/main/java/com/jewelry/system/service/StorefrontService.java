@@ -3,10 +3,12 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.conversation.ConversationDto;
 import com.jewelry.system.dto.storefront.*;
 import com.jewelry.system.entity.*;
+import com.jewelry.system.enums.JewelryType;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
+import com.jewelry.system.util.JewelryTypeRules;
 import com.jewelry.system.repository.*;
 import com.jewelry.system.security.AccountKind;
 import com.jewelry.system.util.SecurityUtils;
@@ -33,6 +35,7 @@ public class StorefrontService {
     private final SysConfigRepository sysConfigRepository;
     private final StorefrontListingRepository listingRepository;
     private final OrderRepository orderRepository;
+    private final OrderDetailRepository orderDetailRepository;
     private final PortalCustomerOrderBindingRepository bindingRepository;
     private final PortalCustomerAccountRepository accountRepository;
     private final DesignInfoRepository designInfoRepository;
@@ -62,8 +65,10 @@ public class StorefrontService {
     }
 
     @Transactional(readOnly = true)
-    public List<StorefrontListingDto> publicListings() {
+    public List<StorefrontListingDto> publicListings(String jewelryTypeFilter) {
+        JewelryType filter = JewelryType.parse(jewelryTypeFilter);
         return listingRepository.findByStatusOrderByUpdatedAtDesc("PUBLISHED").stream()
+                .filter(l -> filter == null || filter.equals(l.getJewelryType()))
                 .map(this::toDto)
                 .toList();
     }
@@ -110,6 +115,7 @@ public class StorefrontService {
         listing.setShippingFeeMin(fees.getShippingFeeMin());
         listing.setShippingFeeMax(fees.getShippingFeeMax());
         listing.setCoverImageUrl(resolveCover(source));
+        listing.setJewelryType(resolveListingJewelryType(source.getId()));
         listing.setStatus("PUBLISHED");
         if (listing.getSoldCount() == null) {
             listing.setSoldCount(0);
@@ -179,6 +185,8 @@ public class StorefrontService {
         if (!"PUBLISHED".equals(listing.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该商品已下架");
         }
+        JewelryType listingType = listing.getJewelryType();
+        JewelryTypeRules.validateBuyerSize(listingType, req != null ? req.getBuyerSize() : null);
         if (listing.getSellerAccountId().equals(buyerId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能购买自己发布的商品");
         }
@@ -210,7 +218,9 @@ public class StorefrontService {
         }
         String note = req != null && StringUtils.hasText(req.getNote()) ? req.getNote().trim() : "";
         String addr = req != null && StringUtils.hasText(req.getShippingAddress()) ? req.getShippingAddress().trim() : "";
+        String buyerSize = req != null && StringUtils.hasText(req.getBuyerSize()) ? req.getBuyerSize().trim() : "";
         order.setBasicRequirements("独立站寄售复产：" + listing.getTitle()
+                + (buyerSize.isBlank() ? "" : "\n买家规格：" + buyerSize)
                 + (addr.isBlank() ? "" : "\n收货地址：" + addr)
                 + (note.isBlank() ? "" : "\n备注：" + note));
         order.setStyleInfo(source.getStyleInfo());
@@ -233,10 +243,18 @@ public class StorefrontService {
         binding.setBindSource("STOREFRONT_PURCHASE");
         bindingRepository.save(binding);
 
-        // 个人推广码（选填）：以售价为佣金基数，统一 5%
-        referralService.bindOnOrder(buyerId, req != null ? req.getReferralCode() : null, order, listing.getSalePrice());
+        // 独立站商城订单不适用 C 端个人推广码（仅珠宝单件定制下单支持）
+        if (req != null && StringUtils.hasText(req.getReferralCode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "独立站商城订单不支持推广码");
+        }
 
         copyDesignAndModel(source.getId(), order.getId());
+        if (StringUtils.hasText(buyerSize)) {
+            orderDetailRepository.findByOrderId(order.getId()).ifPresent(od -> {
+                od.setHandSize(buyerSize);
+                orderDetailRepository.save(od);
+            });
+        }
 
         LocalDateTime now = LocalDateTime.now();
         if (source.getDesignCompletedTime() != null) {
@@ -407,6 +425,7 @@ public class StorefrontService {
             np.setDesignConfirmed(true);
             np.setModelConfirmed(true);
             np.setReferenceImagesJson(sp.getReferenceImagesJson());
+            np.setJewelryType(sp.getJewelryType());
             orderPieceRepository.save(np);
             designInfoRepository.findByPieceId(sp.getId()).ifPresent(src -> {
                 DesignInfo di = new DesignInfo();
@@ -438,6 +457,7 @@ public class StorefrontService {
         String sellerName = accountRepository.findById(listing.getSellerAccountId())
                 .map(a -> StringUtils.hasText(a.getDisplayName()) ? a.getDisplayName() : "duxury maker")
                 .orElse("duxury maker");
+        JewelryType jt = listing.getJewelryType();
         return StorefrontListingDto.builder()
                 .id(listing.getId())
                 .sourceOrderId(listing.getSourceOrderId())
@@ -453,7 +473,22 @@ public class StorefrontService {
                 .soldCount(listing.getSoldCount())
                 .createdAt(listing.getCreatedAt() != null ? ISO.format(listing.getCreatedAt()) : null)
                 .sellerDisplayName(sellerName)
+                .jewelryType(jt != null ? jt.name() : null)
+                .buyerSizeVisible(JewelryTypeRules.buyerNeedsSizeInput(jt))
+                .buyerSizeRequired(JewelryTypeRules.buyerSizeRequired(jt))
                 .build();
+    }
+
+    private JewelryType resolveListingJewelryType(long sourceOrderId) {
+        List<OrderPiece> pieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(sourceOrderId);
+        if (pieces.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "订单尚无单件，无法上架");
+        }
+        JewelryType type = pieces.get(0).getJewelryType();
+        if (type == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先在设计中为作品选择珠宝类型后再上架");
+        }
+        return type;
     }
 
     private String resolveCover(Order source) {

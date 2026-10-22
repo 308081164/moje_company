@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Popover } from 'antd';
-import { ReloadOutlined, SendOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
+import { List, Input, Button, Avatar, Tag, Empty, Space, Typography, Spin, message, Modal, Popover, Segmented } from 'antd';
+import { ArrowLeftOutlined, ReloadOutlined, SendOutlined, FileTextOutlined, FormOutlined, SmileOutlined } from '@ant-design/icons';
 import ChatDesignSubmitModal from '@/components/ChatDesignSubmitModal';
 import type { InputRef } from 'antd/es/input';
 import { conversationService } from '@/services/conversationService';
 import { Conversation, ConversationMember, ConversationMessage, OrderEventCard } from '@/types/conversation';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, useIsAdmin } from '@/stores/authStore';
 import { conversationSocket, setActiveConversationId } from '@/services/conversationSocket';
 
 const { Text } = Typography;
@@ -20,6 +20,7 @@ const roleColor: Record<string, string> = {
   ADMIN: 'magenta',
   SALES_PRE: 'orange',
   SUPER_SERVICE: 'magenta',
+  AI_ASSISTANT: 'cyan',
 };
 
 const roleHex: Record<string, string> = {
@@ -30,6 +31,7 @@ const roleHex: Record<string, string> = {
   SALES_PRE: '#f59e0b',
   FOLLOW_UP: '#22a5f7',
   SUPER_SERVICE: '#c026d3',
+  AI_ASSISTANT: '#0d9488',
   ADMIN: '#c026d3',
   SYSTEM: '#999999',
 };
@@ -46,6 +48,8 @@ const EVENT_STYLE: Record<string, { color: string; label: string }> = {
   QUOTATION: { color: '#f59e0b', label: '报价' },
   PRODUCTION_LOG: { color: '#22a5f7', label: '生产跟单' },
   SHIPPED: { color: '#2ea043', label: '已发货' },
+  SHIPPING_ADDRESS_REQUEST: { color: '#22a5f7', label: '收货信息' },
+  SHIPPING_ADDRESS_FILLED: { color: '#2ea043', label: '已填收货信息' },
   DELIVERED: { color: '#2ea043', label: '已签收' },
   STATUS_CHANGE: { color: '#6b7280', label: '状态' },
   DELIVERY_CONFIRM: { color: '#2ea043', label: '交付' },
@@ -55,6 +59,14 @@ const EVENT_STYLE: Record<string, { color: string; label: string }> = {
 
 const eventStyleOf = (eventType?: string) =>
   EVENT_STYLE[eventType || ''] || { color: '#6b7280', label: '事件' };
+
+const isCraftReviewEvent = (eventType?: string) =>
+  eventType === 'REVIEW_PASS' || eventType === 'REVIEW_REJECT';
+
+const eventPreviewImages = (images?: string[], eventType?: string) => {
+  if (isCraftReviewEvent(eventType)) return [];
+  return (images || []).filter((src) => !String(src).startsWith('data:image/svg'));
+};
 
 const STATUS_COLOR: Record<string, string> = {
   PENDING_DESIGN: '#f59e0b',
@@ -75,8 +87,17 @@ const EMOJI_LIST = (
   '👍 👎 🙏 👌 ✌️ 🤝 💪 🙌 👏 💍 💎 🌹 🌸 ⭐ ✨ 🔥 🎉 🎊 ❤️ 💖 💕 💯 ✅ ❓ ❗ 🎁'
 ).split(' ');
 
+type ChatTier = 'phone' | 'tablet' | 'desktop';
+
+function readChatTier(): ChatTier {
+  if (typeof window === 'undefined') return 'desktop';
+  if (window.innerWidth < 768) return 'phone';
+  if (window.innerWidth < 1200) return 'tablet';
+  return 'desktop';
+}
+
 const EmojiPickerContent: React.FC<{ onPick: (emoji: string) => void }> = ({ onPick }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2, width: 300 }}>
+  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 2, width: 'min(300px, 70vw)' }}>
     {EMOJI_LIST.map((emo) => (
       <Button
         key={emo}
@@ -98,8 +119,33 @@ const SERVICE_TYPE_COLOR: Record<string, string> = {
 
 const serviceTypeColorOf = (type?: string) => SERVICE_TYPE_COLOR[type || ''] || '#6b7280';
 
+function mergeThread(
+  prev: ConversationMessage[],
+  incoming: ConversationMessage[],
+  conversationId: number
+): ConversationMessage[] {
+  const prevSame = prev.length > 0 && prev[0].conversationId === conversationId;
+  const map = new Map<number, ConversationMessage>();
+  if (prevSame) {
+    for (const message of prev) map.set(message.id, message);
+  }
+  for (const message of incoming) {
+    const old = map.get(message.id);
+    map.set(
+      message.id,
+      old
+        ? { ...old, ...message, translatedContent: message.translatedContent || old.translatedContent }
+        : message
+    );
+  }
+  return Array.from(map.values()).sort((a, b) => a.id - b.id);
+}
+
+type AdminChatPersona = 'SUPER_SERVICE' | 'DESIGNER' | 'MODELER';
+
 const ChatPage: React.FC = () => {
   const { user } = useAuthStore();
+  const isAdmin = useIsAdmin();
   const location = useLocation();
   const navigate = useNavigate();
   const [designModalOpen, setDesignModalOpen] = useState(false);
@@ -115,12 +161,20 @@ const ChatPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [translations, setTranslations] = useState<Record<number, string>>({});
   const [detail, setDetail] = useState<ConversationMessage | null>(null);
+  const [detailIndex, setDetailIndex] = useState(0);
   const [filter, setFilter] = useState<'all' | 'designing' | 'done'>('all');
   const [includeAll, setIncludeAll] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   // 同步追踪当前会话 id，避免 markRead 回调里的闭包读到过期值导致无限循环
   const currentIdRef = useRef<number | null>(null);
+  const threadRef = useRef<{ id: number | null; messages: ConversationMessage[] }>({ id: null, messages: [] });
   const includeAllRef = useRef(false);
+  const [chatPersona, setChatPersona] = useState<AdminChatPersona>('SUPER_SERVICE');
+  const [tier, setTier] = useState<ChatTier>(readChatTier);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const tierRef = useRef(tier);
+  tierRef.current = tier;
+  const chatSearchRef = useRef(location.search);
 
   // 受限角色（设计师/跟单员）需要「获取全部记录」入口
   const isRestrictedRole = user?.role === 'DESIGNER' || user?.role === 'TRACKER';
@@ -131,17 +185,60 @@ const ChatPage: React.FC = () => {
       setConversations(list);
       if (list.length && currentIdRef.current == null) {
         const pending = (location.state as { conversationId?: number } | null)?.conversationId;
-        const target = pending != null ? list.find((c) => c.id === pending) : list[0];
-        void selectConversation(target || list[0]);
+        const target = pending != null ? list.find((c) => c.id === pending) : undefined;
+        if (target) {
+          void selectConversation(target);
+        } else if (tierRef.current !== 'phone') {
+          void selectConversation(list[0]);
+        }
       }
     } catch (e) {
       console.error('获取会话列表失败', e);
     }
   };
 
-  const selectConversation = async (conv: Conversation) => {
+  const publishThread = (conversationId: number, incoming: ConversationMessage[]) => {
+    const switched = threadRef.current.id !== conversationId;
+    const prev = switched ? [] : threadRef.current.messages;
+    const merged = mergeThread(prev, incoming, conversationId);
+    const same =
+      prev.length === merged.length &&
+      prev.every(
+        (message, index) =>
+          message.id === merged[index]?.id &&
+          message.content === merged[index]?.content &&
+          message.translatedContent === merged[index]?.translatedContent
+      );
+    threadRef.current = { id: conversationId, messages: merged };
+    conversationSocket.noteSnapshot(conversationId, merged);
+    if ((switched || !same) && currentIdRef.current === conversationId) setMessages(merged);
+    return merged;
+  };
+
+  const selectConversation = async (conv: Conversation, opts?: { skipHistory?: boolean }) => {
+    const phone = window.innerWidth < 768;
+    if (phone) {
+      setThreadOpen(true);
+      if (!opts?.skipHistory) {
+        const params = new URLSearchParams(location.search);
+        if (params.get('c') !== String(conv.id)) {
+          // 手机从列表进入会话时压入历史，系统返回先回到列表
+          navigate({ pathname: '/chat', search: `?c=${conv.id}` });
+        }
+      }
+      const shell = (window.__mojeShellBackState ||= {});
+      shell.chatThreadOpen = true;
+      shell.chatHistoryPushed = new URLSearchParams(window.location.hash.split('?')[1] || '').get('c') != null;
+      shell.closeChatThread = () => {
+        setThreadOpen(false);
+        if (new URLSearchParams(window.location.hash.split('?')[1] || '').get('c')) {
+          navigate({ pathname: '/chat', search: '' }, { replace: true });
+        }
+      };
+    }
     const id = conv.id;
     currentIdRef.current = id;
+    setActiveConversationId(id);
     setCurrentId(id);
     setCurrentConv(conv);
     setLoading(true);
@@ -150,7 +247,8 @@ const ChatPage: React.FC = () => {
         conversationService.getMessages(id, includeAllRef.current),
         conversationService.getMembers(id),
       ]);
-      setMessages(msgs);
+      if (currentIdRef.current !== id) return;
+      publishThread(id, msgs);
       setMembers(mems);
       conversationService.markRead(id).then(loadConversations).catch(() => {});
     } catch (e) {
@@ -168,7 +266,7 @@ const ChatPage: React.FC = () => {
       setLoading(true);
       try {
         const msgs = await conversationService.getMessages(currentId, next);
-        setMessages(msgs);
+        if (currentIdRef.current === currentId) publishThread(currentId, msgs);
       } catch (e) {
         console.error('获取全部记录失败', e);
       } finally {
@@ -176,6 +274,16 @@ const ChatPage: React.FC = () => {
       }
     }
   };
+
+  useEffect(() => {
+    const onResize = () => {
+      const next = readChatTier();
+      tierRef.current = next;
+      setTier(next);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     void loadConversations();
@@ -193,34 +301,135 @@ const ChatPage: React.FC = () => {
   }, [currentId]);
 
   useEffect(() => {
-    const pending = (location.state as { conversationId?: number } | null)?.conversationId;
+    const state = location.state as { conversationId?: number; chatAsRole?: AdminChatPersona } | null;
+    const pending = state?.conversationId;
     if (pending == null || pending === currentIdRef.current) return;
     const conv = conversations.find((c) => c.id === pending);
     if (conv) void selectConversation(conv);
-  }, [conversations, location.state]);
+    if (state?.chatAsRole && isAdmin) {
+      setChatPersona(state.chatAsRole);
+    }
+  }, [conversations, location.state, isAdmin]);
+
+  // 手机返回栈：#/chat?c=id 被弹出时回到会话列表
+  useEffect(() => {
+    const prev = chatSearchRef.current;
+    chatSearchRef.current = location.search;
+    if (tier !== 'phone') return;
+    const prevC = new URLSearchParams(prev).get('c');
+    const nextC = new URLSearchParams(location.search).get('c');
+    if (prevC && !nextC) {
+      setThreadOpen(false);
+      return;
+    }
+    if (!nextC) return;
+    setThreadOpen(true);
+    const id = Number(nextC);
+    if (!Number.isFinite(id) || currentIdRef.current === id) return;
+    const conv = conversations.find((item) => item.id === id);
+    if (conv) void selectConversation(conv, { skipHistory: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tier, location.search, conversations]);
 
   useEffect(() => {
-    return conversationSocket.subscribe((payload) => {
+    const phoneThread = tier === 'phone' && threadOpen;
+    const pushed = phoneThread && new URLSearchParams(location.search).get('c') != null;
+    const state = (window.__mojeShellBackState ||= {});
+    state.chatThreadOpen = phoneThread;
+    state.chatHistoryPushed = pushed;
+    state.chatDetailOpen = detail != null;
+    state.chatDesignOpen = designModalOpen;
+    state.closeChatDetail = () => setDetail(null);
+    state.closeChatDesign = () => setDesignModalOpen(false);
+    state.closeChatThread = () => {
+      setThreadOpen(false);
+      if (new URLSearchParams(window.location.hash.split('?')[1] || '').get('c')) {
+        navigate({ pathname: '/chat', search: '' }, { replace: true });
+      }
+    };
+  }, [tier, threadOpen, location.search, detail, designModalOpen]);
+
+  useEffect(() => {
+    return () => {
+      const state = window.__mojeShellBackState;
+      if (!state) return;
+      state.chatThreadOpen = false;
+      state.chatHistoryPushed = false;
+      state.chatDetailOpen = false;
+      state.chatDesignOpen = false;
+      state.closeChatDetail = undefined;
+      state.closeChatDesign = undefined;
+      state.closeChatThread = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    conversationSocket.setIncludeAll(includeAllRef.current);
+    const unsubscribe = conversationSocket.subscribe((payload) => {
       if (payload?.type === 'MESSAGE_TRANSLATED' && payload.data) {
         const messageId = Number(payload.data.messageId);
         const translatedContent = String(payload.data.translatedContent || '');
         if (!messageId || !translatedContent) return;
-        setMessages((prev) =>
-          prev.map((item) => (item.id === messageId ? { ...item, translatedContent } : item))
-        );
+        const conversationId = currentIdRef.current;
+        if (conversationId != null && threadRef.current.id === conversationId) {
+          publishThread(
+            conversationId,
+            threadRef.current.messages.map((item) =>
+              item.id === messageId ? { ...item, translatedContent } : item
+            )
+          );
+        } else {
+          setMessages((prev) =>
+            prev.map((item) => (item.id === messageId ? { ...item, translatedContent } : item))
+          );
+        }
         return;
       }
       if (payload?.type !== 'MESSAGE' || !payload.data) return;
       const incoming = payload.data as ConversationMessage;
       if (!incoming?.id || incoming.conversationId == null) return;
       if (incoming.conversationId === currentIdRef.current) {
-        setMessages((prev) => (prev.some((item) => item.id === incoming.id) ? prev : [...prev, incoming]));
+        publishThread(incoming.conversationId, [incoming]);
         conversationService.markRead(incoming.conversationId).catch(() => {});
       }
       void loadConversations();
     });
+    const unsubscribeList = conversationSocket.onConversationList((list) => {
+      setConversations((prev) => {
+        if (
+          prev.length === list.length &&
+          prev.every(
+            (item, index) =>
+              item.id === list[index]?.id &&
+              item.lastMessage === list[index]?.lastMessage &&
+              item.unreadCount === list[index]?.unreadCount &&
+              item.orderStatus === list[index]?.orderStatus
+          )
+        ) {
+          return prev;
+        }
+        return list;
+      });
+    });
+    const unsubscribeSync = conversationSocket.onMessagesSynced((conversationId, msgs) => {
+      if (conversationId !== currentIdRef.current) return;
+      publishThread(conversationId, msgs);
+    });
+    return () => {
+      unsubscribe();
+      unsubscribeList();
+      unsubscribeSync();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    conversationSocket.setIncludeAll(includeAll);
+  }, [includeAll]);
+
+  useEffect(() => {
+    setDetailIndex(0);
+  }, [detail?.id]);
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -254,8 +463,12 @@ const ChatPage: React.FC = () => {
     if (!text || currentId == null) return;
     setSending(true);
     try {
-      const msg = await conversationService.sendMessage(currentId, text);
-      setMessages((prev) => (prev.some((item) => item.id === msg.id) ? prev : [...prev, msg]));
+      const msg = await conversationService.sendMessage(
+        currentId,
+        text,
+        isAdmin ? { chatAsRole: chatPersona } : undefined
+      );
+      publishThread(currentId, [msg]);
       setInput('');
       void loadConversations();
     } catch (e) {
@@ -269,6 +482,9 @@ const ChatPage: React.FC = () => {
     m.senderType === 'STAFF' && m.senderId === (user?.id ?? -1) && m.role !== 'SYSTEM';
 
   const currentOrderId = currentConv?.orderId ?? null;
+  const orderDesignerUserId = members.find((m) => m.role === 'DESIGNER')?.accountId;
+  const canSubmitDesignFromChat =
+    currentOrderId != null && (user?.role === 'DESIGNER' || (isAdmin && chatPersona === 'DESIGNER'));
 
   const goOrderTask = () => {
     if (currentOrderId != null) navigate(`/orders/${currentOrderId}`);
@@ -281,7 +497,7 @@ const ChatPage: React.FC = () => {
   const onDesignSubmitted = async () => {
     if (currentIdRef.current != null) {
       const msgs = await conversationService.getMessages(currentIdRef.current, includeAllRef.current);
-      setMessages(msgs);
+      publishThread(currentIdRef.current, msgs);
     }
     void loadConversations();
   };
@@ -318,12 +534,27 @@ const ChatPage: React.FC = () => {
     }
   };
 
+  const showList = tier !== 'phone' || !threadOpen;
+  const showThread = tier !== 'phone' || threadOpen;
+
+  const closePhoneThread = () => {
+    if (new URLSearchParams(location.search).get('c')) {
+      navigate(-1);
+      return;
+    }
+    setThreadOpen(false);
+  };
+
   return (
     <div
+      className={`chat-page chat-page--${tier}`}
       style={{
         display: 'flex',
-        height: 'calc(100vh - 188px)',
-        minHeight: 480,
+        flex: 1,
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
+        width: '100%',
         background: '#fff',
         borderRadius: 8,
         overflow: 'hidden',
@@ -331,14 +562,16 @@ const ChatPage: React.FC = () => {
       }}
     >
       <div
+        className="chat-list"
         style={{
-          width: 280,
-          borderRight: '1px solid #f0f0f0',
-          display: 'flex',
+          width: tier === 'phone' ? '100%' : tier === 'tablet' ? 248 : 280,
+          borderRight: showThread ? '1px solid #f0f0f0' : 'none',
+          display: showList ? 'flex' : 'none',
           flexDirection: 'column',
           flexShrink: 0,
           height: '100%',
           minHeight: 0,
+          minWidth: 0,
         }}
       >
         <div style={{ padding: 12, borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
@@ -351,7 +584,7 @@ const ChatPage: React.FC = () => {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+        <div className="chat-filters" style={{ display: 'flex', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
           {(['all', 'designing', 'done'] as const).map((f) => (
             <Button
               key={f}
@@ -467,9 +700,19 @@ const ChatPage: React.FC = () => {
       </div>
 
       <div
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', minHeight: 0 }}
+        className="chat-thread"
+        style={{
+          flex: 1,
+          display: showThread ? 'flex' : 'none',
+          flexDirection: 'column',
+          minWidth: 0,
+          width: tier === 'phone' ? '100%' : undefined,
+          height: '100%',
+          minHeight: 0,
+        }}
       >
         <div
+          className="chat-thread__head"
           style={{
             padding: '12px 16px',
             borderBottom: '1px solid #f0f0f0',
@@ -477,11 +720,17 @@ const ChatPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
             gap: 12,
             background: 'linear-gradient(180deg, #fff 0%, #fafafa 100%)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: '1 1 160px' }}>
+            {tier === 'phone' && (
+              <Button type="text" icon={<ArrowLeftOutlined />} onClick={closePhoneThread}>
+                会话
+              </Button>
+            )}
             {currentConv && (
               <>
                 <Avatar style={{ background: statusColorOf(currentConv.orderStatus), color: '#fff', flexShrink: 0 }}>
@@ -511,13 +760,13 @@ const ChatPage: React.FC = () => {
               </>
             )}
           </div>
-          <Space wrap style={{ flexShrink: 0 }}>
+          <Space wrap className="chat-thread__actions" style={{ flex: tier === 'phone' ? '1 1 100%' : '1 1 auto', minWidth: 0, justifyContent: 'flex-end' }}>
             {currentOrderId != null && (
               <Button size="small" icon={<FileTextOutlined />} onClick={goOrderTask}>
                 我的任务
               </Button>
             )}
-            {currentOrderId != null && user?.role === 'DESIGNER' && (
+            {canSubmitDesignFromChat && (
               <Button size="small" type="primary" icon={<FormOutlined />} onClick={openDesignModal}>
                 提交设计稿
               </Button>
@@ -605,10 +854,17 @@ const ChatPage: React.FC = () => {
                             {ev.title}
                           </div>
                         )}
-                        {(ev.images || []).length > 0 && (
+                        {isCraftReviewEvent(ev.eventType) && (
+                          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
+                            {ev.eventType === 'REVIEW_REJECT'
+                              ? '跟单工艺验证未通过，需按说明修改'
+                              : '跟单工艺验证已通过'}
+                          </div>
+                        )}
+                        {eventPreviewImages(ev.images, ev.eventType).length > 0 && (
                           <div style={{ position: 'relative', marginBottom: 8 }}>
                             <img
-                              src={ev.images![0]}
+                              src={eventPreviewImages(ev.images, ev.eventType)[0]}
                               alt="design"
                               style={{
                                 width: '100%',
@@ -619,7 +875,7 @@ const ChatPage: React.FC = () => {
                                 boxShadow: '0 4px 14px rgba(0,0,0,0.10)',
                               }}
                             />
-                            {ev.images!.length > 1 && (
+                            {eventPreviewImages(ev.images, ev.eventType).length > 1 && (
                               <span
                                 style={{
                                   position: 'absolute',
@@ -632,7 +888,7 @@ const ChatPage: React.FC = () => {
                                   borderRadius: 99,
                                 }}
                               >
-                                +{ev.images!.length - 1}
+                                +{eventPreviewImages(ev.images, ev.eventType).length - 1}
                               </span>
                             )}
                           </div>
@@ -767,7 +1023,36 @@ const ChatPage: React.FC = () => {
           )}
         </div>
 
-        <div style={{ padding: 12, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 8, flexShrink: 0 }}>
+        {isAdmin && currentId != null && (
+          <div
+            className="chat-persona"
+            style={{
+              padding: '8px 12px 0',
+              borderTop: '1px solid #f0f0f0',
+              flexShrink: 0,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Text type="secondary" style={{ fontSize: 12, marginRight: 8 }}>
+              发送身份
+            </Text>
+            <Segmented
+              size="small"
+              value={chatPersona}
+              onChange={(v) => setChatPersona(v as AdminChatPersona)}
+              options={[
+                { label: '超级客服', value: 'SUPER_SERVICE' },
+                { label: '设计师', value: 'DESIGNER' },
+                { label: '建模师', value: 'MODELER' },
+              ]}
+            />
+          </div>
+        )}
+
+        <div className="chat-composer" style={{ padding: 12, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <Popover
             content={<EmojiPickerContent onPick={(emo) => { insertEmoji(emo); setEmojiOpen(false); }} />}
             trigger="click"
@@ -784,6 +1069,7 @@ const ChatPage: React.FC = () => {
             onPressEnter={() => void send()}
             placeholder="输入消息…"
             disabled={currentId == null}
+            style={{ flex: '1 1 140px', minWidth: 0 }}
           />
           <Button
             type="primary"
@@ -800,7 +1086,7 @@ const ChatPage: React.FC = () => {
       <ChatDesignSubmitModal
         open={designModalOpen}
         orderId={currentOrderId}
-        designerUserId={user?.id}
+        designerUserId={user?.role === 'DESIGNER' ? user?.id : orderDesignerUserId}
         onClose={() => setDesignModalOpen(false)}
         onSubmitted={() => void onDesignSubmitted()}
       />
@@ -833,13 +1119,38 @@ const ChatPage: React.FC = () => {
               <div style={{ fontSize: 12, color: '#999', marginBottom: 14 }}>
                 {senderName} · {detail.createdAt ? new Date(detail.createdAt).toLocaleString() : ''}
               </div>
-              {(ev.images || []).length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-                  {ev.images!.map((img, i) => (
-                    <img key={i} src={img} alt="" style={{ width: '100%', borderRadius: 10, border: '1px solid #eee' }} />
-                  ))}
-                </div>
-              )}
+              {eventPreviewImages(ev.images, ev.eventType).length > 0 && (() => {
+                const imgs = eventPreviewImages(ev.images, ev.eventType);
+                const index = Math.min(detailIndex, imgs.length - 1);
+                return (
+                  <div style={{ position: 'relative', marginBottom: 14, background: '#f6f6f6', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={imgs[index]} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    </div>
+                    {imgs.length > 1 && (
+                      <>
+                        <Button
+                          shape="circle"
+                          style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}
+                          onClick={() => setDetailIndex((index - 1 + imgs.length) % imgs.length)}
+                        >
+                          ‹
+                        </Button>
+                        <Button
+                          shape="circle"
+                          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}
+                          onClick={() => setDetailIndex((index + 1) % imgs.length)}
+                        >
+                          ›
+                        </Button>
+                        <span style={{ position: 'absolute', right: 10, bottom: 8, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 99, fontSize: 12, padding: '2px 8px' }}>
+                          {index + 1} / {imgs.length}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
               {ev.content && (
                 <div style={{ fontSize: 14, lineHeight: 1.6, color: '#3a3a3a', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {ev.content}

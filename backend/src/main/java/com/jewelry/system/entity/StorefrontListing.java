@@ -1,7 +1,10 @@
 package com.jewelry.system.entity;
 
+import com.jewelry.system.enums.JewelryType;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -33,6 +36,11 @@ public class StorefrontListing {
 
     @Column(name = "cover_image_url", length = 1000)
     private String coverImageUrl;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "jewelry_type", length = 32)
+    private JewelryType jewelryType;
 
     @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal salePrice;

@@ -1,7 +1,10 @@
 package com.jewelry.system.entity;
 
+import com.jewelry.system.enums.JewelryType;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -25,6 +28,11 @@ public class OrderPiece {
 
     @Column(nullable = false, length = 50)
     private String name;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "jewelry_type", length = 32)
+    private JewelryType jewelryType;
 
     @Column(name = "design_confirmed", nullable = false)
     private Boolean designConfirmed = false;

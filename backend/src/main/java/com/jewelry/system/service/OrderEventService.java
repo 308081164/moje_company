@@ -66,9 +66,44 @@ public class OrderEventService {
         return event;
     }
 
+    /** 是否存在尚未结清的尾款支付请求（有 BALANCE_PAYMENT 且其后无 BALANCE_PAID）。 */
+    @Transactional(readOnly = true)
+    public boolean hasOpenBalancePayment(long orderId) {
+        boolean open = false;
+        for (OrderEvent e : eventRepository.findByOrderIdOrderByIdAsc(orderId)) {
+            if (e.getEventType() == OrderEventType.BALANCE_PAYMENT) {
+                open = true;
+            } else if (e.getEventType() == OrderEventType.BALANCE_PAID) {
+                open = false;
+            }
+        }
+        return open;
+    }
+
+    /** 客户不可见：内部驳回，以及驳回后在内部交回下游的记录。 */
+    public static boolean isHiddenFromCustomer(String eventType, String title) {
+        if ("REVIEW_REJECT".equals(eventType)) {
+            return true;
+        }
+        if (!"STATUS_CHANGE".equals(eventType) || title == null) {
+            return false;
+        }
+        return "建模师驳回给设计师".equals(title)
+                || "设计师已修改并交回建模师".equals(title)
+                || "建模师已修改并交回跟单员".equals(title);
+    }
+
+    public static boolean isHiddenFromCustomer(OrderEvent event) {
+        if (event == null || event.getEventType() == null) {
+            return false;
+        }
+        return isHiddenFromCustomer(event.getEventType().name(), event.getTitle());
+    }
+
     @Transactional(readOnly = true)
     public List<OrderEventDto> listByOrder(Long orderId) {
         return eventRepository.findByOrderIdOrderByIdAsc(orderId).stream()
+                .filter(e -> !isHiddenFromCustomer(e))
                 .map(this::toDto)
                 .toList();
     }
@@ -153,6 +188,27 @@ public class OrderEventService {
             log.warn("解析事件操作者姓名失败 type={} id={}", type, accountId, e);
             return null;
         }
+    }
+
+    /** 客户首次提交收货信息时发确认卡；再次修改则更新同一张卡的内容。 */
+    @Transactional
+    public void saveShippingAddressNotice(Long orderId, AccountKind actorType, Long actorId, String summary) {
+        OrderEvent existing = null;
+        for (OrderEvent event : eventRepository.findByOrderIdOrderByIdAsc(orderId)) {
+            if (event.getEventType() == OrderEventType.SHIPPING_ADDRESS_FILLED) {
+                existing = event;
+            }
+        }
+        if (existing == null) {
+            record(orderId, OrderEventType.SHIPPING_ADDRESS_FILLED, actorType, actorId, "CUSTOMER",
+                    "已提交收货信息", summary, null, null);
+            return;
+        }
+        existing.setContent(summary);
+        existing.setActorType(actorType);
+        existing.setActorId(actorId);
+        existing.setActorRole("CUSTOMER");
+        eventRepository.save(existing);
     }
 
     private String serializeFileIds(List<Long> fileIds) {

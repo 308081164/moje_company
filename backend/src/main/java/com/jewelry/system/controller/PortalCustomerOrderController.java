@@ -1,12 +1,15 @@
 package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
+import com.jewelry.system.dto.portal.CustomerShippingAddressDto;
+import com.jewelry.system.dto.portal.CustomerShippingAddressRequest;
 import com.jewelry.system.dto.order.OrderEventDto;
 import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.dto.portal.CustomerOrderConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerOrderRejectRequest;
 import com.jewelry.system.dto.portal.CustomerPieceConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerPieceRejectRequest;
+import com.jewelry.system.dto.portal.CustomerQuotationOptionsRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
 import com.jewelry.system.dto.portal.PortalCustomerOrderListItemDto;
@@ -102,9 +105,31 @@ public class PortalCustomerOrderController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{orderId}/quotation-options")
+    @Operation(summary = "建模确认后选择买断/证书/保密并生成最终报价与尾款")
+    public ResponseEntity<Void> submitQuotationOptions(@PathVariable long orderId,
+                                                       @RequestBody CustomerQuotationOptionsRequest req) {
+        portalCustomerService.submitQuotationOptions(orderId, req);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/{orderId}/shipment")
     @Operation(summary = "查询订单物流（客户，须已绑定）")
     public ResponseEntity<OrderShipmentDto> shipment(@PathVariable long orderId) {
         return ResponseEntity.ok(portalCustomerService.getOrderShipment(orderId));
+    }
+
+    @GetMapping("/{orderId}/shipping-address")
+    @Operation(summary = "查询客户收货信息（须已绑定）")
+    public ResponseEntity<CustomerShippingAddressDto> shippingAddress(@PathVariable long orderId) {
+        return ResponseEntity.ok(portalCustomerService.getShippingAddress(orderId));
+    }
+
+    @PostMapping("/{orderId}/shipping-address")
+    @Operation(summary = "客户提交收货信息")
+    public ResponseEntity<CustomerShippingAddressDto> submitShippingAddress(
+            @PathVariable long orderId,
+            @RequestBody CustomerShippingAddressRequest body) {
+        return ResponseEntity.ok(portalCustomerService.submitShippingAddress(orderId, body));
     }
 }

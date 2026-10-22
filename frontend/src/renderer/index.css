@@ -25,20 +25,24 @@ body {
   overflow: hidden;
 }
 
-/* ========== 浏览器 / PWA 移动体验（Electron 不受影响：主要为 WebView 与手机 Safari/Chrome） ========== */
-@media (max-width: 767px) {
+/* 手机/平板：外壳锁在视口内，只让主内容滚动，避免整页滚出底部导航 */
+@media (max-width: 1199px) {
   html,
   body {
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
+    height: 100%;
+    overflow: hidden;
   }
 
   #root,
   #app {
-    min-height: 100%;
-    height: auto !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden;
   }
+}
 
+/* ========== 浏览器 / PWA 移动体验（Electron 不受影响：主要为 WebView 与手机 Safari/Chrome） ========== */
+@media (max-width: 767px) {
   .ant-btn {
     min-height: 40px;
   }

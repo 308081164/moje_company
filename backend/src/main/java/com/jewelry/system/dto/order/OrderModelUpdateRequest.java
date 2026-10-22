@@ -17,4 +17,13 @@ public class OrderModelUpdateRequest {
     private List<String> modelEffectImageUrls;
     /** 源文件：本订单下已上传文件的 ID（通常为 MODEL 类型） */
     private List<Long> modelSourceFileIds;
+    /** 保存时写入历史版本（草稿） */
+    private Boolean createVersion;
+    private String versionLabel;
+    /** 为 true 时提交客户审阅（发送建模稿事件卡片） */
+    private Boolean submitToCustomer;
+    /**
+     * 跟单驳回后的修改：不发给客户，直接交回跟单员做工艺验证。
+     */
+    private Boolean submitToTracker;
 }

@@ -8,7 +8,12 @@ import java.util.Optional;
 
 public interface DesignInfoRepository extends JpaRepository<DesignInfo, Long> {
 
-    Optional<DesignInfo> findByOrderId(Long orderId);
+    Optional<DesignInfo> findFirstByOrderIdOrderByIdAsc(Long orderId);
+
+    /** 兼容旧调用：一单多件时取最早一条设计记录，避免 NonUniqueResultException */
+    default Optional<DesignInfo> findByOrderId(Long orderId) {
+        return findFirstByOrderIdOrderByIdAsc(orderId);
+    }
 
     Optional<DesignInfo> findByPieceId(Long pieceId);
 

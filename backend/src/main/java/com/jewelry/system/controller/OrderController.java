@@ -34,6 +34,7 @@ public class OrderController {
     private final OrderCommandService orderCommandService;
     private final OrderPieceService orderPieceService;
     private final DesignVersionService designVersionService;
+    private final ModelVersionService modelVersionService;
     private final OrderConfigurationService orderConfigurationService;
     private final OrderStatisticsService orderStatisticsService;
     private final EmployeeStatisticsService employeeStatisticsService;
@@ -116,6 +117,14 @@ public class OrderController {
         Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
         return orderQueryService.pageTrackerProducing(pageable, uid, isB2b);
+    }
+
+    @GetMapping("/workbench/tracker/to-ship")
+    @Operation(summary = "跟单员工作台-已完成待发货")
+    public Page<OrderInfoDto> trackerToShip(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
+        Long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerAwaitingShipment(pageable, uid, isB2b);
     }
 
     @GetMapping("/{id:\\d+}/production-follow-logs")
@@ -228,6 +237,7 @@ public class OrderController {
                         .orderId(p.getOrderId())
                         .seq(p.getSeq())
                         .name(p.getName())
+                        .jewelryType(p.getJewelryType() != null ? p.getJewelryType().name() : null)
                         .designConfirmed(p.getDesignConfirmed())
                         .modelConfirmed(p.getModelConfirmed())
                         .referenceImages(orderPieceService.parseReferenceImages(p))
@@ -239,12 +249,16 @@ public class OrderController {
     @Operation(summary = "添加订单单件（最多 5 件）")
     public OrderPieceDto createPiece(@PathVariable long id, @RequestBody OrderPieceCreateRequest body) {
         orderQueryService.getOrder(id);
-        OrderPiece piece = orderPieceService.createPiece(id, body != null ? body.getName() : null);
+        OrderPiece piece = orderPieceService.createPiece(
+                id,
+                body != null ? body.getName() : null,
+                com.jewelry.system.enums.JewelryType.parse(body != null ? body.getJewelryType() : null));
         return OrderPieceDto.builder()
                 .id(piece.getId())
                 .orderId(piece.getOrderId())
                 .seq(piece.getSeq())
                 .name(piece.getName())
+                .jewelryType(piece.getJewelryType() != null ? piece.getJewelryType().name() : null)
                 .designConfirmed(piece.getDesignConfirmed())
                 .modelConfirmed(piece.getModelConfirmed())
                 .build();
@@ -254,12 +268,17 @@ public class OrderController {
     @Operation(summary = "重命名单件")
     public OrderPieceDto renamePiece(@PathVariable long id, @PathVariable long pieceId,
                                      @RequestBody OrderPieceRenameRequest body) {
-        OrderPiece piece = orderPieceService.renamePiece(id, pieceId, body != null ? body.getName() : null);
+        OrderPiece piece = orderPieceService.updatePieceMeta(
+                id,
+                pieceId,
+                body != null ? body.getName() : null,
+                com.jewelry.system.enums.JewelryType.parse(body != null ? body.getJewelryType() : null));
         return OrderPieceDto.builder()
                 .id(piece.getId())
                 .orderId(piece.getOrderId())
                 .seq(piece.getSeq())
                 .name(piece.getName())
+                .jewelryType(piece.getJewelryType() != null ? piece.getJewelryType().name() : null)
                 .designConfirmed(piece.getDesignConfirmed())
                 .modelConfirmed(piece.getModelConfirmed())
                 .build();
@@ -295,6 +314,26 @@ public class OrderController {
     @Operation(summary = "更新建模信息")
     public OrderInfoDto updateModel(@PathVariable long id, @RequestBody OrderModelUpdateRequest body) {
         return orderCommandService.updateModel(id, body);
+    }
+
+    @GetMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/model-versions")
+    @Operation(summary = "单件建模稿历史版本列表")
+    public List<OrderModelVersionDto> listModelVersions(@PathVariable long id, @PathVariable long pieceId) {
+        return modelVersionService.listVersions(id, pieceId);
+    }
+
+    @GetMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/model-versions/{versionId:\\d+}")
+    @Operation(summary = "建模稿版本详情")
+    public OrderModelVersionDto getModelVersion(@PathVariable long id, @PathVariable long pieceId,
+                                                @PathVariable long versionId) {
+        return modelVersionService.getVersion(id, pieceId, versionId);
+    }
+
+    @PostMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/model-versions/{versionId:\\d+}/restore")
+    @Operation(summary = "将历史建模版本恢复为当前编辑稿（不自动提交客户）")
+    public OrderInfoDto restoreModelVersion(@PathVariable long id, @PathVariable long pieceId,
+                                             @PathVariable long versionId) {
+        return orderCommandService.restoreModelVersion(id, pieceId, versionId);
     }
 
     @PutMapping("/{id:\\d+}/review")

@@ -14,5 +14,8 @@ public class OrderProductionFollowLogDto {
     private String authorName;
     private String note;
     private List<Long> imageFileIds;
+    private String processCode;
+    private String processLabel;
+    private Long pieceId;
     private String createdAt;
 }

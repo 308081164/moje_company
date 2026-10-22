@@ -333,6 +333,49 @@ public class OrderFileService {
                 .build();
     }
 
+    /** 现场工序照片池：先入库，回公司后再匹配到具体订单单件。 */
+    @Transactional
+    public FileInfoDto uploadProcessPoolImage(MultipartFile file, String processCode, Long uploaderId) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件不能为空");
+        }
+        if (!minioStorageService.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "对象存储未就绪");
+        }
+        NormalizedUpload normalized = ImageUploadSupport.normalizeRasterUpload(file);
+        MultipartFile uploadFile = normalized.file();
+        String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "photo.jpg";
+        String uploadName = uploadFile.getOriginalFilename() != null ? uploadFile.getOriginalFilename() : original;
+        String ext = "";
+        int dot = uploadName.lastIndexOf('.');
+        if (dot >= 0) {
+            ext = uploadName.substring(dot);
+        }
+        String storedFileName = buildStandardStoredFileName(0L, "PROCESS_POOL", original, ext);
+        String objectKey = "process-pool/" + uploaderId + "/" + processCode + "/" + storedFileName;
+        String url;
+        try {
+            url = minioStorageService.uploadObject(objectKey, uploadFile);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "上传文件到对象存储失败", e);
+        }
+        FileEntity entity = new FileEntity();
+        entity.setFileName(storedFileName);
+        entity.setOriginalName(original);
+        entity.setFilePath(objectKey);
+        entity.setFileUrl(url);
+        entity.setFileSize(uploadFile.getSize());
+        entity.setFileType("PROCESS_POOL");
+        if (dot >= 0) {
+            entity.setFileExtension(uploadName.substring(dot + 1));
+        }
+        entity.setRelatedType(FileRelatedType.OTHER);
+        entity.setRelatedId(uploaderId);
+        entity.setUploaderId(uploaderId);
+        fileEntityRepository.save(entity);
+        return toDto(entity);
+    }
+
     private Order requireOrder(long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));

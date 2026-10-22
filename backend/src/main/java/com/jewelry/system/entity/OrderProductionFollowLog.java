@@ -29,6 +29,12 @@ public class OrderProductionFollowLog {
     @Column(name = "image_file_ids_json", columnDefinition = "TEXT")
     private String imageFileIdsJson;
 
+    @Column(name = "process_code", length = 32)
+    private String processCode;
+
+    @Column(name = "piece_id")
+    private Long pieceId;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -24,6 +24,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import SocialPublishPage from '@/pages/SocialPublishPage';
 import AppLayout from '@/components/layout/AppLayout';
 import './App.css';
+import './styles/staffResponsive.css';
 
 const App: React.FC = () => {
   const { isAuthenticated, user, loading: authLoading, checkAuth } = useAuthStore();
@@ -214,7 +215,10 @@ const App: React.FC = () => {
             {/* 直接渲染默认首页，避免某些环境下重定向导致 Outlet 空白 */}
             <Route index element={<DashboardPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="chat" element={<ChatPage />} />
+            <Route
+              path="chat"
+              element={user?.role === 'MODELER' ? <Navigate to="/dashboard" replace /> : <ChatPage />}
+            />
             <Route path="workbench" element={<WorkbenchPage />} />
             <Route
               path="workbench/tracker-follow-up"

@@ -38,6 +38,11 @@ public final class OrderApiMapper {
                 .customerContact(contact)
                 .customerName(o.getCustomerName())
                 .customerWechat(o.getCustomerWechat())
+                .shippingRecipient(o.getShippingRecipient())
+                .shippingPhone(o.getShippingPhone())
+                .shippingCountry(o.getShippingCountry())
+                .shippingAddress(o.getShippingAddress())
+                .shippingPostalCode(o.getShippingPostalCode())
                 .build();
 
         User salesMid = o.getSalesMid();

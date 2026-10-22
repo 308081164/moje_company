@@ -75,6 +75,7 @@ const ModelingArchivePoolPage: React.FC = () => {
         rowKey={(r) => String(r.baseInfo?.id ?? r.baseInfo?.orderNumber ?? Math.random())}
         columns={columns}
         dataSource={rows}
+        scroll={{ x: 'max-content' }}
         pagination={{
           current: page + 1,
           pageSize: size,

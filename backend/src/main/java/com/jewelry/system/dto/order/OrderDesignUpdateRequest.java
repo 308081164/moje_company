@@ -29,4 +29,8 @@ public class OrderDesignUpdateRequest {
      * 未传时：有 designImages 则视为提交（兼容旧客户端）；显式 false 则仅保存草稿。
      */
     private Boolean submitToCustomer;
+    /**
+     * 建模师驳回后的修改：不发给客户，直接交回建模师。
+     */
+    private Boolean submitToModeler;
 }

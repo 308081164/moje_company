@@ -143,6 +143,7 @@ const BulkExportPage: React.FC = () => {
           loading={loadingPreview}
           columns={previewColumns}
           dataSource={previewRows}
+          scroll={{ x: 'max-content' }}
           pagination={previewRows.length > 20 ? { pageSize: 20 } : false}
           locale={{ emptyText: '请先选择条件后点击「查询预览」' }}
         />

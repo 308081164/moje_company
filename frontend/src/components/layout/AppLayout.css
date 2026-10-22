@@ -188,7 +188,7 @@
 }
 
 .app-layout--mobile .content-wrapper {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 12px;
 }
 
 .mobile-bottom-nav {
@@ -207,10 +207,39 @@
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
 }
 
-.mobile-bottom-nav .ant-btn {
-  font-size: 13px;
+.mobile-bottom-nav .nav-item {
   flex: 1;
-  min-height: 44px;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: #8a8a8a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.1;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.mobile-bottom-nav .nav-item .anticon {
+  font-size: 18px;
+}
+
+.mobile-bottom-nav .nav-item.is-active {
+  color: #8b7355;
+  font-weight: 600;
+}
+
+.app-layout--tablet .content-wrapper {
+  padding: 16px;
+}
+
+.app-layout--phone .content-wrapper {
+  padding: 10px;
+  border-radius: 12px;
 }
 
 .app-layout .ant-menu-item {

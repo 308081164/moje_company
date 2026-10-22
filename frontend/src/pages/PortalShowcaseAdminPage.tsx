@@ -86,7 +86,7 @@ const PortalShowcaseAdminPage: React.FC = () => {
   const refreshPreview = () => setIframeKey((k) => k + 1);
 
   return (
-    <div style={{ padding: 16, height: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
+    <div className="portal-admin" style={{ padding: 16, height: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
       <Space style={{ marginBottom: 12 }} wrap>
         <Title level={4} style={{ margin: 0 }}>
           门户展示配置
@@ -103,7 +103,7 @@ const PortalShowcaseAdminPage: React.FC = () => {
         <Button onClick={refreshPreview}>刷新预览</Button>
       </Space>
 
-      <div style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0 }}>
+      <div className="portal-admin__split" style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0 }}>
         {/* 左侧编辑区 */}
         <div style={{ flex: '1 1 44%', overflow: 'auto', minWidth: 0 }}>
           <EditorTabs scope={scope} onSaved={refreshPreview} />
@@ -371,7 +371,7 @@ const CTextsPanel: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
                   AI 翻译
                 </Button>
               </Space.Compact>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div className="portal-lang-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {LANGS.filter((l) => l !== 'zh-CN').map((lang) => (
                   <Input
                     key={lang}

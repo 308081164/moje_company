@@ -6,15 +6,19 @@ import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import jakarta.persistence.criteria.Predicate;
 
 @Service
@@ -29,6 +33,7 @@ public class OrderQueryService {
     private final QuotationRepository quotationRepository;
     private final OrderDetailAssembler orderDetailAssembler;
     private final OrderPieceRepository orderPieceRepository;
+    private final OrderShipmentRepository shipmentRepository;
 
     @Transactional(readOnly = true)
     public Page<OrderInfoDto> pageOrders(
@@ -183,5 +188,35 @@ public class OrderQueryService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
         return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
+    }
+
+    /** 生产已完成、尚未录入物流单号的订单，供跟单员发货。 */
+    @Transactional(readOnly = true)
+    public Page<OrderInfoDto> pageTrackerAwaitingShipment(Pageable pageable, Long trackerId, Boolean isB2b) {
+        Specification<Order> spec = (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
+            predicates.add(cb.equal(root.get("status"), OrderStatus.COMPLETED));
+            if (isB2b != null) {
+                predicates.add(cb.equal(root.get("isB2b"), isB2b));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        Page<Order> completed = orderRepository.findAll(
+                spec,
+                PageRequest.of(0, 200, Sort.by(Sort.Direction.DESC, "id")));
+        List<Long> ids = completed.getContent().stream().map(Order::getId).toList();
+        Set<Long> shipped = ids.isEmpty()
+                ? Set.of()
+                : new HashSet<>(shipmentRepository.findOrderIdsIn(ids));
+        List<OrderInfoDto> waiting = completed.getContent().stream()
+                .filter(order -> !shipped.contains(order.getId()))
+                .map(order -> OrderApiMapper.toOrderInfo(order, false))
+                .toList();
+        int page = Math.max(pageable.getPageNumber(), 0);
+        int size = pageable.getPageSize() > 0 ? pageable.getPageSize() : 50;
+        int from = Math.min(page * size, waiting.size());
+        int to = Math.min(from + size, waiting.size());
+        return new PageImpl<>(waiting.subList(from, to), PageRequest.of(page, size), waiting.size());
     }
 }

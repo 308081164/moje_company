@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -29,8 +30,8 @@ public class PublicStorefrontController {
 
     @GetMapping("/listings")
     @Operation(summary = "已上架寄售商品列表")
-    public List<StorefrontListingDto> listings() {
-        return storefrontService.publicListings();
+    public List<StorefrontListingDto> listings(@RequestParam(required = false) String jewelryType) {
+        return storefrontService.publicListings(jewelryType);
     }
 
     @GetMapping("/listings/{id}")

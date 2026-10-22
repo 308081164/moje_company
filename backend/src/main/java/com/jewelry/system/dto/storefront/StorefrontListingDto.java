@@ -22,4 +22,9 @@ public class StorefrontListingDto {
     private Integer soldCount;
     private String createdAt;
     private String sellerDisplayName;
+    /** 珠宝类型，用于商城筛选与下单规格 */
+    private String jewelryType;
+    /** 买家是否需填写规格（手寸/链长等） */
+    private Boolean buyerSizeRequired;
+    private Boolean buyerSizeVisible;
 }

@@ -8,7 +8,11 @@ import java.util.Optional;
 
 public interface ModelingInfoRepository extends JpaRepository<ModelingInfo, Long> {
 
-    Optional<ModelingInfo> findByOrderId(Long orderId);
+    Optional<ModelingInfo> findFirstByOrderIdOrderByIdAsc(Long orderId);
+
+    default Optional<ModelingInfo> findByOrderId(Long orderId) {
+        return findFirstByOrderIdOrderByIdAsc(orderId);
+    }
 
     Optional<ModelingInfo> findByPieceId(Long pieceId);
 

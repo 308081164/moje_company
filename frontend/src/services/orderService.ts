@@ -27,9 +27,13 @@ import {
   ModelingArchiveData,
   OrderProductionFollowLogDto,
   OrderProductionFollowCreateRequest,
+  ProductionProcessSummary,
+  ProductionSyncBoard,
+  ProductionPoolPhoto,
   OrderShipmentDto,
   OrderPieceInfo,
   OrderDesignVersion,
+  OrderModelVersion,
 } from '@/types/order';
 
 // 订单服务
@@ -69,6 +73,9 @@ export const orderService = {
   async workbenchTrackerProducing(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/tracker/producing', { params: { page, size, isB2b } });
   },
+  async workbenchTrackerToShip(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/to-ship', { params: { page, size, isB2b } });
+  },
 
   async listProductionFollowLogs(orderId: number): Promise<OrderProductionFollowLogDto[]> {
     return api.get(`/orders/${orderId}/production-follow-logs`);
@@ -78,12 +85,35 @@ export const orderService = {
     return api.post(`/orders/${orderId}/production-follow-logs`, body);
   },
 
+  async listProductionProcesses(): Promise<ProductionProcessSummary[]> {
+    return api.get('/orders/production-sync/processes');
+  },
+
+  async productionSyncBoard(process: string): Promise<ProductionSyncBoard> {
+    return api.get('/orders/production-sync', { params: { process } });
+  },
+
+  async uploadProcessPhoto(process: string, file: File): Promise<ProductionPoolPhoto> {
+    const fd = new FormData();
+    const name = file.name && file.name.trim() ? file.name.trim() : 'photo.jpg';
+    fd.append('file', file, name);
+    return api.post('/orders/production-sync/photos', fd, { params: { process } });
+  },
+
+  async discardProcessPhoto(photoId: number): Promise<void> {
+    return api.delete(`/orders/production-sync/photos/${photoId}`);
+  },
+
+  async matchProcessPhoto(body: { photoId: number; orderId: number; pieceId: number }): Promise<OrderProductionFollowLogDto> {
+    return api.post('/orders/production-sync/match', body);
+  },
+
   async completeProduction(orderId: number): Promise<OrderInfo> {
     return api.post(`/orders/${orderId}/production-complete`, {});
   },
 
   // 发货（跟单员录入快递单号）
-  async shipOrder(orderId: number, body: { trackingNumber: string; carrierCode?: number }): Promise<OrderShipmentDto> {
+  async shipOrder(orderId: number, body: { trackingNumber: string; carrierCode?: number; carrierName?: string }): Promise<OrderShipmentDto> {
     return api.post(`/orders/${orderId}/shipment`, body);
   },
 
@@ -192,8 +222,20 @@ export const orderService = {
     return api.get(`/orders/${orderId}/pieces`);
   },
 
-  async createOrderPiece(orderId: number, name: string): Promise<OrderPieceInfo> {
-    return api.post(`/orders/${orderId}/pieces`, { name });
+  async createOrderPiece(
+    orderId: number,
+    name: string,
+    jewelryType: string
+  ): Promise<OrderPieceInfo> {
+    return api.post(`/orders/${orderId}/pieces`, { name, jewelryType });
+  },
+
+  async updateOrderPieceMeta(
+    orderId: number,
+    pieceId: number,
+    body: { name?: string; jewelryType?: string }
+  ): Promise<OrderPieceInfo> {
+    return api.put(`/orders/${orderId}/pieces/${pieceId}`, body);
   },
 
   async renameOrderPiece(orderId: number, pieceId: number, name: string): Promise<OrderPieceInfo> {
@@ -210,6 +252,18 @@ export const orderService = {
 
   async restoreDesignVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderInfo> {
     return api.post(`/orders/${orderId}/pieces/${pieceId}/design-versions/${versionId}/restore`);
+  },
+
+  async listModelVersions(orderId: number, pieceId: number): Promise<OrderModelVersion[]> {
+    return api.get(`/orders/${orderId}/pieces/${pieceId}/model-versions`);
+  },
+
+  async getModelVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderModelVersion> {
+    return api.get(`/orders/${orderId}/pieces/${pieceId}/model-versions/${versionId}`);
+  },
+
+  async restoreModelVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderInfo> {
+    return api.post(`/orders/${orderId}/pieces/${pieceId}/model-versions/${versionId}/restore`);
   },
   
   // 更新订单评审信息

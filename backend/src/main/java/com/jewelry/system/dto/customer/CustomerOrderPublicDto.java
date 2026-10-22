@@ -32,6 +32,15 @@ public class CustomerOrderPublicDto {
     /** 报价（已 finalize 才返回；未报价为 null） */
     private QuotationPublicDto quotation;
 
+    /** 建模已全部确认且售中已录入基础费用，等待客户选择买断/证书/保密等 */
+    private Boolean awaitingCustomerQuoteOptions;
+
+    /** 建模已确认但售中尚未录入克重等费用 */
+    private Boolean waitingStaffBaseQuote;
+
+    /** 客户可选增值项参考价（系统配置） */
+    private CustomerQuotePriceGuideDto priceGuide;
+
     /** 建模源文件下载（文件名 + URL 列表） */
     private List<ModelFilePublicDto> modelFiles;
 

@@ -7,6 +7,20 @@ declare global {
       INLAY_API_ORIGIN?: string;
     };
 
+    /** Android WebView 壳读取：consumed | root | back */
+    __mojeShellBack?: () => 'consumed' | 'root' | 'back';
+    __mojeShellBackState?: {
+      mobileMenuOpen?: boolean;
+      closeMobileMenu?: () => void;
+      chatDetailOpen?: boolean;
+      closeChatDetail?: () => void;
+      chatDesignOpen?: boolean;
+      closeChatDesign?: () => void;
+      chatThreadOpen?: boolean;
+      chatHistoryPushed?: boolean;
+      closeChatThread?: () => void;
+    };
+
     electronAPI?: {
       getInlayAuth?: () => Promise<{ origin: string; username: string; password: string }>;
       setInlayAuth?: (payload: { username: string; password: string }) => Promise<{ ok: boolean }>;

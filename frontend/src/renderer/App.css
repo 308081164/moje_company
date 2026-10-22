@@ -431,10 +431,6 @@ a:active {
     padding: 0 16px;
   }
   
-  .ant-layout-content {
-    margin: 16px !important;
-  }
-  
   .ant-table {
     font-size: 12px;
   }

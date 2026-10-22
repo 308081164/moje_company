@@ -14,4 +14,6 @@ public interface OrderEventRepository extends JpaRepository<OrderEvent, Long> {
     List<OrderEvent> findByOrderIdOrderByIdDesc(Long orderId);
 
     Optional<OrderEvent> findFirstByOrderIdAndEventTypeOrderByIdAsc(Long orderId, OrderEventType eventType);
+
+    List<OrderEvent> findByOrderIdAndEventTypeInOrderByIdDesc(Long orderId, List<OrderEventType> types);
 }

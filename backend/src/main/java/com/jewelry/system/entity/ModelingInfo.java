@@ -51,6 +51,12 @@ public class ModelingInfo {
     @Column(name = "approval_notes", columnDefinition = "TEXT")
     private String approvalNotes;
 
+    @Column(name = "last_customer_reject_reason", columnDefinition = "TEXT")
+    private String lastCustomerRejectReason;
+
+    @Column(name = "last_customer_reject_at")
+    private LocalDateTime lastCustomerRejectAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

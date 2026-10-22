@@ -94,9 +94,18 @@
     payBalance: function (orderId) {
       return post('/portal/c/orders/' + orderId + '/pay-balance', {});
     },
+    submitQuotationOptions: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/quotation-options', body);
+    },
     // 查询订单物流（须已绑定）
     getShipment: function (orderId) {
       return get('/portal/c/orders/' + orderId + '/shipment');
+    },
+    getShippingAddress: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/shipping-address');
+    },
+    submitShippingAddress: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/shipping-address', body);
     },
     // 站内聊天
     listConversations: function () {
@@ -120,8 +129,9 @@
     translateMessage: function (messageId, targetLang) {
       return post('/conversations/messages/' + messageId + '/translate', { targetLang: targetLang });
     },
-    listStorefront: function () {
-      return get('/public/storefront/listings');
+    listStorefront: function (jewelryType) {
+      var q = jewelryType ? '?jewelryType=' + encodeURIComponent(jewelryType) : '';
+      return get('/public/storefront/listings' + q);
     },
     getStorefrontListing: function (id) {
       return get('/public/storefront/listings/' + id);

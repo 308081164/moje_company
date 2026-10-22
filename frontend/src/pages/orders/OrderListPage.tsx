@@ -5,7 +5,9 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   DatePicker,
+  Empty,
   Form,
   Input,
   InputNumber,
@@ -48,6 +50,13 @@ const OrderListPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [activeTab, setActiveTab] = useState<string>(() => searchParams.get('status') || 'ALL');
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setPhone(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [statisticsLoading, setStatisticsLoading] = useState(false);
@@ -296,7 +305,7 @@ const OrderListPage: React.FC = () => {
   return (
     <div className="order-management-page">
       <Card bordered={false}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
+        <Space className="order-page-head" style={{ width: '100%', justifyContent: 'space-between' }} align="start">
           <div>
             <Title level={3} style={{ margin: 0 }}>
               订单管理
@@ -324,9 +333,9 @@ const OrderListPage: React.FC = () => {
       </Card>
 
       <Card bordered={false} style={{ marginTop: 16 }}>
-        <Form form={searchForm} layout="inline" onFinish={handleSearch}>
+        <Form className="order-search-form" form={searchForm} layout="inline" onFinish={handleSearch}>
           <Form.Item name="keyword" label="关键词">
-            <Input placeholder="编号 / 客户 / 电话 / 微信" style={{ width: 220 }} allowClear />
+            <Input placeholder="编号 / 客户 / 电话 / 微信" allowClear />
           </Form.Item>
           <Form.Item name="dateRange" label="创建日期">
             <RangePicker />
@@ -372,6 +381,42 @@ const OrderListPage: React.FC = () => {
             ),
           }))}
         />
+        {phone ? (
+          <div className="order-phone-list">
+            {loading ? <div className="order-phone-empty">加载中…</div> : orders.length === 0 ? <Empty description="暂无订单" /> : orders.map((record) => {
+              const id = record.baseInfo.id;
+              const checked = selectedRowKeys.includes(id);
+              return (
+                <div key={id} className="order-phone-card" onClick={() =>
+                  navigate(`/orders/${id}`, { state: { backTo: `${location.pathname}${location.search}` } })
+                }>
+                  <div className="order-phone-card__top">
+                    <Checkbox
+                      checked={checked}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        setSelectedRowKeys((prev) =>
+                          e.target.checked ? [...prev, id] : prev.filter((key) => key !== id)
+                        );
+                      }}
+                    />
+                    <strong>{record.baseInfo.orderNumber || '-'}</strong>
+                    <Tag color={orderStatusColor(record.currentStatus)}>{orderStatusLabel(record.currentStatus)}</Tag>
+                  </div>
+                  <div className="order-phone-card__meta">
+                    <span>{record.baseInfo.customerName || '未填客户'}</span>
+                    <span>{record.baseInfo.orderTime ? dayjs(record.baseInfo.orderTime).format('MM-DD HH:mm') : ''}</span>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="order-phone-pager">
+              <Button disabled={currentPage <= 1} onClick={() => handlePageChange(currentPage - 1, pageSize)}>上一页</Button>
+              <span>{currentPage} / {Math.max(1, Math.ceil(total / pageSize))}</span>
+              <Button disabled={currentPage * pageSize >= total} onClick={() => handlePageChange(currentPage + 1, pageSize)}>下一页</Button>
+            </div>
+          </div>
+        ) : (
         <Table
           style={{ marginTop: 16 }}
           rowSelection={{
@@ -394,6 +439,7 @@ const OrderListPage: React.FC = () => {
           }}
           scroll={{ x: 'max-content' }}
         />
+        )}
       </Card>
 
       {/* 新建订单弹窗 */}

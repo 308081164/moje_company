@@ -11,6 +11,7 @@ import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.FileRelatedType;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderStatus;
+import com.jewelry.system.enums.ProductionProcess;
 import com.jewelry.system.repository.FileEntityRepository;
 import com.jewelry.system.repository.OrderProductionFollowLogRepository;
 import com.jewelry.system.repository.OrderRepository;
@@ -88,7 +89,7 @@ public class OrderProductionFollowService {
         }
     }
 
-    private OrderProductionFollowLogDto toDto(OrderProductionFollowLog row) {
+    public OrderProductionFollowLogDto toDto(OrderProductionFollowLog row) {
         User u = userRepository.findById(row.getAuthorUserId()).orElse(null);
         String name = u != null
                 ? (u.getRealName() != null && !u.getRealName().isBlank() ? u.getRealName() : u.getUsername())
@@ -108,8 +109,22 @@ public class OrderProductionFollowService {
                 .authorName(name)
                 .note(row.getNote())
                 .imageFileIds(ids)
+                .processCode(row.getProcessCode())
+                .processLabel(processLabel(row.getProcessCode()))
+                .pieceId(row.getPieceId())
                 .createdAt(row.getCreatedAt() != null ? ISO.format(row.getCreatedAt()) : null)
                 .build();
+    }
+
+    private static String processLabel(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        try {
+            return ProductionProcess.fromCode(code).getLabel();
+        } catch (IllegalArgumentException e) {
+            return code;
+        }
     }
 
     private Order loadOrder(long orderId) {

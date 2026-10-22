@@ -24,4 +24,7 @@ public class OrderModelBlockDto {
     /** 建模师最近一次驳回给设计师的说明（供设计师/订单详情展示） */
     private String lastRejectToDesignerMessage;
     private List<Long> lastRejectToDesignerAttachmentFileIds;
+    /** 客户最近一次驳回建模稿的原因（驳回后、建模师再次提交前有效） */
+    private String lastCustomerModelRejectReason;
+    private String lastCustomerModelRejectTime;
 }

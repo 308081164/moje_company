@@ -20,10 +20,15 @@ export const conversationService = {
     return api.get<ConversationMember[]>(`/conversations/${conversationId}/members`);
   },
 
-  async sendMessage(conversationId: number, content: string): Promise<ConversationMessage> {
+  async sendMessage(
+    conversationId: number,
+    content: string,
+    options?: { chatAsRole?: 'SUPER_SERVICE' | 'DESIGNER' | 'MODELER' }
+  ): Promise<ConversationMessage> {
     return api.post<ConversationMessage>(`/conversations/${conversationId}/messages`, {
       content,
       msgType: 'text',
+      ...(options?.chatAsRole ? { chatAsRole: options.chatAsRole } : {}),
     });
   },
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.ModelingInfo;
 import com.jewelry.system.entity.OrderPiece;
+import com.jewelry.system.enums.JewelryType;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderPieceRepository;
@@ -32,6 +33,39 @@ public class OrderPieceService {
     @Transactional(readOnly = true)
     public List<OrderPiece> listByOrderId(long orderId) {
         return orderPieceRepository.findByOrderIdOrderBySeqAsc(orderId);
+    }
+
+    /**
+     * C 端下单时按客户选择的件数初始化单件行（幂等：已有单件则直接返回，不增删）。
+     */
+    @Transactional
+    public List<OrderPiece> initializePiecesForOrder(long orderId, int pieceCount) {
+        if (pieceCount < 1 || pieceCount > MAX_PIECES_PER_ORDER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "单件数量须在 1 至 " + MAX_PIECES_PER_ORDER + " 之间");
+        }
+        List<OrderPiece> existing = orderPieceRepository.findByOrderIdOrderBySeqAsc(orderId);
+        if (!existing.isEmpty()) {
+            return existing;
+        }
+        for (int seq = 1; seq <= pieceCount; seq++) {
+            OrderPiece piece = new OrderPiece();
+            piece.setOrderId(orderId);
+            piece.setSeq(seq);
+            piece.setName(defaultPieceName(seq, pieceCount));
+            piece.setDesignConfirmed(false);
+            piece.setModelConfirmed(false);
+            piece = orderPieceRepository.save(piece);
+            ensurePieceDesignAndModelRows(orderId, piece.getId());
+        }
+        return orderPieceRepository.findByOrderIdOrderBySeqAsc(orderId);
+    }
+
+    private static String defaultPieceName(int seq, int total) {
+        if (total == 1) {
+            return "主件";
+        }
+        return "单件" + seq;
     }
 
     @Transactional
@@ -66,10 +100,13 @@ public class OrderPieceService {
     }
 
     @Transactional
-    public OrderPiece createPiece(long orderId, String name) {
+    public OrderPiece createPiece(long orderId, String name, JewelryType jewelryType) {
         int count = orderPieceRepository.countByOrderId(orderId);
         if (count >= MAX_PIECES_PER_ORDER) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "每单最多 " + MAX_PIECES_PER_ORDER + " 件");
+        }
+        if (jewelryType == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择珠宝类型");
         }
         String pieceName = StringUtils.hasText(name) ? name.trim() : ("单件" + (count + 1));
         if (pieceName.length() > 50) {
@@ -79,6 +116,7 @@ public class OrderPieceService {
         piece.setOrderId(orderId);
         piece.setSeq(count + 1);
         piece.setName(pieceName);
+        piece.setJewelryType(jewelryType);
         piece.setDesignConfirmed(false);
         piece.setModelConfirmed(false);
         piece = orderPieceRepository.save(piece);
@@ -87,17 +125,27 @@ public class OrderPieceService {
     }
 
     @Transactional
-    public OrderPiece renamePiece(long orderId, long pieceId, String name) {
-        if (!StringUtils.hasText(name)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "名称不能为空");
-        }
-        String trimmed = name.trim();
-        if (trimmed.length() > 50) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "单件名称过长");
-        }
+    public OrderPiece updatePieceMeta(long orderId, long pieceId, String name, JewelryType jewelryType) {
         OrderPiece piece = requirePiece(orderId, pieceId);
-        piece.setName(trimmed);
+        if (name != null) {
+            if (!StringUtils.hasText(name)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "名称不能为空");
+            }
+            String trimmed = name.trim();
+            if (trimmed.length() > 50) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "单件名称过长");
+            }
+            piece.setName(trimmed);
+        }
+        if (jewelryType != null) {
+            piece.setJewelryType(jewelryType);
+        }
         return orderPieceRepository.save(piece);
+    }
+
+    @Transactional
+    public OrderPiece renamePiece(long orderId, long pieceId, String name) {
+        return updatePieceMeta(orderId, pieceId, name, null);
     }
 
     @Transactional

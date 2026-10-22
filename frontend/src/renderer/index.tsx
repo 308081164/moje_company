@@ -6,7 +6,10 @@ import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import App from './App';
+import { installShellBack } from '@/utils/shellBack';
 import './index.css';
+
+installShellBack();
 
 // Webpack 5 + Electron 环境兼容：部分依赖会在运行期读取 global
 // 这里在入口最早处显式注入，避免 "global is not defined"

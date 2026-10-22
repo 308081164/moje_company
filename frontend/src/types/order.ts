@@ -134,6 +134,11 @@ export interface OrderBaseInfo {
   customerName?: string;      // 客户姓名
   customerWechat?: string;    // 客户微信
   customerAddress?: string;   // 客户地址
+  shippingRecipient?: string;
+  shippingPhone?: string;
+  shippingCountry?: string;
+  shippingAddress?: string;
+  shippingPostalCode?: string;
   notes?: string;             // 备注
 }
 
@@ -179,6 +184,9 @@ export interface OrderModelInfo {
   /** 建模师最近一次驳回给设计师的说明 */
   lastRejectToDesignerMessage?: string;
   lastRejectToDesignerAttachmentFileIds?: number[];
+  /** 客户驳回建模稿原因（待修改时由后端填充） */
+  lastCustomerModelRejectReason?: string;
+  lastCustomerModelRejectTime?: string;
 }
 
 /** 生产中跟单过程记录 */
@@ -189,7 +197,38 @@ export interface OrderProductionFollowLogDto {
   authorName?: string;
   note?: string;
   imageFileIds?: number[];
+  processCode?: string;
+  processLabel?: string;
+  pieceId?: number;
   createdAt?: string;
+}
+
+export interface ProductionProcessSummary {
+  code: string;
+  label: string;
+  unmatchedCount: number;
+}
+
+export interface ProductionPieceCard {
+  orderId: number;
+  orderNumber?: string;
+  pieceId: number;
+  pieceName?: string;
+  thumbnailUrl?: string;
+}
+
+export interface ProductionPoolPhoto {
+  id: number;
+  fileId: number;
+  createdAt?: string;
+}
+
+export interface ProductionSyncBoard {
+  processCode: string;
+  processLabel: string;
+  pieces: ProductionPieceCard[];
+  photos: ProductionPoolPhoto[];
+  recentLogs: OrderProductionFollowLogDto[];
 }
 
 export interface OrderProductionFollowCreateRequest {
@@ -275,6 +314,7 @@ export interface OrderPieceInfo {
   orderId: number;
   seq: number;
   name: string;
+  jewelryType?: string;
   designConfirmed?: boolean;
   modelConfirmed?: boolean;
   referenceImages?: string[];
@@ -423,6 +463,8 @@ export interface OrderDesignUpdateRequest {
   createVersion?: boolean;
   versionLabel?: string;
   submitToCustomer?: boolean;
+  /** 建模师驳回后：不发给客户，直接交回建模师 */
+  submitToModeler?: boolean;
 }
 
 /** 单件设计稿历史版本 */
@@ -456,6 +498,30 @@ export interface OrderModelUpdateRequest {
   modelNotes?: string;
   modelEffectImageUrls?: string[];
   modelSourceFileIds?: number[];
+  createVersion?: boolean;
+  versionLabel?: string;
+  submitToCustomer?: boolean;
+  /** 跟单驳回后：不发给客户，直接交回跟单员 */
+  submitToTracker?: boolean;
+}
+
+/** 单件建模稿历史版本 */
+export interface OrderModelVersion {
+  id: number;
+  orderId: number;
+  pieceId: number;
+  versionNo: number;
+  label?: string;
+  modelerId?: number;
+  modelerName?: string;
+  weight?: number;
+  modelNotes?: string;
+  modelEffectImages?: string[];
+  modelFiles?: unknown;
+  submittedToCustomer?: boolean;
+  createdBy?: number;
+  createdByName?: string;
+  createdAt?: string;
 }
 
 /** 建模师驳回给设计师 */

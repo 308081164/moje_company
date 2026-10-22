@@ -1,0 +1,76 @@
+.workbench-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workbench-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workbench-actions .ant-select {
+  width: 140px;
+}
+
+.workbench-page .order-phone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.workbench-page .order-phone-card {
+  width: 100%;
+  text-align: left;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.workbench-page .order-phone-card__top,
+.workbench-page .order-phone-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workbench-page .order-phone-card__meta {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .workbench-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workbench-head .ant-typography {
+    white-space: normal;
+  }
+
+  .workbench-actions .ant-select {
+    flex: 1;
+    width: auto;
+  }
+
+  .tracker-review-card > .ant-card-head {
+    height: auto;
+  }
+
+  .tracker-review-card .ant-card-head-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tracker-review-card .ant-card-extra {
+    margin-inline-start: 0 !important;
+    padding-top: 8px;
+  }
+}

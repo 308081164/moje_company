@@ -87,9 +87,8 @@
     if (lang && window.DUXURY_API && localStorage.getItem('duxury-token')) {
       window.DUXURY_API.updateLang(lang).catch(function () {});
     }
-    if (workspace && workspace.currentId) {
-      var cid = workspace.currentId;
-      window.DUXURY_API.getMessages(cid).then(renderMessages).catch(function () {});
+    if (typeof syncWorkspaceMessages === 'function') {
+      syncWorkspaceMessages(false);
     }
   });
 
@@ -331,7 +330,8 @@
   var checkoutModal = document.getElementById('checkoutModal');
   var selectedService = null; // 'custom' | 'designer'
 
-  var SERVICE_PRICE = { custom: '$49', designer: '$99' };
+  // 与后端 PortalDepositPricing 单价一致；实收金额由服务端按件数重算。
+  var SERVICE_UNIT = { custom: 49, designer: 99 };
 
   function openModal(modal) {
     modal.classList.add('open');
@@ -466,15 +466,15 @@
     dialog.className = 'event-detail__dialog profile-prompt';
     dialog.innerHTML =
       '<button class="event-detail__close" aria-label="Close">&times;</button>' +
-      '<h3 class="profile-prompt__title">完善您的资料</h3>' +
-      '<p class="profile-prompt__sub">为了更好的服务，请补充以下信息</p>' +
-      '<label class="profile-prompt__label">称呼</label>' +
-      '<input type="text" id="profileDisplayName" class="checkout__input" placeholder="如何称呼您" value="' + escapeAttr(data.displayName || '') + '">' +
-      '<label class="profile-prompt__label">联系方式</label>' +
-      '<input type="text" id="profileContact" class="checkout__input" placeholder="手机号 / 微信 / 邮箱" value="' + escapeAttr(data.contact || email || '') + '">' +
+      '<h3 class="profile-prompt__title">' + escapeHtml(window.I18N.t('profile.title')) + '</h3>' +
+      '<p class="profile-prompt__sub">' + escapeHtml(window.I18N.t('profile.sub')) + '</p>' +
+      '<label class="profile-prompt__label">' + escapeHtml(window.I18N.t('profile.name')) + '</label>' +
+      '<input type="text" id="profileDisplayName" class="checkout__input" placeholder="' + escapeAttr(window.I18N.t('profile.name.ph')) + '" value="' + escapeAttr(data.displayName || '') + '">' +
+      '<label class="profile-prompt__label">' + escapeHtml(window.I18N.t('profile.contact')) + '</label>' +
+      '<input type="text" id="profileContact" class="checkout__input" placeholder="' + escapeAttr(window.I18N.t('profile.contact.ph')) + '" value="' + escapeAttr(data.contact || email || '') + '">' +
       '<div class="profile-prompt__actions">' +
-        '<button class="prog-btn prog-btn--ok" id="profileSave">保存并继续</button>' +
-        '<button class="prog-btn prog-btn--no" id="profileSkip">暂时跳过</button>' +
+        '<button class="prog-btn prog-btn--ok" id="profileSave">' + escapeHtml(window.I18N.t('profile.save')) + '</button>' +
+        '<button class="prog-btn prog-btn--no" id="profileSkip">' + escapeHtml(window.I18N.t('profile.skip')) + '</button>' +
       '</div>';
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
@@ -486,8 +486,8 @@
     dialog.querySelector('#profileSave').addEventListener('click', function () {
       var dn = document.getElementById('profileDisplayName').value.trim();
       var ct = document.getElementById('profileContact').value.trim();
-      if (!dn) { alert('请填写称呼'); return; }
-      if (!ct) { alert('请填写联系方式'); return; }
+      if (!dn) { alert(window.I18N.t('profile.err.name')); return; }
+      if (!ct) { alert(window.I18N.t('profile.err.contact')); return; }
       window.DUXURY_API.updateProfile(dn, ct)
         .then(function () {
           var user = { method: 'email', email: data.email || email, displayName: dn };
@@ -496,7 +496,7 @@
           afterLogin();
         })
         .catch(function (err) {
-          alert(err.message || '保存失败');
+          alert(err.message || window.I18N.t('profile.saveFail'));
         });
     });
   }
@@ -535,11 +535,43 @@
   var selectedImages = [];
   var MAX_IMAGES = 5;
 
+  function readPieceCount() {
+    var pieceCountEl = document.getElementById('pieceCountInput');
+    var pieceCount = pieceCountEl ? parseInt(pieceCountEl.value, 10) : 1;
+    if (!pieceCount || pieceCount < 1) pieceCount = 1;
+    if (pieceCount > 5) pieceCount = 5;
+    return pieceCount;
+  }
+
+  function formatDepositAmount(amount) {
+    var lang = (window.I18N && window.I18N.current) || 'en';
+    var n = String(amount);
+    if (lang === 'zh-CN' || lang === 'zh-TW') return n + '美元';
+    if (lang === 'fr' || lang === 'de' || lang === 'es') return n + ' $';
+    return '$' + n;
+  }
+
+  function renderCheckoutDue() {
+    if (!checkoutPrice) return;
+    var unit = Object.prototype.hasOwnProperty.call(SERVICE_UNIT, selectedService)
+      ? SERVICE_UNIT[selectedService]
+      : SERVICE_UNIT.custom;
+    var count = readPieceCount();
+    var total = unit * count;
+    if (count > 1) {
+      checkoutPrice.textContent = formatDepositAmount(unit) + ' × ' + count + ' = ' + formatDepositAmount(total);
+      checkoutPrice.classList.add('checkout__price--multi');
+    } else {
+      checkoutPrice.textContent = formatDepositAmount(unit);
+      checkoutPrice.classList.remove('checkout__price--multi');
+    }
+  }
+
   function showCheckout() {
     if (!checkoutModal) return;
     var nameKey = selectedService === 'custom' ? 'svc.custom.title' : 'svc.designer.title';
     checkoutService.textContent = window.I18N.t(nameKey);
-    checkoutPrice.textContent = SERVICE_PRICE[selectedService] || '$49';
+    renderCheckoutDue();
     checkoutSuccess.style.display = 'none';
     payDeposit.style.display = '';
     var reqBox = document.getElementById('checkoutRequirements');
@@ -553,6 +585,20 @@
     renderImagePreview();
     openModal(checkoutModal);
   }
+
+  var pieceCountInput = document.getElementById('pieceCountInput');
+  if (pieceCountInput) {
+    pieceCountInput.addEventListener('change', renderCheckoutDue);
+  }
+
+  document.addEventListener('duxury:langchange', function () {
+    if (!checkoutModal || !checkoutModal.classList.contains('open')) return;
+    if (checkoutService && selectedService) {
+      var nameKey = selectedService === 'custom' ? 'svc.custom.title' : 'svc.designer.title';
+      checkoutService.textContent = window.I18N.t(nameKey);
+    }
+    renderCheckoutDue();
+  });
 
   function fileToDataUrl(file) {
     return new Promise(function (resolve, reject) {
@@ -682,13 +728,17 @@
         try { currentUser = JSON.parse(localStorage.getItem('duxury-user') || 'null'); } catch (e) { currentUser = null; }
         var customerName = currentUser && currentUser.displayName && currentUser.displayName !== currentUser.email
           ? currentUser.displayName : undefined;
-        var depositAmount = selectedService === 'designer' ? 99 : 49;
         var refInput = document.getElementById('referralCodeInput');
         var referralCode = refInput && refInput.value.trim() ? refInput.value.trim().toUpperCase() : undefined;
+        var pieceCount = readPieceCount();
+        var unit = Object.prototype.hasOwnProperty.call(SERVICE_UNIT, selectedService)
+          ? SERVICE_UNIT[selectedService]
+          : SERVICE_UNIT.custom;
         window.DUXURY_API.createOrder({
           serviceType: serviceType,
           customerName: customerName,
-          depositAmount: depositAmount,
+          depositAmount: unit * pieceCount,
+          pieceCount: pieceCount,
           basicRequirements: requirement,
           materialInfo: material || undefined,
           referenceImages: referenceImages || undefined,
@@ -721,11 +771,111 @@
   var workspace = {
     currentId: null,
     orderId: null,
+    balanceAmount: null,
     members: {},
     allConversations: [],
     filter: 'all',
     searchQuery: ''
   };
+
+  function parseBalanceLabel(ev) {
+    var a = parseBalanceAmount(ev);
+    if (a.amount === '—') return window.I18N.t('ws.event.BALANCE_PAYMENT');
+    return a.symbol + a.amount;
+  }
+
+  function parseBalanceAmount(ev) {
+    var content = ev && ev.content ? String(ev.content) : '';
+    var m = content.match(/(?:尾款金额|Balance(?:\s+amount)?)[：:]\s*([¥$€]?)([\d.,]+)/i);
+    if (m) return { symbol: m[1] || '¥', amount: m[2] };
+    if (workspace.balanceAmount != null) {
+      return { symbol: '¥', amount: String(workspace.balanceAmount) };
+    }
+    return { symbol: '¥', amount: '—' };
+  }
+
+  function fillBalancePaymentCard(card, ev) {
+    var paid =
+      ev.eventType === 'BALANCE_PAID' ||
+      ev.resolution === 'PAID' ||
+      (ev.resolution === 'CONFIRM' && ev.eventType === 'BALANCE_PAID');
+    var amount = parseBalanceAmount(ev);
+    var titleText = window.I18N.localizeEventTitle(ev.title, ev.eventType) || window.I18N.t('ws.balance.title');
+
+    var head = document.createElement('div');
+    head.className = 'pay-card__head';
+
+    var icon = document.createElement('div');
+    icon.className = 'pay-card__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML =
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h.01"/><path d="M11 15h2"/></svg>';
+
+    var headText = document.createElement('div');
+    headText.className = 'pay-card__head-text';
+    var label = document.createElement('div');
+    label.className = 'pay-card__label';
+    label.textContent = titleText;
+    var sub = document.createElement('div');
+    sub.className = 'pay-card__sub';
+    sub.textContent = paid
+      ? (window.I18N && window.I18N.t('ws.pay.paidSub')) || '尾款已结清，订单将继续推进'
+      : (window.I18N && window.I18N.t('ws.pay.pendingSub')) || '确认金额后完成支付';
+    headText.appendChild(label);
+    headText.appendChild(sub);
+
+    var status = document.createElement('span');
+    status.className = 'pay-card__status' + (paid ? ' pay-card__status--paid' : '');
+    status.textContent = paid
+      ? ((window.I18N && window.I18N.t('ws.pay.statusPaid')) || '已支付')
+      : ((window.I18N && window.I18N.t('ws.pay.statusPending')) || '待支付');
+
+    head.appendChild(icon);
+    head.appendChild(headText);
+    head.appendChild(status);
+
+    var amountRow = document.createElement('div');
+    amountRow.className = 'pay-card__amount';
+    var sym = document.createElement('span');
+    sym.className = 'pay-card__currency';
+    sym.textContent = amount.symbol;
+    var val = document.createElement('span');
+    val.className = 'pay-card__value';
+    val.textContent = amount.amount;
+    amountRow.appendChild(sym);
+    amountRow.appendChild(val);
+
+    card.appendChild(head);
+    card.appendChild(amountRow);
+
+    var detail = (ev.content && String(ev.content).trim()) || '';
+    detail = detail.replace(/(?:尾款金额|Balance(?:\s+amount)?)[：:][^\n]*/gi, '').trim();
+    if (detail) {
+      var note = document.createElement('p');
+      note.className = 'pay-card__note';
+      note.textContent = detail;
+      card.appendChild(note);
+    } else if (!paid) {
+      var noteDefault = document.createElement('p');
+      noteDefault.className = 'pay-card__note';
+      noteDefault.textContent =
+        (window.I18N && window.I18N.t('ws.pay.defaultNote')) || '含工费及您已确认的定制选项';
+      card.appendChild(noteDefault);
+    }
+
+    if (ev.actionable && ev.eventType === 'BALANCE_PAYMENT' && !paid) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pay-card__cta';
+      btn.textContent = (window.I18N && window.I18N.t('ws.pay.cta')) || '立即支付';
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openBalancePayModal();
+      });
+      card.appendChild(btn);
+    }
+  }
 
   function chatApiReady() {
     return !!(window.DUXURY_API && window.DUXURY_API.listConversations && window.DUXURY_API.sendMessage);
@@ -741,6 +891,13 @@
       return c.orderStatus === 'PENDING_PRODUCTION' || c.orderStatus === 'PRODUCING';
     }
     return true;
+  }
+
+  function localizedOrderStatus(orderStatus, fallbackLabel) {
+    if (window.I18N && window.I18N.localizeOrderStatus) {
+      return window.I18N.localizeOrderStatus(orderStatus, fallbackLabel);
+    }
+    return fallbackLabel || orderStatus || '';
   }
 
   function renderConversationList(items) {
@@ -764,8 +921,9 @@
       el.setAttribute('data-order', c.orderNumber || '');
       var letter = (c.orderNumber || c.title || '?').charAt(0).toUpperCase();
       var statusColor = STATUS_COLORS[c.orderStatus] || '#6b7280';
-      var statusPill = c.orderStatusLabel
-        ? '<span class="conversation__status" style="background:' + statusColor + '">' + escapeHtml(c.orderStatusLabel) + '</span>'
+      var statusText = localizedOrderStatus(c.orderStatus, c.orderStatusLabel);
+      var statusPill = statusText
+        ? '<span class="conversation__status" style="background:' + statusColor + '">' + escapeHtml(statusText) + '</span>'
         : '';
       var badge = c.unreadCount > 0
         ? '<span class="conversation__badge">' + c.unreadCount + '</span>'
@@ -800,8 +958,9 @@
     if (chatTitle) chatTitle.textContent = title || '';
     if (chatOrderId) chatOrderId.textContent = orderNumber ? '#' + orderNumber : '';
     if (chatStage) {
-      if (orderStatusLabel) {
-        chatStage.textContent = orderStatusLabel;
+      var stageLabel = localizedOrderStatus(orderStatus, orderStatusLabel);
+      if (stageLabel) {
+        chatStage.textContent = stageLabel;
         chatStage.style.display = '';
         chatStage.style.background = STATUS_COLORS[orderStatus] || '#6b7280';
         chatStage.style.color = '#fff';
@@ -818,6 +977,10 @@
     if (chatApiReady()) {
       window.DUXURY_API.getMembers(id).then(renderMembers).catch(function () {});
       window.DUXURY_API.getMessages(id).then(function (msgs) {
+        (msgs || []).forEach(function (m) {
+          if (chatNotified && m && m.id != null) chatNotified[String(m.id)] = true;
+        });
+        if (chatPrimed) chatPrimed[id] = true;
         renderMessages(msgs);
         window.DUXURY_API.markRead(id).then(loadConversations).catch(function () {});
       }).catch(function () {});
@@ -834,7 +997,8 @@
       var role = m.role || 'CUSTOMER';
       var cls = role === 'DESIGNER' ? 'member-avatar--designer'
         : (role === 'CUSTOMER' ? 'member-avatar--client'
-        : (role === 'SUPER_SERVICE' ? 'member-avatar--super-service' : 'member-avatar--tracker'));
+        : (role === 'SUPER_SERVICE' ? 'member-avatar--super-service'
+        : (role === 'AI_ASSISTANT' ? 'member-avatar--ai' : 'member-avatar--tracker')));
       var span = document.createElement('span');
       span.className = 'member-avatar ' + cls;
       span.title = m.displayName || role;
@@ -843,11 +1007,48 @@
     });
   }
 
+  /** 同一单件多次确认、重复尾款推送时只展示最新一条事件卡片。 */
+  function prepareMessagesForDisplay(messages) {
+    var list = (messages || []).slice();
+    var lastIdxByKey = {};
+    list.forEach(function (m, idx) {
+      if (m.msgType !== 'event' || !m.event) return;
+      var ev = m.event;
+      var key = null;
+      if (ev.eventType === 'DESIGN_CONFIRM' || ev.eventType === 'MODEL_CONFIRM') {
+        key = ev.eventType + ':' + (ev.pieceId != null ? ev.pieceId : 'order');
+      } else if (ev.eventType === 'BALANCE_PAYMENT') {
+        key = 'BALANCE_PAYMENT';
+      }
+      if (key) lastIdxByKey[key] = idx;
+    });
+    if (!Object.keys(lastIdxByKey).length) return list;
+    return list.filter(function (m, idx) {
+      if (m.msgType !== 'event' || !m.event) return true;
+      var ev = m.event;
+      if (ev.eventType === 'DESIGN_CONFIRM' || ev.eventType === 'MODEL_CONFIRM') {
+        var key = ev.eventType + ':' + (ev.pieceId != null ? ev.pieceId : 'order');
+        return lastIdxByKey[key] === idx;
+      }
+      if (ev.eventType === 'BALANCE_PAYMENT') {
+        return lastIdxByKey.BALANCE_PAYMENT === idx;
+      }
+      return true;
+    });
+  }
+
   function renderMessages(messages) {
     if (!chatBody) return;
     chatBody.innerHTML = '<div class="chat__day"><span>' + window.I18N.t('ws.day.today') + '</span></div>';
-    (messages || []).forEach(function (m) {
+    var seenEventIds = {};
+    prepareMessagesForDisplay(messages).forEach(function (m) {
       if (m.msgType === 'event' && m.event) {
+        var eid = m.eventId != null ? m.eventId : (m.event && m.event.id);
+        if (eid != null) {
+          var key = String(eid);
+          if (seenEventIds[key]) return;
+          seenEventIds[key] = true;
+        }
         appendEventCard(m);
         return;
       }
@@ -857,20 +1058,234 @@
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
+  /** 事件卡片在客户视角的左右：尾款/设计稿等由对方推送；客户确认/驳回靠右。 */
+  function isBalanceEvent(ev) {
+    return ev && (ev.eventType === 'BALANCE_PAYMENT' || ev.eventType === 'BALANCE_PAID');
+  }
+
+  function localizeAdjustNotice(text) {
+    var raw = text || '';
+    var designZh = '为满足生产工艺要求，我们对设计做了一定的调整，需要您确认新的设计是否符合您的预期。';
+    var modelZh = '为满足生产工艺要求，我们对建模做了一定的调整，需要您确认新的建模是否符合您的预期。';
+    if (raw.indexOf(designZh) >= 0) return raw.split(designZh).join(window.I18N.t('ws.adjust.design'));
+    if (raw.indexOf(modelZh) >= 0) return raw.split(modelZh).join(window.I18N.t('ws.adjust.model'));
+    return raw;
+  }
+
+  function isReviewEvent(ev) {
+    return ev && (ev.eventType === 'REVIEW_REJECT' || ev.eventType === 'REVIEW_PASS');
+  }
+
+  function fillReviewCard(card, ev) {
+    var failed = ev.eventType === 'REVIEW_REJECT';
+    card.classList.add('msg-card--review');
+    card.classList.add(failed ? 'msg-card--review-fail' : 'msg-card--review-pass');
+    card.style.borderTop = '';
+    var title = window.I18N.localizeEventType(ev.eventType);
+    var reason = (ev.reason || '').trim();
+    var notes = (ev.content || '').trim();
+    card.innerHTML =
+      '<div class="review-card__ribbon">' +
+        '<span class="review-card__seal" aria-hidden="true">' + (failed ? '!' : '✓') + '</span>' +
+        '<div>' +
+          '<div class="review-card__kicker">' + escapeHtml(window.I18N.t('ws.review.kicker')) + '</div>' +
+          '<div class="review-card__title">' + escapeHtml(title) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="review-card__body">' +
+        '<p class="review-card__lead">' + escapeHtml(window.I18N.t(failed ? 'ws.review.failLead' : 'ws.review.passLead')) + '</p>' +
+        (reason
+          ? '<div class="review-card__reason"><span class="review-card__label">' + escapeHtml(window.I18N.t('ws.review.reason')) + '</span><p class="review-card__text">' + escapeHtml(reason) + '</p></div>'
+          : '') +
+        (notes
+          ? '<div class="review-card__notes"><span class="review-card__label">' + escapeHtml(window.I18N.t('ws.review.notes')) + '</span><p class="review-card__text">' + escapeHtml(notes) + '</p></div>'
+          : '') +
+      '</div>';
+  }
+
+  function eventCardSenderMeta(ev, m) {
+    if (isBalanceEvent(ev)) {
+      return {
+        role: 'SYSTEM',
+        name: window.I18N.localizeActorName('SYSTEM', '')
+      };
+    }
+    var role = ev.actorRole || m.role || 'SYSTEM';
+    return {
+      role: role,
+      name: window.I18N.localizeActorName(role, ev.actorName || m.displayName || '')
+    };
+  }
+
+  function eventCardIsMine(ev) {
+    if (!ev) return false;
+    if (ev.eventType === 'BALANCE_PAYMENT' || ev.eventType === 'BALANCE_PAID') return false;
+    if (ev.eventType === 'DESIGN_SUBMIT' || ev.eventType === 'MODEL_SUBMIT') return false;
+    return ev.actorType === 'C_PORTAL_CUSTOMER';
+  }
+
+  var SHIP_COUNTRY_PRIORITY = ['CN', 'US', 'GB', 'CA', 'AU', 'DE', 'FR', 'JP', 'KR', 'SG', 'HK', 'TW', 'MO', 'IT', 'ES', 'NL', 'CH', 'MY', 'TH', 'VN', 'AE', 'NZ'];
+
+  function shipCountryOptions(selected) {
+    var codes = [];
+    try {
+      if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) codes = Intl.supportedValuesOf('region');
+    } catch (e) { /* ignore */ }
+    if (!codes.length) codes = SHIP_COUNTRY_PRIORITY.concat(['IN', 'BR', 'MX']);
+    var skip = { EU: 1, UN: 1, UK: 1 };
+    codes = codes.filter(function (code) { return code && code.length === 2 && !skip[code]; });
+    var loc = (window.I18N && window.I18N.current) ? window.I18N.current : 'en';
+    var display = null;
+    try { display = new Intl.DisplayNames([loc], { type: 'region' }); } catch (e2) { display = null; }
+    var rows = codes.map(function (code) {
+      var name = display ? (display.of(code) || code) : code;
+      return { code: code, label: name + ' (' + code + ')' };
+    });
+    var head = [];
+    var rest = [];
+    rows.forEach(function (row) {
+      if (SHIP_COUNTRY_PRIORITY.indexOf(row.code) >= 0) head.push(row);
+      else rest.push(row);
+    });
+    head.sort(function (a, b) {
+      return SHIP_COUNTRY_PRIORITY.indexOf(a.code) - SHIP_COUNTRY_PRIORITY.indexOf(b.code);
+    });
+    rest.sort(function (a, b) { return a.label.localeCompare(b.label, loc); });
+    var all = head.concat(rest);
+    if (selected && !all.some(function (row) { return row.label === selected; })) {
+      all.unshift({ code: '', label: selected });
+    }
+    return all.map(function (row) {
+      var sel = selected && selected === row.label ? ' selected' : '';
+      return '<option value="' + escapeAttr(row.label) + '"' + sel + '>' + escapeHtml(row.label) + '</option>';
+    }).join('');
+  }
+
+  function eventDisplayContent(ev) {
+    if (!ev) return '';
+    if (ev.eventType === 'SHIPPING_ADDRESS_REQUEST') return window.I18N.t('ws.shipaddr.body');
+    return localizeAdjustNotice(ev.content || '');
+  }
+
+  function openShippingAddressForm(orderId) {
+    if (!orderId) {
+      alert(window.I18N.t('ws.action.missingOrder'));
+      return;
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog shipaddr-dialog';
+    dialog.innerHTML =
+      '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.shipaddr.title')) + '</h3>' +
+      '<p class="shipaddr__hint">' + escapeHtml(window.I18N.t('ws.shipaddr.body')) + '</p>' +
+      '<form class="shipaddr" id="shipaddrForm">' +
+        '<label class="shipaddr__label" for="shipaddrRecipient">' + escapeHtml(window.I18N.t('ws.shipaddr.recipient')) + '</label>' +
+        '<input class="checkout__input" id="shipaddrRecipient" autocomplete="name" maxlength="100">' +
+        '<label class="shipaddr__label" for="shipaddrPhone">' + escapeHtml(window.I18N.t('ws.shipaddr.phone')) + '</label>' +
+        '<input class="checkout__input" id="shipaddrPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="40">' +
+        '<label class="shipaddr__label" for="shipaddrCountry">' + escapeHtml(window.I18N.t('ws.shipaddr.country')) + '</label>' +
+        '<select class="checkout__input" id="shipaddrCountry">' +
+          '<option value="">' + escapeHtml(window.I18N.t('ws.shipaddr.countryPh')) + '</option>' +
+        '</select>' +
+        '<label class="shipaddr__label" for="shipaddrDetail">' + escapeHtml(window.I18N.t('ws.shipaddr.detail')) + '</label>' +
+        '<textarea class="checkout__input shipaddr__detail" id="shipaddrDetail" rows="3" maxlength="1000" autocomplete="street-address"></textarea>' +
+        '<label class="shipaddr__label" for="shipaddrPostal">' + escapeHtml(window.I18N.t('ws.shipaddr.postal')) + '</label>' +
+        '<input class="checkout__input" id="shipaddrPostal" autocomplete="postal-code" maxlength="20" placeholder="' + escapeAttr(window.I18N.t('ws.shipaddr.postalPh')) + '">' +
+        '<div class="shipaddr__error" id="shipaddrError" role="alert"></div>' +
+        '<div class="shipaddr__actions">' +
+          '<button type="button" class="prog-btn prog-btn--no" id="shipaddrCancel">' + escapeHtml(window.I18N.t('ws.shipaddr.cancel')) + '</button>' +
+          '<button type="submit" class="prog-btn prog-btn--ok" id="shipaddrSubmit">' + escapeHtml(window.I18N.t('ws.shipaddr.submit')) + '</button>' +
+        '</div>' +
+      '</form>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.querySelector('#shipaddrCancel').addEventListener('click', close);
+    dialog.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    var countryEl = dialog.querySelector('#shipaddrCountry');
+    function fillCountries(selected) {
+      countryEl.innerHTML =
+        '<option value="">' + escapeHtml(window.I18N.t('ws.shipaddr.countryPh')) + '</option>' +
+        shipCountryOptions(selected || '');
+      if (selected) countryEl.value = selected;
+    }
+    fillCountries('');
+
+    window.DUXURY_API.getShippingAddress(orderId).then(function (addr) {
+      if (closed || !addr) return;
+      if (addr.recipient) dialog.querySelector('#shipaddrRecipient').value = addr.recipient;
+      if (addr.phone) dialog.querySelector('#shipaddrPhone').value = addr.phone;
+      if (addr.address) dialog.querySelector('#shipaddrDetail').value = addr.address;
+      if (addr.postalCode) dialog.querySelector('#shipaddrPostal').value = addr.postalCode;
+      if (addr.country) fillCountries(addr.country);
+    }).catch(function () {});
+
+    dialog.querySelector('#shipaddrForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var errEl = dialog.querySelector('#shipaddrError');
+      var submitBtn = dialog.querySelector('#shipaddrSubmit');
+      var recipient = (dialog.querySelector('#shipaddrRecipient').value || '').trim();
+      var phone = (dialog.querySelector('#shipaddrPhone').value || '').trim();
+      var country = countryEl.value || '';
+      var address = (dialog.querySelector('#shipaddrDetail').value || '').trim();
+      var postalCode = (dialog.querySelector('#shipaddrPostal').value || '').trim();
+      var err = '';
+      if (!recipient) err = window.I18N.t('ws.shipaddr.err.recipient');
+      else if (!phone || !/\d/.test(phone)) err = window.I18N.t('ws.shipaddr.err.phone');
+      else if (!country) err = window.I18N.t('ws.shipaddr.err.country');
+      else if (!address) err = window.I18N.t('ws.shipaddr.err.detail');
+      if (err) {
+        if (errEl) errEl.textContent = err;
+        return;
+      }
+      if (errEl) errEl.textContent = '';
+      if (submitBtn) submitBtn.disabled = true;
+      window.DUXURY_API.submitShippingAddress(orderId, {
+        recipient: recipient,
+        phone: phone,
+        country: country,
+        address: address,
+        postalCode: postalCode || null
+      }).then(function () {
+        close();
+        return reloadChatAndProgress();
+      }).catch(function (error) {
+        if (errEl) errEl.textContent = (error && error.message) ? error.message : window.I18N.t('ws.action.failed');
+      }).finally(function () {
+        if (submitBtn) submitBtn.disabled = false;
+      });
+    });
+  }
+
   function appendEventCard(m) {
     if (!chatBody) return;
     if (m && m.id != null && messageAlreadyRendered(m.id)) return;
     var ev = m.event || {};
+    var eventId = m.eventId != null ? m.eventId : ev.id;
+    if (eventId != null && chatBody.querySelector('[data-event-id="' + String(eventId) + '"]')) return;
     var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
-    var role = ev.actorRole || m.role || 'SYSTEM';
-    var senderName = ev.actorName || m.displayName || role;
+    var senderMeta = eventCardSenderMeta(ev, m);
+    var role = senderMeta.role;
+    var senderName = senderMeta.name;
 
     // 普通聊天气泡发送形式：昵称 + 时间，气泡部分替换为卡片（无头像圆球）
     // 自己发送的（客户操作类事件）靠右，他人发送的靠左
-    var mine = ev.actorType === 'C_PORTAL_CUSTOMER';
+    var mine = eventCardIsMine(ev);
     var msg = document.createElement('div');
     msg.className = 'msg msg--no-avatar ' + (mine ? 'msg--out' : 'msg--in');
     if (m && m.id != null) msg.setAttribute('data-mid', m.id);
+    if (eventId != null) msg.setAttribute('data-event-id', String(eventId));
 
     var content = document.createElement('div');
     content.className = 'msg__content';
@@ -889,24 +1304,33 @@
     content.appendChild(meta);
 
     // 尾款支付卡片：长条形，区别于其他卡片
-    var isBalance = ev.eventType === 'BALANCE_PAYMENT' || ev.eventType === 'BALANCE_PAID';
+    var isBalance = isBalanceEvent(ev);
 
     // 卡片（替代气泡）
     var card = document.createElement('div');
-    card.className = 'msg-card msg-card--' + (ev.eventType || 'default') + (isBalance ? ' msg-card--balance' : '');
-    card.style.borderTop = '3px solid ' + style.color;
+    card.className = 'msg-card msg-card--' + (ev.eventType || 'default') + (isBalance ? ' msg-card--pay-sheet' : '');
+    if (!isBalance) {
+      card.style.borderTop = '3px solid ' + style.color;
+    }
     card.setAttribute('role', 'button');
     card.setAttribute('tabindex', '0');
-    card.title = '点击查看详情';
+    card.title = window.I18N.t('ws.card.viewDetail');
 
-    if (ev.title) {
+    if (isBalance) {
+      fillBalancePaymentCard(card, ev);
+    } else if (isReviewEvent(ev)) {
+      fillReviewCard(card, ev);
+    } else if (ev.title) {
       var title = document.createElement('div');
       title.className = 'msg-card__title';
       title.style.color = style.color;
-      title.textContent = ev.title;
+      title.textContent = window.I18N.localizeEventTitle(ev.title, ev.eventType);
       card.appendChild(title);
     }
-    var images = ev.images || [];
+    if (!isBalance && !isReviewEvent(ev)) {
+    var images = (ev.images || []).filter(function (src) {
+      return String(src || '').indexOf('data:image/svg') !== 0;
+    });
     if (images.length) {
       var imgs = document.createElement('div');
       imgs.className = 'msg-card__imgs';
@@ -928,7 +1352,7 @@
     if (ev.content) {
       var contentEl = document.createElement('div');
       contentEl.className = 'msg-card__content';
-      contentEl.textContent = ev.content;
+      contentEl.textContent = eventDisplayContent(ev);
       card.appendChild(contentEl);
     }
     if (ev.reason) {
@@ -937,66 +1361,95 @@
       reason.textContent = ev.reason;
       card.appendChild(reason);
     }
+    }
 
     // 已决策锁定徽标
-    if (ev.resolution && ev.resolutionLabel) {
+    if (ev.resolution) {
       var lock = document.createElement('div');
       lock.className = 'msg-card__lock msg-card__lock--' + ev.resolution.toLowerCase();
-      lock.textContent = ev.resolutionLabel + (ev.resolution === 'CONFIRM' ? ' ✓' : (ev.resolution === 'REJECT' ? ' ✗' : ''));
+      var resText = window.I18N.localizeResolution(ev.resolution);
+      lock.textContent = resText + (ev.resolution === 'CONFIRM' ? ' ✓' : (ev.resolution === 'REJECT' ? ' ✗' : ''));
       card.appendChild(lock);
     }
 
+    if (ev.actionable && ev.eventType === 'SHIPPING_ADDRESS_REQUEST') {
+      var addrActions = document.createElement('div');
+      addrActions.className = 'msg-card__actions';
+      var addrBtn = document.createElement('button');
+      addrBtn.type = 'button';
+      addrBtn.className = 'prog-btn prog-btn--ok msg-card__btn msg-card__btn--addr';
+      addrBtn.textContent = ev.resolution === 'FILLED'
+        ? window.I18N.t('ws.shipaddr.edit')
+        : window.I18N.t('ws.shipaddr.fill');
+      addrBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!workspace.orderId) {
+          alert(window.I18N.t('ws.action.missingOrder'));
+          return;
+        }
+        openShippingAddressForm(workspace.orderId);
+      });
+      addrActions.appendChild(addrBtn);
+      card.appendChild(addrActions);
+    }
+
     // 操作按钮（阻止冒泡，避免触发详情）
-    if (ev.actionable && ev.eventType) {
+    if (ev.actionable && ev.eventType && !isBalance && ev.eventType !== 'SHIPPING_ADDRESS_REQUEST') {
       var confirmAct, rejectAct, confirmLabel, rejectLabel;
       if (ev.eventType === 'DESIGN_SUBMIT') {
         confirmAct = 'DESIGN_CONFIRM'; rejectAct = 'DESIGN_REJECT';
-        confirmLabel = '确认设计稿'; rejectLabel = '驳回设计稿';
+        confirmLabel = window.I18N.t('ws.action.confirmDesign');
+        rejectLabel = window.I18N.t('ws.action.rejectDesign');
       } else if (ev.eventType === 'MODEL_SUBMIT') {
         confirmAct = 'MODEL_CONFIRM'; rejectAct = 'MODEL_REJECT';
-        confirmLabel = '确认建模稿'; rejectLabel = '驳回建模稿';
-      } else if (ev.eventType === 'BALANCE_PAYMENT') {
-        confirmAct = 'BALANCE_PAY'; rejectAct = null;
-        confirmLabel = '立即支付 $399'; rejectLabel = null;
+        confirmLabel = window.I18N.t('ws.action.confirmModel');
+        rejectLabel = window.I18N.t('ws.action.rejectModel');
       }
       if (confirmAct) {
         var actions = document.createElement('div');
         actions.className = 'msg-card__actions';
-        if (confirmAct === 'BALANCE_PAY') {
-          var payBtn = document.createElement('button');
-          payBtn.className = 'prog-btn prog-btn--pay msg-card__btn';
-          payBtn.textContent = confirmLabel;
-          payBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            openBalancePayModal();
-          });
-          actions.appendChild(payBtn);
-        } else {
+        {
           var okBtn = document.createElement('button');
+          okBtn.type = 'button';
           okBtn.className = 'prog-btn prog-btn--ok msg-card__btn';
           okBtn.textContent = confirmLabel;
           okBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             var orderId = workspace.orderId;
-            if (!orderId) return;
-            window.DUXURY_API.confirmOrder(orderId, confirmAct)
-              .then(reloadChatAndProgress)
-              .catch(function (err) { alert(err.message); });
+            if (!orderId || okBtn.disabled) {
+              if (!orderId) alert(window.I18N.t('ws.action.missingOrder'));
+              return;
+            }
+            okBtn.disabled = true;
+            var pieceId = ev.pieceId;
+            var req = pieceId
+              ? window.DUXURY_API.confirmPiece(orderId, pieceId, confirmAct)
+              : window.DUXURY_API.confirmOrder(orderId, confirmAct);
+            req.then(reloadChatAndProgress)
+              .catch(function (err) { alert((err && err.message) || window.I18N.t('ws.action.failed')); })
+              .finally(function () { okBtn.disabled = false; });
           });
           actions.appendChild(okBtn);
           if (rejectAct) {
             var noBtn = document.createElement('button');
+            noBtn.type = 'button';
             noBtn.className = 'prog-btn prog-btn--no msg-card__btn';
             noBtn.textContent = rejectLabel;
             noBtn.addEventListener('click', function (e) {
               e.stopPropagation();
-              var reason = prompt(window.I18N.t('ws.progress.reject.ph'));
-              if (!reason) return;
               var orderId = workspace.orderId;
               if (!orderId) return;
-              window.DUXURY_API.rejectOrder(orderId, rejectAct, reason)
-                .then(reloadChatAndProgress)
-                .catch(function (err) { alert(err.message); });
+              var pieceId = ev.pieceId;
+              openRejectReasonModal({
+                rejectAct: rejectAct,
+                pieceId: pieceId,
+                onSubmit: function (reason) {
+                  if (pieceId) {
+                    return window.DUXURY_API.rejectPiece(orderId, pieceId, rejectAct, reason);
+                  }
+                  return window.DUXURY_API.rejectOrder(orderId, rejectAct, reason);
+                }
+              });
             });
             actions.appendChild(noBtn);
           }
@@ -1005,11 +1458,91 @@
       }
     }
 
-    // 点击卡片查看详情
-    card.addEventListener('click', function () { openEventDetail(m); });
+    card.addEventListener('click', function () {
+      if (ev.eventType === 'SHIPPING_ADDRESS_REQUEST' && ev.actionable) {
+        if (!workspace.orderId) {
+          alert(window.I18N.t('ws.action.missingOrder'));
+          return;
+        }
+        openShippingAddressForm(workspace.orderId);
+        return;
+      }
+      openEventDetail(m);
+    });
     content.appendChild(card);
     msg.appendChild(content);
     chatBody.appendChild(msg);
+  }
+
+  /**
+   * 设计稿 / 建模稿驳回：自定义弹窗（替代浏览器 prompt）
+   * @param {{ rejectAct: string, pieceId?: number, onSubmit: (reason: string) => Promise<unknown> }} opts
+   */
+  function openRejectReasonModal(opts) {
+    var rejectAct = opts.rejectAct;
+    var titleKey = rejectAct === 'MODEL_REJECT' ? 'ws.reject.model.title' : 'ws.reject.design.title';
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog reject-modal';
+    dialog.innerHTML =
+      '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t(titleKey)) + '</h3>' +
+      '<p class="reject-modal__hint">' + escapeHtml(window.I18N.t('ws.reject.hint')) + '</p>' +
+      '<label class="reject-modal__label" for="rejectReasonInput">' + escapeHtml(window.I18N.t('ws.progress.reject.ph')) + '</label>' +
+      '<textarea id="rejectReasonInput" class="checkout__input reject-modal__textarea" rows="4" maxlength="2000" placeholder="' + escapeAttr(window.I18N.t('ws.progress.reject.ph')) + '"></textarea>' +
+      '<div class="reject-modal__error" id="rejectReasonError" role="alert"></div>' +
+      '<div class="balance-pay__actions">' +
+        '<button type="button" class="prog-btn prog-btn--no" id="rejectReasonCancel">' + escapeHtml(window.I18N.t('ws.reject.cancel')) + '</button>' +
+        '<button type="button" class="prog-btn prog-btn--ok" id="rejectReasonSubmit">' + escapeHtml(window.I18N.t('ws.reject.submit')) + '</button>' +
+      '</div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var input = dialog.querySelector('#rejectReasonInput');
+    var errEl = dialog.querySelector('#rejectReasonError');
+    var submitBtn = dialog.querySelector('#rejectReasonSubmit');
+    var closed = false;
+
+    function close() {
+      if (closed) return;
+      closed = true;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.querySelector('#rejectReasonCancel').addEventListener('click', close);
+    dialog.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    setTimeout(function () {
+      if (input) input.focus();
+    }, 0);
+
+    submitBtn.addEventListener('click', function () {
+      if (submitBtn.disabled) return;
+      var reason = (input && input.value || '').trim();
+      if (!reason) {
+        if (errEl) errEl.textContent = window.I18N.t('ws.reject.empty');
+        if (input) input.focus();
+        return;
+      }
+      if (errEl) errEl.textContent = '';
+      submitBtn.disabled = true;
+      opts.onSubmit(reason)
+        .then(function () {
+          close();
+          return reloadChatAndProgress();
+        })
+        .catch(function (err) {
+          if (errEl) errEl.textContent = err && err.message ? err.message : String(err);
+        })
+        .finally(function () {
+          submitBtn.disabled = false;
+        });
+    });
   }
 
   function openPublishModal(orderId, summary) {
@@ -1059,18 +1592,19 @@
   function openBalancePayModal() {
     var orderId = workspace.orderId;
     if (!orderId) return;
+    function showModal(amountText) {
     var overlay = document.createElement('div');
     overlay.className = 'event-detail';
     var dialog = document.createElement('div');
     dialog.className = 'event-detail__dialog balance-pay';
     dialog.innerHTML =
       '<button class="event-detail__close" aria-label="Close">&times;</button>' +
-      '<h3 class="balance-pay__title">支付尾款</h3>' +
-      '<div class="balance-pay__amount">$399</div>' +
-      '<div class="balance-pay__hint">模拟支付流程，点击确认即视为支付成功</div>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.title')) + '</h3>' +
+      '<div class="balance-pay__amount">' + escapeHtml(amountText || '—') + '</div>' +
+      '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.hint')) + '</div>' +
       '<div class="balance-pay__actions">' +
-        '<button class="prog-btn prog-btn--pay" id="balancePayConfirm">确认支付</button>' +
-        '<button class="prog-btn prog-btn--no" id="balancePayCancel">取消</button>' +
+        '<button class="prog-btn prog-btn--pay" id="balancePayConfirm">' + escapeHtml(window.I18N.t('ws.balance.confirm')) + '</button>' +
+        '<button class="prog-btn prog-btn--no" id="balancePayCancel">' + escapeHtml(window.I18N.t('ws.balance.cancel')) + '</button>' +
       '</div>';
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
@@ -1083,9 +1617,9 @@
         .then(function () {
           dialog.innerHTML =
             '<div class="balance-pay__success">✓</div>' +
-            '<h3 class="balance-pay__title">支付成功</h3>' +
-            '<div class="balance-pay__hint">尾款 $399 已支付</div>' +
-            '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="balancePayDone">完成</button></div>';
+            '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.success')) + '</h3>' +
+            '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.paidAmount').replace('{amount}', amountText || '')) + '</div>' +
+            '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="balancePayDone">' + escapeHtml(window.I18N.t('ws.balance.done')) + '</button></div>';
           dialog.querySelector('#balancePayDone').addEventListener('click', function () {
             close();
             reloadChatAndProgress();
@@ -1093,60 +1627,132 @@
         })
         .catch(function (err) { alert(err.message); });
     });
+    }
+    if (workspace.balanceAmount != null) {
+      showModal('¥' + workspace.balanceAmount);
+      return;
+    }
+    window.DUXURY_API.getOrderSummary(orderId).then(function (s) {
+      var amt = s && s.quotation && s.quotation.totalAmount;
+      workspace.balanceAmount = amt != null ? amt : null;
+      showModal(amt != null ? ('¥' + amt) : '—');
+    }).catch(function () { showModal('—'); });
   }
 
   function openEventDetail(m) {
     var ev = m.event || {};
     var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
-    var role = ev.actorRole || m.role || 'SYSTEM';
-    var senderName = ev.actorName || m.displayName || role;
+    var senderMeta = eventCardSenderMeta(ev, m);
+    var typeLabel = window.I18N.localizeEventType(ev.eventType);
 
     var overlay = document.createElement('div');
     overlay.className = 'event-detail';
     var dialog = document.createElement('div');
     dialog.className = 'event-detail__dialog';
     var html = '<button class="event-detail__close" aria-label="Close">&times;</button>';
-    html += '<div class="event-detail__badge" style="background:' + style.color + '">' + escapeHtml(style.label) + '</div>';
-    html += '<h3 class="event-detail__title" style="color:' + style.color + '">' + escapeHtml(ev.title || style.label) + '</h3>';
-    html += '<div class="event-detail__meta">' + escapeHtml(senderName) + ' · ' + escapeHtml(formatTime(m.createdAt)) + '</div>';
-    var images = ev.images || [];
+    html += '<div class="event-detail__badge" style="background:' + style.color + '">' + escapeHtml(typeLabel) + '</div>';
+    html += '<h3 class="event-detail__title" style="color:' + style.color + '">' + escapeHtml(window.I18N.localizeEventTitle(ev.title, ev.eventType) || typeLabel) + '</h3>';
+    html += '<div class="event-detail__meta">' + escapeHtml(senderMeta.name) + ' · ' + escapeHtml(formatTime(m.createdAt)) + '</div>';
+    var images = isReviewEvent(ev) ? [] : (ev.images || []).filter(function (src) {
+      return String(src || '').indexOf('data:image/svg') !== 0;
+    });
     if (images.length) {
-      html += '<div class="event-detail__imgs">';
-      images.forEach(function (u) {
-        html += '<img class="event-detail__img" src="' + escapeAttr(u) + '" alt="">';
-      });
+      html += '<div class="event-gallery" data-count="' + images.length + '">';
+      html += '<div class="event-gallery__stage">';
+      html += '<img class="event-gallery__img" alt="">';
+      html += '</div>';
+      if (images.length > 1) {
+        html += '<button type="button" class="event-gallery__nav event-gallery__nav--prev" aria-label="Previous">&#8249;</button>';
+        html += '<button type="button" class="event-gallery__nav event-gallery__nav--next" aria-label="Next">&#8250;</button>';
+        html += '<div class="event-gallery__count"></div>';
+      }
       html += '</div>';
     }
-    if (ev.content) html += '<div class="event-detail__content">' + escapeHtml(ev.content) + '</div>';
-    if (ev.reason) html += '<div class="event-detail__reason">驳回原因：' + escapeHtml(ev.reason) + '</div>';
+    if (ev.content || ev.eventType === 'SHIPPING_ADDRESS_REQUEST') {
+      html += '<div class="event-detail__content">' + escapeHtml(eventDisplayContent(ev)) + '</div>';
+    }
+    if (ev.eventType === 'SHIPPING_ADDRESS_REQUEST' && ev.actionable) {
+      html += '<div class="shipaddr__actions"><button type="button" class="prog-btn prog-btn--ok" id="shipaddrOpen">' +
+        escapeHtml(ev.resolution === 'FILLED' ? window.I18N.t('ws.shipaddr.edit') : window.I18N.t('ws.shipaddr.fill')) +
+        '</button></div>';
+    }
+    if (ev.reason) html += '<div class="event-detail__reason">' + escapeHtml(window.I18N.t('ws.detail.rejectReason')) + ' ' + escapeHtml(ev.reason) + '</div>';
     // 物流事件：展示物流轨迹
     if (ev.eventType === 'SHIPPED' || ev.eventType === 'DELIVERED') {
-      html += '<div class="event-detail__shipment" id="eventShipment">加载物流信息…</div>';
+      html += '<div class="event-detail__shipment" id="eventShipment">' + escapeHtml(window.I18N.t('ws.ship.loading')) + '</div>';
     }
     dialog.innerHTML = html;
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
+    var galleryIndex = 0;
+    var onGalleryKey = null;
     function close() {
+      if (onGalleryKey) document.removeEventListener('keydown', onGalleryKey);
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     }
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
     dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    var openAddr = dialog.querySelector('#shipaddrOpen');
+    if (openAddr) {
+      openAddr.addEventListener('click', function (e) {
+        e.stopPropagation();
+        close();
+        openShippingAddressForm(workspace.orderId);
+      });
+    }
+
+    if (images.length) {
+      var galleryImg = dialog.querySelector('.event-gallery__img');
+      var galleryCount = dialog.querySelector('.event-gallery__count');
+      function showGallery(next) {
+        var total = images.length;
+        galleryIndex = (next + total) % total;
+        if (galleryImg) galleryImg.src = images[galleryIndex];
+        if (galleryCount) galleryCount.textContent = (galleryIndex + 1) + ' / ' + total;
+      }
+      showGallery(0);
+      var prevBtn = dialog.querySelector('.event-gallery__nav--prev');
+      var nextBtn = dialog.querySelector('.event-gallery__nav--next');
+      if (prevBtn) prevBtn.addEventListener('click', function (e) { e.stopPropagation(); showGallery(galleryIndex - 1); });
+      if (nextBtn) nextBtn.addEventListener('click', function (e) { e.stopPropagation(); showGallery(galleryIndex + 1); });
+      var touchX = 0;
+      var stage = dialog.querySelector('.event-gallery__stage');
+      if (stage && images.length > 1) {
+        stage.addEventListener('touchstart', function (e) {
+          touchX = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0;
+        }, { passive: true });
+        stage.addEventListener('touchend', function (e) {
+          var x = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : touchX;
+          var delta = x - touchX;
+          if (Math.abs(delta) < 40) return;
+          showGallery(galleryIndex + (delta < 0 ? 1 : -1));
+        }, { passive: true });
+      }
+      if (images.length > 1) {
+        onGalleryKey = function (e) {
+          if (e.key === 'ArrowLeft') showGallery(galleryIndex - 1);
+          else if (e.key === 'ArrowRight') showGallery(galleryIndex + 1);
+          else if (e.key === 'Escape') close();
+        };
+        document.addEventListener('keydown', onGalleryKey);
+      }
+    }
 
     // 拉取物流并渲染
     if ((ev.eventType === 'SHIPPED' || ev.eventType === 'DELIVERED') && workspace.orderId) {
       var shipBox = dialog.querySelector('#eventShipment');
       window.DUXURY_API.getShipment(workspace.orderId).then(function (s) {
         if (!shipBox || !s) {
-          if (shipBox) shipBox.textContent = '暂无物流信息';
+          if (shipBox) shipBox.textContent = window.I18N.t('ws.ship.none');
           return;
         }
         var sh = '';
-        sh += '<div class="event-detail__shipment-row">快递单号：' + escapeHtml(s.trackingNumber || '-') + '</div>';
+        sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.tracking')) + ' ' + escapeHtml(s.trackingNumber || '-') + '</div>';
         if (s.carrierName || s.carrierCode) {
-          sh += '<div class="event-detail__shipment-row">承运商：' + escapeHtml(s.carrierName || s.carrierCode) + '</div>';
+          sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.carrier')) + ' ' + escapeHtml(s.carrierName || s.carrierCode) + '</div>';
         }
-        sh += '<div class="event-detail__shipment-row">状态：' + escapeHtml(s.statusLabel || '已发货（待物流更新）') + '</div>';
+        sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.status')) + ' ' + escapeHtml(s.statusLabel || window.I18N.t('ws.ship.pending')) + '</div>';
         if (s.events && s.events.length) {
           sh += '<div class="event-detail__timeline">';
           s.events.forEach(function (e) {
@@ -1156,24 +1762,17 @@
           sh += '</div>';
         }
         if (s.queryUrl) {
-          sh += '<a class="prog-file" href="' + escapeAttr(s.queryUrl) + '" target="_blank">在 17TRACK 查看完整轨迹</a>';
+          sh += '<a class="prog-file" href="' + escapeAttr(s.queryUrl) + '" target="_blank">' + escapeHtml(window.I18N.t('ws.ship.trackLink')) + '</a>';
         }
         shipBox.innerHTML = sh;
       }).catch(function () {
-        if (shipBox) shipBox.textContent = '物流信息加载失败';
+        if (shipBox) shipBox.textContent = window.I18N.t('ws.ship.loadFail');
       });
     }
   }
 
   function reloadChatAndProgress() {
-    if (workspace.currentId) {
-      window.DUXURY_API.getMessages(workspace.currentId).then(renderMessages).catch(function () {});
-    }
-    if (workspace.orderId) {
-      var body = document.getElementById('chatProgressBody');
-      if (body) renderOrderProgress(workspace.orderId, body);
-    }
-    loadConversations();
+    syncWorkspaceMessages(false);
   }
 
   function loadConversations() {
@@ -1216,6 +1815,7 @@
     SALES_PRE: '#f59e0b',
     FOLLOW_UP: '#22a5f7',
     SUPER_SERVICE: '#c026d3',
+    AI_ASSISTANT: '#0d9488',
     ADMIN: '#c026d3',
     SYSTEM: '#999999'
   };
@@ -1253,6 +1853,8 @@
     QUOTATION: { color: '#f59e0b', label: '报价' },
     PRODUCTION_LOG: { color: '#22a5f7', label: '生产跟单' },
     SHIPPED: { color: '#2ea043', label: '已发货' },
+    SHIPPING_ADDRESS_REQUEST: { color: '#22a5f7', label: '收货信息' },
+    SHIPPING_ADDRESS_FILLED: { color: '#2ea043', label: '已填收货信息' },
     DELIVERED: { color: '#2ea043', label: '已签收' },
     STATUS_CHANGE: { color: '#6b7280', label: '状态' },
     DELIVERY_CONFIRM: { color: '#2ea043', label: '交付' },
@@ -1290,8 +1892,9 @@
       osc.stop(t + 0.24);
     } catch (e) { /* ignore */ }
   }
-  document.addEventListener('pointerdown', unlockChatAudio, { once: true });
-  document.addEventListener('keydown', unlockChatAudio, { once: true });
+  document.addEventListener('pointerdown', unlockChatAudio);
+  document.addEventListener('keydown', unlockChatAudio);
+  document.addEventListener('touchstart', unlockChatAudio, { passive: true });
 
   function messageAlreadyRendered(messageId) {
     if (messageId == null || !chatBody) return false;
@@ -1310,7 +1913,8 @@
       var avatar = document.createElement('span');
       var avatarCls = role === 'DESIGNER' ? 'msg__avatar--designer'
         : (role === 'CUSTOMER' ? 'msg__avatar--client'
-        : (role === 'SUPER_SERVICE' ? 'msg__avatar--super-service' : 'msg__avatar--tracker'));
+        : (role === 'SUPER_SERVICE' ? 'msg__avatar--super-service'
+        : (role === 'AI_ASSISTANT' ? 'msg__avatar--ai' : 'msg__avatar--tracker')));
       avatar.className = 'msg__avatar ' + avatarCls;
       avatar.textContent = (roleName || role || '?').charAt(0).toUpperCase();
       msg.appendChild(avatar);
@@ -1323,7 +1927,7 @@
       var roleTag = document.createElement('span');
       roleTag.className = 'msg__role';
       roleTag.style.color = ROLE_COLORS[role] || '';
-      roleTag.textContent = roleName || role || '';
+      roleTag.textContent = window.I18N.localizeActorName(role, roleName || '');
       var time = document.createElement('span');
       time.className = 'msg__time';
       time.textContent = formatTime(timeText);
@@ -1489,6 +2093,95 @@
 
   var workspaceChatWs = null;
   var workspaceChatWsRetry = 0;
+  var chatPingTimer = null;
+  var chatPongTimer = null;
+  var chatReconnectTimer = null;
+  var chatPollTimer = null;
+  var chatAwaitingPong = false;
+  var chatNotified = {};
+  var chatPrimed = {};
+
+  function clearChatHeartbeat() {
+    if (chatPingTimer) clearInterval(chatPingTimer);
+    if (chatPongTimer) clearTimeout(chatPongTimer);
+    chatPingTimer = null;
+    chatPongTimer = null;
+    chatAwaitingPong = false;
+  }
+
+  function sendChatPing() {
+    if (!workspaceChatWs || workspaceChatWs.readyState !== WebSocket.OPEN) return;
+    try {
+      workspaceChatWs.send(JSON.stringify({ type: 'ping' }));
+    } catch (e) {
+      try { workspaceChatWs.close(); } catch (err) { /* ignore */ }
+      return;
+    }
+    chatAwaitingPong = true;
+    if (chatPongTimer) clearTimeout(chatPongTimer);
+    chatPongTimer = setTimeout(function () {
+      if (!chatAwaitingPong) return;
+      if (workspaceChatWs) {
+        try { workspaceChatWs.close(); } catch (e) { /* ignore */ }
+      }
+    }, 10000);
+  }
+
+  function startChatHeartbeat() {
+    clearChatHeartbeat();
+    sendChatPing();
+    chatPingTimer = setInterval(sendChatPing, 20000);
+  }
+
+  function syncWorkspaceMessages(notify) {
+    if (!chatApiReady()) return;
+    var cid = workspace.currentId;
+    if (cid) {
+      window.DUXURY_API.getMessages(cid).then(function (msgs) {
+        if (workspace.currentId !== cid) return;
+        var primed = !!chatPrimed[cid];
+        var shouldSound = false;
+        (msgs || []).forEach(function (m) {
+          if (!m || m.id == null) return;
+          var key = String(m.id);
+          if (!chatNotified[key]) {
+            chatNotified[key] = true;
+            if (notify && primed && m.senderType !== 'C_PORTAL_CUSTOMER') shouldSound = true;
+          }
+        });
+        chatPrimed[cid] = true;
+        renderMessages(msgs);
+        if (shouldSound) playChatNotify();
+      }).catch(function () {});
+    }
+    loadConversations();
+  }
+
+  function stopChatPoll() {
+    if (chatPollTimer) clearInterval(chatPollTimer);
+    chatPollTimer = null;
+  }
+
+  function startChatPoll() {
+    if (chatPollTimer || !chatApiReady()) return;
+    if (!chatBody && !conversationList) return;
+    syncWorkspaceMessages(true);
+    chatPollTimer = setInterval(function () {
+      if (workspaceChatWs && workspaceChatWs.readyState === WebSocket.OPEN) return;
+      syncWorkspaceMessages(true);
+    }, 10000);
+  }
+
+  function scheduleChatReconnect() {
+    if (chatReconnectTimer || !localStorage.getItem('duxury-token')) return;
+    workspaceChatWsRetry += 1;
+    var delay = Math.min(15000, 1000 * Math.pow(2, Math.min(workspaceChatWsRetry - 1, 4)));
+    chatReconnectTimer = setTimeout(function () {
+      chatReconnectTimer = null;
+      connectChatSocket();
+    }, delay);
+  }
+
   function connectChatSocket() {
     var token = localStorage.getItem('duxury-token');
     if (!token || !chatApiReady()) return;
@@ -1506,12 +2199,33 @@
     try {
       var ws = new WebSocket(wsUrl);
       workspaceChatWs = ws;
-      ws.onopen = function () { workspaceChatWsRetry = 0; };
+      var connectTimer = setTimeout(function () {
+        if (workspaceChatWs === ws && ws.readyState !== WebSocket.OPEN) {
+          try { ws.close(); } catch (e) { /* ignore */ }
+        }
+      }, 8000);
+      ws.onopen = function () {
+        if (workspaceChatWs !== ws) return;
+        clearTimeout(connectTimer);
+        workspaceChatWsRetry = 0;
+        stopChatPoll();
+        startChatHeartbeat();
+        syncWorkspaceMessages(true);
+      };
       ws.onmessage = function (ev) {
+        if (workspaceChatWs !== ws) return;
         var payload;
         try { payload = JSON.parse(ev.data); } catch (e) { return; }
+        if (payload && payload.type === 'pong') {
+          chatAwaitingPong = false;
+          if (chatPongTimer) { clearTimeout(chatPongTimer); chatPongTimer = null; }
+          return;
+        }
         if (payload && payload.type === 'MESSAGE' && payload.data) {
           var m = payload.data;
+          var key = m.id != null ? String(m.id) : '';
+          var seen = !!(key && chatNotified[key]);
+          if (key) chatNotified[key] = true;
           var mine = m.senderType === 'C_PORTAL_CUSTOMER';
           if (workspace.currentId === m.conversationId) {
             if (m.msgType === 'event' && m.event) {
@@ -1520,7 +2234,7 @@
               appendChatMsg(m.content, mine ? 'out' : 'in', m.role || 'CUSTOMER', m.displayName || m.role, m.createdAt, m.translatedContent, m.id);
             }
           }
-          if (!mine) playChatNotify();
+          if (!mine && !seen) playChatNotify();
           loadConversations();
         }
         if (payload && payload.type === 'MESSAGE_TRANSLATED' && payload.data) {
@@ -1528,19 +2242,43 @@
         }
       };
       ws.onclose = function () {
-        workspaceChatWs = null;
+        clearTimeout(connectTimer);
+        if (workspaceChatWs === ws) workspaceChatWs = null;
+        if (workspaceChatWs && workspaceChatWs !== ws) return;
+        clearChatHeartbeat();
         if (!localStorage.getItem('duxury-token')) return;
-        workspaceChatWsRetry += 1;
-        var delay = Math.min(15000, 1000 * Math.pow(2, Math.min(workspaceChatWsRetry, 4)));
-        setTimeout(connectChatSocket, delay);
+        startChatPoll();
+        scheduleChatReconnect();
       };
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      startChatPoll();
+      scheduleChatReconnect();
+    }
   }
+
+  function nudgeChatSocket() {
+    if (!localStorage.getItem('duxury-token') || !chatApiReady()) return;
+    if (workspaceChatWs && workspaceChatWs.readyState === WebSocket.OPEN) {
+      sendChatPing();
+      return;
+    }
+    workspaceChatWsRetry = 0;
+    if (chatReconnectTimer) {
+      clearTimeout(chatReconnectTimer);
+      chatReconnectTimer = null;
+    }
+    connectChatSocket();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') nudgeChatSocket();
+  });
+  window.addEventListener('online', nudgeChatSocket);
+  window.addEventListener('pageshow', nudgeChatSocket);
 
   function startWorkspace() {
     connectChatSocket();
     loadConversations();
-    loadOrderProgress();
   }
 
   if (localStorage.getItem('duxury-token') && chatApiReady()) {
@@ -1548,178 +2286,6 @@
   }
   if (chatBody && workspaceLoggedIn) {
     startWorkspace();
-  }
-
-  /* ============================================================
-     Order progress panel (C 端进度：事件卡片 + 确认/驳回 + 报价 + 交付)
-  ============================================================ */
-  function loadOrderProgress() {
-    var order = null;
-    try { order = JSON.parse(localStorage.getItem('duxury-order') || 'null'); } catch (e) { order = null; }
-    var orderId = order && order.orderId;
-    var progress = document.getElementById('chatProgress');
-    var body = document.getElementById('chatProgressBody');
-    if (!progress || !body || !orderId || !(window.DUXURY_API && window.DUXURY_API.getOrderSummary)) return;
-    progress.style.display = '';
-    renderOrderProgress(orderId, body);
-
-    var toggle = document.getElementById('chatProgressToggle');
-    if (toggle) {
-      toggle.addEventListener('click', function () {
-        body.style.display = body.style.display === 'none' ? '' : 'none';
-        toggle.textContent = body.style.display === 'none' ? '▼' : '▲';
-      });
-    }
-  }
-
-  function renderOrderProgress(orderId, body) {
-    function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function build(summary, events) {
-      var html = '';
-      var st = summary.currentStatusLabel || summary.currentStatus || '';
-      html += '<div class="prog-status"><strong>' + esc(summary.displayTitle || summary.orderNumber) + '</strong> <span class="prog-tag">' + esc(st) + '</span></div>';
-      if (summary.firstDesignImageUrl) {
-        html += '<img class="prog-img" src="' + esc(summary.firstDesignImageUrl) + '" alt="design">';
-      }
-      if (summary.quotation && summary.quotation.finalized) {
-        html += '<div class="prog-quote"><div>工费 ¥' + (summary.quotation.laborCost || 0) + '</div><div>附加工费 ¥' + (summary.quotation.additionalLaborCost || 0) + '</div><div><strong>合计 ¥' + (summary.quotation.totalAmount || 0) + '</strong></div></div>';
-      }
-      if (summary.modelFiles && summary.modelFiles.length) {
-        html += '<div class="prog-files">';
-        summary.modelFiles.forEach(function (f) {
-          html += '<a href="' + esc(f.fileUrl) + '" target="_blank" class="prog-file">下载 ' + esc(f.fileName || '文件') + '</a>';
-        });
-        html += '</div>';
-      }
-      // 物流信息（发货后展示）
-      if (summary.shipment) {
-        html += '<div class="prog-shipment">';
-        html += '<div class="prog-shipment-title">物流信息</div>';
-        html += '<div class="prog-shipment-row">快递单号：' + esc(summary.shipment.trackingNumber) + '</div>';
-        if (summary.shipment.carrierName || summary.shipment.carrierCode) {
-          html += '<div class="prog-shipment-row">承运商：' + esc(summary.shipment.carrierName || summary.shipment.carrierCode) + '</div>';
-        }
-        html += '<div class="prog-shipment-row">状态：' + esc(summary.shipment.statusLabel || '已发货（待物流更新）') + '</div>';
-        if (summary.shipment.queryUrl) {
-          html += '<a href="' + esc(summary.shipment.queryUrl) + '" target="_blank" class="prog-file">查询物流轨迹</a>';
-        }
-        if (summary.shipment.events && summary.shipment.events.length) {
-          html += '<div class="prog-shipment-events">';
-          summary.shipment.events.forEach(function (e) {
-            html += '<div class="prog-event"><div class="prog-event-title">' + esc(e.description || e.time || '-') + '</div>';
-            if (e.time) html += '<div class="prog-event-content">' + esc(e.time) + (e.location ? ' · ' + esc(e.location) : '') + '</div>';
-            html += '</div>';
-          });
-          html += '</div>';
-        }
-        html += '</div>';
-      }
-      if (events && events.length) {
-        html += '<div class="prog-events">';
-        events.slice().reverse().forEach(function (ev) {
-          html += '<div class="prog-event"><div class="prog-event-title">' + esc(ev.title || ev.eventType) + '</div>';
-          if (ev.content) html += '<div class="prog-event-content">' + esc(ev.content) + '</div>';
-          if (ev.reason) html += '<div class="prog-event-reason">驳回原因：' + esc(ev.reason) + '</div>';
-          html += '</div>';
-        });
-        html += '</div>';
-      }
-      // 按件操作区
-      var actions = '';
-      var pieces = summary.pieces && summary.pieces.length ? summary.pieces : [];
-      var isCustomImage = summary.serviceType === 'CUSTOM_IMAGE';
-      if (pieces.length) {
-        html += '<div class="prog-piece-list">';
-        pieces.forEach(function (piece) {
-          html += '<div class="prog-piece-card"><div class="prog-piece-title"><strong>' + esc(piece.name) + '</strong>';
-          if (piece.designConfirmed) html += ' <span class="prog-tag">设计已确认</span>';
-          if (piece.modelConfirmed) html += ' <span class="prog-tag">建模已确认</span>';
-          html += '</div>';
-          if (!isCustomImage && piece.designImages && piece.designImages.length) {
-            html += '<img class="prog-img prog-img--sm" src="' + esc(piece.designImages[0]) + '" alt="design">';
-          }
-          if (piece.modelEffectImages && piece.modelEffectImages.length) {
-            html += '<img class="prog-img prog-img--sm" src="' + esc(piece.modelEffectImages[0]) + '" alt="model">';
-          }
-          var lastDesignPiece = events.filter(function (e) {
-            return e.pieceId === piece.id && ['DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM'].indexOf(e.eventType) >= 0;
-          }).slice(-1)[0];
-          var lastModelPiece = events.filter(function (e) {
-            return e.pieceId === piece.id && ['MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM'].indexOf(e.eventType) >= 0;
-          }).slice(-1)[0];
-          if (!isCustomImage && !piece.designConfirmed && lastDesignPiece && lastDesignPiece.eventType === 'DESIGN_SUBMIT') {
-            actions += '<button class="prog-btn prog-btn--ok" data-act="DESIGN_CONFIRM" data-piece-id="' + piece.id + '">确认「' + esc(piece.name) + '」设计</button>';
-            actions += '<button class="prog-btn prog-btn--no" data-act="DESIGN_REJECT" data-piece-id="' + piece.id + '">驳回设计</button>';
-          }
-          if (!piece.modelConfirmed && lastModelPiece && lastModelPiece.eventType === 'MODEL_SUBMIT') {
-            actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM" data-piece-id="' + piece.id + '">确认「' + esc(piece.name) + '」建模</button>';
-            actions += '<button class="prog-btn prog-btn--no" data-act="MODEL_REJECT" data-piece-id="' + piece.id + '">驳回建模</button>';
-          }
-          html += '</div>';
-        });
-        html += '</div>';
-      } else {
-        var lastDesign = events.filter(function (e) { return ['DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
-        var lastModel = events.filter(function (e) { return ['MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM'].indexOf(e.eventType) >= 0; }).slice(-1)[0];
-        if (!summary.designApproved && lastDesign && lastDesign.eventType === 'DESIGN_SUBMIT') {
-          actions += '<button class="prog-btn prog-btn--ok" data-act="DESIGN_CONFIRM">确认设计稿</button><button class="prog-btn prog-btn--no" data-act="DESIGN_REJECT">驳回设计稿</button>';
-        }
-        if (!summary.modelApproved && lastModel && lastModel.eventType === 'MODEL_SUBMIT') {
-          actions += '<button class="prog-btn prog-btn--ok" data-act="MODEL_CONFIRM">确认建模稿</button><button class="prog-btn prog-btn--no" data-act="MODEL_REJECT">驳回建模稿</button>';
-        }
-      }
-      if (summary.canPublishToStorefront) {
-        actions += '<button class="prog-btn prog-btn--ok" data-act="PUBLISH">' + (window.I18N.t('pub.title')) + '</button>';
-      }
-      if (summary.currentStatus === 'PRODUCING') {
-        if (summary.serviceType === 'STOREFRONT') {
-          actions += '<button class="prog-btn prog-btn--ok" data-act="DELIVERY">确认收货</button>';
-        } else {
-          actions += '<button class="prog-btn prog-btn--ok" data-act="DELIVERY">确认收货 / 付尾款</button>';
-        }
-      }
-      if (actions) html += '<div class="prog-actions">' + actions + '</div>';
-      body.innerHTML = html;
-
-      body.querySelectorAll('[data-act]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var act = btn.getAttribute('data-act');
-          if (act === 'PUBLISH') {
-            openPublishModal(orderId, summary);
-            return;
-          }
-          if (act === 'DELIVERY') {
-            if (!confirm(window.I18N.t('ws.progress.delivery.confirm'))) return;
-            window.DUXURY_API.confirmDelivery(orderId).then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
-          } else if (act.indexOf('REJECT') >= 0) {
-            var reason = prompt(window.I18N.t('ws.progress.reject.ph'));
-            if (!reason) return;
-            var pieceId = btn.getAttribute('data-piece-id');
-            var rejectReq = pieceId
-              ? window.DUXURY_API.rejectPiece(orderId, pieceId, act, reason)
-              : window.DUXURY_API.rejectOrder(orderId, act, reason);
-            rejectReq.then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
-          } else {
-            var pieceIdOk = btn.getAttribute('data-piece-id');
-            var confirmReq = pieceIdOk
-              ? window.DUXURY_API.confirmPiece(orderId, pieceIdOk, act)
-              : window.DUXURY_API.confirmOrder(orderId, act);
-            confirmReq.then(function () { refreshOrderProgress(orderId, body); }).catch(function (e) { alert(e.message); });
-          }
-        });
-      });
-    }
-
-    window.DUXURY_API.getOrderSummary(orderId).then(function (summary) {
-      window.DUXURY_API.getOrderEvents(orderId).then(function (events) {
-        build(summary, events || []);
-      }).catch(function () { build(summary, []); });
-    }).catch(function (e) { body.innerHTML = '<div class="prog-empty">' + esc(e.message || '加载进度失败') + '</div>'; });
-  }
-
-  function refreshOrderProgress(orderId, body) {
-    renderOrderProgress(orderId, body);
-    loadConversations();
   }
 
   /* ============================================================

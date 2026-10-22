@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Layout,
@@ -37,7 +37,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
-import { conversationSocket, getActiveConversationId } from '@/services/conversationSocket';
+import { claimChatAlert, conversationSocket, getActiveConversationId } from '@/services/conversationSocket';
 import { playNotifySound } from '@/utils/notifySound';
 import './AppLayout.css';
 
@@ -51,15 +51,24 @@ const AppLayout: React.FC = () => {
   const { sidebarCollapsed, toggleSidebar, notifications, unreadNotifications } = useAppStore();
   const [collapsed, setCollapsed] = useState(sidebarCollapsed);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
-  );
+  const [viewport, setViewport] = useState<'phone' | 'tablet' | 'desktop'>(() => {
+    if (typeof window === 'undefined') return 'desktop';
+    if (window.innerWidth < 768) return 'phone';
+    if (window.innerWidth < 1200) return 'tablet';
+    return 'desktop';
+  });
+  const isMobile = viewport !== 'desktop';
+  const isMobileRef = useRef(isMobile);
+  isMobileRef.current = isMobile;
+  const recentChatAlertRef = useRef(new Map<number, { text: string; at: number }>());
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    const fn = () => setIsMobile(mq.matches);
-    mq.addEventListener('change', fn);
-    return () => mq.removeEventListener('change', fn);
+    const onResize = () => {
+      const width = window.innerWidth;
+      setViewport(width < 768 ? 'phone' : width < 1200 ? 'tablet' : 'desktop');
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   useEffect(() => {
@@ -68,23 +77,40 @@ const AppLayout: React.FC = () => {
       conversationSocket.disconnect();
       return;
     }
+    if (user.role === 'MODELER') {
+      conversationSocket.disconnect();
+      return;
+    }
     conversationSocket.connect(accessToken);
     const unsubscribe = conversationSocket.subscribe((payload) => {
-      if (payload?.type !== 'MESSAGE' || !payload.data) return;
+      if ((payload?.type !== 'MESSAGE' && payload?.type !== 'INBOX') || !payload.data) return;
       const m = payload.data;
+      if (m.conversationId == null) return;
       const mine = m.senderType === 'STAFF' && m.senderId === user.id;
       if (mine) return;
+      const textKey = `${m.conversationId}:${m.content || ''}`;
+      const now = Date.now();
+      const recent = recentChatAlertRef.current.get(m.conversationId);
+      if (recent && recent.text === textKey && now - recent.at < 3000) return;
+      const dedupKey = m.id && m.id > 0
+        ? `id:${m.id}`
+        : `inbox:${m.conversationId}:${m.createdAt || ''}:${m.content || ''}`;
+      if (!claimChatAlert(dedupKey)) return;
+      recentChatAlertRef.current.set(m.conversationId, { text: textKey, at: now });
+      // 桌面保持原逻辑：别人的消息响一声，当前会话不弹通知。
+      // 手机 / 触屏同样要响，包括正在看的会话；自己发的上面已经跳过。
       playNotifySound();
       if (getActiveConversationId() === m.conversationId) return;
+      const noticeKey = `chat-${m.conversationId}-${m.id && m.id > 0 ? m.id : m.createdAt || 'inbox'}`;
       const preview = (m.content || (m.msgType === 'event' ? '订单进度更新' : '收到新消息')).slice(0, 80);
       notification.info({
-        key: `chat-${m.conversationId}-${m.id}`,
+        key: noticeKey,
         message: m.displayName || '新消息',
         description: preview,
-        placement: 'bottomRight',
+        placement: isMobileRef.current ? 'topRight' : 'bottomRight',
         duration: 4,
         onClick: () => {
-          notification.destroy(`chat-${m.conversationId}-${m.id}`);
+          notification.destroy(noticeKey);
           navigate('/chat', { state: { conversationId: m.conversationId } });
         },
       });
@@ -102,23 +128,22 @@ const AppLayout: React.FC = () => {
   const getMenuItems = (): any[] => {
     if (!user) return [];
 
-    const baseItems: any[] = [
-      {
-        key: '/dashboard',
-        icon: <DashboardOutlined />,
-        label: '仪表盘',
-      },
-      {
-        key: '/chat',
-        icon: <MessageOutlined />,
-        label: '客户沟通',
-      },
-    ];
+    const dashboardItem = {
+      key: '/dashboard',
+      icon: <DashboardOutlined />,
+      label: '仪表盘',
+    };
+    const chatItem = {
+      key: '/chat',
+      icon: <MessageOutlined />,
+      label: '客户沟通',
+    };
+    const homeItems = user.role === 'MODELER' ? [dashboardItem] : [dashboardItem, chatItem];
 
     switch (user.role) {
       case 'ADMIN':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
@@ -175,7 +200,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'PRE_SALES':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
@@ -190,7 +215,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'SALES':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/orders',
             icon: <ShoppingCartOutlined />,
@@ -212,7 +237,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'DESIGNER':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/workbench',
             icon: <FileTextOutlined />,
@@ -231,7 +256,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'MODELER':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
@@ -255,7 +280,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'TRACKER':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/workbench',
             icon: <FileTextOutlined />,
@@ -278,7 +303,7 @@ const AppLayout: React.FC = () => {
         ];
       case 'DATA_ARCHIVIST':
         return [
-          ...baseItems,
+          ...homeItems,
           {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
@@ -297,7 +322,7 @@ const AppLayout: React.FC = () => {
           },
         ];
       default:
-        return baseItems;
+        return homeItems;
     }
   };
 
@@ -324,6 +349,16 @@ const AppLayout: React.FC = () => {
   useEffect(() => {
     if (!isMobile) setMobileMenuOpen(false);
   }, [isMobile]);
+
+  useEffect(() => {
+    const state = (window.__mojeShellBackState ||= {});
+    state.mobileMenuOpen = mobileMenuOpen;
+    state.closeMobileMenu = () => setMobileMenuOpen(false);
+    return () => {
+      state.mobileMenuOpen = false;
+      state.closeMobileMenu = undefined;
+    };
+  }, [mobileMenuOpen]);
 
   const handleLogout = async () => {
     try {
@@ -438,7 +473,7 @@ const AppLayout: React.FC = () => {
 
   return (
     <Layout
-      className={`app-layout${isMobile ? ' app-layout--mobile' : ''}`}
+      className={`app-layout app-layout--${viewport}${isMobile ? ' app-layout--mobile' : ''}`}
       style={{
         flex: 1,
         minHeight: 0,
@@ -511,6 +546,7 @@ const AppLayout: React.FC = () => {
           onClose={() => setMobileMenuOpen(false)}
           open={mobileMenuOpen}
           width={280}
+          zIndex={1100}
           styles={{ body: { padding: 0 } }}
           title={null}
         >
@@ -540,7 +576,7 @@ const AppLayout: React.FC = () => {
       </Drawer>
       )}
 
-      <Layout style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <Layout className="app-main" style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <Header
           style={{
             padding: '0 16px',
@@ -620,21 +656,23 @@ const AppLayout: React.FC = () => {
 
         <Content
           style={{
-            margin: isMobile ? '8px' : '16px',
-            marginBottom: isMobile ? 72 : undefined,
+            margin: viewport === 'phone' ? '8px' : viewport === 'tablet' ? '12px' : '16px',
             padding: 0,
             flex: 1,
             minHeight: 0,
             background: 'transparent',
             borderRadius: borderRadiusLG,
-            overflow: location.pathname.startsWith('/social-publish') ? 'hidden' : 'auto',
+            overflow:
+              location.pathname.startsWith('/social-publish') || location.pathname.startsWith('/chat')
+                ? 'hidden'
+                : 'auto',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
           <div
             className={
-              location.pathname.startsWith('/social-publish')
+              location.pathname.startsWith('/social-publish') || location.pathname.startsWith('/chat')
                 ? 'content-wrapper content-wrapper--fill'
                 : 'content-wrapper'
             }
@@ -646,35 +684,62 @@ const AppLayout: React.FC = () => {
 
       {isMobile && (
         <div className="mobile-bottom-nav" role="navigation" aria-label="主导航">
-          <Button type="text" onClick={() => navigateAndCloseMobile('/dashboard')}>
-            首页
-          </Button>
-          <Button type="text" onClick={() => navigateAndCloseMobile('/orders')}>
-            订单
-          </Button>
+          <button
+            type="button"
+            className={`nav-item${location.pathname.startsWith('/dashboard') ? ' is-active' : ''}`}
+            onClick={() => navigateAndCloseMobile('/dashboard')}
+          >
+            <DashboardOutlined />
+            <span>首页</span>
+          </button>
+          <button
+            type="button"
+            className={`nav-item${location.pathname.startsWith('/orders') ? ' is-active' : ''}`}
+            onClick={() => navigateAndCloseMobile('/orders')}
+          >
+            <ShoppingCartOutlined />
+            <span>订单</span>
+          </button>
           {['DESIGNER', 'MODELER', 'TRACKER'].includes(user?.role || '') && (
-            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench')}>
-              工作台
-            </Button>
+            <button
+              type="button"
+              className={`nav-item${location.pathname === '/workbench' ? ' is-active' : ''}`}
+              onClick={() => navigateAndCloseMobile('/workbench')}
+            >
+              <FileTextOutlined />
+              <span>工作台</span>
+            </button>
           )}
           {user?.role === 'TRACKER' && (
-            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/tracker-follow-up')}>
-              跟单
-            </Button>
+            <button
+              type="button"
+              className={`nav-item${location.pathname.startsWith('/workbench/tracker-follow-up') ? ' is-active' : ''}`}
+              onClick={() => navigateAndCloseMobile('/workbench/tracker-follow-up')}
+            >
+              <UnorderedListOutlined />
+              <span>跟单</span>
+            </button>
           )}
           {['ADMIN', 'SALES', 'DATA_ARCHIVIST'].includes(user?.role || '') && (
-            <Button type="text" onClick={() => navigateAndCloseMobile('/workbench/modeling-archive')}>
-              归档池
-            </Button>
+            <button
+              type="button"
+              className={`nav-item${location.pathname.startsWith('/workbench/modeling-archive') ? ' is-active' : ''}`}
+              onClick={() => navigateAndCloseMobile('/workbench/modeling-archive')}
+            >
+              <DatabaseOutlined />
+              <span>归档</span>
+            </button>
           )}
           {['ADMIN', 'PRE_SALES', 'SALES'].includes(user?.role || '') && (
-            <Button type="text" onClick={handleSocialPublish}>
-              社媒发布
-            </Button>
+            <button type="button" className="nav-item" onClick={handleSocialPublish}>
+              <HighlightOutlined />
+              <span>社媒</span>
+            </button>
           )}
-          <Button type="text" onClick={() => setMobileMenuOpen(true)}>
-            菜单
-          </Button>
+          <button type="button" className="nav-item" onClick={() => setMobileMenuOpen(true)}>
+            <MenuOutlined />
+            <span>菜单</span>
+          </button>
         </div>
       )}
     </Layout>

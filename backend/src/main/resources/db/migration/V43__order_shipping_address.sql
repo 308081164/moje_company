@@ -1,0 +1,18 @@
+-- 生产完成后客户填写的收货信息，供跟单员发货使用
+ALTER TABLE orders
+    ADD COLUMN shipping_recipient VARCHAR(100) NULL COMMENT '收货人',
+    ADD COLUMN shipping_phone VARCHAR(40) NULL COMMENT '收货联系电话',
+    ADD COLUMN shipping_country VARCHAR(80) NULL COMMENT '收货国家或地区',
+    ADD COLUMN shipping_address TEXT NULL COMMENT '收货详细地址',
+    ADD COLUMN shipping_postal_code VARCHAR(20) NULL COMMENT '邮编',
+    ADD COLUMN shipping_address_at DATETIME NULL COMMENT '收货信息提交时间';
+
+ALTER TABLE order_event
+    MODIFY COLUMN event_type ENUM(
+        'DESIGN_SUBMIT','DESIGN_REJECT','DESIGN_CONFIRM',
+        'MODEL_SUBMIT','MODEL_REJECT','MODEL_CONFIRM',
+        'REVIEW_PASS','REVIEW_REJECT','QUOTATION','PRODUCTION_LOG',
+        'STATUS_CHANGE','DELIVERY_CONFIRM','SHIPPED','DELIVERED',
+        'BALANCE_PAYMENT','BALANCE_PAID',
+        'SHIPPING_ADDRESS_REQUEST','SHIPPING_ADDRESS_FILLED'
+    ) NOT NULL COMMENT '订单事件卡片类型';

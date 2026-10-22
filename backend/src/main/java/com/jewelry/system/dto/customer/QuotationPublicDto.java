@@ -12,4 +12,9 @@ public class QuotationPublicDto {
     private BigDecimal additionalLaborCost;
     private BigDecimal totalAmount;
     private boolean finalized;
+    private Boolean designBuyout;
+    private BigDecimal designBuyoutCost;
+    private Boolean appraisalCertificate;
+    private BigDecimal appraisalCertificateCost;
+    private Boolean confidential;
 }

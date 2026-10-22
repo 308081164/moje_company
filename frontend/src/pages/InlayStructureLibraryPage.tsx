@@ -235,6 +235,7 @@ const BrowseTab: React.FC = () => {
         loading={loading}
         columns={columns}
         dataSource={items}
+        scroll={{ x: 'max-content' }}
         pagination={{
           current: page,
           pageSize,
@@ -647,7 +648,7 @@ const AgentQueryTab: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 280px)', minHeight: 480 }}>
+    <div className="inlay-library-shell">
       <Alert
         type="info"
         showIcon
@@ -677,6 +678,7 @@ const AgentQueryTab: React.FC = () => {
 
       <div
         ref={threadRef}
+        className="inlay-thread"
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -810,6 +812,7 @@ const AgentQueryTab: React.FC = () => {
       ) : null}
 
       <div
+        className="inlay-composer"
         style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}
         onPaste={(e) => {
           const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'));

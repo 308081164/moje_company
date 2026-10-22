@@ -34,6 +34,17 @@ public class AsyncConfig {
         return new DelegatingSecurityContextAsyncTaskExecutor(ex);
     }
 
+    @Bean(name = "orderAiConciergeExecutor")
+    public Executor orderAiConciergeExecutor() {
+        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
+        ex.setCorePoolSize(2);
+        ex.setMaxPoolSize(8);
+        ex.setQueueCapacity(300);
+        ex.setThreadNamePrefix("order-ai-concierge-");
+        ex.initialize();
+        return ex;
+    }
+
     @Bean(name = "translationExecutor")
     public Executor translationExecutor() {
         ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();

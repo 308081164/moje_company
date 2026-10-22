@@ -10,6 +10,15 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-maskable.svg" />
     <title>珠宝定制管理系统</title>
+    <script>
+      (function () {
+        if (window.env && window.env.API_URL) return;
+        var host = location.hostname;
+        var local = host === 'localhost' || host === '127.0.0.1';
+        window.env = window.env || {};
+        window.env.API_URL = local ? 'http://localhost:8851/api' : 'http://62.234.174.95:8851/api';
+      })();
+    </script>
     <!-- 开发环境可能没有打包图标资源，避免 404 干扰 -->
     <style>
         * {

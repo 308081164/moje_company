@@ -2,6 +2,7 @@ package com.jewelry.system.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.entity.OrderPiece;
+import com.jewelry.system.enums.JewelryType;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderPieceRepository;
@@ -44,7 +45,7 @@ class OrderPieceServiceTest {
     @Test
     void createPieceRejectsWhenAtLimit() {
         when(orderPieceRepository.countByOrderId(1L)).thenReturn(5);
-        assertThrows(ResponseStatusException.class, () -> orderPieceService.createPiece(1L, "男戒"));
+        assertThrows(ResponseStatusException.class, () -> orderPieceService.createPiece(1L, "男戒", JewelryType.RING));
     }
 
     @Test
@@ -57,6 +58,23 @@ class OrderPieceServiceTest {
         b.setDesignConfirmed(false);
         when(orderPieceRepository.findByOrderIdOrderBySeqAsc(9L)).thenReturn(List.of(a, b));
         org.junit.jupiter.api.Assertions.assertFalse(svc.allDesignConfirmed(9L));
+    }
+
+    @Test
+    void initializePiecesForOrderRejectsInvalidCount() {
+        assertThrows(ResponseStatusException.class, () -> orderPieceService.initializePiecesForOrder(1L, 0));
+        assertThrows(ResponseStatusException.class, () -> orderPieceService.initializePiecesForOrder(1L, 6));
+    }
+
+    @Test
+    void initializePiecesForOrderIsIdempotentWhenPiecesExist() {
+        OrderPiece existing = new OrderPiece();
+        existing.setId(1L);
+        existing.setName("主件");
+        when(orderPieceRepository.findByOrderIdOrderBySeqAsc(4L)).thenReturn(List.of(existing));
+        var list = orderPieceService.initializePiecesForOrder(4L, 3);
+        assertEquals(1, list.size());
+        assertEquals("主件", list.get(0).getName());
     }
 
     @Test

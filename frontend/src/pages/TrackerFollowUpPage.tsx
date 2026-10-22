@@ -1,451 +1,972 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
-  Card,
+  Empty,
   Image,
-  Input,
-  Pagination,
-  Select,
-  Space,
-  Timeline,
-  Typography,
-  Upload,
-  message,
   Modal,
+  Spin,
+  Typography,
+  message,
 } from 'antd';
-import type { UploadFile } from 'antd/es/upload/interface';
-import { DownloadOutlined, PlusOutlined, ReloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { CameraOutlined, PictureOutlined, ReloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
-import type { OrderInfo, OrderProductionFollowLogDto } from '@/types/order';
-import { OrderSource } from '@/types/order';
-import { orderStatusLabel, orderSourceLabel } from '@/utils/orderLabels';
-import { isRasterImageFileName } from '@/utils/isRasterImageFileName';
-import dayjs from 'dayjs';
+import { API_ORIGIN } from '@/services/api';
+import type {
+  OrderInfo,
+  OrderPieceInfo,
+  OrderProductionFollowLogDto,
+  ProductionPieceCard,
+  ProductionPoolPhoto,
+  ProductionProcessSummary,
+} from '@/types/order';
 
-const { Title, Text } = Typography;
-const { TextArea } = Input;
+const { Text, Title } = Typography;
 
-function collectModelFileRows(order: OrderInfo): { id: number; name: string; url?: string }[] {
-  const raw = order.modelInfo?.modelFiles;
-  if (!raw || !Array.isArray(raw)) return [];
-  return (raw as { fileId?: number; fileName?: string; fileUrl?: string }[])
-    .filter((x) => x.fileId != null)
-    .map((x) => ({
-      id: Number(x.fileId),
-      name: x.fileName || `file-${x.fileId}`,
-      url: x.fileUrl,
-    }));
-}
-
-const FollowLogImages: React.FC<{ fileIds: number[] }> = ({ fileIds }) => {
-  const [urls, setUrls] = useState<Record<number, string>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    const key = fileIds.join(',');
-    if (!key) return;
-    void (async () => {
-      const next: Record<number, string> = {};
-      for (const id of fileIds) {
-        try {
-          const u = await orderService.previewFile(id);
-          if (u) next[id] = u;
-        } catch {
-          /* 单张失败不影响其余 */
-        }
-      }
-      if (!cancelled) setUrls(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fileIds]);
-
-  if (!fileIds.length) return null;
-  return (
-    <Space wrap style={{ marginTop: 8 }}>
-      {fileIds.map((fid) =>
-        urls[fid] ? (
-          <Image key={fid} width={96} height={96} src={urls[fid]} style={{ objectFit: 'cover', borderRadius: 6 }} />
-        ) : (
-          <Text key={fid} type="secondary">
-            加载图片…
-          </Text>
-        )
-      )}
-    </Space>
-  );
-};
-
-const B2B_OPTIONS = [
-  { value: undefined, label: '全部订单' },
-  { value: false, label: 'C端订单' },
-  { value: true, label: 'B端订单' },
+const PROCESSES = [
+  { code: 'WAX', label: '喷蜡' },
+  { code: 'CAST', label: '倒模浇筑' },
+  { code: 'SETTING', label: '宝石镶嵌' },
+  { code: 'ENAMEL', label: '烤珐琅' },
+  { code: 'PLATING', label: '电镀' },
+  { code: 'BRUSH', label: '拉丝' },
+  { code: 'SAND', label: '喷砂' },
+  { code: 'FINISH_MOLD', label: '执模' },
+  { code: 'POLISH', label: '抛光' },
+  { code: 'MICRO_PAVE', label: '钉砂' },
 ];
 
+function resolveMediaUrl(url?: string): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${API_ORIGIN}${path}`;
+}
+
+function firstResolvedImage(urls?: string[] | null): string {
+  if (!urls?.length) return '';
+  for (const raw of urls) {
+    const resolved = resolveMediaUrl(raw);
+    if (resolved) return resolved;
+  }
+  return '';
+}
+
+/** 单件优先用建模效果图，没有时用设计图。订单级字段只补到对应单件上。 */
+function previewUrlForPiece(order: OrderInfo, piece: OrderPieceInfo): string {
+  const own =
+    firstResolvedImage(piece.model?.modelEffectImages) ||
+    firstResolvedImage(piece.design?.designImages);
+  if (own) return own;
+  if (order.modelInfo?.pieceId != null && order.modelInfo.pieceId === piece.id) {
+    const fromOrder = firstResolvedImage(order.modelInfo.modelEffectImages);
+    if (fromOrder) return fromOrder;
+  }
+  if (order.designInfo?.pieceId != null && order.designInfo.pieceId === piece.id) {
+    const fromOrder = firstResolvedImage(order.designInfo.designImages);
+    if (fromOrder) return fromOrder;
+  }
+  if ((order.pieces?.length ?? 0) === 1) {
+    return (
+      firstResolvedImage(order.modelInfo?.modelEffectImages) ||
+      firstResolvedImage(order.designInfo?.designImages)
+    );
+  }
+  return '';
+}
+
+interface FinishPiecePreview {
+  key: string;
+  name: string;
+  url: string;
+  orderId: number;
+  pieceId: number | null;
+}
+
+interface PieceTimelineTarget {
+  orderId: number;
+  pieceId: number | null;
+  pieceName: string;
+  orderNumber?: string;
+}
+
+/** 按实际完成时间先后，不用固定工艺顺序重排。 */
+function compareFollowLogs(a: OrderProductionFollowLogDto, b: OrderProductionFollowLogDto): number {
+  const ta = a.createdAt ? Date.parse(a.createdAt) : Number.NaN;
+  const tb = b.createdAt ? Date.parse(b.createdAt) : Number.NaN;
+  if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return ta - tb;
+  return (a.id || 0) - (b.id || 0);
+}
+
+function logsForPiece(rows: OrderProductionFollowLogDto[], pieceId: number | null): OrderProductionFollowLogDto[] {
+  const tagged = pieceId == null
+    ? rows.filter((log) => log.pieceId == null)
+    : rows.filter((log) => log.pieceId === pieceId);
+  const chosen = pieceId == null && tagged.length === 0 ? rows.slice() : tagged.slice();
+  chosen.sort(compareFollowLogs);
+  return chosen;
+}
+
+function formatLogTime(value?: string): string {
+  if (!value) return '';
+  return value.replace('T', ' ').slice(0, 16);
+}
+
+function finishPiecePreviews(order: OrderInfo): FinishPiecePreview[] {
+  const pieces = order.pieces ?? [];
+  const orderId = order.baseInfo.id;
+  if (pieces.length === 0) {
+    const url =
+      firstResolvedImage(order.modelInfo?.modelEffectImages) ||
+      firstResolvedImage(order.designInfo?.designImages);
+    if (!url) return [];
+    return [{ key: `order-${orderId}`, name: '单件', url, orderId, pieceId: null }];
+  }
+  return pieces.map((piece, index) => ({
+    key: String(piece.id ?? `${orderId}-${index}`),
+    name: (piece.name || '').trim() || `单件${piece.seq || index + 1}`,
+    url: previewUrlForPiece(order, piece),
+    orderId,
+    pieceId: piece.id ?? null,
+  }));
+}
+
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i;
+
+function isAcceptedImage(file: File): boolean {
+  const type = (file.type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  if (IMAGE_EXT.test(file.name || '')) return true;
+  // 安卓 WebView 经常不给相机文件带 MIME，空类型或二进制也要收下。
+  return (!type || type === 'application/octet-stream') && file.size > 0;
+}
+
+function markFileIntake(status: 'ok' | 'bad') {
+  (window as unknown as { __mojeFileIntake?: string }).__mojeFileIntake = status;
+}
+
+function shippingLines(order: OrderInfo): string[] {
+  const base = order.baseInfo;
+  if (!base.shippingRecipient && !base.shippingPhone && !base.shippingAddress && !base.shippingCountry) {
+    return [];
+  }
+  return [
+    base.shippingRecipient ? `收货人：${base.shippingRecipient}` : '',
+    base.shippingPhone ? `电话：${base.shippingPhone}` : '',
+    base.shippingCountry ? `国家/地区：${base.shippingCountry}` : '',
+    base.shippingAddress ? `地址：${base.shippingAddress}` : '',
+    `邮编：${base.shippingPostalCode || '未填'}`,
+  ].filter(Boolean);
+}
+
+function errorText(error: unknown): string {
+  const err = error as {
+    message?: string;
+    response?: { status?: number; data?: { message?: unknown; detail?: unknown; error?: unknown } };
+    request?: unknown;
+  };
+  const data = err?.response?.data;
+  const server = [data?.message, data?.detail, data?.error].find(
+    (item) => typeof item === 'string' && item.trim()
+  );
+  if (typeof server === 'string') return server;
+  if (err?.response?.status) return `服务器返回 HTTP ${err.response.status}`;
+  if (err?.request && !err.response) return '网络请求失败，照片没有保存到服务器';
+  if (err?.message) return err.message;
+  return '请重试';
+}
+
 const TrackerFollowUpPage: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [isB2b, setIsB2b] = useState<boolean | undefined>(undefined);
+  const [mode, setMode] = useState<'home' | 'capture' | 'sync'>('home');
+  const [processCode, setProcessCode] = useState<string>('WAX');
+  const [summaries, setSummaries] = useState<ProductionProcessSummary[]>([]);
+  const [pieces, setPieces] = useState<ProductionPieceCard[]>([]);
+  const [photos, setPhotos] = useState<ProductionPoolPhoto[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<Record<number, string>>({});
+  const [timelineTarget, setTimelineTarget] = useState<PieceTimelineTarget | null>(null);
+  const [timelineLogs, setTimelineLogs] = useState<OrderProductionFollowLogDto[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingUrls, setPendingUrls] = useState<string[]>([]);
+  const [overKey, setOverKey] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderInfo[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [shipOrders, setShipOrders] = useState<OrderInfo[]>([]);
+  const [shipDrafts, setShipDrafts] = useState<Record<number, { tracking: string; carrier: string }>>({});
+  const [shippingBusyId, setShippingBusyId] = useState<number | null>(null);
+  const dragPhotoId = useRef<number | null>(null);
+  const [ghost, setGhost] = useState<{ url: string; x: number; y: number } | null>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const albumRef = useRef<HTMLInputElement>(null);
 
-  const [logsByOrder, setLogsByOrder] = useState<Record<number, OrderProductionFollowLogDto[]>>({});
-  const [logsLoading, setLogsLoading] = useState<Record<number, boolean>>({});
+  const processLabel = PROCESSES.find((p) => p.code === processCode)?.label || processCode;
 
-  const [noteDraft, setNoteDraft] = useState<Record<number, string>>({});
-  const [fileDraft, setFileDraft] = useState<Record<number, UploadFile[]>>({});
-  const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
-  const [completing, setCompleting] = useState<Record<number, boolean>>({});
-
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
+  const loadSummary = useCallback(async () => {
     try {
-      const res = await orderService.workbenchTrackerProducing(page - 1, pageSize, isB2b);
-      setOrders(res?.content ?? []);
-      setTotal(res?.totalElements ?? 0);
-    } catch {
-      message.error('加载生产中订单失败');
-      setOrders([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, isB2b]);
-
-  useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
-
-  const fetchLogs = useCallback(async (orderId: number) => {
-    setLogsLoading((m) => ({ ...m, [orderId]: true }));
-    try {
-      const list = await orderService.listProductionFollowLogs(orderId);
-      setLogsByOrder((m) => ({ ...m, [orderId]: list }));
-    } catch {
-      message.error('加载跟单记录失败');
-    } finally {
-      setLogsLoading((m) => ({ ...m, [orderId]: false }));
+      setSummaries(await orderService.listProductionProcesses());
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
     }
   }, []);
 
-  const orderIdsKey = useMemo(() => orders.map((o) => o.baseInfo.id).join(','), [orders]);
-
-  useEffect(() => {
-    if (!orderIdsKey) return;
-    orders.forEach((o) => void fetchLogs(o.baseInfo.id));
-  }, [orderIdsKey, orders, fetchLogs]);
-
-  const submitLog = async (orderId: number) => {
-    const note = (noteDraft[orderId] || '').trim();
-    const files = fileDraft[orderId] || [];
-    const rawFiles = files.map((f) => f.originFileObj).filter(Boolean) as File[];
-    if (!note && rawFiles.length === 0) {
-      message.warning('请填写工序说明或选择至少一张过程图');
-      return;
-    }
-    setSubmitting((m) => ({ ...m, [orderId]: true }));
+  const loadBoard = useCallback(async (code: string) => {
+    setLoading(true);
     try {
-      const ids: number[] = [];
-      for (const file of rawFiles) {
-        const info = await orderService.uploadProductionFollowImage(orderId, file);
-        ids.push(info.id);
-      }
-      await orderService.addProductionFollowLog(orderId, { note: note || undefined, imageFileIds: ids.length ? ids : undefined });
-      message.success('已添加跟单记录');
-      setNoteDraft((m) => ({ ...m, [orderId]: '' }));
-      setFileDraft((m) => ({ ...m, [orderId]: [] }));
-      await fetchLogs(orderId);
+      const board = await orderService.productionSyncBoard(code);
+      setPieces(board.pieces || []);
+      setPhotos(board.photos || []);
+      const urls: Record<number, string> = {};
+      await Promise.all(
+        (board.photos || []).map(async (photo) => {
+          try {
+            urls[photo.fileId] = await orderService.previewFile(photo.fileId);
+          } catch {
+            /* 单张失败不影响其余 */
+          }
+        })
+      );
+      setPhotoUrls(urls);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
     } finally {
-      setSubmitting((m) => ({ ...m, [orderId]: false }));
+      setLoading(false);
+    }
+  }, []);
+
+  const loadOrders = useCallback(async () => {
+    try {
+      const res = await orderService.workbenchTrackerProducing(0, 50);
+      setOrders(res?.content ?? []);
+    } catch {
+      setOrders([]);
+    }
+  }, []);
+
+  const loadShipping = useCallback(async () => {
+    try {
+      const res = await orderService.workbenchTrackerToShip(0, 50);
+      setShipOrders(res?.content ?? []);
+    } catch {
+      setShipOrders([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSummary();
+    void loadOrders();
+    void loadShipping();
+  }, [loadSummary, loadOrders, loadShipping]);
+
+  useEffect(() => {
+    const onFileError = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      const text = typeof detail === 'string' && detail.trim()
+        ? detail
+        : '照片没有交回页面，请重试';
+      message.error(text, 6);
+    };
+    window.addEventListener('moje-file-error', onFileError);
+    return () => window.removeEventListener('moje-file-error', onFileError);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      pendingUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [pendingUrls]);
+
+  const openCapture = (code: string) => {
+    setProcessCode(code);
+    setPendingFiles([]);
+    setPendingUrls([]);
+    setMode('capture');
+  };
+
+  const openSync = (code: string) => {
+    setProcessCode(code);
+    setMode('sync');
+    void loadBoard(code);
+  };
+
+  const addPending = (list: FileList | File[] | null) => {
+    const incoming = Array.from(list || []);
+    if (!incoming.length) return;
+    // 整批都是空文件时先不弹错。壳会再把照片字节写回来；写不回来才会提示。
+    if (incoming.every((file) => file.size <= 0)) {
+      markFileIntake('bad');
+      return;
+    }
+    const accepted: File[] = [];
+    const errors: string[] = [];
+    for (const file of incoming) {
+      if (file.size <= 0) {
+        errors.push(`「${file.name || '照片'}」内容为空，没有从相机读到文件`);
+        continue;
+      }
+      if (!isAcceptedImage(file)) {
+        errors.push(`「${file.name || '文件'}」不是图片，无法保存`);
+        continue;
+      }
+      accepted.push(file);
+    }
+    if (errors.length) {
+      message.error(errors.slice(0, 3).join('；'), 6);
+    }
+    markFileIntake(accepted.length ? 'ok' : 'bad');
+    if (!accepted.length) return;
+    setPendingFiles((prev) => [...prev, ...accepted]);
+    setPendingUrls((prev) => [...prev, ...accepted.map((file) => URL.createObjectURL(file))]);
+  };
+
+  const savePending = async () => {
+    if (!pendingFiles.length) {
+      message.warning('请先拍照或从相册选择图片');
+      return;
+    }
+    setUploading(true);
+    let saved = 0;
+    try {
+      for (let i = 0; i < pendingFiles.length; i += 1) {
+        const file = pendingFiles[i];
+        if (file.size <= 0) {
+          throw new Error(`「${file.name || '照片'}」内容为空，没有上传`);
+        }
+        await orderService.uploadProcessPhoto(processCode, file);
+        saved += 1;
+      }
+      message.success(`已保存 ${saved} 张${processLabel}照片`);
+      pendingUrls.forEach((url) => URL.revokeObjectURL(url));
+      setPendingFiles([]);
+      setPendingUrls([]);
+      await loadSummary();
+    } catch (e: unknown) {
+      if (saved > 0) {
+        pendingUrls.slice(0, saved).forEach((url) => URL.revokeObjectURL(url));
+        setPendingFiles(pendingFiles.slice(saved));
+        setPendingUrls(pendingUrls.slice(saved));
+        message.error(`已保存 ${saved} 张，其余没有保存：${errorText(e)}`, 6);
+        await loadSummary();
+      } else {
+        message.error(`保存失败：${errorText(e)}`, 6);
+      }
+    } finally {
+      setUploading(false);
     }
   };
 
-  const confirmComplete = (order: OrderInfo) => {
-    const id = order.baseInfo.id;
+  const matchPhoto = async (photoId: number, piece: ProductionPieceCard) => {
+    try {
+      await orderService.matchProcessPhoto({
+        photoId,
+        orderId: piece.orderId,
+        pieceId: piece.pieceId,
+      });
+      message.success('该订单生产状态已更新');
+      setPieces((prev) => prev.filter((item) => item.pieceId !== piece.pieceId));
+      setPhotos((prev) => prev.filter((item) => item.id !== photoId));
+      await loadBoard(processCode);
+      await loadSummary();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    }
+  };
+
+  const onPhotoPointerDown = (event: React.PointerEvent<HTMLButtonElement>, photo: ProductionPoolPhoto) => {
+    dragPhotoId.current = photo.id;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const url = photoUrls[photo.fileId];
+    if (url) setGhost({ url, x: event.clientX, y: event.clientY });
+  };
+
+  const onPhotoPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (dragPhotoId.current == null) return;
+    setGhost((prev) => (prev ? { ...prev, x: event.clientX, y: event.clientY } : prev));
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const card = target?.closest('[data-piece-key]') as HTMLElement | null;
+    setOverKey(card?.dataset.pieceKey || null);
+  };
+
+  const onPhotoPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const photoId = dragPhotoId.current;
+    dragPhotoId.current = null;
+    setGhost(null);
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const card = target?.closest('[data-piece-key]') as HTMLElement | null;
+    const key = card?.dataset.pieceKey;
+    setOverKey(null);
+    if (photoId == null || !key) return;
+    const piece = pieces.find((item) => `${item.orderId}-${item.pieceId}` === key);
+    if (piece) void matchPhoto(photoId, piece);
+  };
+
+  const openPieceTimeline = useCallback(async (target: PieceTimelineTarget) => {
+    setTimelineTarget(target);
+    setTimelineLoading(true);
+    setTimelineError('');
+    setTimelineLogs([]);
+    try {
+      const rows = await orderService.listProductionFollowLogs(target.orderId);
+      const list = Array.isArray(rows) ? rows : [];
+      setTimelineLogs(logsForPiece(list, target.pieceId));
+    } catch (e: unknown) {
+      setTimelineError(`加载失败：${errorText(e)}`);
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, []);
+
+  const confirmDiscardPhoto = (photo: ProductionPoolPhoto) => {
     Modal.confirm({
-      title: '确认生产完成？',
-      content: '确认后订单将关闭完整生产流程并进入「已完成」，请确保生产已全部结束。',
-      okText: '确认完成',
+      title: '删除这张未匹配照片？',
+      content: '删除后不可恢复，这张照片会从照片池中移除。',
+      okText: '确认删除',
+      okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
-        setCompleting((m) => ({ ...m, [id]: true }));
         try {
-          await orderService.completeProduction(id);
-          message.success('订单已标记为生产完成');
-          await loadOrders();
-          setLogsByOrder((m) => {
-            const next = { ...m };
-            delete next[id];
-            return next;
-          });
+          await orderService.discardProcessPhoto(photo.id);
         } catch (e: unknown) {
-          message.error(String((e as Error)?.message || e));
-        } finally {
-          setCompleting((m) => ({ ...m, [id]: false }));
+          message.error(`删除失败：${errorText(e)}`);
+          throw e;
+        }
+        setPhotos((prev) => prev.filter((item) => item.id !== photo.id));
+        setPhotoUrls((prev) => {
+          if (!(photo.fileId in prev)) return prev;
+          const next = { ...prev };
+          delete next[photo.fileId];
+          return next;
+        });
+        message.success('已从照片池删除');
+        try {
+          await loadSummary();
+        } catch {
+          /* 未匹配数量刷新失败不影响已删除 */
         }
       },
     });
   };
 
-  const orderCards = useMemo(
-    () =>
-      orders.map((order) => {
-        const id = order.baseInfo.id;
-        const designUrls = order.designInfo?.designImages || [];
-        const effectUrls = order.modelInfo?.modelEffectImages || [];
-        const modelRows = collectModelFileRows(order);
-        const logs = logsByOrder[id] || [];
-        const logPending = logsLoading[id] && logs.length === 0;
+  const confirmComplete = (order: OrderInfo) => {
+    Modal.confirm({
+      title: '确认生产完成？',
+      content: '确认后订单进入「已完成」，并在客户订单群里请客户填写收货信息。',
+      okText: '确认完成',
+      cancelText: '取消',
+      onOk: async () => {
+        await orderService.completeProduction(order.baseInfo.id);
+        message.success('生产已完成，已请客户填写收货信息');
+        await loadOrders();
+        await loadShipping();
+        if (mode === 'sync') await loadBoard(processCode);
+      },
+    });
+  };
 
-        return (
-          <Card
-            key={id}
-            style={{ marginBottom: 16 }}
-            title={
-              <Space wrap>
-                <Title level={5} style={{ margin: 0 }}>
-                  {order.baseInfo.orderNumber}
-                </Title>
-                <Text type="secondary">{orderStatusLabel(order.currentStatus)}</Text>
-                <Text type="secondary">{orderSourceLabel(order.baseInfo.source)}</Text>
-                <Text type="secondary">{order.baseInfo.customerName || '-'}</Text>
-              </Space>
-            }
-            extra={
-              <Space wrap>
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() =>
-                    navigate(`/orders/${id}`, {
-                      state: { backTo: `${location.pathname}${location.search}` },
-                    })
-                  }
-                >
-                  订单详情
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  loading={!!completing[id]}
-                  onClick={() => confirmComplete(order)}
-                >
-                  生产完成
-                </Button>
-              </Space>
-            }
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              {order.baseInfo.source === OrderSource.MARKETPLACE ? (
-                <div style={{ background: '#fff7e8', padding: 12, borderRadius: 8, border: '1px solid #f0d9a6' }}>
-                  <Text strong>独立站寄售复产</Text>
-                  <div style={{ marginTop: 6 }}>
-                    <Text type="secondary">
-                      跳过设计/打样，按已确认建模稿生产并代为邮寄。发货请进入订单详情录入快递单号。
-                    </Text>
-                  </div>
-                  {order.baseInfo.basicRequirements ? (
-                    <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
-                      <Text>{order.baseInfo.basicRequirements}</Text>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <div style={{ background: '#fafafa', padding: 12, borderRadius: 8 }}>
-                <Text strong>设计图</Text>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                  {designUrls.length === 0 ? (
-                    <Text type="secondary">暂无</Text>
-                  ) : (
-                    designUrls.map((url, i) => (
-                      <Image key={i} width={100} height={100} src={url} style={{ objectFit: 'cover', borderRadius: 6 }} />
-                    ))
-                  )}
-                </div>
-              </div>
-              <div style={{ background: '#fafafa', padding: 12, borderRadius: 8 }}>
-                <Text strong>建模效果图（预览）</Text>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                  {effectUrls.length === 0 ? (
-                    <Text type="secondary">暂无</Text>
-                  ) : (
-                    effectUrls.map((url, i) => (
-                      <Image key={i} width={100} height={100} src={url} style={{ objectFit: 'cover', borderRadius: 6 }} />
-                    ))
-                  )}
-                </div>
-              </div>
-              <div style={{ background: '#fafafa', padding: 12, borderRadius: 8 }}>
-                <Text strong>建模源文件（下载）</Text>
-                <div style={{ marginTop: 8 }}>
-                  {modelRows.length === 0 ? (
-                    <Text type="secondary">暂无</Text>
-                  ) : (
-                    <Space direction="vertical" size={4}>
-                      {modelRows.map((f) => (
-                        <Space key={f.id} wrap>
-                          <Text>{f.name}</Text>
-                          {f.url && isRasterImageFileName(f.name) ? (
-                            <Image src={f.url} width={64} height={64} style={{ objectFit: 'cover', borderRadius: 4 }} />
-                          ) : null}
-                          <Button
-                            type="link"
-                            size="small"
-                            icon={<DownloadOutlined />}
-                            onClick={() =>
-                              void orderService
-                                .downloadFile(f.id)
-                                .then((blob) => {
-                                  const a = document.createElement('a');
-                                  a.href = URL.createObjectURL(blob);
-                                  a.download = f.name || `model-${f.id}`;
-                                  a.click();
-                                  URL.revokeObjectURL(a.href);
-                                })
-                                .catch((e: unknown) => message.error(String((e as Error)?.message || e)))
-                            }
-                          >
-                            下载
-                          </Button>
-                          {f.url ? (
-                            <Button type="link" size="small" href={f.url} target="_blank" rel="noopener noreferrer">
-                              打开链接
-                            </Button>
-                          ) : null}
-                        </Space>
-                      ))}
-                    </Space>
-                  )}
-                </div>
-              </div>
+  const patchShipDraft = (orderId: number, patch: Partial<{ tracking: string; carrier: string }>) => {
+    setShipDrafts((prev) => {
+      const current = prev[orderId] || { tracking: '', carrier: '' };
+      return { ...prev, [orderId]: { ...current, ...patch } };
+    });
+  };
 
-              <div>
-                <Text strong>跟单过程记录</Text>
-                {logPending ? (
-                  <div style={{ marginTop: 8 }}>
-                    <Text type="secondary">加载中…</Text>
-                  </div>
-                ) : logs.length === 0 ? (
-                  <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                    暂无记录，可在下方添加。
-                  </Text>
-                ) : (
-                  <Timeline style={{ marginTop: 12 }} items={logs.map((log) => ({
-                    children: (
-                      <div>
-                        <Text type="secondary">
-                          {log.createdAt ? dayjs(log.createdAt).format('YYYY-MM-DD HH:mm') : ''} · {log.authorName || '跟单员'}
-                        </Text>
-                        {log.note ? (
-                          <div style={{ marginTop: 4 }}>
-                            <Text>{log.note}</Text>
-                          </div>
-                        ) : null}
-                        {log.imageFileIds?.length ? <FollowLogImages fileIds={log.imageFileIds} /> : null}
-                      </div>
-                    ),
-                  }))} />
-                )}
-              </div>
+  const submitShip = async (orderId: number) => {
+    const draft = shipDrafts[orderId] || { tracking: '', carrier: '' };
+    const trackingNumber = draft.tracking.trim();
+    if (!trackingNumber) {
+      message.warning('请填写国际物流单号');
+      return;
+    }
+    setShippingBusyId(orderId);
+    try {
+      await orderService.shipOrder(orderId, {
+        trackingNumber,
+        carrierName: draft.carrier.trim() || undefined,
+      });
+      message.success('已发货，客户可以在订单聊天里查看物流');
+      setShipDrafts((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+      await loadShipping();
+    } catch (e: unknown) {
+      message.error(errorText(e));
+    } finally {
+      setShippingBusyId(null);
+    }
+  };
 
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
-                <Text strong>添加过程记录</Text>
-                <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
-                  可上传工序现场图并填写简短文字说明（至少填一项）。
-                </Text>
-                <Upload
-                  multiple
-                  listType="picture-card"
-                  fileList={fileDraft[id] || []}
-                  beforeUpload={() => false}
-                  onChange={({ fileList }) => setFileDraft((m) => ({ ...m, [id]: fileList }))}
-                  style={{ marginTop: 8 }}
-                >
-                  {(fileDraft[id]?.length || 0) >= 8 ? null : (
-                    <div>
-                      <PlusOutlined />
-                      <div style={{ marginTop: 8 }}>上传图片</div>
-                    </div>
-                  )}
-                </Upload>
-                <TextArea
-                  rows={3}
-                  style={{ marginTop: 8 }}
-                  placeholder="例如：执模完成，已交镶石。"
-                  value={noteDraft[id] || ''}
-                  onChange={(e) => setNoteDraft((m) => ({ ...m, [id]: e.target.value }))}
-                />
-                <Button
-                  type="primary"
-                  style={{ marginTop: 8 }}
-                  loading={!!submitting[id]}
-                  onClick={() => void submitLog(id)}
-                >
-                  提交记录
-                </Button>
-              </div>
-            </Space>
-          </Card>
-        );
-      }),
-    [orders, logsByOrder, logsLoading, noteDraft, fileDraft, submitting, completing, navigate, location]
-  );
+  const unmatchedOf = (code: string) => summaries.find((item) => item.code === code)?.unmatchedCount || 0;
 
   return (
-    <div>
-      <Card bordered={false}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center" wrap>
-          <div>
-            <Title level={3} style={{ margin: 0 }}>
-              跟单记录
-            </Title>
-            <Text type="secondary">待生产 / 生产中订单（含独立站寄售复产）· 过程记录、发货与生产完成</Text>
+    <div className="follow-sync">
+      <style>{`
+        .follow-sync { display: flex; flex-direction: column; gap: 12px; min-height: 100%; min-width: 0; max-width: 100%; }
+        .follow-sync__bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+        .process-card {
+          min-height: 104px; border: 1px solid #eee; border-radius: 16px; background: #fff;
+          padding: 14px; text-align: left; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .process-card strong { font-size: 18px; }
+        .process-card span { color: #8c8c8c; font-size: 12px; }
+        .process-actions { display: flex; gap: 8px; }
+        .process-actions button { flex: 1; height: 36px; border-radius: 999px; border: 1px solid #e5e5e5; background: #fafafa; }
+        .capture-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .capture-actions .ant-btn { height: 52px; border-radius: 14px; font-size: 16px; }
+        .preview-grid, .photo-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; }
+        .preview-grid img, .photo-drag img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; display: block; }
+        .photo-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .photo-drag {
+          width: 100%; border: 0; padding: 0; background: transparent; touch-action: none; cursor: grab; border-radius: 12px;
+        }
+        .photo-drag img { pointer-events: none; user-select: none; -webkit-user-drag: none; }
+        .photo-loading {
+          display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 12px;
+          background: #f3f3f3; color: #999; font-size: 12px;
+        }
+        .photo-delete {
+          min-height: 44px; width: 100%; border-radius: 10px; border: 1px solid #ffccc7;
+          background: #fff2f0; color: #cf1322; font-size: 15px; touch-action: manipulation; cursor: pointer;
+        }
+        .piece-row { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; }
+        .piece-card {
+          width: 108px; flex: 0 0 108px; border: 2px solid transparent; border-radius: 18px; background: #fff;
+          padding: 8px; text-align: center;
+        }
+        .piece-card.is-over { border-color: #c9a962; background: #fffaf0; }
+        .piece-open {
+          display: flex; flex-direction: column; align-items: center; width: 100%;
+          margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit;
+          cursor: pointer; text-align: center;
+        }
+        .piece-open strong { display: block; font-size: 13px; }
+        .piece-card img, .piece-card .piece-fallback {
+          width: 92px; height: 92px; border-radius: 16px; object-fit: cover; background: #f3f3f3;
+          display: grid; place-items: center; margin: 0 auto 6px;
+        }
+        .piece-card small { display: block; color: #888; font-size: 11px; }
+        .piece-log-hint { margin-top: 2px; color: #8c6b2f; font-size: 12px; line-height: 1.3; }
+        .drag-ghost {
+          position: fixed; width: 72px; height: 72px; margin-left: -36px; margin-top: -78px;
+          border-radius: 14px; object-fit: cover; pointer-events: none; z-index: 2000;
+          box-shadow: 0 8px 24px rgba(0,0,0,.25);
+        }
+        .log-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        .log-item { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 12px; padding: 10px 12px; }
+        .finish-thumb__log {
+          border: 0; background: transparent; color: #8c6b2f; font-size: 12px; line-height: 1.2;
+          min-height: 36px; width: 72px; padding: 6px 0; cursor: pointer; touch-action: manipulation;
+        }
+        .finish-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .finish-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas: "meta done" "thumbs thumbs";
+          gap: 8px 10px;
+          align-items: center;
+          background: #fff;
+          border-radius: 12px;
+          padding: 10px 12px;
+          min-width: 0;
+        }
+        .finish-row__meta { grid-area: meta; min-width: 0; }
+        .finish-row__no { font-weight: 600; overflow-wrap: anywhere; }
+        .finish-row__done { grid-area: done; justify-self: end; flex: 0 0 auto; }
+        .finish-thumbs {
+          grid-area: thumbs;
+          display: flex;
+          gap: 10px;
+          overflow-x: auto;
+          min-width: 0;
+          width: 100%;
+          padding-bottom: 2px;
+          -webkit-overflow-scrolling: touch;
+        }
+        .finish-thumb {
+          flex: 0 0 72px;
+          width: 72px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+        }
+        .finish-thumb .ant-image {
+          display: block;
+          width: 72px;
+          height: 72px;
+          border-radius: 10px;
+          overflow: hidden;
+          background: #f3f3f3;
+          line-height: 0;
+        }
+        .finish-thumb .ant-image-img {
+          width: 72px;
+          height: 72px;
+          object-fit: cover;
+        }
+        .finish-thumb .ant-image-mask { font-size: 12px; border-radius: 10px; }
+        .finish-thumb__empty {
+          width: 72px;
+          height: 72px;
+          border-radius: 10px;
+          background: #f3f3f3;
+          color: #bfbfbf;
+          display: grid;
+          place-items: center;
+          font-size: 18px;
+        }
+        .finish-thumb__name {
+          width: 72px;
+          font-size: 11px;
+          line-height: 1.3;
+          color: #666;
+          text-align: center;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        @media (min-width: 768px) {
+          .finish-row {
+            grid-template-columns: minmax(128px, 200px) minmax(0, 1fr) auto;
+            grid-template-areas: "meta thumbs done";
+            align-items: center;
+          }
+          .finish-thumbs { width: auto; }
+        }
+        .ship-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .ship-card {
+          background: #fff; border-radius: 12px; padding: 12px;
+          display: flex; flex-direction: column; gap: 8px; min-width: 0;
+        }
+        .ship-card__addr { font-size: 13px; line-height: 1.55; color: #444; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .ship-card__form { display: flex; flex-direction: column; gap: 8px; }
+        .ship-card__form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #666; min-width: 0; }
+        .ship-card__form input {
+          width: 100%; min-height: 44px; font-size: 16px; border: 1px solid #e5e5e5;
+          border-radius: 10px; padding: 8px 12px; box-sizing: border-box;
+        }
+        .ship-card__form .ant-btn { min-height: 44px; font-size: 16px; width: 100%; }
+        @media (min-width: 768px) {
+          .ship-card__form { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) auto; align-items: end; gap: 8px; }
+          .ship-card__form .ant-btn { width: auto; min-width: 112px; }
+        }
+        @media (max-width: 767px) {
+          .process-grid { grid-template-columns: 1fr 1fr; }
+          .follow-sync { padding-bottom: 8px; }
+          .follow-sync__bar { flex-wrap: wrap; align-items: flex-start; }
+          .finish-row__done, .process-actions button { min-height: 40px; }
+        }
+        @media (max-width: 1199px) {
+          .follow-sync__bar { min-width: 0; }
+          .follow-sync__bar .ant-typography { overflow-wrap: anywhere; }
+        }
+      `}</style>
+
+      {mode === 'home' && (
+        <>
+          <div className="follow-sync__bar">
+            <div>
+              <Title level={4} style={{ margin: 0 }}>工序跟单</Title>
+              <Text type="secondary">现场按工序连续拍照，回公司后再拖到对应单件。</Text>
+            </div>
+            <Button icon={<ReloadOutlined />} onClick={() => { void loadSummary(); void loadOrders(); void loadShipping(); }}>刷新</Button>
           </div>
-          <Space wrap>
-            <Select
-              value={isB2b}
-              onChange={(v) => {
-                setIsB2b(v);
-                setPage(1);
+          <div className="process-grid">
+            {PROCESSES.map((process) => (
+              <div key={process.code} className="process-card">
+                <div>
+                  <strong>{process.label}</strong>
+                  <span>未匹配 {unmatchedOf(process.code)} 张</span>
+                </div>
+                <div className="process-actions">
+                  <button type="button" onClick={() => openCapture(process.code)}>拍照</button>
+                  <button type="button" onClick={() => openSync(process.code)}>同步</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Title level={5} style={{ marginBottom: 0 }}>生产收尾</Title>
+          <div className="finish-list">
+            {orders.length === 0 ? <Empty description="暂无生产中的订单" /> : orders.map((order) => {
+              const previews = finishPiecePreviews(order);
+              return (
+                <div key={order.baseInfo.id} className="finish-row">
+                  <div className="finish-row__meta">
+                    <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                    <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
+                  </div>
+                  {previews.length > 0 && (
+                    <div className="finish-thumbs">
+                      <Image.PreviewGroup>
+                        {previews.map((preview) => (
+                          <div key={preview.key} className="finish-thumb">
+                            {preview.url ? (
+                              <Image
+                                src={preview.url}
+                                alt={preview.name}
+                                width={72}
+                                height={72}
+                                style={{ objectFit: 'cover' }}
+                                preview={{ mask: '放大' }}
+                              />
+                            ) : (
+                              <div className="finish-thumb__empty" aria-label={`${preview.name}暂无预览图`}>
+                                <PictureOutlined />
+                              </div>
+                            )}
+                            <span className="finish-thumb__name" title={preview.name}>{preview.name}</span>
+                            <button
+                              type="button"
+                              className="finish-thumb__log"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openPieceTimeline({
+                                  orderId: preview.orderId,
+                                  pieceId: preview.pieceId,
+                                  pieceName: preview.name,
+                                  orderNumber: order.baseInfo.orderNumber,
+                                });
+                              }}
+                            >
+                              过程记录
+                            </button>
+                          </div>
+                        ))}
+                      </Image.PreviewGroup>
+                    </div>
+                  )}
+                  <Button
+                    className="finish-row__done"
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => confirmComplete(order)}
+                  >
+                    生产完成
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <Title level={5} style={{ marginBottom: 0 }}>待发货</Title>
+          <Text type="secondary">生产完成后在这里填写承运商和国际物流单号。客户已填的收货信息会显示在每张单上。</Text>
+          <div className="ship-list">
+            {shipOrders.length === 0 ? (
+              <Text type="secondary">暂无待发货订单</Text>
+            ) : shipOrders.map((order) => {
+              const lines = shippingLines(order);
+              const draft = shipDrafts[order.baseInfo.id] || { tracking: '', carrier: '' };
+              return (
+                <div key={order.baseInfo.id} className="ship-card">
+                  <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                  <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
+                  <div className="ship-card__addr">
+                    {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。已在订单群里请客户填写，也可以先录入物流单号。'}
+                  </div>
+                  <div className="ship-card__form">
+                    <label>
+                      承运商（可选）
+                      <input
+                        value={draft.carrier}
+                        autoComplete="off"
+                        placeholder="DHL / FedEx / UPS"
+                        onChange={(event) => patchShipDraft(order.baseInfo.id, { carrier: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      国际物流单号
+                      <input
+                        value={draft.tracking}
+                        autoComplete="off"
+                        inputMode="text"
+                        placeholder="物流单号"
+                        onChange={(event) => patchShipDraft(order.baseInfo.id, { tracking: event.target.value })}
+                      />
+                    </label>
+                    <Button
+                      type="primary"
+                      loading={shippingBusyId === order.baseInfo.id}
+                      onClick={() => void submitShip(order.baseInfo.id)}
+                    >
+                      确认发货
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {mode === 'capture' && (
+        <>
+          <div className="follow-sync__bar">
+            <Button onClick={() => setMode('home')}>返回</Button>
+            <Title level={4} style={{ margin: 0 }}>{processLabel}</Title>
+            <Button type="primary" loading={uploading} onClick={() => void savePending()}>保存</Button>
+          </div>
+          <Text type="secondary">可以连续拍很多张。保存后先进入照片池，回公司再匹配订单。</Text>
+          <div className="capture-actions">
+            <Button
+              icon={<CameraOutlined />}
+              onClick={() => {
+                (window as unknown as { __mojeWantCamera?: boolean }).__mojeWantCamera = true;
+                cameraRef.current?.click();
               }}
-              options={B2B_OPTIONS}
-              style={{ width: 120 }}
-            />
-            <Button icon={<ReloadOutlined />} onClick={() => void loadOrders()}>
-              刷新
+            >
+              拍照
             </Button>
-          </Space>
-        </Space>
-
-        <div style={{ marginTop: 16 }}>{loading && orders.length === 0 ? <Text type="secondary">加载中…</Text> : orderCards}</div>
-
-        {!loading && orders.length === 0 ? (
-          <Card style={{ marginTop: 16 }}>
-            <Text type="secondary">暂无待生产/生产中订单。工艺评审通过或独立站寄售下单后，会出现在此处。</Text>
-          </Card>
-        ) : null}
-
-        {total > 0 ? (
-          <Pagination
-            style={{ marginTop: 16, textAlign: 'right' }}
-            current={page}
-            pageSize={pageSize}
-            total={total}
-            showSizeChanger
-            onChange={(p, ps) => {
-              setPage(p);
-              setPageSize(ps);
+            <Button
+              icon={<PictureOutlined />}
+              onClick={() => {
+                (window as unknown as { __mojeWantCamera?: boolean }).__mojeWantCamera = false;
+                albumRef.current?.click();
+              }}
+            >
+              相册多选
+            </Button>
+          </div>
+          <input
+            ref={cameraRef}
+            hidden
+            data-moje-file="camera"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => {
+              const selected = e.target.files ? Array.from(e.target.files) : [];
+              addPending(selected);
+              e.target.value = '';
             }}
           />
-        ) : null}
-      </Card>
+          <input
+            ref={albumRef}
+            hidden
+            data-moje-file="album"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => {
+              const selected = e.target.files ? Array.from(e.target.files) : [];
+              addPending(selected);
+              e.target.value = '';
+            }}
+          />
+          {pendingUrls.length === 0 ? <Empty description="还没有选择照片" /> : (
+            <div className="preview-grid">
+              {pendingUrls.map((url, index) => <img key={url} src={url} alt={`待保存 ${index + 1}`} />)}
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === 'sync' && (
+        <>
+          <div className="follow-sync__bar">
+            <Button onClick={() => setMode('home')}>返回</Button>
+            <Title level={4} style={{ margin: 0 }}>{processLabel}进度同步</Title>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadBoard(processCode)} />
+          </div>
+          <Text type="secondary">把下方照片拖到对应的建模图上。拖完后这件在本工序不再出现，并会通知客户。点单件可看这件的过程记录。</Text>
+          {loading ? <Spin /> : (
+            <>
+              <div className="piece-row">
+                {pieces.length === 0 ? <Empty description="这一工序没有待同步的单件" /> : pieces.map((piece) => {
+                  const key = `${piece.orderId}-${piece.pieceId}`;
+                  const pieceName = piece.pieceName || '单件';
+                  return (
+                    <div
+                      key={key}
+                      data-piece-key={key}
+                      className={`piece-card${overKey === key ? ' is-over' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="piece-open"
+                        onClick={() => void openPieceTimeline({
+                          orderId: piece.orderId,
+                          pieceId: piece.pieceId,
+                          pieceName,
+                          orderNumber: piece.orderNumber,
+                        })}
+                      >
+                        {piece.thumbnailUrl ? (
+                          <img src={resolveMediaUrl(piece.thumbnailUrl)} alt={pieceName} draggable={false} />
+                        ) : (
+                          <div className="piece-fallback">{pieceName.slice(0, 2)}</div>
+                        )}
+                        <strong>{pieceName}</strong>
+                        <small>{piece.orderNumber}</small>
+                        <span className="piece-log-hint">过程记录</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <Title level={5} style={{ margin: 0 }}>未匹配照片</Title>
+              {photos.length === 0 ? <Empty description="照片池是空的，先去现场拍照并保存" /> : (
+                <div className="photo-pool">
+                  {photos.map((photo) => (
+                    <div key={photo.id} className="photo-tile">
+                      <button
+                        type="button"
+                        className="photo-drag"
+                        onPointerDown={(event) => onPhotoPointerDown(event, photo)}
+                        onPointerMove={onPhotoPointerMove}
+                        onPointerUp={onPhotoPointerUp}
+                        onPointerCancel={() => { dragPhotoId.current = null; setOverKey(null); setGhost(null); }}
+                      >
+                        {photoUrls[photo.fileId]
+                          ? <img src={photoUrls[photo.fileId]} alt="现场照片" draggable={false} />
+                          : <span className="photo-loading">加载中</span>}
+                      </button>
+                      <button
+                        type="button"
+                        className="photo-delete"
+                        aria-label="删除这张未匹配照片"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => confirmDiscardPhoto(photo)}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+      <Modal
+        open={timelineTarget != null}
+        title={timelineTarget ? `${timelineTarget.pieceName} · 过程记录` : '过程记录'}
+        footer={null}
+        onCancel={() => setTimelineTarget(null)}
+        destroyOnClose
+      >
+        {timelineTarget?.orderNumber ? <Text type="secondary">{timelineTarget.orderNumber}</Text> : null}
+        <div><Text type="secondary">按这件实际完成时间先后</Text></div>
+        {timelineLoading ? <Spin /> : timelineError ? (
+          <Text type="danger">{timelineError}</Text>
+        ) : timelineLogs.length === 0 ? (
+          <Text type="secondary">暂无</Text>
+        ) : (
+          <div className="log-list">
+            {timelineLogs.map((log) => (
+              <div key={log.id} className="log-item">
+                <strong>{log.processLabel || log.processCode || '记录'}</strong>
+                <div>{log.note || '已更新生产进度'}</div>
+                {formatLogTime(log.createdAt) ? <Text type="secondary">{formatLogTime(log.createdAt)}</Text> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+      {ghost && <img className="drag-ghost" src={ghost.url} alt="" style={{ left: ghost.x, top: ghost.y }} />}
     </div>
   );
 };

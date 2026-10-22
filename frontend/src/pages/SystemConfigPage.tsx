@@ -407,6 +407,7 @@ const SystemConfigPage: React.FC = () => {
                   columns={materialColumns}
                   dataSource={materials}
                   pagination={false}
+                  scroll={{ x: 'max-content' }}
                 />
               </Card>
             ),
@@ -447,6 +448,7 @@ const SystemConfigPage: React.FC = () => {
                   columns={processColumns}
                   dataSource={processes}
                   pagination={false}
+                  scroll={{ x: 'max-content' }}
                 />
               </Card>
             ),

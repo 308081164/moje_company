@@ -72,8 +72,8 @@ export function collectDoneImageUrlsFromFileList(fileList: UploadFile[]): string
 export function normalizeModelSourceUploadFileList(fileList: UploadFile[]): UploadFile[] {
   return fileList.map((f) => {
     if (f.status === 'done') {
-      const res = f.response as FileInfo | undefined;
-      const url = (f.url || res?.fileUrl || '').trim();
+      const res = f.response as (FileInfo & { url?: string }) | undefined;
+      const url = (f.url || res?.url || res?.fileUrl || '').trim();
       if (url) {
         const isImg = isLikelyRasterImageFile(f);
         return { ...f, url, thumbUrl: isImg ? f.thumbUrl || url : f.thumbUrl };

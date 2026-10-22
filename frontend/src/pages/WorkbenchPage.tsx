@@ -11,6 +11,7 @@ import { orderSourceLabel, orderStatusColor, orderStatusLabel } from '@/utils/or
 import dayjs from 'dayjs';
 import ModelerStatusPanel from '@/components/ModelerStatusPanel';
 import TrackerReviewTodoPanel from '@/components/TrackerReviewTodoPanel';
+import './WorkbenchPage.css';
 
 const { Title, Text } = Typography;
 
@@ -33,6 +34,13 @@ const WorkbenchPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setPhone(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const loader = useMemo(() => {
     if (role === UserRole.DESIGNER) {
@@ -150,29 +158,25 @@ const WorkbenchPage: React.FC = () => {
   }
 
   return (
-    <div>
+    <div className="workbench-page">
       {role === UserRole.MODELER && <ModelerStatusPanel />}
       <Card bordered={false}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center">
-          <div>
-            <Title level={3} style={{ margin: 0 }}>
-              {loader.title}
-            </Title>
-            <Text type="secondary">与后端 /orders/workbench/* 联调</Text>
-          </div>
-          <Space>
+        <div className="workbench-head">
+          <Title level={3} style={{ margin: 0 }}>
+            {loader.title}
+          </Title>
+          <div className="workbench-actions">
             <Select
               value={isB2b}
               onChange={handleB2bChange}
               options={B2B_OPTIONS}
-              style={{ width: 120 }}
               placeholder="选择订单类型"
             />
             <Button icon={<ReloadOutlined />} onClick={load}>
               刷新
             </Button>
-          </Space>
-        </Space>
+          </div>
+        </div>
 
         <Tabs
         style={{ marginTop: 16 }}
@@ -202,17 +206,42 @@ const WorkbenchPage: React.FC = () => {
         <>
           <TrackerReviewTodoPanel orders={orders} loading={loading} onRefresh={() => void load()} />
           <Pagination
-            style={{ marginTop: 16, textAlign: 'right' }}
+            style={{ marginTop: 16, textAlign: phone ? 'center' : 'right' }}
             current={page}
             pageSize={pageSize}
             total={total}
-            showSizeChanger
+            showSizeChanger={!phone}
+            simple={phone}
             onChange={(p, ps) => {
               setPage(p);
               setPageSize(ps);
             }}
           />
         </>
+      ) : phone ? (
+        <div className="order-phone-list">
+          {orders.map((record) => (
+            <button
+              key={record.baseInfo.id}
+              type="button"
+              className="order-phone-card"
+              onClick={() =>
+                navigate(`/orders/${record.baseInfo.id}`, {
+                  state: { backTo: `${location.pathname}${location.search}` },
+                })
+              }
+            >
+              <div className="order-phone-card__top">
+                <strong>{record.baseInfo.orderNumber || '-'}</strong>
+                <Tag color={orderStatusColor(record.currentStatus)}>{orderStatusLabel(record.currentStatus)}</Tag>
+              </div>
+              <div className="order-phone-card__meta">
+                <span>{record.baseInfo.customerName || '未填客户'}</span>
+                <span>{record.baseInfo.orderTime ? dayjs(record.baseInfo.orderTime).format('MM-DD HH:mm') : ''}</span>
+              </div>
+            </button>
+          ))}
+        </div>
       ) : (
         <Table
           style={{ marginTop: 8 }}
@@ -220,6 +249,7 @@ const WorkbenchPage: React.FC = () => {
           loading={loading}
           columns={columns}
           dataSource={orders}
+          scroll={{ x: 'max-content' }}
           pagination={{
             current: page,
             pageSize,

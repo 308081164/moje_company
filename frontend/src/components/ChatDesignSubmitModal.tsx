@@ -32,6 +32,7 @@ import type {
   OrderPieceInfo,
   ProcessInfo,
 } from '@/types/order';
+import { JEWELRY_TYPE_OPTIONS, handSizeFieldMeta } from '@/constants/jewelryType';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
 
@@ -69,10 +70,24 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
 
   const pieces: OrderPieceInfo[] = order?.pieces ?? [];
 
+  const selectedVersion = useMemo(
+    () => versions.find((v) => v.id === selectedVersionId) ?? null,
+    [versions, selectedVersionId]
+  );
+
+  const activePiece = useMemo(
+    () => pieces.find((x) => x.id === activePieceId) ?? pieces[0],
+    [pieces, activePieceId]
+  );
+
+  const handSizeMeta = useMemo(
+    () => handSizeFieldMeta(activePiece?.jewelryType),
+    [activePiece?.jewelryType]
+  );
+
   const activePieceDesign = useMemo(() => {
-    const p = pieces.find((x) => x.id === activePieceId) ?? pieces[0];
-    return p?.design ?? order?.designInfo;
-  }, [pieces, activePieceId, order?.designInfo]);
+    return activePiece?.design ?? order?.designInfo;
+  }, [activePiece, order?.designInfo]);
 
   const craftSelectOptions = useMemo(
     () => craftSelectOptionsFrom(processConfig, activePieceDesign?.processInfo as ProcessInfo[]),
@@ -90,6 +105,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         designerId: design?.designerId ?? designerUserId,
         engravingText: design?.engravingText,
         materialType: design?.materialType,
+        jewelryType: piece?.jewelryType,
         handSize: design?.handSize,
         designNotes: design?.designNotes,
       });
@@ -101,7 +117,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     try {
       const list = await orderService.listDesignVersions(oid, pieceId);
       setVersions(list);
-      setSelectedVersionId(null);
+      setSelectedVersionId(list.length > 0 ? list[0].id : null);
     } catch {
       setVersions([]);
       setSelectedVersionId(null);
@@ -160,14 +176,16 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   };
 
-  const afterPiecesChanged = async () => {
+  const afterPiecesChanged = async (focusPieceId?: number) => {
     if (orderId == null) return;
     const o = await orderService.getOrderById(orderId);
     setOrder(o);
     const pid =
-      activePieceId && o.pieces?.some((p) => p.id === activePieceId)
-        ? activePieceId
-        : o.pieces?.[0]?.id ?? null;
+      focusPieceId && o.pieces?.some((p) => p.id === focusPieceId)
+        ? focusPieceId
+        : activePieceId && o.pieces?.some((p) => p.id === activePieceId)
+          ? activePieceId
+          : o.pieces?.[0]?.id ?? null;
     setActivePieceId(pid);
     applyPieceToForm(o, pid);
     if (pid != null) {
@@ -362,6 +380,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
           pieces={pieces}
           activePieceId={activePieceId}
           canEdit={!loading}
+          nestedModalZIndex={2100}
           onSelectPiece={(pieceId) => void switchPiece(pieceId)}
           onPiecesChanged={afterPiecesChanged}
         />
@@ -371,15 +390,21 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         <Select
           size="small"
           style={{ minWidth: 220 }}
-          placeholder="历史版本"
-          allowClear
+          placeholder={versions.length === 0 ? '暂无历史版本' : '选择版本'}
           value={selectedVersionId ?? undefined}
           options={versions.map((v) => ({
             value: v.id,
             label: `${v.label || 'v' + v.versionNo}${v.submittedToCustomer ? ' · 已提交' : ''}`,
           }))}
-          onChange={(id) => setSelectedVersionId(id ?? null)}
+          onChange={(id) => setSelectedVersionId(id)}
         />
+        {selectedVersion && (
+          <Text type="secondary" style={{ fontSize: 12, maxWidth: 280 }}>
+            当前：{selectedVersion.label || `v${selectedVersion.versionNo}`}
+            {selectedVersion.createdAt ? ` · ${selectedVersion.createdAt}` : ''}
+            {selectedVersion.submittedToCustomer ? ' · 已提交客户' : ''}
+          </Text>
+        )}
         <Button
           size="small"
           icon={<RollbackOutlined />}
@@ -438,6 +463,17 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
             <div style={{ marginTop: 8 }}>上传</div>
           </UploadWithImagePreview>
         </Form.Item>
+        <Form.Item name="jewelryType" label="珠宝类型" rules={[{ required: true, message: '请选择珠宝类型' }]}>
+          <Select
+            placeholder="请选择类型"
+            options={JEWELRY_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            onChange={(val) => {
+              if (orderId != null && activePiece) {
+                void orderService.updateOrderPieceMeta(orderId, activePiece.id, { jewelryType: val });
+              }
+            }}
+          />
+        </Form.Item>
         <Form.Item name="materialType" label="材质类型">
           <Select
             allowClear
@@ -448,9 +484,19 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
             }))}
           />
         </Form.Item>
-        <Form.Item name="handSize" label="手寸/链长">
-          <Input />
-        </Form.Item>
+        {handSizeMeta.visible && (
+          <Form.Item
+            name="handSize"
+            label={handSizeMeta.label}
+            rules={
+              handSizeMeta.required
+                ? [{ required: true, message: `请填写${handSizeMeta.label}` }]
+                : []
+            }
+          >
+            <Input placeholder={handSizeMeta.placeholder} />
+          </Form.Item>
+        )}
         <Form.Item label="工艺选择">
           <Select
             mode="multiple"

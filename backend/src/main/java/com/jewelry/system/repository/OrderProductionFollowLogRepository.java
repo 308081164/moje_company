@@ -7,4 +7,8 @@ import java.util.List;
 
 public interface OrderProductionFollowLogRepository extends JpaRepository<OrderProductionFollowLog, Long> {
     List<OrderProductionFollowLog> findByOrderIdOrderByIdAsc(Long orderId);
+
+    boolean existsByOrderIdAndPieceIdAndProcessCode(Long orderId, Long pieceId, String processCode);
+
+    List<OrderProductionFollowLog> findTop40ByAuthorUserIdOrderByIdDesc(Long authorUserId);
 }

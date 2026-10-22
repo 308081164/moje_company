@@ -427,6 +427,7 @@ const ModelingArchivePanel: React.FC<ModelingArchivePanelProps> = ({ orderId }) 
         size="small"
         pagination={false}
         rowKey={(r) => r.key}
+        scroll={{ x: 'max-content' }}
         columns={compColumns}
         dataSource={draft.components.map((r, i) => ({ ...r, key: `c-${i}` }))}
       />
@@ -460,6 +461,7 @@ const ModelingArchivePanel: React.FC<ModelingArchivePanelProps> = ({ orderId }) 
         size="small"
         pagination={false}
         rowKey={(r) => r.key}
+        scroll={{ x: 'max-content' }}
         columns={inlayColumns}
         dataSource={filteredInlayRows.map(({ row, origIndex }) => ({
           row,

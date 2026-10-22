@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
+import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.ReviewResult;
+import com.jewelry.system.repository.OrderEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +17,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
+
+import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
@@ -25,6 +30,13 @@ public class OrderDetailAssembler {
 
     private final ObjectMapper objectMapper;
     private final OrderPieceService orderPieceService;
+    private final OrderEventRepository orderEventRepository;
+
+    private static final List<OrderEventType> MODEL_CUSTOMER_FLOW = List.of(
+            OrderEventType.MODEL_CONFIRM,
+            OrderEventType.MODEL_REJECT,
+            OrderEventType.MODEL_SUBMIT
+    );
 
     public OrderInfoDto enrich(
             OrderInfoDto base,
@@ -72,6 +84,7 @@ public class OrderDetailAssembler {
                             .orderId(p.getOrderId())
                             .seq(p.getSeq())
                             .name(p.getName())
+                            .jewelryType(p.getJewelryType() != null ? p.getJewelryType().name() : null)
                             .designConfirmed(p.getDesignConfirmed())
                             .modelConfirmed(p.getModelConfirmed())
                             .referenceImages(orderPieceService.parseReferenceImages(p))
@@ -193,6 +206,17 @@ public class OrderDetailAssembler {
                     .modelEffectImages(Collections.emptyList())
                     .build();
         }
+        Optional<OrderEvent> pendingReject = findPendingCustomerModelReject(order.getId(), pieceId);
+        String rejectReason = mi.getLastCustomerRejectReason();
+        if (rejectReason == null || rejectReason.isBlank()) {
+            rejectReason = pendingReject.map(OrderEvent::getReason).orElse(null);
+        }
+        String rejectTime = mi.getLastCustomerRejectAt() != null
+                ? ISO.format(mi.getLastCustomerRejectAt())
+                : pendingReject.map(OrderEvent::getCreatedAt).map(ISO::format).orElse(null);
+        if (rejectReason != null && rejectReason.isBlank()) {
+            rejectReason = null;
+        }
         return OrderModelBlockDto.builder()
                 .id(mi.getId())
                 .orderId(order.getId())
@@ -209,7 +233,44 @@ public class OrderDetailAssembler {
                 .updatedAt(mi.getUpdatedAt() != null ? ISO.format(mi.getUpdatedAt()) : null)
                 .lastRejectToDesignerMessage(mi.getModelerRejectToDesignerMessage())
                 .lastRejectToDesignerAttachmentFileIds(parseLongIdList(mi.getModelerRejectToDesignerFileIdsJson()))
+                .lastCustomerModelRejectReason(rejectReason)
+                .lastCustomerModelRejectTime(rejectTime)
                 .build();
+    }
+
+    /**
+     * 自新到旧扫描建模相关事件：若最新为「客户驳回」则返回该事件；若已确认或建模师已重新提交则不再展示。
+     */
+    private Optional<OrderEvent> findPendingCustomerModelReject(Long orderId, Long pieceId) {
+        List<OrderEvent> events = orderEventRepository.findByOrderIdAndEventTypeInOrderByIdDesc(orderId, MODEL_CUSTOMER_FLOW);
+        for (OrderEvent e : events) {
+            if (!pieceIdMatches(e.getPieceId(), pieceId)) {
+                continue;
+            }
+            if (e.getEventType() == OrderEventType.MODEL_CONFIRM) {
+                return Optional.empty();
+            }
+            if (e.getEventType() == OrderEventType.MODEL_REJECT) {
+                if (StringUtils.hasText(e.getReason())) {
+                    return Optional.of(e);
+                }
+                return Optional.empty();
+            }
+            if (e.getEventType() == OrderEventType.MODEL_SUBMIT) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean pieceIdMatches(Long eventPieceId, Long targetPieceId) {
+        if (eventPieceId == null) {
+            return targetPieceId == null;
+        }
+        if (targetPieceId == null) {
+            return false;
+        }
+        return Objects.equals(eventPieceId, targetPieceId);
     }
 
     private OrderReviewBlockDto buildReview(Order order, ProcessReview pr) {

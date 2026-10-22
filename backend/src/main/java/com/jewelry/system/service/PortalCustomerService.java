@@ -4,6 +4,8 @@ import com.jewelry.system.dto.customer.CustomerOrderPublicDto;
 import com.jewelry.system.dto.order.OrderEventDto;
 import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.dto.portal.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.repository.OrderAccessLinkRepository;
@@ -55,6 +57,8 @@ public class PortalCustomerService {
     private final ReferralService referralService;
     private final OrderPieceService orderPieceService;
     private final OrderCommandService orderCommandService;
+    private final OrderEventCardService orderEventCardService;
+    private final CustomerQuotationFlowService customerQuotationFlowService;
 
     @Transactional
     public PortalCustomerLoginResponse register(PortalCustomerRegisterRequest req) {
@@ -202,14 +206,8 @@ public class PortalCustomerService {
 
     @Transactional
     public void rejectOrder(long orderId, String eventType, String reason) {
-        Long accountId = requireBoundAccount(orderId);
-        OrderEventType type;
-        try {
-            type = OrderEventType.fromString(eventType);
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
-        orderEventService.rejectByCustomer(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER", reason);
+        OrderPiece piece = orderPieceService.ensureDefaultPiece(orderId);
+        rejectPiece(orderId, piece.getId(), eventType, reason);
     }
 
     /**
@@ -234,6 +232,11 @@ public class PortalCustomerService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         if (type == OrderEventType.DESIGN_CONFIRM) {
+            boolean awaitingDesign = orderEventCardService.isSubmitAwaitingDecision(
+                    orderId, pieceId, OrderEventType.DESIGN_SUBMIT);
+            if (Boolean.TRUE.equals(piece.getDesignConfirmed()) && !awaitingDesign) {
+                return;
+            }
             DesignInfo di = designInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 DesignInfo d = new DesignInfo();
                 d.setOrderId(orderId);
@@ -249,15 +252,12 @@ public class PortalCustomerService {
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                     title, null, null, null, pieceId, null);
             orderCommandService.tryAdvanceAfterAllDesignConfirmed(order);
-            Order afterDesign = orderRepository.findById(orderId).orElse(order);
-            if (orderPieceService.allDesignConfirmed(orderId)
-                    && afterDesign.getServiceType() != ServiceType.CUSTOM_IMAGE) {
-                orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
-                        AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                        OrderEventType.BALANCE_PAYMENT.getDescription(),
-                        "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
-            }
         } else if (type == OrderEventType.MODEL_CONFIRM) {
+            boolean awaiting = orderEventCardService.isSubmitAwaitingDecision(
+                    orderId, pieceId, OrderEventType.MODEL_SUBMIT);
+            if (Boolean.TRUE.equals(piece.getModelConfirmed()) && !awaiting) {
+                return;
+            }
             ModelingInfo mi = modelingInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 ModelingInfo m = new ModelingInfo();
                 m.setOrderId(orderId);
@@ -267,19 +267,14 @@ public class PortalCustomerService {
             mi.setCustomerApproved(true);
             mi.setApprovalTime(LocalDateTime.now());
             mi.setApprovalNotes("客户已确认建模稿（" + piece.getName() + "）");
+            mi.setLastCustomerRejectReason(null);
+            mi.setLastCustomerRejectAt(null);
             modelingInfoRepository.save(mi);
             orderPieceService.markModelConfirmed(orderId, pieceId);
             String title = "确认建模 · " + piece.getName();
             orderEventService.record(orderId, type, AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                     title, null, null, null, pieceId, null);
             orderCommandService.tryAdvanceAfterAllModelConfirmed(order);
-            if (orderPieceService.allModelConfirmed(orderId)
-                    && order.getServiceType() == ServiceType.CUSTOM_IMAGE) {
-                orderEventService.record(orderId, OrderEventType.BALANCE_PAYMENT,
-                        AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                        OrderEventType.BALANCE_PAYMENT.getDescription(),
-                        "尾款金额：$" + BALANCE_AMOUNT_USD, null, null);
-            }
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "确认类型仅支持 DESIGN_CONFIRM / MODEL_CONFIRM");
         }
@@ -311,27 +306,37 @@ public class PortalCustomerService {
             orderPieceService.resetModelConfirmation(orderId, pieceId);
             modelingInfoRepository.findByPieceId(pieceId).ifPresent(mi -> {
                 mi.setCustomerApproved(false);
+                mi.setLastCustomerRejectReason(reason != null ? reason.trim() : null);
+                mi.setLastCustomerRejectAt(java.time.LocalDateTime.now());
                 modelingInfoRepository.save(mi);
             });
         }
     }
 
-    /**
-     * 客户确认收货/付尾款（mock）：仅 PRODUCING 状态可推进到 COMPLETED。
-     */
-    /** 默认尾款金额（美元）。 */
-    private static final int BALANCE_AMOUNT_USD = 399;
+    @Transactional
+    public void submitQuotationOptions(long orderId, CustomerQuotationOptionsRequest req) {
+        Long accountId = requireBoundAccount(orderId);
+        customerQuotationFlowService.submitCustomerOptions(orderId, accountId, req);
+    }
 
     /**
-     * 客户支付尾款（mock）：记录尾款已支付事件卡片，锁定尾款支付卡片。
+     * 客户支付尾款（mock）：须已完成最终报价；记录尾款已支付事件卡片。
      */
     @Transactional
     public void payBalance(long orderId) {
         Long accountId = requireBoundAccount(orderId);
+        BigDecimal amount = customerQuotationFlowService.resolveBalanceAmount(orderId);
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先完成报价确认后再支付尾款");
+        }
+        if (!orderEventService.hasOpenBalancePayment(orderId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前没有待支付的尾款");
+        }
+        String paidText = "尾款 ¥" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " 已支付（模拟）";
         orderEventService.record(orderId, OrderEventType.BALANCE_PAID,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 OrderEventType.BALANCE_PAID.getDescription(),
-                "尾款 $" + BALANCE_AMOUNT_USD + " 已支付（模拟）", null, null);
+                paidText, null, null);
     }
 
     @Transactional
@@ -365,6 +370,85 @@ public class PortalCustomerService {
     public OrderShipmentDto getOrderShipment(long orderId) {
         requireBoundAccount(orderId);
         return shipmentService.getShipmentForCustomer(orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerShippingAddressDto getShippingAddress(long orderId) {
+        requireBoundAccount(orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        return toShippingAddressDto(order);
+    }
+
+    @Transactional
+    public CustomerShippingAddressDto submitShippingAddress(long orderId, CustomerShippingAddressRequest req) {
+        Long accountId = requireBoundAccount(orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        if (order.getStatus() != OrderStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请在生产完成后再填写收货信息");
+        }
+        if (shipmentService.getShipmentForCustomer(orderId) != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "订单已发货，不能再修改收货信息");
+        }
+        if (req == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写收货信息");
+        }
+        String recipient = requiredText(req.getRecipient(), "收货人", 100);
+        String phone = requiredText(req.getPhone(), "联系电话", 40);
+        if (phone.chars().noneMatch(Character::isDigit)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写有效的联系电话");
+        }
+        String country = requiredText(req.getCountry(), "国家或地区", 80);
+        String address = requiredText(req.getAddress(), "详细地址", 1000);
+        String postal = optionalText(req.getPostalCode(), 20);
+        order.setShippingRecipient(recipient);
+        order.setShippingPhone(phone);
+        order.setShippingCountry(country);
+        order.setShippingAddress(address);
+        order.setShippingPostalCode(postal);
+        order.setShippingAddressAt(LocalDateTime.now());
+        orderRepository.save(order);
+        String summary = "收货人：" + recipient
+                + "\n联系电话：" + phone
+                + "\n国家/地区：" + country
+                + "\n详细地址：" + address
+                + "\n邮编：" + (postal == null ? "未填" : postal);
+        orderEventService.saveShippingAddressNotice(orderId, AccountKind.C_PORTAL_CUSTOMER, accountId, summary);
+        return toShippingAddressDto(order);
+    }
+
+    private CustomerShippingAddressDto toShippingAddressDto(Order order) {
+        return CustomerShippingAddressDto.builder()
+                .recipient(order.getShippingRecipient())
+                .phone(order.getShippingPhone())
+                .country(order.getShippingCountry())
+                .address(order.getShippingAddress())
+                .postalCode(order.getShippingPostalCode())
+                .submittedAt(order.getShippingAddressAt() != null ? ISO.format(order.getShippingAddressAt()) : null)
+                .build();
+    }
+
+    private static String requiredText(String value, String label, int max) {
+        String text = value == null ? "" : value.trim();
+        if (text.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写" + label);
+        }
+        if (text.length() > max) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + "过长");
+        }
+        return text;
+    }
+
+    private static String optionalText(String value, int max) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        if (text.length() > max) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邮编过长");
+        }
+        return text;
     }
 
     private Long requireBoundAccount(long orderId) {

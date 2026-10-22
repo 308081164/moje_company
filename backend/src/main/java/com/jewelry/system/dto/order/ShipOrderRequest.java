@@ -12,4 +12,7 @@ public class ShipOrderRequest {
 
     @Schema(description = "17TRACK 承运商编码，可空（空则自动识别）", example = "100003")
     private Integer carrierCode;
+
+    @Schema(description = "承运商名称，可空（如 DHL、FedEx）", example = "DHL")
+    private String carrierName;
 }

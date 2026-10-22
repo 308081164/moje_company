@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -41,6 +42,10 @@ import java.util.Objects;
 public class OrderCommandService {
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
+    static final String DESIGN_ADJUST_NOTICE =
+            "为满足生产工艺要求，我们对设计做了一定的调整，需要您确认新的设计是否符合您的预期。";
+    static final String MODEL_ADJUST_NOTICE =
+            "为满足生产工艺要求，我们对建模做了一定的调整，需要您确认新的建模是否符合您的预期。";
 
     private final OrderRepository orderRepository;
     private final FileEntityRepository fileEntityRepository;
@@ -64,6 +69,7 @@ public class OrderCommandService {
     private final OrderPieceRepository orderPieceRepository;
     private final OrderPieceService orderPieceService;
     private final DesignVersionService designVersionService;
+    private final ModelVersionService modelVersionService;
 
     @Value("${app.order.number-prefix:JZ}")
     private String numberPrefix;
@@ -195,7 +201,14 @@ public class OrderCommandService {
         if (req.getMaterialType() != null) {
             od.setMaterialType(req.getMaterialType());
         }
-        if (req.getHandSize() != null) {
+        OrderPiece piece = orderPieceService.requirePiece(orderId, req.getPieceId());
+        String handSizeForValidation = req.getHandSize() != null ? req.getHandSize() : od.getHandSize();
+        com.jewelry.system.util.JewelryTypeRules.validateDesignerHandSize(
+                piece.getJewelryType(), handSizeForValidation);
+        if (piece.getJewelryType() != null && piece.getJewelryType().hasNoSizeField()) {
+            req.setHandSize("");
+            od.setHandSize(null);
+        } else if (req.getHandSize() != null) {
             od.setHandSize(req.getHandSize());
         }
         if (req.getDesignNotes() != null) {
@@ -206,8 +219,6 @@ public class OrderCommandService {
             od.setDesignNotes(base + (base.isEmpty() ? "" : "\n") + "材质详情: " + req.getMaterialDetail());
         }
         orderDetailRepository.save(od);
-
-        OrderPiece piece = orderPieceService.requirePiece(orderId, req.getPieceId());
         DesignInfo di = designInfoRepository.findByPieceId(piece.getId()).orElseGet(() -> {
             DesignInfo d = new DesignInfo();
             d.setOrderId(orderId);
@@ -240,21 +251,52 @@ public class OrderCommandService {
         }
 
         boolean hasDesignImages = req.getDesignImages() != null && !req.getDesignImages().isEmpty();
-        boolean submitToCustomer = req.getSubmitToCustomer() != null
+        boolean submitToModeler = Boolean.TRUE.equals(req.getSubmitToModeler());
+        boolean submitToCustomer = submitToModeler ? false : (req.getSubmitToCustomer() != null
                 ? req.getSubmitToCustomer()
-                : hasDesignImages;
-        if (Boolean.TRUE.equals(req.getCreateVersion()) || submitToCustomer) {
+                : hasDesignImages);
+        if (submitToCustomer && submitToModeler) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能同时提交客户和建模师");
+        }
+        boolean designRework = isDesignRework(orderId);
+        if (Boolean.TRUE.equals(req.getCreateVersion()) || submitToCustomer || submitToModeler) {
             designVersionService.createVersionSnapshot(
                     orderId, piece, req, submitToCustomer, req.getVersionLabel());
         }
         boolean advanced = tryAdvanceOrderToDesigning(order);
         orderRepository.save(order);
-        if (submitToCustomer && hasDesignImages) {
+        if (submitToModeler) {
+            if (!hasDesignImages) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "交给建模师前请先上传设计图");
+            }
+            if (!designRework) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前不是建模师驳回后的修改，请先提交客户确认");
+            }
+            orderPieceService.markDesignConfirmed(orderId, piece.getId());
+            tryAdvanceAfterAllDesignConfirmed(order);
+            if (order.getStatus() == OrderStatus.DESIGNING || order.getStatus() == OrderStatus.PENDING_DESIGN) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "还有其他单件的设计未确认，暂时不能交回建模师");
+            }
+            orderEventService.record(orderId, OrderEventType.STATUS_CHANGE,
+                    AccountKind.STAFF, requireUserId(), "DESIGNER",
+                    "设计师已修改并交回建模师", req.getDesignNotes(), null, null, piece.getId(), null);
+        } else if (submitToCustomer && hasDesignImages) {
+            if (designRework) {
+                orderPieceService.resetDesignConfirmation(orderId, piece.getId());
+                designInfoRepository.findByPieceId(piece.getId()).ifPresent(row -> {
+                    row.setCustomerApproved(false);
+                    row.setApprovalTime(null);
+                    designInfoRepository.save(row);
+                });
+            }
             String snapshot = buildImageSnapshotJson(req.getDesignImages());
             String title = "设计稿 · " + piece.getName();
+            String content = designRework
+                    ? joinNotice(DESIGN_ADJUST_NOTICE, req.getDesignNotes())
+                    : req.getDesignNotes();
             orderEventService.record(orderId, OrderEventType.DESIGN_SUBMIT,
                     AccountKind.STAFF, requireUserId(), "DESIGNER",
-                    title, req.getDesignNotes(), null, null, piece.getId(), snapshot);
+                    title, content, null, null, piece.getId(), snapshot);
         }
         auditLogService.log("ORDER_UPDATE_DESIGN", "ORDER", orderId, "更新设计信息（单件 " + piece.getName() + "）");
         if (advanced) {
@@ -343,6 +385,42 @@ public class OrderCommandService {
         }
     }
 
+    private boolean isDesignRework(long orderId) {
+        return modelingInfoRepository.findByOrderId(orderId)
+                .map(mi -> StringUtils.hasText(mi.getModelerRejectToDesignerMessage()))
+                .orElse(false);
+    }
+
+    private boolean isModelRework(Order order) {
+        OrderStatus st = order.getStatus();
+        if (st != OrderStatus.MODELING && st != OrderStatus.PENDING_MODEL) {
+            return false;
+        }
+        return processReviewRepository.findTopByOrderIdOrderByIdDesc(order.getId())
+                .map(pr -> pr.getReviewResult() == ReviewResult.REJECTED)
+                .orElse(false);
+    }
+
+    private static String joinNotice(String notice, String notes) {
+        if (!StringUtils.hasText(notes)) {
+            return notice;
+        }
+        return notice + "\n" + notes.trim();
+    }
+
+    private void handoffModelToTracker(Order order) {
+        OrderStatus st = order.getStatus();
+        if (st == OrderStatus.PENDING_MODEL) {
+            order.transitionTo(OrderStatus.PENDING_REVIEW);
+        } else if (st == OrderStatus.MODELING) {
+            order.transitionTo(OrderStatus.PENDING_REVIEW);
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前状态不能交回跟单员");
+        }
+        autoAssignmentService.ensureTrackerAssigned(order);
+        orderRepository.save(order);
+    }
+
     private void clearModelerRejectToDesignerFields(long orderId) {
         modelingInfoRepository.findByOrderId(orderId).ifPresent(mi -> {
             mi.setModelerRejectToDesignerMessage(null);
@@ -386,16 +464,65 @@ public class OrderCommandService {
         if (stBefore == OrderStatus.PENDING_MODEL) {
             order.transitionTo(OrderStatus.MODELING);
         }
-        boolean modelSubmitted = req.getModelEffectImageUrls() != null && !req.getModelEffectImageUrls().isEmpty();
-        if (modelSubmitted) {
+        boolean hasEffectImages = req.getModelEffectImageUrls() != null && !req.getModelEffectImageUrls().isEmpty();
+        boolean submitToTracker = Boolean.TRUE.equals(req.getSubmitToTracker());
+        boolean submitToCustomer = Boolean.TRUE.equals(req.getSubmitToCustomer()) && !submitToTracker;
+        if (Boolean.TRUE.equals(req.getSubmitToCustomer()) && submitToTracker) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能同时提交客户和跟单员");
+        }
+        boolean modelRework = isModelRework(order);
+        boolean createVersion = Boolean.TRUE.equals(req.getCreateVersion()) || submitToCustomer || submitToTracker;
+        if (createVersion) {
+            modelVersionService.createVersionSnapshot(
+                    orderId, piece, req, mi.getModelFilesJson(), submitToCustomer, req.getVersionLabel());
+        }
+        if (submitToTracker) {
+            if (!hasEffectImages) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "交给跟单员前请至少上传一张效果图");
+            }
+            if (!modelRework) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前没有待处理的工艺驳回，请先提交客户确认");
+            }
+            handoffModelToTracker(order);
+            orderEventService.record(orderId, OrderEventType.STATUS_CHANGE,
+                    AccountKind.STAFF, requireUserId(), "MODELER",
+                    "建模师已修改并交回跟单员", req.getModelNotes(), null, null, piece.getId(), null);
+        } else if (submitToCustomer) {
+            if (!hasEffectImages) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "提交客户审阅须至少上传一张效果图");
+            }
+            mi.setLastCustomerRejectReason(null);
+            mi.setLastCustomerRejectAt(null);
+            mi.setCustomerApproved(false);
+            mi.setApprovalTime(null);
+            modelingInfoRepository.save(mi);
+            orderPieceService.resetModelConfirmation(orderId, piece.getId());
             String snapshot = buildImageSnapshotJson(req.getModelEffectImageUrls());
             String title = "建模稿 · " + piece.getName();
+            String content = modelRework
+                    ? joinNotice(MODEL_ADJUST_NOTICE, req.getModelNotes())
+                    : req.getModelNotes();
             orderEventService.record(orderId, OrderEventType.MODEL_SUBMIT,
                     AccountKind.STAFF, requireUserId(), SecurityUtils.currentRoleApi().orElse("MODELER"),
-                    title, req.getModelNotes(), null, null, piece.getId(), snapshot);
+                    title, content, null, null, piece.getId(), snapshot);
         }
         orderRepository.save(order);
-        auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId, "更新建模信息（单件 " + piece.getName() + "）");
+        auditLogService.log("ORDER_UPDATE_MODEL", "ORDER", orderId,
+                submitToTracker
+                        ? "建模修改直接交回跟单员（单件 " + piece.getName() + "）"
+                        : submitToCustomer
+                        ? "提交建模稿给客户（单件 " + piece.getName() + "）"
+                        : "更新建模信息（单件 " + piece.getName() + "）");
+        return orderQueryService.getOrder(orderId);
+    }
+
+    @Transactional
+    public OrderInfoDto restoreModelVersion(long orderId, long pieceId, long versionId) {
+        Order order = loadOrder(orderId);
+        assertCanEditModel(order);
+        modelVersionService.applyVersionToWorkingCopy(orderId, pieceId, versionId);
+        auditLogService.log("ORDER_RESTORE_MODEL_VERSION", "ORDER", orderId,
+                "回退建模稿版本 piece=" + pieceId + " versionId=" + versionId);
         return orderQueryService.getOrder(orderId);
     }
 
@@ -568,6 +695,7 @@ public class OrderCommandService {
             }
             orderRepository.save(order);
             auditLogService.log("ORDER_REVIEW_PASS_TO_PRODUCING", "ORDER", orderId, "工艺评审通过，订单进入生产中");
+            conversationService.announceTrackerHandoff(orderId);
         }
         orderEventService.record(orderId, rejected ? OrderEventType.REVIEW_REJECT : OrderEventType.REVIEW_PASS,
                 AccountKind.STAFF, uid, SecurityUtils.currentRoleApi().orElse("TRACKER"),
@@ -605,6 +733,15 @@ public class OrderCommandService {
         storefrontWalletService.settleOnCompleted(orderId);
         referralService.settleOnCompleted(orderId);
         auditLogService.log("ORDER_PRODUCTION_COMPLETED", "ORDER", orderId, "生产完成，订单已关闭");
+        conversationService.ensureConversationByOrder(orderId, false);
+        Long actorId = order.getFollowUp() != null && order.getFollowUp().getId() != null
+                ? order.getFollowUp().getId()
+                : requireUserId();
+        orderEventService.record(orderId, OrderEventType.SHIPPING_ADDRESS_REQUEST,
+                AccountKind.STAFF, actorId, "FOLLOW_UP",
+                "请完善收货信息",
+                "生产已经完成。请填写收货人、联系电话、国家或地区、详细地址和邮编（如有），方便我们安排发货。",
+                null, null);
         return orderQueryService.getOrder(orderId);
     }
 
@@ -622,19 +759,21 @@ public class OrderCommandService {
         q.setLaborCost(BigDecimal.valueOf(labor));
         q.setAdditionalLaborCost(BigDecimal.valueOf(add));
         q.setOtherFees(BigDecimal.valueOf(nz(req.getOtherCost())));
-        q.setHasDesignCopyright(Boolean.TRUE.equals(req.getDesignBuyout()));
-        q.setDesignCopyrightFee(BigDecimal.valueOf(nz(req.getDesignBuyoutCost())));
-        double cert = nz(req.getCertificateCost());
-        q.setHasAppraisalCertificate(cert > 0);
-        q.setAppraisalCertificateFee(BigDecimal.valueOf(cert));
-        q.setConfidential(Boolean.TRUE.equals(req.getConfidential()));
+        // 买断/证书/保密由客户在建模确认后选择；售中仅保存基础工费与克重等费用
+        q.setHasDesignCopyright(false);
+        q.setDesignCopyrightFee(BigDecimal.ZERO);
+        q.setHasAppraisalCertificate(false);
+        q.setAppraisalCertificateFee(BigDecimal.ZERO);
+        q.setConfidential(false);
         q.setOtherNotes(req.getQuotationNotes());
         double total = nz(req.getTotalCost());
         if (total <= 0) {
-            total = labor + add + nz(req.getOtherCost()) + nz(req.getDesignBuyoutCost()) + cert;
+            total = labor + add + nz(req.getOtherCost());
         }
         q.setSubtotal(BigDecimal.valueOf(total));
         q.setTotalAmount(BigDecimal.valueOf(total));
+        q.setFinalized(false);
+        q.setFinalizedTime(null);
         quotationRepository.save(q);
         orderEventService.record(orderId, OrderEventType.QUOTATION,
                 AccountKind.STAFF, requireUserId(), SecurityUtils.currentRoleApi().orElse("SALES"),

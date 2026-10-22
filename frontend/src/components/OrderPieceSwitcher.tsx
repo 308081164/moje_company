@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Button, Input, Modal, Space, Tag, Typography, message } from 'antd';
+import { Button, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
+import { JEWELRY_TYPE_OPTIONS, jewelryTypeLabel } from '@/constants/jewelryType';
 import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import type { OrderPieceInfo } from '@/types/order';
@@ -12,7 +13,9 @@ export type OrderPieceSwitcherProps = {
   activePieceId: number | null;
   canEdit: boolean;
   onSelectPiece: (pieceId: number) => void;
-  onPiecesChanged: () => void | Promise<void>;
+  onPiecesChanged: (focusPieceId?: number) => void | Promise<void>;
+  /** 嵌套在其它 Modal 内时提高子 Modal 层级，避免被遮挡 */
+  nestedModalZIndex?: number;
 };
 
 const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
@@ -22,20 +25,44 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
   canEdit,
   onSelectPiece,
   onPiecesChanged,
+  nestedModalZIndex = 1100,
 }) => {
   const [renameOpen, setRenameOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addJewelryType, setAddJewelryType] = useState<string | undefined>(undefined);
   const [renamingPiece, setRenamingPiece] = useState<OrderPieceInfo | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const onAddPiece = async () => {
-    const name = window.prompt('单件名称（如男戒、女戒、项链）');
-    if (!name?.trim()) return;
+  const nestedModalProps = {
+    zIndex: nestedModalZIndex,
+    getContainer: () => document.body,
+    mask: true,
+  };
+
+  const openAddPiece = () => {
+    setAddName('');
+    setAddJewelryType(undefined);
+    setAddOpen(true);
+  };
+
+  const submitAddPiece = async () => {
+    const trimmed = addName.trim();
+    if (!trimmed) {
+      message.warning('请输入单件名称');
+      return;
+    }
+    if (!addJewelryType) {
+      message.warning('请选择珠宝类型');
+      return;
+    }
     setBusy(true);
     try {
-      await orderService.createOrderPiece(orderId, name.trim());
+      const created = await orderService.createOrderPiece(orderId, trimmed, addJewelryType);
       message.success('已添加单件');
-      await onPiecesChanged();
+      setAddOpen(false);
+      await onPiecesChanged(created.id);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
     } finally {
@@ -73,7 +100,7 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
     return canEdit ? (
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">当前订单尚无单件记录。</Text>
-        <Button size="small" type="link" loading={busy} onClick={() => void onAddPiece()}>
+        <Button size="small" type="link" loading={busy} onClick={openAddPiece}>
           添加第一件
         </Button>
       </div>
@@ -94,6 +121,7 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
             onClick={() => onSelectPiece(p.id)}
           >
             <span>{p.name}</span>
+            {p.jewelryType ? ` ·${jewelryTypeLabel(p.jewelryType)}` : ''}
             {p.designConfirmed ? ' ·设计已确认' : ''}
             {p.modelConfirmed ? ' ·建模已确认' : ''}
             {canEdit && (
@@ -108,11 +136,47 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
           </Tag>
         ))}
         {canEdit && pieces.length < 5 && (
-          <Button size="small" icon={<PlusOutlined />} loading={busy} onClick={() => void onAddPiece()}>
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            loading={busy}
+            onClick={(e) => {
+              e.stopPropagation();
+              openAddPiece();
+            }}
+          >
             添加单件
           </Button>
         )}
       </Space>
+
+      <Modal
+        title="添加单件"
+        open={addOpen}
+        onCancel={() => setAddOpen(false)}
+        onOk={() => void submitAddPiece()}
+        confirmLoading={busy}
+        destroyOnClose
+        {...nestedModalProps}
+      >
+        <Input
+          maxLength={50}
+          value={addName}
+          onChange={(e) => setAddName(e.target.value)}
+          placeholder="如男戒、女戒、项链"
+          onPressEnter={() => void submitAddPiece()}
+        />
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>珠宝类型</Text>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="请选择类型（决定手寸/链长是否必填）"
+            value={addJewelryType}
+            onChange={setAddJewelryType}
+            options={JEWELRY_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          />
+        </div>
+      </Modal>
 
       <Modal
         title="编辑单件名称"
@@ -121,6 +185,7 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
         onOk={() => void submitRename()}
         confirmLoading={busy}
         destroyOnClose
+        {...nestedModalProps}
       >
         <Input
           maxLength={50}

@@ -43,7 +43,6 @@ public class PortalCustomerOrderService {
     private final ReferralService referralService;
     private final ObjectMapper objectMapper;
     private final OrderPieceService orderPieceService;
-
     @Transactional
     public PortalCustomerOrderCreateResponse createOrder(PortalCustomerOrderCreateRequest req) {
         Long accountId = SecurityUtils.currentPortalCustomerId()
@@ -55,9 +54,13 @@ public class PortalCustomerOrderService {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
+        if (type == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "服务类型不能为空");
+        }
         if (!StringUtils.hasText(req.getBasicRequirements())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "基础需求不能为空");
         }
+        int pieceCount = PortalDepositPricing.normalizePieceCount(req.getPieceCount());
 
         var account = accountRepository.findById(accountId).orElse(null);
         String accountEmail = account != null ? account.getEmail() : null;
@@ -74,14 +77,18 @@ public class PortalCustomerOrderService {
         order.setBasicRequirements(req.getBasicRequirements());
         order.setStyleInfo(req.getStyleInfo());
         order.setMaterialInfo(req.getMaterialInfo());
-        order.setDeposit(req.getDepositAmount() != null ? req.getDepositAmount() : BigDecimal.ZERO);
+        order.setDeposit(PortalDepositPricing.unitPrice(type).multiply(BigDecimal.valueOf(pieceCount)));
         order.setOrderTime(LocalDateTime.now());
         order.setOrderNumber(orderCommandService.generateOrderNumber());
         order.setStatus(type == ServiceType.CUSTOM_IMAGE ? OrderStatus.PENDING_MODEL : OrderStatus.PENDING_DESIGN);
         orderRepository.save(order);
-        OrderPiece defaultPiece = orderPieceService.ensureDefaultPiece(order.getId());
+
+        var pieces = orderPieceService.initializePiecesForOrder(order.getId(), pieceCount);
+        OrderPiece defaultPiece = pieces.get(0);
         if (type == ServiceType.CUSTOM_IMAGE) {
-            orderPieceService.markDesignConfirmed(order.getId(), defaultPiece.getId());
+            for (OrderPiece p : pieces) {
+                orderPieceService.markDesignConfirmed(order.getId(), p.getId());
+            }
         }
 
         PortalCustomerOrderBinding binding = new PortalCustomerOrderBinding();
@@ -106,9 +113,13 @@ public class PortalCustomerOrderService {
 
         ConversationDto conversation = conversationService.ensureConversationByOrder(order.getId());
 
+        String createContent = req.getBasicRequirements();
+        if (pieceCount > 1) {
+            createContent = (createContent != null ? createContent : "") + "\n【单件数量】" + pieceCount + " 件";
+        }
         orderEventService.record(order.getId(), OrderEventType.STATUS_CHANGE,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
-                type.getDescription() + "订单已创建", req.getBasicRequirements(), null, null);
+                type.getDescription() + "订单已创建", createContent, null, null);
 
         return PortalCustomerOrderCreateResponse.builder()
                 .orderId(order.getId())

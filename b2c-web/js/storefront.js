@@ -32,10 +32,34 @@
       (fees.note ? '<p class="shop-fees__note">' + esc(fees.note) + '</p>' : '');
   }
 
+  function jewelryLabel(code) {
+    return window.DUXURY_JEWELRY ? window.DUXURY_JEWELRY.label(code) : code;
+  }
+
+  function renderBuyerSizeField(item) {
+    var meta = window.DUXURY_JEWELRY
+      ? window.DUXURY_JEWELRY.buyerSizeMeta(item.jewelryType)
+      : { visible: false };
+    if (!meta.visible && item.buyerSizeVisible === true) {
+      meta = { visible: true, required: !!item.buyerSizeRequired, labelKey: 'shop.size.generic', placeholderKey: 'shop.size.generic.ph' };
+    }
+    if (!meta.visible) return '';
+    var label = t(meta.labelKey || 'shop.size.generic', 'Size');
+    var ph = t(meta.placeholderKey || 'shop.size.generic.ph', '');
+    var req = meta.required || item.buyerSizeRequired;
+    return (
+      '<label class="listing-label" for="buySize">' + esc(label) + (req ? ' *' : '') + '</label>' +
+      '<input class="checkout__input" id="buySize" ' + (req ? 'required' : '') + ' placeholder="' + esc(ph) + '">'
+    );
+  }
+
   function listingCard(item) {
     var img = coverUrl(item);
+    var typeTag = item.jewelryType
+      ? '<span class="shop-card__type">' + esc(jewelryLabel(item.jewelryType)) + '</span>'
+      : '';
     return '<a class="shop-card" href="listing.html?id=' + encodeURIComponent(item.id) + '">' +
-      '<div class="shop-card__img">' + (img ? '<img src="' + esc(img) + '" alt="">' : '<div class="shop-card__ph"></div>') + '</div>' +
+      '<div class="shop-card__img">' + (img ? '<img src="' + esc(img) + '" alt="">' : '<div class="shop-card__ph"></div>') + typeTag + '</div>' +
       '<div class="shop-card__body">' +
       '<h3 class="shop-card__title">' + esc(item.title) + '</h3>' +
       '<p class="shop-card__maker">' + esc(item.sellerDisplayName || '') + '</p>' +
@@ -44,10 +68,37 @@
       '</div></a>';
   }
 
-  function initShop() {
+  function initShopFilters(onChange) {
+    var bar = document.getElementById('shopTypeFilter');
+    if (!bar || !window.DUXURY_JEWELRY) return;
+    var current = qs('type') || '';
+    var chips = '<button type="button" class="shop-filter-chip' + (current ? '' : ' is-active') + '" data-type="">' +
+      esc(t('shop.filter.all', 'All')) + '</button>';
+    window.DUXURY_JEWELRY.TYPES.forEach(function (row) {
+      var active = current === row.code ? ' is-active' : '';
+      chips += '<button type="button" class="shop-filter-chip' + active + '" data-type="' + esc(row.code) + '">' +
+        esc(jewelryLabel(row.code)) + '</button>';
+    });
+    bar.innerHTML = chips;
+    bar.querySelectorAll('.shop-filter-chip').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var type = btn.getAttribute('data-type') || '';
+        var url = new URL(location.href);
+        if (type) url.searchParams.set('type', type);
+        else url.searchParams.delete('type');
+        history.replaceState(null, '', url.pathname + url.search);
+        bar.querySelectorAll('.shop-filter-chip').forEach(function (b) {
+          b.classList.toggle('is-active', b === btn);
+        });
+        onChange(type);
+      });
+    });
+  }
+
+  function loadShopGrid(typeFilter) {
     var grid = document.getElementById('shopGrid');
     if (!grid || !window.DUXURY_API) return;
-    window.DUXURY_API.listStorefront().then(function (list) {
+    window.DUXURY_API.listStorefront(typeFilter || undefined).then(function (list) {
       if (!list || !list.length) {
         grid.innerHTML = '<p class="shop-empty">' + esc(t('shop.empty')) + '</p>';
         return;
@@ -58,26 +109,38 @@
     });
   }
 
-  function storedReferralCode() {
-    var v = localStorage.getItem('duxury-ref');
-    return v && v.trim() ? v.trim().toUpperCase() : '';
+  function initShop() {
+    var typeFilter = qs('type') || '';
+    initShopFilters(function (type) {
+      loadShopGrid(type);
+    });
+    loadShopGrid(typeFilter);
   }
 
   function doPurchase(id) {
     var nameEl = document.getElementById('buyName');
     var contactEl = document.getElementById('buyContact');
-    var addrEl = document.getElementById('buyAddress');
     var noteEl = document.getElementById('buyNote');
-    var refEl = document.getElementById('buyReferral');
-    var referralCode = refEl && refEl.value.trim() ? refEl.value.trim().toUpperCase() : '';
+    var addrResult = window.DUXURY_ADDRESS
+      ? window.DUXURY_ADDRESS.validateAndFormat()
+      : { ok: false, message: 'Address form unavailable' };
+    if (!addrResult.ok) {
+      alert(addrResult.message || 'Please complete shipping address');
+      return;
+    }
+    var sizeEl = document.getElementById('buySize');
+    if (sizeEl && sizeEl.required && !sizeEl.value.trim()) {
+      alert(t('shop.size.ring.ph', 'Please enter finger size'));
+      return;
+    }
+    var buyerSize = sizeEl ? sizeEl.value.trim() : '';
     window.DUXURY_API.purchaseStorefront(id, {
       customerName: nameEl ? nameEl.value.trim() : '',
       customerContact: contactEl ? contactEl.value.trim() : '',
-      shippingAddress: addrEl ? addrEl.value.trim() : '',
-      note: noteEl ? noteEl.value.trim() : '',
-      referralCode: referralCode || undefined
+      shippingAddress: addrResult.shippingAddress,
+      buyerSize: buyerSize,
+      note: noteEl ? noteEl.value.trim() : ''
     }).then(function (res) {
-      if (referralCode) localStorage.removeItem('duxury-ref');
       localStorage.setItem('duxury-order', JSON.stringify(res));
       location.href = 'order-workspace.html';
     }).catch(function (e) {
@@ -102,22 +165,24 @@
         '<h1 class="listing-title">' + esc(item.title) + '</h1>' +
         '<div class="listing-price">' + esc(money(item.salePrice)) + '</div>' +
         '<p class="listing-desc">' + esc(item.description || '') + '</p>' +
+        (item.jewelryType ? '<p class="listing-type"><span class="listing-type__label">' + esc(t('shop.type', 'Type')) + '</span> ' +
+          esc(jewelryLabel(item.jewelryType)) + '</p>' : '') +
         '<p class="shop-fees__note">' + esc(t('shop.pay.mock')) + '</p>' +
+        renderBuyerSizeField(item) +
         '<label class="listing-label">' + esc(t('shop.name')) + '</label>' +
         '<input class="checkout__input" id="buyName">' +
         '<label class="listing-label">' + esc(t('shop.contact')) + '</label>' +
         '<input class="checkout__input" id="buyContact">' +
-        '<label class="listing-label">' + esc(t('shop.addr')) + '</label>' +
-        '<textarea class="checkout__input" id="buyAddress" rows="3"></textarea>' +
+        '<div class="listing-address-block">' +
+        '<div class="listing-label listing-label--section">' + esc(t('shop.addr')) + '</div>' +
+        (window.DUXURY_ADDRESS ? window.DUXURY_ADDRESS.renderFormHtml() : '') +
+        '</div>' +
         '<label class="listing-label">' + esc(t('shop.note')) + '</label>' +
         '<textarea class="checkout__input" id="buyNote" rows="2"></textarea>' +
-        '<label class="listing-label">' + esc(t('co.referral')) + '</label>' +
-        '<input class="checkout__input" id="buyReferral" maxlength="16" placeholder="' + esc(t('co.referral.ph')) + '">' +
         '<button class="btn btn--gold btn--lg listing-buy" id="buyNow">' + esc(t('shop.buy')) + '</button>' +
         '</div>';
-      var buyRefEl = document.getElementById('buyReferral');
-      if (buyRefEl && storedReferralCode()) {
-        buyRefEl.value = storedReferralCode();
+      if (window.DUXURY_ADDRESS) {
+        window.DUXURY_ADDRESS.bind(document.getElementById('buyAddressForm'));
       }
       document.getElementById('buyNow').addEventListener('click', function () {
         if (!localStorage.getItem('duxury-token')) {
@@ -364,6 +429,19 @@
       return;
     }
     if (document.getElementById('sellerBody')) loadSeller();
+  });
+
+  document.addEventListener('duxury:langchange', function () {
+    if (document.getElementById('shopGrid')) {
+      loadShopGrid(qs('type') || '');
+    }
+    if (document.getElementById('listingRoot') && document.getElementById('listingRoot').children.length) {
+      initListing();
+    }
+    if (document.getElementById('sellerBody') && document.getElementById('sellerRoot').style.display !== 'none') {
+      loadSeller();
+    }
+    if (window.I18N) window.I18N.apply();
   });
 
   if (document.getElementById('shopGrid')) initShop();

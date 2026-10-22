@@ -56,5 +56,10 @@ public class OrderInfoDto {
         private String customerContact;
         private String customerName;
         private String customerWechat;
+        private String shippingRecipient;
+        private String shippingPhone;
+        private String shippingCountry;
+        private String shippingAddress;
+        private String shippingPostalCode;
     }
 }

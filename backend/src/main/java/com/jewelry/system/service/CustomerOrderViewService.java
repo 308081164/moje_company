@@ -14,7 +14,9 @@ import com.jewelry.system.dto.customer.CustomerOrderPublicMilestoneDto;
 import com.jewelry.system.dto.customer.CustomerOrderRegistrationHintDto;
 import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
 import com.jewelry.system.dto.customer.ModelFilePublicDto;
+import com.jewelry.system.dto.customer.CustomerQuotePriceGuideDto;
 import com.jewelry.system.dto.customer.QuotationPublicDto;
+import com.jewelry.system.dto.order.OrderSystemConfigDto;
 import com.jewelry.system.entity.DesignInfo;
 import com.jewelry.system.entity.ModelingInfo;
 import com.jewelry.system.entity.Order;
@@ -78,6 +80,8 @@ public class CustomerOrderViewService {
     private final ObjectMapper objectMapper;
     private final ShipmentService shipmentService;
     private final OrderPieceService orderPieceService;
+    private final CustomerQuotationFlowService customerQuotationFlowService;
+    private final OrderConfigurationService orderConfigurationService;
 
     /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
     @Value("${app.portal.base-url:http://localhost:8852}")
@@ -240,6 +244,22 @@ public class CustomerOrderViewService {
                     .additionalLaborCost(quotation.getAdditionalLaborCost())
                     .totalAmount(quotation.getTotalAmount())
                     .finalized(true)
+                    .designBuyout(Boolean.TRUE.equals(quotation.getHasDesignCopyright()))
+                    .designBuyoutCost(quotation.getDesignCopyrightFee())
+                    .appraisalCertificate(Boolean.TRUE.equals(quotation.getHasAppraisalCertificate()))
+                    .appraisalCertificateCost(quotation.getAppraisalCertificateFee())
+                    .confidential(Boolean.TRUE.equals(quotation.getConfidential()))
+                    .build();
+        }
+
+        boolean awaitingOptions = customerQuotationFlowService.awaitingCustomerOptions(order, quotation);
+        boolean waitingStaff = customerQuotationFlowService.waitingStaffBaseQuote(order, quotation);
+        CustomerQuotePriceGuideDto priceGuide = null;
+        if (awaitingOptions || waitingStaff) {
+            OrderSystemConfigDto cfg = orderConfigurationService.getOrderSystemConfig();
+            priceGuide = CustomerQuotePriceGuideDto.builder()
+                    .designBuyoutPrice(cfg.getDesignBuyoutPrice())
+                    .certificatePrice(cfg.getCertificatePrice())
                     .build();
         }
 
@@ -255,6 +275,9 @@ public class CustomerOrderViewService {
                 .designApproved(orderPieceService.allDesignConfirmed(order.getId()))
                 .modelApproved(orderPieceService.allModelConfirmed(order.getId()))
                 .quotation(quotationDto)
+                .awaitingCustomerQuoteOptions(awaitingOptions)
+                .waitingStaffBaseQuote(waitingStaff)
+                .priceGuide(priceGuide)
                 .modelFiles(parseModelFiles(mi))
                 .shipment(shipmentService.getShipmentForCustomer(order.getId()))
                 .pieces(pieces)

@@ -37,6 +37,25 @@ public class Order {
     /** 客户邮箱（C 端自助下单时自动带出） */
     @Column(name = "customer_email", length = 100)
     private String customerEmail;
+
+    /** 生产完成后客户填写的收货人 */
+    @Column(name = "shipping_recipient", length = 100)
+    private String shippingRecipient;
+
+    @Column(name = "shipping_phone", length = 40)
+    private String shippingPhone;
+
+    @Column(name = "shipping_country", length = 80)
+    private String shippingCountry;
+
+    @Column(name = "shipping_address", columnDefinition = "TEXT")
+    private String shippingAddress;
+
+    @Column(name = "shipping_postal_code", length = 20)
+    private String shippingPostalCode;
+
+    @Column(name = "shipping_address_at")
+    private LocalDateTime shippingAddressAt;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

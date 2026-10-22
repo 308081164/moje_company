@@ -11,10 +11,16 @@ import com.jewelry.system.security.SecurityUserPrincipal;
 import com.jewelry.system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.jewelry.system.event.CustomerChatMessageEvent;
+import com.jewelry.system.event.OrderConversationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
+import com.jewelry.system.enums.OrderSource;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
@@ -32,6 +38,10 @@ public class ConversationService {
 
     private static final String SUPER_SERVICE_ROLE = "SUPER_SERVICE";
     private static final String SUPER_SERVICE_NAME = "超级客服";
+    public static final String AI_ASSISTANT_ROLE = "AI_ASSISTANT";
+    public static final String AI_ASSISTANT_NAME = "AI 客服";
+    public static final String SYSTEM_EVENT_ROLE = "SYSTEM";
+    public static final String SYSTEM_EVENT_NAME = "系统";
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
@@ -47,9 +57,18 @@ public class ConversationService {
     private final OrderEventCardService orderEventCardService;
     private final DesignInfoRepository designInfoRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ConversationDto ensureConversationByOrder(Long orderId) {
+        return ensureConversationByOrder(orderId, true);
+    }
+
+    /**
+     * @param scheduleIntake 为 false 时只保证群和成员存在，不再触发 AI 接单欢迎语
+     */
+    @Transactional
+    public ConversationDto ensureConversationByOrder(Long orderId, boolean scheduleIntake) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
         OrderConversation conversation = conversationRepository.findByOrderId(orderId).orElse(null);
@@ -62,7 +81,27 @@ public class ConversationService {
             orderRepository.save(order);
         }
         syncMembers(conversation, order);
+        if (scheduleIntake) {
+            scheduleAiIntakeKickoff(order);
+        }
         return toConversationDto(conversation, order, null);
+    }
+
+    private void scheduleAiIntakeKickoff(Order order) {
+        if (order == null || Boolean.TRUE.equals(order.getIsB2b()) || order.getSource() == OrderSource.MARKETPLACE) {
+            return;
+        }
+        Long orderId = order.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    eventPublisher.publishEvent(new OrderConversationReadyEvent(orderId));
+                }
+            });
+        } else {
+            eventPublisher.publishEvent(new OrderConversationReadyEvent(orderId));
+        }
     }
 
     @Transactional
@@ -79,9 +118,7 @@ public class ConversationService {
         ConversationMessage message = new ConversationMessage();
         message.setConversationId(conversationId);
         if (admin) {
-            message.setSenderType(AccountKind.STAFF);
-            message.setSenderId(principal.getUserId());
-            message.setRole(SUPER_SERVICE_ROLE);
+            applyAdminChatIdentity(message, conversationId, req.getChatAsRole());
         } else {
             message.setSenderType(member.getAccountType());
             message.setSenderId(member.getAccountId());
@@ -99,6 +136,33 @@ public class ConversationService {
         if (StringUtils.hasText(content)) {
             translationService.preTranslateAsync(message.getId(), content, conversationId);
         }
+        if (!admin && member != null && "CUSTOMER".equals(member.getRole()) && "text".equals(message.getMsgType())) {
+            eventPublisher.publishEvent(new CustomerChatMessageEvent(conversationId, message.getId()));
+        }
+        return dto;
+    }
+
+    /**
+     * 订单群聊 AI 客服消息（全员可见，不走客户发送路径）。
+     */
+    @Transactional
+    public ConversationMessageDto postAiAssistantMessage(Long conversationId, String content) {
+        if (!StringUtils.hasText(content)) {
+            return null;
+        }
+        ConversationMessage message = new ConversationMessage();
+        message.setConversationId(conversationId);
+        message.setSenderType(AccountKind.STAFF);
+        message.setSenderId(0L);
+        message.setRole(AI_ASSISTANT_ROLE);
+        message.setMsgType("text");
+        message.setContent(content.trim());
+        message = messageRepository.save(message);
+
+        List<ConversationMember> members = memberRepository.findByConversationIdOrderByJoinedAtAsc(conversationId);
+        ConversationMessageDto dto = toMessageDto(message, null);
+        broadcastFilteredByRole(conversationId, members, "MESSAGE", dto);
+        translationService.preTranslateAsync(message.getId(), content, conversationId);
         return dto;
     }
 
@@ -116,9 +180,11 @@ public class ConversationService {
             boundaryMessageId = boundaryMessageIdForCurrentUser(conversationId);
         }
         Long bound = boundaryMessageId;
+        boolean customerViewer = isCustomerAccount();
         return messageRepository.findByConversationIdOrderByIdAsc(conversationId).stream()
                 .filter(m -> bound == null || m.getId() <= bound)
                 .map(m -> toMessageDto(m, viewerLang, false))
+                .filter(dto -> !customerViewer || !hiddenFromCustomer(dto))
                 .toList();
     }
 
@@ -159,18 +225,69 @@ public class ConversationService {
     public void pushEventMessage(Long orderId, Long eventId, String content,
                                  AccountKind actorType, Long actorId, String actorRole) {
         conversationRepository.findByOrderId(orderId).ifPresent(conversation -> {
+            if (messageRepository.findFirstByConversationIdAndEventId(conversation.getId(), eventId).isPresent()) {
+                return;
+            }
+            AccountKind senderType = actorType != null ? actorType : AccountKind.STAFF;
+            Long senderId = actorId != null ? actorId : 0L;
+            String senderRole = actorRole != null && !actorRole.isBlank() ? actorRole : SYSTEM_EVENT_ROLE;
+            OrderEvent linked = orderEventRepository.findById(eventId).orElse(null);
+            if (linked != null && (linked.getEventType() == OrderEventType.BALANCE_PAYMENT
+                    || linked.getEventType() == OrderEventType.BALANCE_PAID)) {
+                senderType = AccountKind.STAFF;
+                senderId = 0L;
+                senderRole = SYSTEM_EVENT_ROLE;
+            }
             ConversationMessage message = new ConversationMessage();
             message.setConversationId(conversation.getId());
-            message.setSenderType(actorType != null ? actorType : AccountKind.STAFF);
-            message.setSenderId(actorId != null ? actorId : 0L);
-            message.setRole(actorRole != null && !actorRole.isBlank() ? actorRole : "SYSTEM");
+            message.setSenderType(senderType);
+            message.setSenderId(senderId);
+            message.setRole(senderRole);
             message.setMsgType("event");
             message.setContent(content);
             message.setEventId(eventId);
             message = messageRepository.save(message);
             List<ConversationMember> members = memberRepository.findByConversationIdOrderByJoinedAtAsc(conversation.getId());
+            if (OrderEventService.isHiddenFromCustomer(linked)) {
+                members = members.stream()
+                        .filter(m -> m.getAccountType() == AccountKind.STAFF)
+                        .toList();
+            }
             broadcastFilteredByRole(conversation.getId(), members, "MESSAGE", toMessageDto(message, null));
         });
+    }
+
+    /**
+     * 工艺验证通过后：确保跟单员在群内，并以跟单员本人身份告知客户后续由自己对接。
+     */
+    @Transactional
+    public void announceTrackerHandoff(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null || order.getFollowUp() == null || order.getFollowUp().getId() == null) {
+            return;
+        }
+        User tracker = userRepository.findById(order.getFollowUp().getId()).orElse(null);
+        if (tracker == null) {
+            return;
+        }
+        ensureConversationByOrder(orderId);
+        OrderConversation conversation = conversationRepository.findByOrderId(orderId).orElse(null);
+        if (conversation == null) {
+            return;
+        }
+        String name = StringUtils.hasText(tracker.getRealName()) ? tracker.getRealName().trim() : tracker.getUsername();
+        String content = "您好，我是" + name + "。工艺验证已经通过，后续的生产与交付由我来和您对接，有任何问题可以直接在这里告诉我。";
+        ConversationMessage message = new ConversationMessage();
+        message.setConversationId(conversation.getId());
+        message.setSenderType(AccountKind.STAFF);
+        message.setSenderId(tracker.getId());
+        message.setRole("FOLLOW_UP");
+        message.setMsgType("text");
+        message.setContent(content);
+        message = messageRepository.save(message);
+        List<ConversationMember> members = memberRepository.findByConversationIdOrderByJoinedAtAsc(conversation.getId());
+        broadcastFilteredByRole(conversation.getId(), members, "MESSAGE", toMessageDto(message, null));
+        translationService.preTranslateAsync(message.getId(), content, conversation.getId());
     }
 
     @Transactional(readOnly = true)
@@ -265,6 +382,18 @@ public class ConversationService {
 
     private boolean isCurrentAdmin() {
         return "ADMIN".equals(SecurityUtils.currentRoleApi().orElse(null));
+    }
+
+    private boolean isCustomerAccount() {
+        AccountKind kind = currentPrincipal().getAccountKind();
+        return kind == AccountKind.C_PORTAL_CUSTOMER || kind == AccountKind.B2B_CLIENT;
+    }
+
+    private static boolean hiddenFromCustomer(ConversationMessageDto dto) {
+        if (dto == null || dto.getEvent() == null) {
+            return false;
+        }
+        return OrderEventService.isHiddenFromCustomer(dto.getEvent().getEventType(), dto.getEvent().getTitle());
     }
 
     /** 角色 → 其消息可见的结束边界事件（越过该事件后默认不再接收/展示后续消息）。 */
@@ -513,9 +642,7 @@ public class ConversationService {
                 .senderType(message.getSenderType().name())
                 .senderId(message.getSenderId())
                 .role(message.getRole())
-                .displayName(SUPER_SERVICE_ROLE.equals(message.getRole())
-                        ? SUPER_SERVICE_NAME
-                        : resolveDisplayName(message.getSenderType(), message.getSenderId()))
+                .displayName(resolveMessageDisplayName(message))
                 .msgType(message.getMsgType())
                 .content(content)
                 .translatedContent(translated)
@@ -549,6 +676,60 @@ public class ConversationService {
             log.warn("解析查看者语言失败", e);
         }
         return "zh-CN";
+    }
+
+    private void applyAdminChatIdentity(ConversationMessage message, Long conversationId, String chatAsRole) {
+        SecurityUserPrincipal principal = currentPrincipal();
+        message.setSenderType(AccountKind.STAFF);
+        message.setSenderId(principal.getUserId());
+        String role = SUPER_SERVICE_ROLE;
+        if (StringUtils.hasText(chatAsRole)) {
+            String normalized = chatAsRole.trim().toUpperCase();
+            if ("DESIGNER".equals(normalized) || "MODELER".equals(normalized)) {
+                role = normalized;
+            } else if ("SUPER_SERVICE".equals(normalized)) {
+                role = SUPER_SERVICE_ROLE;
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的发送身份: " + chatAsRole);
+            }
+        }
+        message.setRole(role);
+    }
+
+    private String resolveMessageDisplayName(ConversationMessage message) {
+        if (SYSTEM_EVENT_ROLE.equals(message.getRole())) {
+            return SYSTEM_EVENT_NAME;
+        }
+        if (AI_ASSISTANT_ROLE.equals(message.getRole())) {
+            return AI_ASSISTANT_NAME;
+        }
+        if (SUPER_SERVICE_ROLE.equals(message.getRole())) {
+            return SUPER_SERVICE_NAME;
+        }
+        if ("DESIGNER".equals(message.getRole()) || "MODELER".equals(message.getRole())) {
+            String assignee = resolveOrderAssigneeDisplayName(message.getConversationId(), message.getRole());
+            if (StringUtils.hasText(assignee)) {
+                return assignee;
+            }
+        }
+        return resolveDisplayName(message.getSenderType(), message.getSenderId());
+    }
+
+    private String resolveOrderAssigneeDisplayName(Long conversationId, String role) {
+        if (conversationId == null || !StringUtils.hasText(role)) {
+            return null;
+        }
+        return conversationRepository.findById(conversationId)
+                .map(OrderConversation::getOrderId)
+                .flatMap(orderRepository::findById)
+                .map(order -> {
+                    User user = "DESIGNER".equals(role) ? order.getDesigner() : order.getModeler();
+                    if (user == null) {
+                        return null;
+                    }
+                    return StringUtils.hasText(user.getRealName()) ? user.getRealName() : user.getUsername();
+                })
+                .orElse(null);
     }
 
     private String resolveDisplayName(AccountKind type, Long accountId) {

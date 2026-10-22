@@ -34,7 +34,9 @@ import { orderService } from '@/services/orderService';
 import { conversationService } from '@/services/conversationService';
 import { userService } from '@/services/userService';
 import UploadWithImagePreview from '@/components/UploadWithImagePreview';
+import UploadWithModelSourcePreview from '@/components/UploadWithModelSourcePreview';
 import OrderPieceSwitcher from '@/components/OrderPieceSwitcher';
+import { JEWELRY_TYPE_OPTIONS, handSizeFieldMeta } from '@/constants/jewelryType';
 import {
   collectDoneImageUrlsFromFileList,
   normalizeDoneImageUploadFileList,
@@ -47,6 +49,7 @@ import type {
   FileInfo,
   OrderInfo,
   OrderPieceInfo,
+  OrderModelVersion,
   OrderShipmentDto,
   ProcessInfo,
 } from '@/types/order';
@@ -59,6 +62,33 @@ import { filterOrdersForTodoFlip } from '@/utils/orderFlipTodoFilter';
 import { useCurrentUser, useIsAdmin, useIsSales, useIsDesigner, useIsModeler, useIsTracker } from '@/stores/authStore';
 
 const { Title, Text, Paragraph } = Typography;
+
+const touchFieldStyle = { fontSize: 16, minHeight: 44 };
+
+function orderHasShippingAddress(base?: OrderInfo['baseInfo']): boolean {
+  return !!(
+    base?.shippingRecipient ||
+    base?.shippingPhone ||
+    base?.shippingCountry ||
+    base?.shippingAddress ||
+    base?.shippingPostalCode
+  );
+}
+
+function ShippingAddressLines({ base }: { base?: OrderInfo['baseInfo'] }) {
+  if (!orderHasShippingAddress(base)) {
+    return <Text type="secondary">客户尚未填写收货信息。生产完成后会在订单群里请客户填写。</Text>;
+  }
+  return (
+    <Descriptions column={1} size="small" bordered>
+      <Descriptions.Item label="收货人">{base?.shippingRecipient || '-'}</Descriptions.Item>
+      <Descriptions.Item label="联系电话">{base?.shippingPhone || '-'}</Descriptions.Item>
+      <Descriptions.Item label="国家/地区">{base?.shippingCountry || '-'}</Descriptions.Item>
+      <Descriptions.Item label="详细地址">{base?.shippingAddress || '-'}</Descriptions.Item>
+      <Descriptions.Item label="邮编">{base?.shippingPostalCode || '未填'}</Descriptions.Item>
+    </Descriptions>
+  );
+}
 
 /** 建模流程下的「设计审核」展示：驳回→未通过修改中；建模中→审核中；建模已提交后→已通过 */
 function renderModelerDesignAuditTag(order: OrderInfo) {
@@ -190,10 +220,26 @@ const OrderDetailPage: React.FC = () => {
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
   const [openChatLoading, setOpenChatLoading] = useState(false);
   const [modelSaveLoading, setModelSaveLoading] = useState(false);
+  const [modelSubmitLoading, setModelSubmitLoading] = useState(false);
+  const [modelTrackerLoading, setModelTrackerLoading] = useState(false);
+  const [designHandoffLoading, setDesignHandoffLoading] = useState(false);
+  const [modelVersions, setModelVersions] = useState<OrderModelVersion[]>([]);
+  const [modelVersionPick, setModelVersionPick] = useState<number | null>(null);
   const [shipment, setShipment] = useState<OrderShipmentDto | null>(null);
   const [shipmentLoading, setShipmentLoading] = useState(false);
   const [activePieceId, setActivePieceId] = useState<number | null>(null);
   const activePieceIdRef = useRef<number | null>(null);
+
+  const activePiece = useMemo(() => {
+    const pieces = order?.pieces ?? [];
+    if (!pieces.length) return undefined;
+    return pieces.find((p) => p.id === activePieceId) ?? pieces[0];
+  }, [order, activePieceId]);
+
+  const handSizeMeta = useMemo(
+    () => handSizeFieldMeta(activePiece?.jewelryType),
+    [activePiece?.jewelryType]
+  );
 
   const [flipTodoOnly, setFlipTodoOnly] = useState(() => {
     try {
@@ -316,6 +362,7 @@ const OrderDetailPage: React.FC = () => {
           designerId: design.designerId,
           engravingText: design.engravingText,
           materialType: design.materialType,
+          jewelryType: piece?.jewelryType,
           handSize: design.handSize,
           designNotes: design.designNotes,
         });
@@ -601,6 +648,19 @@ const OrderDetailPage: React.FC = () => {
     [orderId]
   );
 
+  const handleModelSourceDownload = useCallback((fileId: number, fileName: string) => {
+    void orderService
+      .downloadFile(fileId)
+      .then((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName || `model-${fileId}`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch((e: unknown) => message.error(String((e as Error)?.message || e)));
+  }, []);
+
   const handleRejectDesignerAttachChange = useCallback<NonNullable<UploadProps['onChange']>>(({ fileList }) => {
     setRejectDesignerAttachList(normalizeDoneImageUploadFileList(fileList));
   }, []);
@@ -627,8 +687,28 @@ const OrderDetailPage: React.FC = () => {
     [orderId]
   );
 
+  const onPieceJewelryTypeChange = async (jewelryType: string) => {
+    if (!activePiece) return;
+    try {
+      await orderService.updateOrderPieceMeta(orderId, activePiece.id, { jewelryType });
+      designForm.setFieldsValue({ jewelryType, handSize: undefined });
+      message.success('珠宝类型已更新');
+      await refresh();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    }
+  };
+
   const saveDesign = async () => {
     const v = await designForm.validateFields();
+    if (!activePiece?.jewelryType) {
+      message.error('请先选择珠宝类型');
+      return;
+    }
+    if (handSizeMeta.required && !String(v.handSize || '').trim()) {
+      message.error(`请填写${handSizeMeta.label}`);
+      return;
+    }
     const processInfo = selectedProcesses.map((key) => {
       const cfg = processConfig.find((p) => p.id != null && String(p.id) === key);
       if (cfg) {
@@ -663,9 +743,67 @@ const OrderDetailPage: React.FC = () => {
       designImages: collectDoneImageUrlsFromFileList(designImageFileList),
       processInfo,
       submitToCustomer: false,
+      submitToModeler: false,
     });
     message.success('设计信息已保存');
     refresh();
+  };
+
+  const handoffDesign = async (toModeler: boolean) => {
+    const images = collectDoneImageUrlsFromFileList(designImageFileList);
+    if (!images.length) {
+      message.warning('请先上传设计图');
+      return;
+    }
+    try {
+      setDesignHandoffLoading(true);
+      const v = await designForm.validateFields();
+      if (!activePiece?.jewelryType) {
+        message.error('请先选择珠宝类型');
+        return;
+      }
+      const processInfo = selectedProcesses.map((key) => {
+        const cfg = processConfig.find((p) => p.id != null && String(p.id) === key);
+        if (cfg) {
+          return {
+            id: cfg.id,
+            processType: cfg.processType,
+            customProcess: cfg.customProcess,
+            additionalCost: cfg.additionalCost ?? 0,
+            notes: cfg.notes,
+          };
+        }
+        if (key.startsWith(OTHER_VALUE_PREFIX)) {
+          return {
+            processType: ProcessType.OTHER,
+            customProcess: key.slice(OTHER_VALUE_PREFIX.length),
+            additionalCost: 0,
+          };
+        }
+        return { processType: key as ProcessType, additionalCost: 0 };
+      });
+      await orderService.updateOrderDesign(orderId, {
+        pieceId: activePieceId ?? undefined,
+        designerId: v.designerId,
+        engravingText: v.engravingText,
+        engravingImages: collectDoneImageUrlsFromFileList(engravingImageFileList),
+        materialType: v.materialType,
+        handSize: v.handSize,
+        designNotes: v.designNotes,
+        designImages: images,
+        processInfo,
+        createVersion: true,
+        submitToCustomer: !toModeler,
+        submitToModeler: toModeler,
+      });
+      message.success(toModeler ? '已直接交回建模师，客户不会看到这次驳回' : '已发给客户确认；客户确认后会进入建模');
+      refresh();
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) return;
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setDesignHandoffLoading(false);
+    }
   };
 
   const canShareCustomerProgress = useMemo(() => {
@@ -738,27 +876,56 @@ const OrderDetailPage: React.FC = () => {
     }
   };
 
+  const buildModelUpdatePayload = async () => {
+    const v = await modelForm.validateFields();
+    const sourceIds = modelSourceFileList
+      .filter((f) => f.status === 'done')
+      .map((f) => {
+        const res = f.response as FileInfo | undefined;
+        return res?.id;
+      })
+      .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
+    return {
+      pieceId: activePieceId ?? undefined,
+      modelerId: v.modelerId,
+      weight: v.weight,
+      modelNotes: v.modelNotes,
+      modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
+      modelSourceFileIds: sourceIds,
+    };
+  };
+
+  const loadModelVersions = useCallback(async () => {
+    if (!orderId || activePieceId == null) {
+      setModelVersions([]);
+      return;
+    }
+    try {
+      const list = await orderService.listModelVersions(orderId, activePieceId);
+      setModelVersions(list);
+    } catch {
+      setModelVersions([]);
+    }
+  }, [orderId, activePieceId]);
+
+  useEffect(() => {
+    if (isModeler || isAdmin) {
+      void loadModelVersions();
+    }
+  }, [isModeler, isAdmin, loadModelVersions]);
+
   const saveModel = async () => {
     try {
-      const v = await modelForm.validateFields();
-      const sourceIds = modelSourceFileList
-        .filter((f) => f.status === 'done')
-        .map((f) => {
-          const res = f.response as FileInfo | undefined;
-          return res?.id;
-        })
-        .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
       setModelSaveLoading(true);
-      const updated = await orderService.updateOrderModel(orderId, {
-        pieceId: activePieceId ?? undefined,
-        modelerId: v.modelerId,
-        weight: v.weight,
-        modelNotes: v.modelNotes,
-        modelEffectImageUrls: collectDoneImageUrlsFromFileList(modelEffectImageFileList),
-        modelSourceFileIds: sourceIds,
+      const payload = await buildModelUpdatePayload();
+      await orderService.updateOrderModel(orderId, {
+        ...payload,
+        createVersion: true,
+        submitToCustomer: false,
       });
-      message.success('建模信息已保存');
-      refresh();
+      message.success('建模信息已保存（已记入版本历史，未发送客户）');
+      await refresh();
+      await loadModelVersions();
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) {
         return;
@@ -766,6 +933,80 @@ const OrderDetailPage: React.FC = () => {
       message.error(String((e as Error)?.message || e));
     } finally {
       setModelSaveLoading(false);
+    }
+  };
+
+  const submitModelToTracker = async () => {
+    try {
+      const urls = collectDoneImageUrlsFromFileList(modelEffectImageFileList);
+      if (!urls.length) {
+        message.warning('交给跟单员前请至少上传一张效果图');
+        return;
+      }
+      setModelTrackerLoading(true);
+      const payload = await buildModelUpdatePayload();
+      await orderService.updateOrderModel(orderId, {
+        ...payload,
+        createVersion: true,
+        submitToCustomer: false,
+        submitToTracker: true,
+      });
+      message.success('已直接交回跟单员，客户不会看到这次工艺驳回');
+      await refresh();
+      await loadModelVersions();
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) return;
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setModelTrackerLoading(false);
+    }
+  };
+
+  const submitModelToCustomer = async () => {
+    try {
+      const urls = collectDoneImageUrlsFromFileList(modelEffectImageFileList);
+      if (!urls.length) {
+        message.warning('提交客户审阅前请至少上传一张效果图');
+        return;
+      }
+      setModelSubmitLoading(true);
+      const payload = await buildModelUpdatePayload();
+      await orderService.updateOrderModel(orderId, {
+        ...payload,
+        createVersion: true,
+        submitToCustomer: true,
+      });
+      const review = order?.reviewInfo;
+      const rework =
+        !!review &&
+        review.reviewPassed === false &&
+        !!(review.rejectionReason?.trim() || review.reviewNotes?.trim() || (review.rejectedProcesses || []).length);
+      message.success(rework ? '已发给客户确认调整。客户确认后才会进入工艺验证。' : '建模稿已提交给客户审阅');
+      await refresh();
+      await loadModelVersions();
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) {
+        return;
+      }
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setModelSubmitLoading(false);
+    }
+  };
+
+  const restoreModelVersion = async () => {
+    if (activePieceId == null || modelVersionPick == null) {
+      message.info('请选择要恢复的历史版本');
+      return;
+    }
+    try {
+      const o = await orderService.restoreModelVersion(orderId, activePieceId, modelVersionPick);
+      setOrder(o);
+      applyPieceData(o, activePieceId);
+      message.success('已恢复为该版本内容，可继续编辑后保存或提交');
+      await loadModelVersions();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
     }
   };
 
@@ -829,21 +1070,23 @@ const OrderDetailPage: React.FC = () => {
     const v = await shipForm.validateFields();
     const trackingNumber = String(v.trackingNumber || '').trim();
     if (!trackingNumber) {
-      message.warning('请输入快递单号');
+      message.warning('请输入国际物流单号');
       return;
     }
     setShipmentLoading(true);
     try {
+      const carrierName = String(v.carrierName || '').trim();
       const sh = await orderService.shipOrder(orderId, {
         trackingNumber,
-        carrierCode: v.carrierCode,
+        carrierName: carrierName || undefined,
       });
       setShipment(sh);
-      message.success('发货成功');
+      message.success('发货成功，客户可在订单聊天里查看物流');
       shipForm.resetFields();
       await refresh();
-    } catch (e) {
-      message.error('发货失败，请重试');
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { message?: string } } };
+      message.error(err?.response?.data?.message || err?.message || '发货失败，请重试');
     } finally {
       setShipmentLoading(false);
     }
@@ -934,12 +1177,33 @@ const OrderDetailPage: React.FC = () => {
     );
   };
 
-  const getTaskForm = () => {
+  const getDesignerTaskForm = () => {
     if (!order) return null;
-
-    if (isDesigner) {
-      return (
+    const designRejectMsg =
+      order.modelInfo?.lastRejectToDesignerMessage?.trim() ||
+      order.pieces?.map((p) => p.model?.lastRejectToDesignerMessage?.trim()).find((text) => !!text) ||
+      '';
+    const designRework =
+      !!designRejectMsg &&
+      (order.currentStatus === OrderStatus.DESIGNING || order.currentStatus === OrderStatus.PENDING_DESIGN);
+    return (
         <div style={{ maxWidth: 720 }}>
+          {designRework ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="建模师退回了设计，请修改后选择如何继续"
+              description={
+                <div>
+                  <Paragraph style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>{designRejectMsg}</Paragraph>
+                  <Text type="secondary">
+                    外观变化不大可直接交回建模师，客户不会看到这次驳回。外观变化较大时，先请客户确认新设计，确认后再进入建模。
+                  </Text>
+                </div>
+              }
+            />
+          ) : null}
           {renderPieceBar(canOperateDesign)}
           {!canOperateDesign && (
             <Alert
@@ -976,6 +1240,19 @@ const OrderDetailPage: React.FC = () => {
               <div style={{ marginTop: 8 }}>上传</div>
             </UploadWithImagePreview>
           </Form.Item>
+          <Form.Item
+            name="jewelryType"
+            label="珠宝类型"
+            rules={[{ required: true, message: '请选择珠宝类型' }]}
+            extra="创建单件时也可预选；类型决定手寸/链长是否必填。胸针、耳钉无需规格。"
+          >
+            <Select
+              placeholder="请选择类型"
+              options={JEWELRY_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+              onChange={(val) => void onPieceJewelryTypeChange(val)}
+              disabled={!canOperateDesign}
+            />
+          </Form.Item>
           <Form.Item name="materialType" label="材质类型">
             <Select
               allowClear
@@ -986,9 +1263,19 @@ const OrderDetailPage: React.FC = () => {
               }))}
             />
           </Form.Item>
-          <Form.Item name="handSize" label="手寸/链长">
-            <Input />
-          </Form.Item>
+          {handSizeMeta.visible && (
+            <Form.Item
+              name="handSize"
+              label={handSizeMeta.label}
+              rules={
+                handSizeMeta.required
+                  ? [{ required: true, message: `请填写${handSizeMeta.label}` }]
+                  : []
+              }
+            >
+              <Input placeholder={handSizeMeta.placeholder} />
+            </Form.Item>
+          )}
           <Form.Item label="工艺选择">
             <Select
               mode="multiple"
@@ -1021,9 +1308,31 @@ const OrderDetailPage: React.FC = () => {
             </UploadWithImagePreview>
           </Form.Item>
           
-          <Button type="primary" onClick={saveDesign}>
-            保存设计信息
-          </Button>
+          <Space wrap>
+            <Button type="primary" onClick={saveDesign} disabled={!canOperateDesign}>
+              保存设计信息
+            </Button>
+            {designRework ? (
+              <>
+                <Button
+                  disabled={!canOperateDesign}
+                  loading={designHandoffLoading}
+                  onClick={() => void handoffDesign(true)}
+                >
+                  直接提交给建模师
+                </Button>
+                <Button
+                  type="primary"
+                  ghost
+                  disabled={!canOperateDesign}
+                  loading={designHandoffLoading}
+                  onClick={() => void handoffDesign(false)}
+                >
+                  请客户确认后再交建模
+                </Button>
+              </>
+            ) : null}
+          </Space>
 
           {canShareCustomerProgress && (
             <Card size="small" title="客户进度分享" style={{ marginTop: 16 }}>
@@ -1071,14 +1380,90 @@ const OrderDetailPage: React.FC = () => {
           )}
         </Form>
         </div>
-      );
-    }
+    );
+  };
 
-    if (isModeler) {
+  const getModelerTaskForm = () => {
+    if (!order) return null;
       const canReject =
         order.currentStatus === OrderStatus.PENDING_MODEL || order.currentStatus === OrderStatus.MODELING;
+      const activePiece =
+        order.pieces?.find((p) => p.id === activePieceId) ?? order.pieces?.[0];
+      const activeModel = activePiece?.model ?? order.modelInfo;
+      const customerModelRejectReason =
+        activeModel?.lastCustomerModelRejectReason?.trim() ||
+        order.modelInfo?.lastCustomerModelRejectReason?.trim();
+      const customerModelRejectTime =
+        activeModel?.lastCustomerModelRejectTime || order.modelInfo?.lastCustomerModelRejectTime;
+      const showCustomerReject = !!customerModelRejectReason;
+      const review = order.reviewInfo;
+      const rejectedProcesses = (review?.rejectedProcesses || []).map((p) => p.trim()).filter(Boolean);
+      const reviewRejectText = review?.rejectionReason?.trim();
+      const reviewNotes = review?.reviewNotes?.trim();
+      const showReviewReject =
+        canReject &&
+        !!review &&
+        review.reviewPassed === false &&
+        !!(reviewRejectText || reviewNotes || rejectedProcesses.length);
+      const reviewTime = review?.reviewPassedTime || review?.updatedAt;
       return (
-        <div style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 960 }}>
+          {(showReviewReject || showCustomerReject) && (
+            <Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 16 }}>
+              {showReviewReject ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  message="跟单工艺验证未通过，请按说明修改后重新提交给客户"
+                  description={
+                    <div>
+                      {reviewRejectText ? (
+                        <Paragraph style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>{reviewRejectText}</Paragraph>
+                      ) : null}
+                      {rejectedProcesses.length > 0 ? (
+                        <div style={{ marginBottom: 8 }}>
+                          <Text type="secondary">涉及工艺：</Text>
+                          <Space size={4} wrap>
+                            {rejectedProcesses.map((name) => (
+                              <Tag key={name} color="error">{name}</Tag>
+                            ))}
+                          </Space>
+                        </div>
+                      ) : null}
+                      {reviewNotes ? (
+                        <Paragraph type="secondary" style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+                          评审备注：{reviewNotes}
+                        </Paragraph>
+                      ) : null}
+                      <Text type="secondary">
+                        {review?.trackerName ? `${review.trackerName} · ` : ''}
+                        {reviewTime ? dayjs(reviewTime).format('YYYY-MM-DD HH:mm') : ''}
+                      </Text>
+                    </div>
+                  }
+                />
+              ) : null}
+              {showCustomerReject ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="客户已驳回建模稿，请按说明修改后重新保存并提交"
+                  description={
+                    <div>
+                      <Paragraph style={{ marginBottom: customerModelRejectTime ? 8 : 0, whiteSpace: 'pre-wrap' }}>
+                        {customerModelRejectReason}
+                      </Paragraph>
+                      {customerModelRejectTime ? (
+                        <Text type="secondary">
+                          驳回时间：{dayjs(customerModelRejectTime).format('YYYY-MM-DD HH:mm')}
+                        </Text>
+                      ) : null}
+                    </div>
+                  }
+                />
+              ) : null}
+            </Space>
+          )}
           {renderPieceBar(canOperateModel)}
           {!canOperateModel && (
             <Alert
@@ -1139,61 +1524,227 @@ const OrderDetailPage: React.FC = () => {
               ]}
             />
           )}
-          <Form form={modelForm} layout="vertical" style={{ maxWidth: 520 }} disabled={!canOperateModel}>
-            <Form.Item name="modelerId" label="建模师">
-              <Select
-                allowClear
-                options={modelers.map((u) => ({
-                  value: u.id,
-                  label: `${u.realName || u.username}`,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="weight" label="克重">
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="modelNotes" label="建模备注">
-              <Input.TextArea rows={4} />
-            </Form.Item>
-            <Form.Item
-              label="效果图"
-              extra="支持多张图片；上传后点「保存建模信息」写入订单（与设计师设计图存法一致）。"
+          <Form form={modelForm} layout="vertical" disabled={!canOperateModel}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+                gap: 16,
+                alignItems: 'start',
+              }}
             >
-              <UploadWithImagePreview
-                listType="picture-card"
-                accept="image/*"
-                multiple
-                fileList={modelEffectImageFileList}
-                onChange={handleModelEffectUploadChange}
-                customRequest={handleModelEffectCustomRequest}
-              >
-                <div>
-                  <PlusOutlined />
-                  <div style={{ marginTop: 8 }}>上传</div>
-                </div>
-              </UploadWithImagePreview>
-            </Form.Item>
-            <Form.Item
-              label="建模源文件（STL / ZIP 等）"
-              extra="先上传文件，再保存建模信息；保存时会写入本单的 MODEL 类型文件引用。"
+              <Card size="small" title="建模参数">
+                {modelVersions.length > 0 && (
+                  <Form.Item label="历史版本" style={{ marginBottom: 12 }}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Select
+                        placeholder="选择历史版本"
+                        style={{ width: '100%' }}
+                        value={modelVersionPick ?? undefined}
+                        onChange={(id) => setModelVersionPick(id)}
+                        options={modelVersions.map((ver) => ({
+                          value: ver.id,
+                          label: `${ver.label || 'v' + ver.versionNo}${ver.submittedToCustomer ? ' · 已提交客户' : ' · 草稿'} · ${ver.createdAt ? dayjs(ver.createdAt).format('MM-DD HH:mm') : ''}`,
+                        }))}
+                      />
+                      <Button disabled={!canOperateModel || modelVersionPick == null} onClick={() => void restoreModelVersion()}>
+                        恢复此版本到编辑区
+                      </Button>
+                    </Space>
+                  </Form.Item>
+                )}
+                <Form.Item name="modelerId" label="建模师">
+                  <Select
+                    allowClear
+                    options={modelers.map((u) => ({
+                      value: u.id,
+                      label: `${u.realName || u.username}`,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item name="weight" label="克重">
+                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="modelNotes" label="建模备注" style={{ marginBottom: 0 }}>
+                  <Input.TextArea rows={4} placeholder="修改说明会随建模稿卡片发给客户" />
+                </Form.Item>
+              </Card>
+              <Card size="small" title="效果图与源文件">
+                <Form.Item
+                  label="效果图"
+                  extra="支持多张；上传后点「保存建模信息」写入订单。提交客户前至少需要一张。"
+                >
+                  <UploadWithImagePreview
+                    listType="picture-card"
+                    accept="image/*"
+                    multiple
+                    fileList={modelEffectImageFileList}
+                    onChange={handleModelEffectUploadChange}
+                    customRequest={handleModelEffectCustomRequest}
+                  >
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>上传</div>
+                    </div>
+                  </UploadWithImagePreview>
+                </Form.Item>
+                <Form.Item
+                  label="建模源文件（STL / ZIP 等）"
+                  extra="先上传文件，再保存建模信息。"
+                  style={{ marginBottom: 0 }}
+                >
+                  <UploadWithModelSourcePreview
+                    multiple
+                    fileList={modelSourceFileList}
+                    onChange={handleModelSourceUploadChange}
+                    customRequest={handleModelSourceCustomRequest}
+                    onDownloadFile={handleModelSourceDownload}
+                  >
+                    <Button icon={<PlusOutlined />}>上传源文件</Button>
+                  </UploadWithModelSourcePreview>
+                </Form.Item>
+              </Card>
+            </div>
+            <div
+              style={{
+                marginTop: 16,
+                padding: '12px 16px',
+                borderRadius: 8,
+                background: '#fafafa',
+                border: '1px solid #f0f0f0',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 12,
+              }}
             >
-              <UploadWithImagePreview
-                multiple
-                imageOnlyRasterPreview
-                fileList={modelSourceFileList}
-                onChange={handleModelSourceUploadChange}
-                customRequest={handleModelSourceCustomRequest}
-              >
-                <Button icon={<PlusOutlined />}>上传源文件</Button>
-              </UploadWithImagePreview>
-            </Form.Item>
-            <Button type="primary" loading={modelSaveLoading} onClick={() => void saveModel()}>
-              保存建模信息
-            </Button>
+              <Button type="default" loading={modelSaveLoading} disabled={!canOperateModel} onClick={() => void saveModel()}>
+                保存建模信息
+              </Button>
+              {showReviewReject ? (
+                <>
+                  <Button
+                    disabled={!canOperateModel}
+                    loading={modelTrackerLoading}
+                    onClick={() => void submitModelToTracker()}
+                  >
+                    直接提交给跟单员
+                  </Button>
+                  <Button
+                    type="primary"
+                    loading={modelSubmitLoading}
+                    disabled={!canOperateModel}
+                    onClick={() => void submitModelToCustomer()}
+                  >
+                    请客户确认后再交跟单
+                  </Button>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    外观变化不大可直接交跟单，客户看不到这次驳回。外观变化较大时先请客户确认，系统会说明这是为满足工艺要求做的调整。
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Button
+                    type="primary"
+                    loading={modelSubmitLoading}
+                    disabled={!canOperateModel}
+                    onClick={() => void submitModelToCustomer()}
+                  >
+                    提交给客户
+                  </Button>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    「保存」记入版本；「提交给客户」会发送建模稿，客户确认后进入工艺验证。
+                  </Text>
+                </>
+              )}
+            </div>
           </Form>
         </div>
-      );
-    }
+    );
+  };
+
+  const renderLogistics = () => {
+    if (!order) return null;
+    const showAddress =
+      order.currentStatus === OrderStatus.COMPLETED || orderHasShippingAddress(order.baseInfo);
+    const canShip =
+      (isTracker || isAdmin) &&
+      !shipment &&
+      (order.currentStatus === OrderStatus.PRODUCING || order.currentStatus === OrderStatus.COMPLETED);
+    if (!showAddress && !canShip && !shipment) return null;
+    return (
+      <>
+        {showAddress && (
+          <Card size="small" title="收货信息" style={{ marginTop: 16 }}>
+            <ShippingAddressLines base={order.baseInfo} />
+          </Card>
+        )}
+        {canShip && (
+          <Card size="small" title="发货（国际物流单号）" style={{ marginTop: 16 }}>
+            <Form form={shipForm} layout="vertical">
+              <Form.Item
+                name="trackingNumber"
+                label="国际物流单号"
+                rules={[{ required: true, message: '请输入国际物流单号' }]}
+              >
+                <Input style={touchFieldStyle} placeholder="如：1Z999AA10123456784" autoComplete="off" />
+              </Form.Item>
+              <Form.Item name="carrierName" label="承运商（可选）">
+                <Input style={touchFieldStyle} placeholder="如 DHL、FedEx、UPS，可留空" autoComplete="off" />
+              </Form.Item>
+              <Button type="primary" block style={{ minHeight: 44 }} loading={shipmentLoading} onClick={() => void submitShipment()}>
+                确认发货
+              </Button>
+            </Form>
+          </Card>
+        )}
+        {shipment && (
+          <Card size="small" title="物流信息" style={{ marginTop: 16 }}>
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="快递单号">{shipment.trackingNumber}</Descriptions.Item>
+              <Descriptions.Item label="承运商">
+                {shipment.carrierName || shipment.carrierCode || '自动识别'}
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={shipment.statusLabel === '已签收' ? 'green' : 'processing'}>
+                  {shipment.statusLabel || '已发货（待物流更新）'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="发货时间">{shipment.shippedAt || '-'}</Descriptions.Item>
+            </Descriptions>
+            {shipment.queryUrl && (
+              <div style={{ marginTop: 12 }}>
+                <a href={shipment.queryUrl} target="_blank" rel="noopener noreferrer">
+                  前往 17TRACK 查询物流轨迹
+                </a>
+              </div>
+            )}
+            {shipment.events && shipment.events.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <Text strong>物流轨迹</Text>
+                {shipment.events.map((e, i) => (
+                  <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {e.time || '-'} {e.location ? `· ${e.location}` : ''}
+                      </Text>
+                    </div>
+                    <div>{e.description || '-'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+      </>
+    );
+  };
+
+  const getTaskForm = () => {
+    if (!order) return null;
+
+    if (isDesigner) return getDesignerTaskForm();
+    if (isModeler) return getModelerTaskForm();
 
     if (isTracker) {
       return (
@@ -1231,67 +1782,7 @@ const OrderDetailPage: React.FC = () => {
         </Form>
 
         <Divider />
-
-        {/* 物流发货（仅生产中） */}
-        {order?.currentStatus === OrderStatus.PRODUCING && !shipment && (
-          <Card size="small" title="发货（录入快递单号）" style={{ marginTop: 16 }}>
-            <Form form={shipForm} layout="vertical">
-              <Form.Item
-                name="trackingNumber"
-                label="快递单号"
-                rules={[{ required: true, message: '请输入快递单号' }]}
-              >
-                <Input placeholder="如：RR123456789CN" />
-              </Form.Item>
-              <Form.Item name="carrierCode" label="承运商编码（可选，留空自动识别）">
-                <Input placeholder="如：100003（17TRACK 承运商编码）" />
-              </Form.Item>
-              <Button type="primary" loading={shipmentLoading} onClick={submitShipment}>
-                确认发货
-              </Button>
-            </Form>
-          </Card>
-        )}
-
-        {/* 物流轨迹展示 */}
-        {shipment && (
-          <Card size="small" title="物流信息" style={{ marginTop: 16 }}>
-            <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="快递单号">{shipment.trackingNumber}</Descriptions.Item>
-              <Descriptions.Item label="承运商">
-                {shipment.carrierName || shipment.carrierCode || '自动识别'}
-              </Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <Tag color={shipment.statusLabel === '已签收' ? 'green' : 'processing'}>
-                  {shipment.statusLabel || '已发货（待物流更新）'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="发货时间">{shipment.shippedAt || '-'}</Descriptions.Item>
-            </Descriptions>
-            {shipment.queryUrl && (
-              <div style={{ marginTop: 12 }}>
-                <a href={shipment.queryUrl} target="_blank" rel="noopener noreferrer">
-                  前往 17TRACK 查询物流轨迹
-                </a>
-              </div>
-            )}
-            {shipment.events && shipment.events.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <Text strong>物流轨迹</Text>
-                {shipment.events.map((e, i) => (
-                  <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {e.time || '-'} {e.location ? `· ${e.location}` : ''}
-                      </Text>
-                    </div>
-                    <div>{e.description || '-'}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        )}
+        {renderLogistics()}
         </div>
       );
     }
@@ -1299,6 +1790,7 @@ const OrderDetailPage: React.FC = () => {
     if (isSales || isAdmin) {
       return (
         <div style={{ maxWidth: 720 }}>
+          {isAdmin && renderLogistics()}
           {!canOperateQuote && isSales && (
             <Alert
               type="info"
@@ -1307,6 +1799,12 @@ const OrderDetailPage: React.FC = () => {
               message="当前订单的报价由其他售中同事负责，您可查看信息，无法在此保存。"
             />
           )}
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="建模确认后请在此录入工艺费、克重费等基础费用；买断设计、鉴定证书、保密不宣传由客户在 C 端选择后系统自动计入尾款。"
+          />
           <Form form={quoteForm} layout="vertical" disabled={isSales && !canOperateQuote}>
           <Space wrap>
             <Form.Item name="processCost" label="工艺费">
@@ -1324,25 +1822,16 @@ const OrderDetailPage: React.FC = () => {
             <Form.Item name="weightCost" label="克重费">
               <InputNumber min={0} step={0.01} />
             </Form.Item>
-            <Form.Item name="certificateCost" label="证书费">
-              <InputNumber min={0} step={0.01} />
-            </Form.Item>
             <Form.Item name="otherCost" label="其他费用">
               <InputNumber min={0} step={0.01} />
             </Form.Item>
-            <Form.Item name="totalCost" label="总计">
+            <Form.Item name="totalCost" label="基础费用合计（不含客户选项）">
               <InputNumber min={0} step={0.01} />
             </Form.Item>
           </Space>
-          <Form.Item name="designBuyout" label="设计买断" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="designBuyoutCost" label="买断费用">
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="confidential" label="保密不宣传" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            鉴定证书费、设计买断费由客户在确认建模后于 C 端勾选，按系统配置价自动计入最终报价。
+          </Text>
           <Form.Item name="quotationNotes" label="报价备注">
             <Input.TextArea rows={3} />
           </Form.Item>
@@ -1400,6 +1889,12 @@ const OrderDetailPage: React.FC = () => {
             </Descriptions.Item>
           </Descriptions>
         </Card>
+
+        {(order.currentStatus === OrderStatus.COMPLETED || orderHasShippingAddress(order.baseInfo)) && (
+          <Card size="small" title="收货信息" style={{ marginBottom: 16 }}>
+            <ShippingAddressLines base={order.baseInfo} />
+          </Card>
+        )}
 
         {(order.wecomJoinQrBase64 || order.wecomJoinError) && (
           <Card size="small" title="企业微信客户群" style={{ marginBottom: 16 }}>
@@ -1627,6 +2122,7 @@ const OrderDetailPage: React.FC = () => {
               columns={fileColumns}
               dataSource={files}
               pagination={false}
+              scroll={{ x: 'max-content' }}
             />
           ) : (
             <Text type="secondary">暂无附件</Text>
@@ -1646,7 +2142,7 @@ const OrderDetailPage: React.FC = () => {
   }
 
   return (
-    <div>
+    <div className="order-detail-page">
       <Card loading={loading} bordered={false}>
         <Space wrap style={{ marginBottom: 16 }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(backTo)}>
@@ -1661,6 +2157,7 @@ const OrderDetailPage: React.FC = () => {
             </Tag>
           )}
           <Space size={4} align="center">
+            {!isModeler && (
             <Button
               icon={<MessageOutlined />}
               loading={openChatLoading}
@@ -1668,6 +2165,7 @@ const OrderDetailPage: React.FC = () => {
             >
               联系客户
             </Button>
+            )}
             <Button
               type="primary"
               icon={<DownloadOutlined />}
@@ -1688,6 +2186,7 @@ const OrderDetailPage: React.FC = () => {
 
         {/* 不用 Tabs.styles：部分 antd/@types 组合下 ts-loader 会报 TS2322；外层滚动与 flex minHeight:0 等效 */}
         <div
+          className="order-detail-scroll"
           style={{
             maxHeight: 'calc(100vh - 200px)',
             overflowY: 'auto',
@@ -1706,12 +2205,27 @@ const OrderDetailPage: React.FC = () => {
                 label: '✏️ 我的任务',
                 children: getTaskForm(),
               },
+              ...(isAdmin
+                ? [
+                    {
+                      key: 'task-designer',
+                      label: '🎨 设计师任务',
+                      children: getDesignerTaskForm(),
+                    },
+                    {
+                      key: 'task-modeler',
+                      label: '📐 建模师任务',
+                      children: getModelerTaskForm(),
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>
       </Card>
 
       <div
+        className="order-detail-dock"
         style={{
           position: 'fixed',
           bottom: 24,

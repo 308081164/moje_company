@@ -51,14 +51,34 @@ public class ShipmentService {
         if (trackingNumber.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "快递单号不能为空");
         }
+        if (trackingNumber.length() > 64) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "快递单号过长");
+        }
         if (shipmentRepository.findByOrderId(orderId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该订单已发货，请勿重复提交");
+        }
+
+        String carrierName = req.getCarrierName() == null ? "" : req.getCarrierName().trim();
+        Integer carrierCode = req.getCarrierCode();
+        if (carrierCode == null && carrierName.matches("\\d+")) {
+            try {
+                carrierCode = Integer.valueOf(carrierName);
+                carrierName = "";
+            } catch (NumberFormatException ignored) {
+                carrierCode = null;
+            }
+        }
+        if (carrierName.length() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "承运商名称过长");
         }
 
         OrderShipment shipment = new OrderShipment();
         shipment.setOrderId(orderId);
         shipment.setTrackingNumber(trackingNumber);
-        shipment.setCarrierCode(req.getCarrierCode());
+        shipment.setCarrierCode(carrierCode);
+        if (StringUtils.hasText(carrierName)) {
+            shipment.setCarrierName(carrierName);
+        }
         shipment.setShippedAt(LocalDateTime.now());
         shipment.setQueryUrl(buildQueryUrl(trackingNumber));
         // 默认降级状态，待 17TRACK 同步覆盖
@@ -70,10 +90,11 @@ public class ShipmentService {
 
         Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        String shipDetail = "快递单号：" + trackingNumber
+                + (StringUtils.hasText(shipment.getCarrierName()) ? "，承运商：" + shipment.getCarrierName() : "");
         orderEventService.record(orderId, OrderEventType.SHIPPED,
                 AccountKind.STAFF, uid, SecurityUtils.currentRoleApi().orElse("TRACKER"),
-                "订单已发货", "快递单号：" + trackingNumber
-                        + (StringUtils.hasText(shipment.getCarrierName()) ? "，承运商：" + shipment.getCarrierName() : ""),
+                "订单已发货", shipDetail,
                 null, null);
 
         // 尝试 17TRACK 同步（失败静默降级，不阻塞发货）
@@ -207,8 +228,8 @@ public class ShipmentService {
     }
 
     private void assertCanShip(Order order) {
-        if (order.getStatus() != OrderStatus.PRODUCING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅「生产中」订单可发货");
+        if (order.getStatus() != OrderStatus.PRODUCING && order.getStatus() != OrderStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅「生产中」或「已完成」订单可发货");
         }
         assertTrackerOrAdmin(order);
     }

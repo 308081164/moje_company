@@ -48,14 +48,28 @@ public class OrderEventCardService {
     public OrderEventDto assemble(OrderEvent event) {
         List<String> images = resolveImages(event);
         if (images == null || images.isEmpty()) {
-            images = List.of(placeholderImage(event.getEventType()));
+            if (isCraftReview(event.getEventType()) || isShippingAddressEvent(event.getEventType())) {
+                images = List.of();
+            } else {
+                images = List.of(placeholderImage(event.getEventType()));
+            }
         }
         String resolution = resolveResolution(event);
         String resolutionLabel = resolutionLabel(resolution);
-        boolean actionable = (event.getEventType() == OrderEventType.DESIGN_SUBMIT
+        boolean addressRequest = event.getEventType() == OrderEventType.SHIPPING_ADDRESS_REQUEST;
+        boolean actionable = addressRequest
+                ? !hasLaterEvent(event, OrderEventType.SHIPPED)
+                : (event.getEventType() == OrderEventType.DESIGN_SUBMIT
                 || event.getEventType() == OrderEventType.MODEL_SUBMIT
                 || event.getEventType() == OrderEventType.BALANCE_PAYMENT)
                 && resolution == null;
+        String actorRole = event.getActorRole();
+        String actorName = resolveActorName(event.getActorType(), event.getActorId());
+        if (event.getEventType() == OrderEventType.BALANCE_PAYMENT
+                || event.getEventType() == OrderEventType.BALANCE_PAID) {
+            actorRole = ConversationService.SYSTEM_EVENT_ROLE;
+            actorName = ConversationService.SYSTEM_EVENT_NAME;
+        }
         return OrderEventDto.builder()
                 .id(event.getId())
                 .orderId(event.getOrderId())
@@ -63,8 +77,8 @@ public class OrderEventCardService {
                 .eventType(event.getEventType().name())
                 .actorType(event.getActorType() != null ? event.getActorType().name() : null)
                 .actorId(event.getActorId())
-                .actorRole(event.getActorRole())
-                .actorName(resolveActorName(event.getActorType(), event.getActorId()))
+                .actorRole(actorRole)
+                .actorName(actorName)
                 .title(event.getTitle())
                 .content(event.getContent())
                 .reason(event.getReason())
@@ -77,6 +91,49 @@ public class OrderEventCardService {
                 .build();
     }
 
+    /**
+     * 该单件最新一次设计/建模提交之后，客户是否尚未确认或驳回。
+     * 与卡片 {@code actionable} 使用同一套后续事件规则。
+     */
+    @Transactional(readOnly = true)
+    public boolean isSubmitAwaitingDecision(Long orderId, Long pieceId, OrderEventType submitType) {
+        if (orderId == null || submitType == null) {
+            return false;
+        }
+        OrderEvent latestSubmit = null;
+        for (OrderEvent e : orderEventRepository.findByOrderIdOrderByIdAsc(orderId)) {
+            if (e.getEventType() != submitType) {
+                continue;
+            }
+            if (pieceId != null && e.getPieceId() != null && !pieceId.equals(e.getPieceId())) {
+                continue;
+            }
+            latestSubmit = e;
+        }
+        return latestSubmit != null && resolveResolution(latestSubmit) == null;
+    }
+
+    private static boolean isCraftReview(OrderEventType type) {
+        return type == OrderEventType.REVIEW_PASS || type == OrderEventType.REVIEW_REJECT;
+    }
+
+    private static boolean isShippingAddressEvent(OrderEventType type) {
+        return type == OrderEventType.SHIPPING_ADDRESS_REQUEST
+                || type == OrderEventType.SHIPPING_ADDRESS_FILLED;
+    }
+
+    private boolean hasLaterEvent(OrderEvent event, OrderEventType type) {
+        if (event.getId() == null || type == null) {
+            return false;
+        }
+        for (OrderEvent later : orderEventRepository.findByOrderIdOrderByIdAsc(event.getOrderId())) {
+            if (later.getId() != null && later.getId() > event.getId() && later.getEventType() == type) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 判断客户对该提交事件已作出的决策：CONFIRM / REJECT / PAID / null。 */
     private String resolveResolution(OrderEvent event) {
         OrderEventType type = event.getEventType();
@@ -87,6 +144,7 @@ public class OrderEventCardService {
             case DESIGN_SUBMIT -> List.of(OrderEventType.DESIGN_CONFIRM, OrderEventType.DESIGN_REJECT);
             case MODEL_SUBMIT -> List.of(OrderEventType.MODEL_CONFIRM, OrderEventType.MODEL_REJECT);
             case BALANCE_PAYMENT -> List.of(OrderEventType.BALANCE_PAID);
+            case SHIPPING_ADDRESS_REQUEST -> List.of(OrderEventType.SHIPPING_ADDRESS_FILLED);
             default -> List.of();
         };
         if (followers.isEmpty()) {
@@ -106,6 +164,7 @@ public class OrderEventCardService {
                     case DESIGN_CONFIRM, MODEL_CONFIRM -> "CONFIRM";
                     case DESIGN_REJECT, MODEL_REJECT -> "REJECT";
                     case BALANCE_PAID -> "PAID";
+                    case SHIPPING_ADDRESS_FILLED -> "FILLED";
                     default -> null;
                 };
             }
@@ -121,6 +180,7 @@ public class OrderEventCardService {
             case "CONFIRM" -> "已确认";
             case "REJECT" -> "已驳回";
             case "PAID" -> "已支付";
+            case "FILLED" -> "已填写";
             default -> null;
         };
     }

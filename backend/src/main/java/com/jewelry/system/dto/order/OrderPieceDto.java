@@ -13,6 +13,7 @@ public class OrderPieceDto {
     private Long orderId;
     private Integer seq;
     private String name;
+    private String jewelryType;
     private Boolean designConfirmed;
     private Boolean modelConfirmed;
     private List<String> referenceImages;

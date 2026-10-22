@@ -1,6 +1,6 @@
 # 生产环境：珠宝定制系统（MOJE）
 # 目标机：62.234.174.95（OpenCloudOS），目录 /opt/moje
-# 对外：API 8851，B2B 8852，C 端 8853
+# 对外：API 8851，B2B 8852，C 端 8853，员工 Web / Android 壳 8854
 #
 # 标准 bridge 组网（不再使用旧 ECS 的 network_mode: service:mysql）。
 # 主机已有宝塔 MySQL 占用 3306，故本栈 MySQL 不对宿主机暴露。
@@ -87,6 +87,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - jewelry-network
+
+  staff-web:
+    image: ${IMAGE_STAFF:-moje-staff-web:latest}
+    container_name: moje-staff-web
+    restart: unless-stopped
+    ports:
+      - "8854:80"
     networks:
       - jewelry-network
 

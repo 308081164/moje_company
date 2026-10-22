@@ -69,13 +69,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, Object>> handleDataAccessException(DataAccessException ex) {
         String root = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
-        boolean missingDesignVersionTable = root != null && root.contains("design_info_version");
+        boolean missingVersionTable = root != null
+                && (root.contains("design_info_version") || root.contains("modeling_info_version"));
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now().toString());
-        if (missingDesignVersionTable) {
+        if (missingVersionTable) {
             response.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
             response.put("error", "Service Unavailable");
-            response.put("message", "设计稿版本功能需要数据库迁移 V38，请升级后端并执行 Flyway 迁移后再试");
+            response.put("message", "设计/建模版本功能需要数据库迁移 V38/V39，请升级后端并执行 Flyway 迁移后再试");
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
         }
         response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());

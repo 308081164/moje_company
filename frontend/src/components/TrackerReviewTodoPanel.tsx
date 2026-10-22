@@ -96,6 +96,7 @@ const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders,
         return (
           <Card
             key={id}
+            className="tracker-review-card"
             loading={loading}
             title={
               <Space wrap>

@@ -94,6 +94,7 @@ const SettingsPage: React.FC = () => {
           rowKey="key"
           size="small"
           pagination={false}
+          scroll={{ x: 'max-content' }}
           dataSource={shareLinks}
           columns={[
             { title: '页面', dataIndex: 'name', width: 160 },

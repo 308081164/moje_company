@@ -373,9 +373,118 @@
     'ws.status.done': { en: 'Delivered', fr: 'Livré', de: 'Geliefert', es: 'Entregado', ja: '納品済み', ko: '배송 완료', 'zh-TW': '已交付', 'zh-CN': '已交付' },
     'ws.status.design': { en: 'Designing', fr: 'Conception', de: 'Im Entwurf', es: 'Diseñando', ja: 'デザイン中', ko: '디자인 중', 'zh-TW': '方案設計中', 'zh-CN': '方案设计中' },
     'ws.day.today': { en: 'Today', fr: 'Aujourd’hui', de: 'Heute', es: 'Hoy', ja: '今日', ko: '오늘', 'zh-TW': '今天', 'zh-CN': '今天' },
-    'ws.progress.title': { en: 'Order Progress', fr: 'Avancement de la commande', de: 'Bestellfortschritt', es: 'Progreso del pedido', ja: '注文の進捗', ko: '주문 진행 상황', 'zh-TW': '訂單進度', 'zh-CN': '订单进度' },
     'ws.progress.delivery.confirm': { en: 'Confirm receipt and pay the balance?', fr: 'Confirmer la réception et payer le solde ?', de: 'Empfang bestätigen und Restbetrag zahlen?', es: '¿Confirmar recepción y pagar el saldo?', ja: '受領を確認して残金を支払いますか？', ko: '수령 확인 및 잔금을 결제하시겠습니까?', 'zh-TW': '確認收貨並支付尾款？', 'zh-CN': '确认收货并支付尾款？' },
     'ws.progress.reject.ph': { en: 'Please enter rejection reason', fr: 'Veuillez saisir le motif du rejet', de: 'Bitte Ablehnungsgrund eingeben', es: 'Introduzca el motivo del rechazo', ja: '却下理由を入力してください', ko: '거부 사유를 입력하세요', 'zh-TW': '請輸入駁回原因', 'zh-CN': '请输入驳回原因' },
+    'ws.pay.pendingSub': { en: 'Review the amount and pay to continue production', fr: 'Vérifiez le montant et payez pour poursuivre', de: 'Betrag prüfen und zahlen, um fortzufahren', es: 'Revise el importe y pague para continuar', ja: '金額を確認のうえお支払いください', ko: '금액 확인 후 결제해 주세요', 'zh-TW': '確認金額後完成支付', 'zh-CN': '确认金额后完成支付' },
+    'ws.pay.paidSub': { en: 'Balance paid — your order will move forward', fr: 'Solde réglé — la commande avance', de: 'Restbetrag bezahlt — Auftrag läuft weiter', es: 'Saldo pagado — el pedido continúa', ja: '尾款お支払い済み', ko: '잔금 결제 완료', 'zh-TW': '尾款已結清，訂單將繼續推進', 'zh-CN': '尾款已结清，订单将继续推进' },
+    'ws.pay.statusPending': { en: 'Unpaid', fr: 'À payer', de: 'Offen', es: 'Pendiente', ja: '未払い', ko: '미결제', 'zh-TW': '待支付', 'zh-CN': '待支付' },
+    'ws.pay.statusPaid': { en: 'Paid', fr: 'Payé', de: 'Bezahlt', es: 'Pagado', ja: '支払済', ko: '결제완료', 'zh-TW': '已支付', 'zh-CN': '已支付' },
+    'ws.pay.defaultNote': { en: 'Includes labor and confirmed customization options', fr: 'Inclut la main-d’œuvre et les options choisies', de: 'Inkl. Arbeit und gewählte Optionen', es: 'Incluye mano de obra y opciones confirmadas', ja: '工賃と選択オプションを含みます', ko: '공임 및 선택 옵션 포함', 'zh-TW': '含工費及您已確認的定制選項', 'zh-CN': '含工费及您已确认的定制选项' },
+    'ws.pay.cta': { en: 'Pay now', fr: 'Payer', de: 'Jetzt zahlen', es: 'Pagar ahora', ja: '今すぐ支払う', ko: '지금 결제', 'zh-TW': '立即支付', 'zh-CN': '立即支付' },
+    'ws.reject.design.title': { en: 'Reject design draft', fr: 'Rejeter le design', de: 'Design ablehnen', es: 'Rechazar diseño', ja: 'デザインを却下', ko: '디자인안 거부', 'zh-TW': '駁回設計稿', 'zh-CN': '驳回设计稿' },
+    'ws.reject.model.title': { en: 'Reject 3D model', fr: 'Rejeter le modèle 3D', de: '3D-Modell ablehnen', es: 'Rechazar modelo 3D', ja: 'モデルを却下', ko: '모델링안 거부', 'zh-TW': '駁回建模稿', 'zh-CN': '驳回建模稿' },
+    'ws.reject.hint': { en: 'Please describe what should be revised so our team can update the draft.', fr: 'Décrivez les modifications souhaitées pour que l’équipe puisse ajuster le design.', de: 'Beschreiben Sie die gewünschten Änderungen für unser Team.', es: 'Indique qué debe corregirse para que el equipo actualice el borrador.', ja: '修正してほしい点を具体的にご記入ください。', ko: '수정이 필요한 내용을 구체적으로 적어 주세요.', 'zh-TW': '請說明需要修改的內容，方便團隊調整方案。', 'zh-CN': '请说明需要修改的内容，方便团队调整方案。' },
+    'ws.reject.empty': { en: 'Please enter a rejection reason', fr: 'Veuillez saisir un motif', de: 'Bitte Ablehnungsgrund eingeben', es: 'Introduzca el motivo', ja: '却下理由を入力してください', ko: '거부 사유를 입력하세요', 'zh-TW': '請填寫駁回原因', 'zh-CN': '请填写驳回原因' },
+    'ws.reject.submit': { en: 'Submit rejection', fr: 'Envoyer le rejet', de: 'Ablehnung senden', es: 'Enviar rechazo', ja: '却下を送信', ko: '거부 제출', 'zh-TW': '提交駁回', 'zh-CN': '提交驳回' },
+    'ws.reject.cancel': { en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ja: 'キャンセル', ko: '취소', 'zh-TW': '取消', 'zh-CN': '取消' },
+    'ws.action.confirmDesign': { en: 'Approve design', fr: 'Valider le design', de: 'Design freigeben', es: 'Aprobar diseño', ja: 'デザインを承認', ko: '디자인 승인', 'zh-TW': '確認設計稿', 'zh-CN': '确认设计稿' },
+    'ws.action.rejectDesign': { en: 'Reject design', fr: 'Rejeter le design', de: 'Design ablehnen', es: 'Rechazar diseño', ja: 'デザインを却下', ko: '디자인 거부', 'zh-TW': '駁回設計稿', 'zh-CN': '驳回设计稿' },
+    'ws.action.confirmModel': { en: 'Approve 3D model', fr: 'Valider le modèle 3D', de: '3D-Modell freigeben', es: 'Aprobar modelo 3D', ja: 'モデルを承認', ko: '모델링 승인', 'zh-TW': '確認建模稿', 'zh-CN': '确认建模稿' },
+    'ws.action.rejectModel': { en: 'Reject 3D model', fr: 'Rejeter le modèle 3D', de: '3D-Modell ablehnen', es: 'Rechazar modelo 3D', ja: 'モデルを却下', ko: '모델링 거부', 'zh-TW': '駁回建模稿', 'zh-CN': '驳回建模稿' },
+    'ws.resolution.CONFIRM': { en: 'Confirmed', fr: 'Confirmé', de: 'Bestätigt', es: 'Confirmado', ja: '確認済み', ko: '확인됨', 'zh-TW': '已確認', 'zh-CN': '已确认' },
+    'ws.resolution.REJECT': { en: 'Rejected', fr: 'Rejeté', de: 'Abgelehnt', es: 'Rechazado', ja: '却下', ko: '거부됨', 'zh-TW': '已駁回', 'zh-CN': '已驳回' },
+    'ws.resolution.PAID': { en: 'Paid', fr: 'Payé', de: 'Bezahlt', es: 'Pagado', ja: '支払済', ko: '결제완료', 'zh-TW': '已支付', 'zh-CN': '已支付' },
+    'ws.resolution.FILLED': { en: 'Address saved', fr: 'Adresse enregistrée', de: 'Adresse gespeichert', es: 'Dirección guardada', ja: '住所を保存', ko: '주소 저장됨', 'zh-TW': '已填寫', 'zh-CN': '已填写' },
+    'ws.event.title.design': { en: 'Design draft', fr: 'Avant-projet', de: 'Designentwurf', es: 'Borrador de diseño', ja: 'デザイン稿', ko: '디자인안', 'zh-TW': '設計稿', 'zh-CN': '设计稿' },
+    'ws.event.title.model': { en: '3D model', fr: 'Modèle 3D', de: '3D-Modell', es: 'Modelo 3D', ja: 'モデリング稿', ko: '모델링안', 'zh-TW': '建模稿', 'zh-CN': '建模稿' },
+    'ws.event.DESIGN_SUBMIT': { en: 'Design draft', fr: 'Design', de: 'Design', es: 'Diseño', ja: 'デザイン稿', ko: '디자인안', 'zh-TW': '設計稿', 'zh-CN': '设计稿' },
+    'ws.event.DESIGN_REJECT': { en: 'Design rejected', fr: 'Design rejeté', de: 'Design abgelehnt', es: 'Diseño rechazado', ja: 'デザイン却下', ko: '디자인 거부', 'zh-TW': '駁回設計', 'zh-CN': '驳回设计' },
+    'ws.event.DESIGN_CONFIRM': { en: 'Design approved', fr: 'Design validé', de: 'Design bestätigt', es: 'Diseño aprobado', ja: 'デザイン承認', ko: '디자인 승인', 'zh-TW': '確認設計', 'zh-CN': '确认设计' },
+    'ws.event.MODEL_SUBMIT': { en: '3D model', fr: 'Modèle 3D', de: '3D-Modell', es: 'Modelo 3D', ja: 'モデリング稿', ko: '모델링안', 'zh-TW': '建模稿', 'zh-CN': '建模稿' },
+    'ws.event.MODEL_REJECT': { en: 'Model rejected', fr: 'Modèle rejeté', de: 'Modell abgelehnt', es: 'Modelo rechazado', ja: 'モデル却下', ko: '모델 거부', 'zh-TW': '駁回建模', 'zh-CN': '驳回建模' },
+    'ws.event.MODEL_CONFIRM': { en: 'Model approved', fr: 'Modèle validé', de: 'Modell bestätigt', es: 'Modelo aprobado', ja: 'モデル承認', ko: '모델 승인', 'zh-TW': '確認建模', 'zh-CN': '确认建模' },
+    'ws.event.REVIEW_PASS': { en: 'Craft review passed', fr: 'Validation technique', de: 'Technik geprüft', es: 'Revisión técnica', ja: '工芸検証', ko: '공정 검증', 'zh-TW': '工藝驗證通過', 'zh-CN': '工艺验证通过' },
+    'ws.event.REVIEW_REJECT': { en: 'Craft review rejected', fr: 'Rejet technique', de: 'Technik abgelehnt', es: 'Revisión rechazada', ja: '工芸却下', ko: '공정 거부', 'zh-TW': '工藝驗證駁回', 'zh-CN': '工艺验证驳回' },
+    'ws.review.kicker': { en: 'Craft review', fr: 'Validation', de: 'Prüfung', es: 'Revisión', ja: '工芸検証', ko: '공정 검증', 'zh-TW': '工藝驗證', 'zh-CN': '工艺验证' },
+    'ws.review.failLead': { en: 'This piece needs a revision before we continue.', fr: 'Cette pièce doit être ajustée avant de continuer.', de: 'Dieses Teil muss angepasst werden, bevor es weitergeht.', es: 'Esta pieza debe corregirse antes de continuar.', ja: '続行する前に修正が必要です。', ko: '계속하기 전에 수정이 필요합니다.', 'zh-TW': '此件需要按說明修改後才能繼續。', 'zh-CN': '此件需要按说明修改后才能继续。' },
+    'ws.review.passLead': { en: 'Craft review passed. Production can move forward.', fr: 'Validation technique réussie.', de: 'Technikprüfung bestanden.', es: 'La revisión técnica ha sido aprobada.', ja: '工芸検証を通過しました。', ko: '공정 검증을 통과했습니다.', 'zh-TW': '工藝驗證已通過，可進入後續製作。', 'zh-CN': '工艺验证已通过，可进入后续制作。' },
+    'ws.review.reason': { en: 'What to change', fr: 'À modifier', de: 'Änderung', es: 'Qué cambiar', ja: '修正内容', ko: '수정 내용', 'zh-TW': '需修改內容', 'zh-CN': '需修改内容' },
+    'ws.review.notes': { en: 'Notes', fr: 'Notes', de: 'Hinweis', es: 'Notas', ja: '補足', ko: '보충', 'zh-TW': '補充說明', 'zh-CN': '补充说明' },
+    'ws.adjust.design': { en: 'To meet production requirements, we adjusted the design. Please confirm the new design still matches what you expect.', fr: 'Pour respecter la fabrication, le design a été ajusté. Merci de confirmer qu’il correspond toujours à vos attentes.', de: 'Für die Fertigung haben wir das Design angepasst. Bitte bestätigen Sie, dass es weiterhin Ihren Vorstellungen entspricht.', es: 'Para cumplir el proceso de producción ajustamos el diseño. Confirme si sigue siendo lo que espera.', ja: '製造工程に合わせデザインを調整しました。新しいデザインがご希望どおりかご確認ください。', ko: '제작 공정에 맞춰 디자인을 조정했습니다. 새 디자인이 기대와 맞는지 확인해 주세요.', 'zh-TW': '為滿足生產工藝要求，我們對設計做了一定的調整，需要您確認新的設計是否符合您的預期。', 'zh-CN': '为满足生产工艺要求，我们对设计做了一定的调整，需要您确认新的设计是否符合您的预期。' },
+    'ws.adjust.model': { en: 'To meet production requirements, we adjusted the 3D model. Please confirm the new model still matches what you expect.', fr: 'Pour respecter la fabrication, le modèle 3D a été ajusté. Merci de confirmer qu’il correspond toujours à vos attentes.', de: 'Für die Fertigung haben wir das 3D-Modell angepasst. Bitte bestätigen Sie, dass es weiterhin Ihren Vorstellungen entspricht.', es: 'Para cumplir el proceso de producción ajustamos el modelo 3D. Confirme si sigue siendo lo que espera.', ja: '製造工程に合わせ3Dモデルを調整しました。新しいモデルがご希望どおりかご確認ください。', ko: '제작 공정에 맞춰 3D 모델을 조정했습니다. 새 모델이 기대와 맞는지 확인해 주세요.', 'zh-TW': '為滿足生產工藝要求，我們對建模做了一定的調整，需要您確認新的建模是否符合您的預期。', 'zh-CN': '为满足生产工艺要求，我们对建模做了一定的调整，需要您确认新的建模是否符合您的预期。' },
+    'ws.action.missingOrder': { en: 'Order is not ready. Please refresh and try again.', fr: 'Commande indisponible. Actualisez et réessayez.', de: 'Auftrag nicht bereit. Bitte aktualisieren.', es: 'El pedido no está listo. Actualice e inténtelo de nuevo.', ja: '注文の準備ができていません。更新して再試行してください。', ko: '주문이 준비되지 않았습니다. 새로고침 후 다시 시도하세요.', 'zh-TW': '訂單尚未就緒，請刷新後重試。', 'zh-CN': '订单尚未就绪，请刷新后重试。' },
+    'ws.action.failed': { en: 'Could not update. Please try again.', fr: 'Échec de la mise à jour.', de: 'Aktualisierung fehlgeschlagen.', es: 'No se pudo actualizar.', ja: '更新できませんでした。', ko: '업데이트하지 못했습니다.', 'zh-TW': '操作失敗，請重試。', 'zh-CN': '操作失败，请重试。' },
+    'ws.event.QUOTATION': { en: 'Quotation', fr: 'Devis', de: 'Angebot', es: 'Cotización', ja: '見積', ko: '견적', 'zh-TW': '報價', 'zh-CN': '报价' },
+    'ws.event.PRODUCTION_LOG': { en: 'Production update', fr: 'Suivi production', de: 'Produktionsupdate', es: 'Avance de producción', ja: '生産フォロー', ko: '생산 진행', 'zh-TW': '生產跟單', 'zh-CN': '生产跟单' },
+    'ws.event.SHIPPED': { en: 'Shipped', fr: 'Expédié', de: 'Versendet', es: 'Enviado', ja: '発送済', ko: '발송됨', 'zh-TW': '已發貨', 'zh-CN': '已发货' },
+    'ws.event.DELIVERED': { en: 'Delivered', fr: 'Livré', de: 'Zugestellt', es: 'Entregado', ja: '配達完了', ko: '배송 완료', 'zh-TW': '已簽收', 'zh-CN': '已签收' },
+    'ws.event.STATUS_CHANGE': { en: 'Status update', fr: 'Mise à jour', de: 'Status', es: 'Estado', ja: 'ステータス', ko: '상태', 'zh-TW': '狀態', 'zh-CN': '状态' },
+    'ws.event.DELIVERY_CONFIRM': { en: 'Delivery', fr: 'Livraison', de: 'Lieferung', es: 'Entrega', ja: '納品', ko: '인도', 'zh-TW': '交付', 'zh-CN': '交付' },
+    'ws.event.BALANCE_PAYMENT': { en: 'Balance due', fr: 'Solde à payer', de: 'Restzahlung', es: 'Saldo pendiente', ja: '尾金支払い', ko: '잔금 결제', 'zh-TW': '支付尾款', 'zh-CN': '支付尾款' },
+    'ws.event.BALANCE_PAID': { en: 'Balance paid', fr: 'Solde payé', de: 'Rest bezahlt', es: 'Saldo pagado', ja: '尾金支払済', ko: '잔금 결제 완료', 'zh-TW': '已支付', 'zh-CN': '已支付' },
+    'ws.event.SHIPPING_ADDRESS_REQUEST': { en: 'Shipping details', fr: 'Adresse de livraison', de: 'Lieferadresse', es: 'Datos de envío', ja: '配送先', ko: '배송지', 'zh-TW': '收貨信息', 'zh-CN': '收货信息' },
+    'ws.event.SHIPPING_ADDRESS_FILLED': { en: 'Shipping details saved', fr: 'Adresse enregistrée', de: 'Lieferadresse gespeichert', es: 'Datos de envío guardados', ja: '配送先を保存', ko: '배송지 저장', 'zh-TW': '已提交收貨信息', 'zh-CN': '已提交收货信息' },
+    'ws.shipaddr.title': { en: 'Please add your shipping details', fr: 'Veuillez indiquer votre adresse de livraison', de: 'Bitte Lieferadresse angeben', es: 'Indique los datos de envío', ja: '配送先をご記入ください', ko: '배송지를 입력해 주세요', 'zh-TW': '請完善收貨信息', 'zh-CN': '请完善收货信息' },
+    'ws.shipaddr.body': { en: 'Production is complete. Please add the recipient, phone number, country or region, street address, and postal code if you have one, so we can ship your order.', fr: 'La production est terminée. Indiquez le destinataire, le téléphone, le pays ou la région, l’adresse et le code postal (si vous en avez un) pour que nous puissions expédier.', de: 'Die Fertigung ist abgeschlossen. Bitte Empfänger, Telefon, Land oder Region, Adresse und ggf. Postleitzahl angeben, damit wir versenden können.', es: 'La producción ha terminado. Indique destinatario, teléfono, país o región, dirección y código postal (si lo tiene) para poder enviarlo.', ja: '制作が完了しました。発送のため、受取人・電話番号・国/地域・住所・郵便番号（あれば）をご記入ください。', ko: '제작이 완료되었습니다. 발송을 위해 수령인, 전화번호, 국가/지역, 상세 주소, 우편번호(있으면)를 입력해 주세요.', 'zh-TW': '生產已經完成。請填寫收貨人、聯繫電話、國家或地區、詳細地址和郵編（如有），方便我們安排發貨。', 'zh-CN': '生产已经完成。请填写收货人、联系电话、国家或地区、详细地址和邮编（如有），方便我们安排发货。' },
+    'ws.shipaddr.filledTitle': { en: 'Shipping details saved', fr: 'Adresse de livraison enregistrée', de: 'Lieferadresse gespeichert', es: 'Datos de envío guardados', ja: '配送先を保存しました', ko: '배송지를 저장했습니다', 'zh-TW': '已提交收貨信息', 'zh-CN': '已提交收货信息' },
+    'ws.shipaddr.fill': { en: 'Add shipping details', fr: 'Renseigner l’adresse', de: 'Adresse angeben', es: 'Añadir datos de envío', ja: '配送先を記入', ko: '배송지 입력', 'zh-TW': '填寫收貨信息', 'zh-CN': '填写收货信息' },
+    'ws.shipaddr.edit': { en: 'Update shipping details', fr: 'Modifier l’adresse', de: 'Adresse ändern', es: 'Modificar datos de envío', ja: '配送先を変更', ko: '배송지 수정', 'zh-TW': '修改收貨信息', 'zh-CN': '修改收货信息' },
+    'ws.shipaddr.recipient': { en: 'Recipient', fr: 'Destinataire', de: 'Empfänger', es: 'Destinatario', ja: '受取人', ko: '수령인', 'zh-TW': '收貨人', 'zh-CN': '收货人' },
+    'ws.shipaddr.phone': { en: 'Phone', fr: 'Téléphone', de: 'Telefon', es: 'Teléfono', ja: '電話番号', ko: '전화번호', 'zh-TW': '聯繫電話', 'zh-CN': '联系电话' },
+    'ws.shipaddr.country': { en: 'Country / region', fr: 'Pays / région', de: 'Land / Region', es: 'País / región', ja: '国 / 地域', ko: '국가 / 지역', 'zh-TW': '國家 / 地區', 'zh-CN': '国家 / 地区' },
+    'ws.shipaddr.countryPh': { en: 'Select country or region', fr: 'Choisir un pays ou une région', de: 'Land oder Region wählen', es: 'Seleccione país o región', ja: '国または地域を選択', ko: '국가 또는 지역 선택', 'zh-TW': '請選擇國家或地區', 'zh-CN': '请选择国家或地区' },
+    'ws.shipaddr.detail': { en: 'Street address', fr: 'Adresse', de: 'Adresse', es: 'Dirección', ja: '詳細住所', ko: '상세 주소', 'zh-TW': '詳細地址', 'zh-CN': '详细地址' },
+    'ws.shipaddr.postal': { en: 'Postal code', fr: 'Code postal', de: 'Postleitzahl', es: 'Código postal', ja: '郵便番号', ko: '우편번호', 'zh-TW': '郵編', 'zh-CN': '邮编' },
+    'ws.shipaddr.postalPh': { en: 'Optional', fr: 'Facultatif', de: 'Optional', es: 'Opcional', ja: '任意', ko: '선택', 'zh-TW': '有就填', 'zh-CN': '有就填' },
+    'ws.shipaddr.submit': { en: 'Save', fr: 'Enregistrer', de: 'Speichern', es: 'Guardar', ja: '保存', ko: '저장', 'zh-TW': '提交', 'zh-CN': '提交' },
+    'ws.shipaddr.cancel': { en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ja: 'キャンセル', ko: '취소', 'zh-TW': '取消', 'zh-CN': '取消' },
+    'ws.shipaddr.err.recipient': { en: 'Please enter the recipient', fr: 'Indiquez le destinataire', de: 'Bitte Empfänger angeben', es: 'Indique el destinatario', ja: '受取人を入力してください', ko: '수령인을 입력해 주세요', 'zh-TW': '請填寫收貨人', 'zh-CN': '请填写收货人' },
+    'ws.shipaddr.err.phone': { en: 'Please enter a phone number', fr: 'Indiquez un téléphone', de: 'Bitte Telefonnummer angeben', es: 'Indique un teléfono', ja: '電話番号を入力してください', ko: '전화번호를 입력해 주세요', 'zh-TW': '請填寫聯繫電話', 'zh-CN': '请填写联系电话' },
+    'ws.shipaddr.err.country': { en: 'Please select a country or region', fr: 'Choisissez un pays ou une région', de: 'Bitte Land oder Region wählen', es: 'Seleccione un país o región', ja: '国または地域を選択してください', ko: '국가 또는 지역을 선택해 주세요', 'zh-TW': '請選擇國家或地區', 'zh-CN': '请选择国家或地区' },
+    'ws.shipaddr.err.detail': { en: 'Please enter the street address', fr: 'Indiquez l’adresse', de: 'Bitte Adresse angeben', es: 'Indique la dirección', ja: '詳細住所を入力してください', ko: '상세 주소를 입력해 주세요', 'zh-TW': '請填寫詳細地址', 'zh-CN': '请填写详细地址' },
+    'ws.shipaddr.success': { en: 'Shipping details saved', fr: 'Adresse enregistrée', de: 'Adresse gespeichert', es: 'Datos guardados', ja: '配送先を保存しました', ko: '배송지를 저장했습니다', 'zh-TW': '收貨信息已保存', 'zh-CN': '收货信息已保存' },
+    'ws.event._default': { en: 'Update', fr: 'Événement', de: 'Ereignis', es: 'Evento', ja: 'イベント', ko: '이벤트', 'zh-TW': '事件', 'zh-CN': '事件' },
+    'ws.order.PENDING_DESIGN': { en: 'Pending design', fr: 'En attente de design', de: 'Design ausstehend', es: 'Diseño pendiente', ja: 'デザイン待ち', ko: '디자인 대기', 'zh-TW': '設計中', 'zh-CN': '设计中' },
+    'ws.order.DESIGNING': { en: 'Design review', fr: 'Relecture design', de: 'Design-Review', es: 'Revisión de diseño', ja: 'デザイン確認中', ko: '디자인 검토', 'zh-TW': '設計複審中', 'zh-CN': '设计复审中' },
+    'ws.order.PENDING_MODEL': { en: 'Pending 3D model', fr: 'Modèle en attente', de: 'Modell ausstehend', es: 'Modelado pendiente', ja: 'モデリング待ち', ko: '모델링 대기', 'zh-TW': '建模中', 'zh-CN': '建模中' },
+    'ws.order.MODELING': { en: 'Model revisions', fr: 'Modèle en révision', de: 'Modell-Anpassung', es: 'Revisión de modelo', ja: 'モデル修正中', ko: '모델 수정', 'zh-TW': '建模修改中', 'zh-CN': '建模修改中' },
+    'ws.order.PENDING_REVIEW': { en: 'Craft review', fr: 'Validation technique', de: 'Technikprüfung', es: 'Revisión técnica', ja: '工芸検証待ち', ko: '공정 검증 대기', 'zh-TW': '待工藝驗證', 'zh-CN': '待工艺验证' },
+    'ws.order.PENDING_PRODUCTION': { en: 'Ready to produce', fr: 'Prêt à produire', de: 'Produktionsbereit', es: 'Listo para producir', ja: '生産待ち', ko: '생산 대기', 'zh-TW': '待生產', 'zh-CN': '待生产' },
+    'ws.order.PRODUCING': { en: 'In production', fr: 'En production', de: 'In Produktion', es: 'En producción', ja: '生産中', ko: '생산 중', 'zh-TW': '生產中', 'zh-CN': '生产中' },
+    'ws.order.COMPLETED': { en: 'Completed', fr: 'Terminé', de: 'Abgeschlossen', es: 'Completado', ja: '完了', ko: '완료', 'zh-TW': '已完成', 'zh-CN': '已完成' },
+    'ws.order.CANCELLED': { en: 'Cancelled', fr: 'Annulé', de: 'Storniert', es: 'Cancelado', ja: 'キャンセル', ko: '취소됨', 'zh-TW': '已取消', 'zh-CN': '已取消' },
+    'ws.role.customer': { en: 'Customer', fr: 'Client', de: 'Kunde', es: 'Cliente', ja: 'お客様', ko: '고객', 'zh-TW': '客戶', 'zh-CN': '客户' },
+    'ws.role.ai': { en: 'AI assistant', fr: 'Assistant IA', de: 'KI-Assistent', es: 'Asistente IA', ja: 'AIアシスタント', ko: 'AI 어시스턴트', 'zh-TW': 'AI 助理', 'zh-CN': 'AI 助理' },
+    'ws.role.admin': { en: 'Admin', fr: 'Admin', de: 'Admin', es: 'Admin', ja: '管理者', ko: '관리자', 'zh-TW': '管理員', 'zh-CN': '管理员' },
+    'ws.role.system': { en: 'System', fr: 'Système', de: 'System', es: 'Sistema', ja: 'システム', ko: '시스템', 'zh-TW': '系統', 'zh-CN': '系统' },
+    'ws.card.viewDetail': { en: 'Tap to view details', fr: 'Voir les détails', de: 'Details anzeigen', es: 'Ver detalles', ja: 'タップして詳細', ko: '탭하여 상세 보기', 'zh-TW': '點擊查看詳情', 'zh-CN': '点击查看详情' },
+    'ws.detail.rejectReason': { en: 'Rejection reason:', fr: 'Motif du rejet :', de: 'Ablehnungsgrund:', es: 'Motivo del rechazo:', ja: '却下理由：', ko: '거부 사유:', 'zh-TW': '駁回原因：', 'zh-CN': '驳回原因：' },
+    'ws.ship.loading': { en: 'Loading shipment…', fr: 'Chargement de l’expédition…', de: 'Sendung wird geladen…', es: 'Cargando envío…', ja: '配送情報を読み込み中…', ko: '배송 정보 불러오는 중…', 'zh-TW': '載入物流資訊…', 'zh-CN': '加载物流信息…' },
+    'ws.ship.none': { en: 'No shipment info yet', fr: 'Pas encore d’expédition', de: 'Noch keine Sendung', es: 'Sin envío aún', ja: '物流情報はまだありません', ko: '배송 정보 없음', 'zh-TW': '暫無物流資訊', 'zh-CN': '暂无物流信息' },
+    'ws.ship.tracking': { en: 'Tracking number:', fr: 'N° de suivi :', de: 'Sendungsnummer:', es: 'Nº de seguimiento:', ja: '追跡番号：', ko: '운송장 번호:', 'zh-TW': '快遞單號：', 'zh-CN': '快递单号：' },
+    'ws.ship.carrier': { en: 'Carrier:', fr: 'Transporteur :', de: 'Versanddienst:', es: 'Transportista:', ja: '配送業者：', ko: '택배사:', 'zh-TW': '承運商：', 'zh-CN': '承运商：' },
+    'ws.ship.status': { en: 'Status:', fr: 'Statut :', de: 'Status:', es: 'Estado:', ja: '状態：', ko: '상태:', 'zh-TW': '狀態：', 'zh-CN': '状态：' },
+    'ws.ship.pending': { en: 'Shipped (tracking pending)', fr: 'Expédié (suivi en attente)', de: 'Versendet (Tracking ausstehend)', es: 'Enviado (seguimiento pendiente)', ja: '発送済み（追跡更新待ち）', ko: '발송됨(추적 대기)', 'zh-TW': '已發貨（待物流更新）', 'zh-CN': '已发货（待物流更新）' },
+    'ws.ship.trackLink': { en: 'Track on 17TRACK', fr: 'Suivre sur 17TRACK', de: 'Auf 17TRACK verfolgen', es: 'Seguir en 17TRACK', ja: '17TRACKで追跡', ko: '17TRACK에서 조회', 'zh-TW': '在 17TRACK 查看完整軌跡', 'zh-CN': '在 17TRACK 查看完整轨迹' },
+    'ws.ship.loadFail': { en: 'Failed to load shipment', fr: 'Échec du chargement', de: 'Laden fehlgeschlagen', es: 'Error al cargar envío', ja: '物流情報の読み込みに失敗', ko: '배송 정보 로드 실패', 'zh-TW': '物流資訊載入失敗', 'zh-CN': '物流信息加载失败' },
+    'ws.balance.title': { en: 'Pay balance', fr: 'Payer le solde', de: 'Restzahlung', es: 'Pagar saldo', ja: '尾金を支払う', ko: '잔금 결제', 'zh-TW': '支付尾款', 'zh-CN': '支付尾款' },
+    'ws.balance.hint': { en: 'Demo checkout — confirm to mark as paid.', fr: 'Paiement démo — confirmer pour valider.', de: 'Demo-Zahlung — bestätigen gilt als bezahlt.', es: 'Pago de prueba — confirmar marca como pagado.', ja: 'デモ決済 — 確認で支払い完了扱い', ko: '데모 결제 — 확인 시 결제 완료 처리', 'zh-TW': '模擬支付流程，點擊確認即視為支付成功', 'zh-CN': '模拟支付流程，点击确认即视为支付成功' },
+    'ws.balance.confirm': { en: 'Confirm payment', fr: 'Confirmer le paiement', de: 'Zahlung bestätigen', es: 'Confirmar pago', ja: '支払いを確認', ko: '결제 확인', 'zh-TW': '確認支付', 'zh-CN': '确认支付' },
+    'ws.balance.cancel': { en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ja: 'キャンセル', ko: '취소', 'zh-TW': '取消', 'zh-CN': '取消' },
+    'ws.balance.success': { en: 'Payment successful', fr: 'Paiement réussi', de: 'Zahlung erfolgreich', es: 'Pago exitoso', ja: '支払い完了', ko: '결제 완료', 'zh-TW': '支付成功', 'zh-CN': '支付成功' },
+    'ws.balance.paidAmount': { en: 'Balance {amount} paid', fr: 'Solde {amount} payé', de: 'Rest {amount} bezahlt', es: 'Saldo {amount} pagado', ja: '尾金 {amount} 支払済', ko: '잔금 {amount} 결제됨', 'zh-TW': '尾款 {amount} 已支付', 'zh-CN': '尾款 {amount} 已支付' },
+    'ws.balance.done': { en: 'Done', fr: 'Terminé', de: 'Fertig', es: 'Listo', ja: '完了', ko: '완료', 'zh-TW': '完成', 'zh-CN': '完成' },
+    'profile.title': { en: 'Complete your profile', fr: 'Complétez votre profil', de: 'Profil vervollständigen', es: 'Complete su perfil', ja: 'プロフィールを入力', ko: '프로필을 완성해 주세요', 'zh-TW': '完善您的資料', 'zh-CN': '完善您的资料' },
+    'profile.sub': { en: 'Help us serve you better with a few details.', fr: 'Quelques informations pour mieux vous servir.', de: 'Ein paar Angaben für besseren Service.', es: 'Algunos datos para atenderle mejor.', ja: 'より良いサービスのため、情報をご入力ください。', ko: '더 나은 서비스를 위해 정보를 입력해 주세요.', 'zh-TW': '為了更好的服務，請補充以下資訊', 'zh-CN': '为了更好的服务，请补充以下信息' },
+    'profile.name': { en: 'Display name', fr: 'Nom affiché', de: 'Anzeigename', es: 'Nombre', ja: 'お名前', ko: '이름', 'zh-TW': '稱呼', 'zh-CN': '称呼' },
+    'profile.name.ph': { en: 'How should we address you?', fr: 'Comment vous appeler ?', de: 'Wie sollen wir Sie nennen?', es: '¿Cómo llamarle?', ja: 'お呼びする名前', ko: '어떻게 불러드릴까요?', 'zh-TW': '如何稱呼您', 'zh-CN': '如何称呼您' },
+    'profile.contact': { en: 'Contact', fr: 'Contact', de: 'Kontakt', es: 'Contacto', ja: '連絡先', ko: '연락처', 'zh-TW': '聯繫方式', 'zh-CN': '联系方式' },
+    'profile.contact.ph': { en: 'Phone / WeChat / email', fr: 'Tél. / WeChat / e-mail', de: 'Telefon / WeChat / E-Mail', es: 'Tel. / WeChat / correo', ja: '電話 / WeChat / メール', ko: '전화 / WeChat / 이메일', 'zh-TW': '手機號 / 微信 / 郵箱', 'zh-CN': '手机号 / 微信 / 邮箱' },
+    'profile.save': { en: 'Save and continue', fr: 'Enregistrer', de: 'Speichern', es: 'Guardar', ja: '保存して続行', ko: '저장 후 계속', 'zh-TW': '保存並繼續', 'zh-CN': '保存并继续' },
+    'profile.skip': { en: 'Skip for now', fr: 'Plus tard', de: 'Überspringen', es: 'Omitir', ja: 'あとで', ko: '나중에', 'zh-TW': '暫時跳過', 'zh-CN': '暂时跳过' },
+    'profile.err.name': { en: 'Please enter your name', fr: 'Veuillez saisir votre nom', de: 'Bitte Namen eingeben', es: 'Introduzca su nombre', ja: 'お名前を入力してください', ko: '이름을 입력하세요', 'zh-TW': '請填寫稱呼', 'zh-CN': '请填写称呼' },
+    'profile.err.contact': { en: 'Please enter contact info', fr: 'Veuillez saisir un contact', de: 'Bitte Kontakt eingeben', es: 'Introduzca contacto', ja: '連絡先を入力してください', ko: '연락처를 입력하세요', 'zh-TW': '請填寫聯繫方式', 'zh-CN': '请填写联系方式' },
+    'profile.saveFail': { en: 'Could not save profile', fr: 'Échec de l’enregistrement', de: 'Speichern fehlgeschlagen', es: 'No se pudo guardar', ja: '保存に失敗しました', ko: '저장 실패', 'zh-TW': '保存失敗', 'zh-CN': '保存失败' },
     'ws.stage.modeling': { en: '3D modeling stage', fr: 'Étape de modélisation 3D', de: '3D-Modellierungsphase', es: 'Etapa de modelado 3D', ja: '3Dモデリング段階', ko: '3D 모델링 단계', 'zh-TW': '3D建模階段', 'zh-CN': '3D建模阶段' },
     'ws.online': { en: 'Online', fr: 'En ligne', de: 'Online', es: 'En línea', ja: 'オンライン', ko: '온라인', 'zh-TW': '在線', 'zh-CN': '在线' },
     'ws.input': { en: 'Type a message…', fr: 'Écrire un message…', de: 'Nachricht schreiben…', es: 'Escribir un mensaje…', ja: 'メッセージを入力…', ko: '메시지를 입력하세요…', 'zh-TW': '輸入訊息…', 'zh-CN': '输入消息…' },
@@ -624,6 +733,22 @@
     'co.total': { en: 'Total due', fr: 'Total à payer', de: 'Fälliger Betrag', es: 'Total a pagar', ja: 'お支払い額', ko: '결제 금액', 'zh-TW': '應付金額', 'zh-CN': '应付金额' },
     'co.referral': { en: 'Referral code (optional)', fr: 'Code de parrainage (optionnel)', de: 'Empfehlungscode (optional)', es: 'Código de referido (opcional)', ja: '紹介コード（任意）', ko: '추천 코드 (선택)', 'zh-TW': '推廣碼（選填）', 'zh-CN': '推广码（选填）' },
     'co.referral.ph': { en: 'Friend’s code — they earn 5%', fr: 'Code d’un ami — il gagne 5 %', de: 'Code eines Freundes — er erhält 5 %', es: 'Código de un amigo — gana 5 %', ja: '友達のコード — 5%還元', ko: '친구 코드 — 5% 적립', 'zh-TW': '好友推廣碼，TA 可獲 5% 佣金', 'zh-CN': '好友推广码，TA 可获 5% 佣金' },
+    'co.pieceCount': { en: 'How many jewelry pieces in this order?', fr: 'Nombre de pièces pour cette commande', de: 'Anzahl Schmuckstücke in dieser Bestellung', es: '¿Cuántas piezas en este pedido?', ja: '本注文のジュエリー点数', ko: '이 주문의 주얼리 개수', 'zh-TW': '本單珠寶件數', 'zh-CN': '本单珠宝件数' },
+    'co.pieceCount.hint': {
+      en: 'Each piece is designed and confirmed separately (e.g. two rings in a wedding set). Staff can rename pieces later.',
+      fr: 'Chaque pièce est conçue et validée séparément. L’équipe pourra renommer les pièces ensuite.',
+      de: 'Jedes Stück wird einzeln entworfen und bestätigt. Das Team kann die Stücke später umbenennen.',
+      es: 'Cada pieza se diseña y confirma por separado. El equipo puede renombrarlas después.',
+      ja: '各点数は別々にデザイン・確認します（結婚指輪セットなど）。後から名称変更できます。',
+      ko: '각 개수는 따로 디자인·확인합니다. 이후 이름을 변경할 수 있습니다.',
+      'zh-TW': '每件將分別設計與確認（如婚戒對戒）；後續可在訂單中重命名。',
+      'zh-CN': '每件将分别设计与确认（如婚戒对戒）；后续可在订单中重命名。'
+    },
+    'co.pieceCount.opt1': { en: '1 piece', 'zh-CN': '1 件', 'zh-TW': '1 件' },
+    'co.pieceCount.opt2': { en: '2 pieces', 'zh-CN': '2 件', 'zh-TW': '2 件' },
+    'co.pieceCount.opt3': { en: '3 pieces', 'zh-CN': '3 件', 'zh-TW': '3 件' },
+    'co.pieceCount.opt4': { en: '4 pieces', 'zh-CN': '4 件', 'zh-TW': '4 件' },
+    'co.pieceCount.opt5': { en: '5 pieces', 'zh-CN': '5 件', 'zh-TW': '5 件' },
     'co.pay': { en: 'Pay deposit', fr: 'Payer l’acompte', de: 'Anzahlung zahlen', es: 'Pagar depósito', ja: '内金を支払う', ko: '예약금 결제', 'zh-TW': '支付定金', 'zh-CN': '支付定金' },
     'co.secure': { en: '256-bit encrypted · secure payment', fr: 'Chiffrement 256 bits · paiement sécurisé', de: '256-Bit-Verschlüsselung · sichere Zahlung', es: 'Cifrado de 256 bits · pago seguro', ja: '256bit暗号化 · 安全な決済', ko: '256비트 암호화 · 안전 결제', 'zh-TW': '256位元加密 · 安全支付', 'zh-CN': '256位加密 · 安全支付' },
     'co.back': { en: 'Back', fr: 'Retour', de: 'Zurück', es: 'Volver', ja: '戻る', ko: '뒤로', 'zh-TW': '返回', 'zh-CN': '返回' },
@@ -723,6 +848,40 @@
     'shop.buy': { en: 'Buy now', fr: 'Acheter', de: 'Jetzt kaufen', es: 'Comprar', ja: '購入する', ko: '구매하기', 'zh-TW': '立即購買', 'zh-CN': '立即购买' },
     'shop.pay.mock': { en: 'Mock payment — you will be charged the sale price in full.', fr: 'Paiement simulé — le prix de vente est débité en totalité.', de: 'Simulierte Zahlung — der Verkaufspreis wird vollständig belastet.', es: 'Pago simulado: se cobra el precio de venta completo.', ja: '模擬決済 — 販売価格を全額お支払いいただきます。', ko: '모의 결제 — 판매가가 전액 결제됩니다.', 'zh-TW': '模擬支付 — 將按售價全額扣款。', 'zh-CN': '模拟支付 — 将按售价全额扣款。' },
     'shop.addr': { en: 'Shipping address', fr: 'Adresse de livraison', de: 'Lieferadresse', es: 'Dirección de envío', ja: '配送先', ko: '배송지', 'zh-TW': '收貨地址', 'zh-CN': '收货地址' },
+    'shop.type': { en: 'Type', fr: 'Type', de: 'Typ', es: 'Tipo', ja: 'タイプ', ko: '유형', 'zh-TW': '類型', 'zh-CN': '类型' },
+    'shop.filter.all': { en: 'All types', fr: 'Tous', de: 'Alle', es: 'Todos', ja: 'すべて', ko: '전체', 'zh-TW': '全部類型', 'zh-CN': '全部类型' },
+    'shop.size.ring': { en: 'Finger size', fr: 'Taille de doigt', de: 'Ringgröße', es: 'Talla de anillo', ja: '指輪のサイズ', ko: '반지 사이즈', 'zh-TW': '手寸', 'zh-CN': '手寸' },
+    'shop.size.ring.ph': { en: 'Required for rings, e.g. US 7 or HK 14', fr: 'Obligatoire pour les bagues', de: 'Pflichtangabe für Ringe', es: 'Obligatorio en anillos', ja: '指輪は必須', ko: '반지는 필수', 'zh-TW': '戒指必填，如港碼 14', 'zh-CN': '戒指必填，如港码 14' },
+    'shop.size.chain': { en: 'Chain length', fr: 'Longueur de chaîne', de: 'Kettenlänge', es: 'Longitud de cadena', ja: 'チェーンの長さ', ko: '체인 길이', 'zh-TW': '鏈長', 'zh-CN': '链长' },
+    'shop.size.chain.ph': { en: 'Optional, e.g. 40 cm', fr: 'Optionnel', de: 'Optional', es: 'Opcional', ja: '任意', ko: '선택', 'zh-TW': '選填，如 45cm', 'zh-CN': '选填，如 45cm' },
+    'shop.size.generic': { en: 'Size', fr: 'Taille', de: 'Größe', es: 'Talla', ja: 'サイズ', ko: '사이즈', 'zh-TW': '規格', 'zh-CN': '规格' },
+    'shop.size.generic.ph': { en: 'Enter size if needed', fr: 'Si nécessaire', de: 'Falls erforderlich', es: 'Si aplica', ja: '必要な場合', ko: '필요 시 입력', 'zh-TW': '按需填寫', 'zh-CN': '按需填写' },
+    'jewelry.ring': { en: 'Ring', fr: 'Bague', de: 'Ring', es: 'Anillo', ja: 'リング', ko: '반지', 'zh-TW': '戒指', 'zh-CN': '戒指' },
+    'jewelry.necklace': { en: 'Necklace', fr: 'Collier', de: 'Halskette', es: 'Collar', ja: 'ネックレス', ko: '목걸이', 'zh-TW': '項鏈', 'zh-CN': '项链' },
+    'jewelry.earring': { en: 'Earrings', fr: 'Boucles', de: 'Ohrringe', es: 'Pendientes', ja: 'ピアス', ko: '귀걸이', 'zh-TW': '耳釘/耳環', 'zh-CN': '耳钉/耳环' },
+    'jewelry.brooch': { en: 'Brooch', fr: 'Broche', de: 'Brosche', es: 'Broche', ja: 'ブローチ', ko: '브로치', 'zh-TW': '胸針', 'zh-CN': '胸针' },
+    'jewelry.bracelet': { en: 'Bracelet', fr: 'Bracelet', de: 'Armband', es: 'Pulsera', ja: 'ブレスレット', ko: '팔찌', 'zh-TW': '手鏈', 'zh-CN': '手链' },
+    'jewelry.other': { en: 'Other', fr: 'Autre', de: 'Sonstige', es: 'Otro', ja: 'その他', ko: '기타', 'zh-TW': '其他', 'zh-CN': '其他' },
+    'addr.country': { en: 'Country / region', fr: 'Pays / région', de: 'Land / Region', es: 'País / región', ja: '国・地域', ko: '국가/지역', 'zh-TW': '國家/地區', 'zh-CN': '国家/地区' },
+    'addr.country.ph': { en: 'Select country or region', fr: 'Choisir un pays ou une région', de: 'Land oder Region wählen', es: 'Seleccione país o región', ja: '国・地域を選択', ko: '국가/지역 선택', 'zh-TW': '請選擇國家或地區', 'zh-CN': '请选择国家或地区' },
+    'addr.province': { en: 'Province', fr: 'Province', de: 'Provinz', es: 'Provincia', ja: '省', ko: '성/도', 'zh-TW': '省/直轄市', 'zh-CN': '省/直辖市' },
+    'addr.province.ph': { en: 'Select province', fr: 'Choisir la province', de: 'Provinz wählen', es: 'Seleccione provincia', ja: '省を選択', ko: '성/도 선택', 'zh-TW': '請選擇省/直轄市', 'zh-CN': '请选择省/直辖市' },
+    'addr.city': { en: 'City', fr: 'Ville', de: 'Stadt', es: 'Ciudad', ja: '市区町村', ko: '시/군/구', 'zh-TW': '城市', 'zh-CN': '城市' },
+    'addr.district': { en: 'District', fr: 'District', de: 'Bezirk', es: 'Distrito', ja: '区', ko: '구/읍/면', 'zh-TW': '區/縣', 'zh-CN': '区/县' },
+    'addr.state': { en: 'State / province', fr: 'État / province', de: 'Bundesland / Provinz', es: 'Estado / provincia', ja: '州/県', ko: '주/도', 'zh-TW': '州/省', 'zh-CN': '州/省' },
+    'addr.postal': { en: 'Postal / ZIP code', fr: 'Code postal', de: 'Postleitzahl', es: 'Código postal', ja: '郵便番号', ko: '우편번호', 'zh-TW': '郵政編碼', 'zh-CN': '邮政编码' },
+    'addr.detail': { en: 'Street address & details', fr: 'Adresse détaillée', de: 'Straße und Details', es: 'Dirección detallada', ja: '番地・建物名など', ko: '상세 주소', 'zh-TW': '詳細地址', 'zh-CN': '详细地址' },
+    'addr.err.missing': { en: 'Please complete the shipping address', fr: 'Veuillez compléter l’adresse', de: 'Bitte Lieferadresse ausfüllen', es: 'Complete la dirección de envío', ja: '配送先を入力してください', ko: '배송지를 입력해 주세요', 'zh-TW': '請完善收貨地址', 'zh-CN': '请完善收货地址' },
+    'addr.err.country': { en: 'Please select a country or region', fr: 'Veuillez choisir un pays ou une région', de: 'Bitte Land oder Region wählen', es: 'Seleccione país o región', ja: '国・地域を選択してください', ko: '국가/지역을 선택해 주세요', 'zh-TW': '請選擇國家或地區', 'zh-CN': '请选择国家或地区' },
+    'addr.err.detail': { en: 'Please enter street address and details', fr: 'Veuillez saisir l’adresse détaillée', de: 'Bitte Straße und Details eingeben', es: 'Introduzca la dirección detallada', ja: '詳細住所を入力してください', ko: '상세 주소를 입력해 주세요', 'zh-TW': '請填寫詳細地址', 'zh-CN': '请填写详细地址' },
+    'addr.err.region': { en: 'Please complete province/state and city', fr: 'Veuillez indiquer la province/état et la ville', de: 'Bitte Provinz/Bundesland und Stadt angeben', es: 'Indique provincia/estado y ciudad', ja: '都道府県・市区町村を入力してください', ko: '주/도와 시를 입력해 주세요', 'zh-TW': '請填寫省/州與城市', 'zh-CN': '请填写省/州与城市' },
+    'addr.line.country': { en: 'Country', fr: 'Pays', de: 'Land', es: 'País', ja: '国', ko: '국가', 'zh-TW': '國家', 'zh-CN': '国家' },
+    'addr.line.province': { en: 'Province', fr: 'Province', de: 'Provinz', es: 'Provincia', ja: '省', ko: '성/도', 'zh-TW': '省', 'zh-CN': '省' },
+    'addr.line.state': { en: 'State/Province', fr: 'État/Province', de: 'Bundesland/Provinz', es: 'Estado/Provincia', ja: '州/県', ko: '주/도', 'zh-TW': '州/省', 'zh-CN': '州/省' },
+    'addr.line.city': { en: 'City', fr: 'Ville', de: 'Stadt', es: 'Ciudad', ja: '市', ko: '시', 'zh-TW': '城市', 'zh-CN': '城市' },
+    'addr.line.district': { en: 'District', fr: 'District', de: 'Bezirk', es: 'Distrito', ja: '区', ko: '구', 'zh-TW': '區/縣', 'zh-CN': '区/县' },
+    'addr.line.postal': { en: 'Postal', fr: 'Code postal', de: 'PLZ', es: 'Código postal', ja: '郵便番号', ko: '우편번호', 'zh-TW': '郵編', 'zh-CN': '邮编' },
+    'addr.line.street': { en: 'Address', fr: 'Adresse', de: 'Adresse', es: 'Dirección', ja: '住所', ko: '주소', 'zh-TW': '詳細地址', 'zh-CN': '详细地址' },
     'shop.note': { en: 'Note (optional)', fr: 'Remarque (optionnel)', de: 'Hinweis (optional)', es: 'Nota (opcional)', ja: '備考（任意）', ko: '메모(선택)', 'zh-TW': '備註（選填）', 'zh-CN': '备注（选填）' },
     'shop.name': { en: 'Your name', fr: 'Votre nom', de: 'Ihr Name', es: 'Su nombre', ja: 'お名前', ko: '이름', 'zh-TW': '稱呼', 'zh-CN': '称呼' },
     'shop.contact': { en: 'Contact', fr: 'Contact', de: 'Kontakt', es: 'Contacto', ja: '連絡先', ko: '연락처', 'zh-TW': '聯繫方式', 'zh-CN': '联系方式' },
@@ -788,12 +947,86 @@
     });
   }
 
+  var ROLE_NAME_ZH = /^(设计师|建模师|跟单员|跟单|客户|系统|管理员|AI\s*助理)$/;
+
+  function isZhLang(code) {
+    return code === 'zh-CN' || code === 'zh-TW';
+  }
+
+  function hasKey(key) {
+    return !!T[key];
+  }
+
+  function localizeOrderStatus(code, fallback) {
+    if (!code) return fallback || '';
+    var key = 'ws.order.' + code;
+    return hasKey(key) ? t(key) : (fallback || code);
+  }
+
+  function localizeEventType(type) {
+    if (!type) return t('ws.event._default');
+    var key = 'ws.event.' + type;
+    return hasKey(key) ? t(key) : t('ws.event._default');
+  }
+
+  function localizeResolution(code) {
+    if (!code) return '';
+    var key = 'ws.resolution.' + code;
+    return hasKey(key) ? t(key) : code;
+  }
+
+  function localizeEventTitle(title, eventType) {
+    if (eventType === 'SHIPPING_ADDRESS_REQUEST') return t('ws.shipaddr.title');
+    if (eventType === 'SHIPPING_ADDRESS_FILLED') return t('ws.shipaddr.filledTitle');
+    if (eventType === 'SHIPPED') return t('ws.event.SHIPPED');
+    var raw = title != null ? String(title).trim() : '';
+    if (!raw) {
+      return eventType ? localizeEventType(eventType) : '';
+    }
+    if (eventType === 'REVIEW_PASS' || eventType === 'REVIEW_REJECT' || raw === '工艺验证通过' || raw === '工艺验证驳回' || raw === '工艺验证') {
+      return localizeEventType(eventType || (raw.indexOf('驳回') >= 0 ? 'REVIEW_REJECT' : 'REVIEW_PASS'));
+    }
+    if (isZhLang(current)) return raw;
+    var piece = raw.match(/^(设计稿|建模稿)\s*[·•]\s*(.+)$/);
+    if (piece) {
+      var prefix = piece[1] === '建模稿' ? t('ws.event.title.model') : t('ws.event.title.design');
+      return prefix + ' · ' + piece[2];
+    }
+    return raw;
+  }
+
+  function localizeActorName(role, displayName) {
+    var name = (displayName || '').trim();
+    var roleKeys = {
+      DESIGNER: 'ws.role.designer',
+      MODELER: 'ws.role.modeler',
+      FOLLOW_UP: 'ws.role.tracker',
+      SALES_MID: 'ws.role.tracker',
+      SALES_PRE: 'ws.role.tracker',
+      SUPER_SERVICE: 'ws.role.tracker',
+      CUSTOMER: 'ws.role.customer',
+      C_PORTAL_CUSTOMER: 'ws.role.customer',
+      AI_ASSISTANT: 'ws.role.ai',
+      ADMIN: 'ws.role.admin',
+      SYSTEM: 'ws.role.system'
+    };
+    var rk = roleKeys[role];
+    if (name && !ROLE_NAME_ZH.test(name)) return name;
+    if (rk && hasKey(rk)) return t(rk);
+    return name || role || '';
+  }
+
   window.I18N = {
     SUPPORTED: SUPPORTED,
     get current() { return current; },
     t: t,
     setLang: setLang,
     apply: apply,
+    localizeOrderStatus: localizeOrderStatus,
+    localizeEventType: localizeEventType,
+    localizeResolution: localizeResolution,
+    localizeEventTitle: localizeEventTitle,
+    localizeActorName: localizeActorName,
     // 合并后端多语言文案（blockKey -> {lang: text}），覆盖静态文案后重新渲染
     mergeTranslations: function (translations) {
       if (!translations || typeof translations !== 'object') return;
