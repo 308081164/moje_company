@@ -43,6 +43,12 @@ public class Quotation {
     @Column(name = "is_confidential")
     private Boolean confidential = false;
 
+    @Column(name = "has_copyright_certificate", nullable = false)
+    private Boolean hasCopyrightCertificate = false;
+
+    @Column(name = "design_options_at")
+    private LocalDateTime designOptionsAt;
+
     @Column(name = "other_fees", precision = 10, scale = 2)
     private BigDecimal otherFees = BigDecimal.ZERO;
 

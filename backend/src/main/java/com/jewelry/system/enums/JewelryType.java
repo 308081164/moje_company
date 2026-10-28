@@ -11,6 +11,9 @@ public enum JewelryType {
     EARRING,
     BROOCH,
     BRACELET,
+    COLLARBONE,
+    HAIR,
+    CHARM,
     OTHER;
 
     public static JewelryType parse(String raw) {
@@ -29,10 +32,10 @@ public enum JewelryType {
     }
 
     public boolean allowsOptionalLength() {
-        return this == NECKLACE || this == BRACELET;
+        return this == NECKLACE || this == BRACELET || this == COLLARBONE;
     }
 
     public boolean hasNoSizeField() {
-        return this == EARRING || this == BROOCH;
+        return this == EARRING || this == BROOCH || this == HAIR || this == CHARM;
     }
 }

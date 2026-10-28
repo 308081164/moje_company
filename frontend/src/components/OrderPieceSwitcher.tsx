@@ -4,6 +4,7 @@ import { JEWELRY_TYPE_OPTIONS, jewelryTypeLabel } from '@/constants/jewelryType'
 import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
 import type { OrderPieceInfo } from '@/types/order';
+import { pieceHasCustomerDesignReject, pieceHasCustomerModelReject } from '@/utils/pieceCustomerSubmit';
 
 const { Text } = Typography;
 
@@ -124,6 +125,13 @@ const OrderPieceSwitcher: React.FC<OrderPieceSwitcherProps> = ({
             {p.jewelryType ? ` ·${jewelryTypeLabel(p.jewelryType)}` : ''}
             {p.designConfirmed ? ' ·设计已确认' : ''}
             {p.modelConfirmed ? ' ·建模已确认' : ''}
+            {(pieceHasCustomerDesignReject(p) || pieceHasCustomerModelReject(p)) && (
+              <span style={{ color: '#cf1322', marginLeft: 4 }}>待修改</span>
+            )}
+            {p.model?.lastRejectToDesignerMessage?.trim() && (
+              <span style={{ color: '#d48806', marginLeft: 4 }}>建模驳回</span>
+            )}
+            {p.processVerified ? ' ·已通过' : ''}
             {canEdit && (
               <EditOutlined
                 style={{ marginLeft: 6, fontSize: 12 }}

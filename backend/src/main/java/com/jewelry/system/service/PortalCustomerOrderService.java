@@ -3,13 +3,16 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.conversation.ConversationDto;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
+import com.jewelry.system.customerbrief.CustomerBriefCatalog;
 import com.jewelry.system.entity.Order;
+import com.jewelry.system.entity.OrderDetail;
 import com.jewelry.system.entity.OrderPiece;
 import com.jewelry.system.entity.PortalCustomerOrderBinding;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
+import com.jewelry.system.repository.OrderDetailRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.PortalCustomerAccountRepository;
 import com.jewelry.system.repository.PortalCustomerOrderBindingRepository;
@@ -34,6 +37,7 @@ import java.time.LocalDateTime;
 public class PortalCustomerOrderService {
 
     private final OrderRepository orderRepository;
+    private final OrderDetailRepository orderDetailRepository;
     private final PortalCustomerAccountRepository accountRepository;
     private final PortalCustomerOrderBindingRepository bindingRepository;
     private final OrderCommandService orderCommandService;
@@ -61,6 +65,7 @@ public class PortalCustomerOrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "基础需求不能为空");
         }
         int pieceCount = PortalDepositPricing.normalizePieceCount(req.getPieceCount());
+        String metalCode = CustomerBriefCatalog.requireMetal(req.getMetalCode());
 
         var account = accountRepository.findById(accountId).orElse(null);
         String accountEmail = account != null ? account.getEmail() : null;
@@ -76,12 +81,17 @@ public class PortalCustomerOrderService {
         order.setCustomerEmail(accountEmail);
         order.setBasicRequirements(req.getBasicRequirements());
         order.setStyleInfo(req.getStyleInfo());
-        order.setMaterialInfo(req.getMaterialInfo());
+        order.setMaterialInfo(CustomerBriefCatalog.materialLabel(metalCode));
         order.setDeposit(PortalDepositPricing.unitPrice(type).multiply(BigDecimal.valueOf(pieceCount)));
         order.setOrderTime(LocalDateTime.now());
         order.setOrderNumber(orderCommandService.generateOrderNumber());
         order.setStatus(type == ServiceType.CUSTOM_IMAGE ? OrderStatus.PENDING_MODEL : OrderStatus.PENDING_DESIGN);
         orderRepository.save(order);
+
+        OrderDetail detail = new OrderDetail();
+        detail.setOrderId(order.getId());
+        detail.setMaterialType(metalCode);
+        orderDetailRepository.save(detail);
 
         var pieces = orderPieceService.initializePiecesForOrder(order.getId(), pieceCount);
         OrderPiece defaultPiece = pieces.get(0);

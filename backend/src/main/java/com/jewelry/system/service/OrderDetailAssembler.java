@@ -6,7 +6,9 @@ import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.ReviewResult;
+import com.jewelry.system.enums.ProductionProcess;
 import com.jewelry.system.repository.OrderEventRepository;
+import com.jewelry.system.repository.OrderProductionFollowLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,8 +16,10 @@ import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -31,11 +35,19 @@ public class OrderDetailAssembler {
     private final ObjectMapper objectMapper;
     private final OrderPieceService orderPieceService;
     private final OrderEventRepository orderEventRepository;
+    private final OrderProductionFollowLogRepository productionFollowLogRepository;
+    private final CustomerOrderBriefService customerOrderBriefService;
 
     private static final List<OrderEventType> MODEL_CUSTOMER_FLOW = List.of(
             OrderEventType.MODEL_CONFIRM,
             OrderEventType.MODEL_REJECT,
             OrderEventType.MODEL_SUBMIT
+    );
+
+    private static final List<OrderEventType> DESIGN_CUSTOMER_FLOW = List.of(
+            OrderEventType.DESIGN_CONFIRM,
+            OrderEventType.DESIGN_REJECT,
+            OrderEventType.DESIGN_SUBMIT
     );
 
     public OrderInfoDto enrich(
@@ -68,16 +80,24 @@ public class OrderDetailAssembler {
         List<OrderPiece> pieceList = pieces != null ? pieces : orderPieceService.listByOrderId(order.getId());
         Map<Long, DesignInfo> designByPiece = indexDesignByPiece(allDesign, di);
         Map<Long, ModelingInfo> modelByPiece = indexModelByPiece(allModel, mi);
+        Set<Long> waxedPieceIds = waxedPieceIds(order.getId());
 
         List<OrderPieceDto> pieceDtos = pieceList.stream()
                 .map(p -> {
                     OrderDesignBlockDto design = buildDesign(order, od, designByPiece.get(p.getId()), p.getId());
                     if (design != null) {
                         design.setDesignPassed(Boolean.TRUE.equals(p.getDesignConfirmed()));
+                        if (!Boolean.TRUE.equals(p.getDesignConfirmed())) {
+                            applyPendingDesignReject(design, designByPiece.get(p.getId()), order.getId(), p.getId());
+                        }
                     }
                     OrderModelBlockDto model = buildModel(order, modelByPiece.get(p.getId()), p.getId());
                     if (model != null) {
                         model.setModelPassed(Boolean.TRUE.equals(p.getModelConfirmed()));
+                        if (Boolean.TRUE.equals(p.getModelConfirmed())) {
+                            model.setLastCustomerModelRejectReason(null);
+                            model.setLastCustomerModelRejectTime(null);
+                        }
                     }
                     return OrderPieceDto.builder()
                             .id(p.getId())
@@ -87,6 +107,7 @@ public class OrderDetailAssembler {
                             .jewelryType(p.getJewelryType() != null ? p.getJewelryType().name() : null)
                             .designConfirmed(p.getDesignConfirmed())
                             .modelConfirmed(p.getModelConfirmed())
+                            .processVerified(p.getId() != null && waxedPieceIds.contains(p.getId()))
                             .referenceImages(orderPieceService.parseReferenceImages(p))
                             .design(design)
                             .model(model)
@@ -102,7 +123,26 @@ public class OrderDetailAssembler {
         base.setModelInfo(buildModel(order, primaryModel, primaryPieceId));
         base.setReviewInfo(buildReview(order, pr));
         base.setQuotationInfo(buildQuotation(q));
+        base.setCustomerBrief(customerOrderBriefService.viewFor(order, od));
         return base;
+    }
+
+    private Set<Long> waxedPieceIds(Long orderId) {
+        if (orderId == null) {
+            return Set.of();
+        }
+        List<Long> ids = productionFollowLogRepository.findPieceIdsByOrderIdAndProcessCode(
+                orderId, ProductionProcess.WAX.name());
+        if (ids == null || ids.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> waxed = new HashSet<>();
+        for (Long id : ids) {
+            if (id != null) {
+                waxed.add(id);
+            }
+        }
+        return waxed;
     }
 
     private Map<Long, DesignInfo> indexDesignByPiece(List<DesignInfo> allDesign, DesignInfo fallback) {
@@ -177,6 +217,7 @@ public class OrderDetailAssembler {
                 .materialType(od != null ? od.getMaterialType() : null)
                 .materialDetail(null)
                 .handSize(od != null ? firstNonBlank(od.getHandSize(), od.getChainLength()) : null)
+                .plating(di != null ? di.getPlating() : null)
                 .processInfo(di != null ? parseJson(di.getProcessInfoJson()) : null)
                 .stoneInfo(di != null ? parseJson(di.getStoneInfoJson()) : null)
                 .designNotes(od != null ? od.getDesignNotes() : null)
@@ -236,6 +277,45 @@ public class OrderDetailAssembler {
                 .lastCustomerModelRejectReason(rejectReason)
                 .lastCustomerModelRejectTime(rejectTime)
                 .build();
+    }
+
+    /**
+     * 单件未确认时展示客户驳回原话：优先设计资料上的字段，否则回退到尚未被重新提交盖掉的驳回事件。
+     */
+    private void applyPendingDesignReject(OrderDesignBlockDto design, DesignInfo di, Long orderId, Long pieceId) {
+        String reason = di != null ? di.getLastCustomerRejectReason() : null;
+        String time = di != null && di.getLastCustomerRejectAt() != null ? ISO.format(di.getLastCustomerRejectAt()) : null;
+        if (!StringUtils.hasText(reason)) {
+            Optional<OrderEvent> pending = findPendingCustomerDesignReject(orderId, pieceId);
+            reason = pending.map(OrderEvent::getReason).orElse(null);
+            if (!StringUtils.hasText(time)) {
+                time = pending.map(OrderEvent::getCreatedAt).map(ISO::format).orElse(null);
+            }
+        }
+        if (reason != null && reason.isBlank()) {
+            reason = null;
+        }
+        design.setLastCustomerDesignRejectReason(reason);
+        design.setLastCustomerDesignRejectTime(time);
+    }
+
+    private Optional<OrderEvent> findPendingCustomerDesignReject(Long orderId, Long pieceId) {
+        List<OrderEvent> events = orderEventRepository.findByOrderIdAndEventTypeInOrderByIdDesc(orderId, DESIGN_CUSTOMER_FLOW);
+        for (OrderEvent e : events) {
+            if (!pieceIdMatches(e.getPieceId(), pieceId)) {
+                continue;
+            }
+            if (e.getEventType() == OrderEventType.DESIGN_CONFIRM || e.getEventType() == OrderEventType.DESIGN_SUBMIT) {
+                return Optional.empty();
+            }
+            if (e.getEventType() == OrderEventType.DESIGN_REJECT) {
+                if (StringUtils.hasText(e.getReason())) {
+                    return Optional.of(e);
+                }
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -323,6 +403,8 @@ public class OrderDetailAssembler {
                 .weightCost(0d)
                 .laborCost(labor.doubleValue())
                 .designBuyout(Boolean.TRUE.equals(q.getHasDesignCopyright()))
+                .copyrightCertificate(Boolean.TRUE.equals(q.getHasCopyrightCertificate()))
+                .appraisalCertificate(Boolean.TRUE.equals(q.getHasAppraisalCertificate()))
                 .designBuyoutCost(nz(q.getDesignCopyrightFee()).doubleValue())
                 .certificateCost(nz(q.getAppraisalCertificateFee()).doubleValue())
                 .certificateTypes(Collections.emptyList())
@@ -330,6 +412,7 @@ public class OrderDetailAssembler {
                 .otherCost(nz(q.getOtherFees()).doubleValue())
                 .totalCost(total.doubleValue())
                 .quotationNotes(q.getOtherNotes())
+                .finalized(Boolean.TRUE.equals(q.getFinalized()))
                 .createdAt(q.getCreatedAt() != null ? ISO.format(q.getCreatedAt()) : null)
                 .updatedAt(q.getUpdatedAt() != null ? ISO.format(q.getUpdatedAt()) : null)
                 .build();

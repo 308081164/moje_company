@@ -2,11 +2,13 @@ package com.jewelry.system.repository;
 
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.enums.OrderStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,6 +26,10 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @EntityGraph(attributePaths = {"salesMid", "salesPre", "designer", "modeler", "followUp"})
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findWithGraphById(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
     List<Order> findByMarketplaceSellerIdOrderByCreatedAtDesc(Long marketplaceSellerId);
 

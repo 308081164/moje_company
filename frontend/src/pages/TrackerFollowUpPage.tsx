@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Button,
   Empty,
   Image,
   Modal,
   Spin,
+  Tabs,
   Typography,
   message,
 } from 'antd';
 import { CameraOutlined, PictureOutlined, ReloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { orderService } from '@/services/orderService';
+import { YunexpressDesk } from '@/pages/orders/YunexpressDesk';
 import { API_ORIGIN } from '@/services/api';
 import type {
   OrderInfo,
@@ -21,6 +24,13 @@ import type {
 } from '@/types/order';
 
 const { Text, Title } = Typography;
+
+type FollowTab = 'process' | 'finish' | 'ship';
+
+function followTabFromQuery(value: string | null): FollowTab {
+  if (value === 'finish' || value === 'ship') return value;
+  return 'process';
+}
 
 const PROCESSES = [
   { code: 'WAX', label: '喷蜡' },
@@ -179,6 +189,8 @@ function errorText(error: unknown): string {
 }
 
 const TrackerFollowUpPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const followTab = followTabFromQuery(searchParams.get('tab'));
   const [mode, setMode] = useState<'home' | 'capture' | 'sync'>('home');
   const [processCode, setProcessCode] = useState<string>('WAX');
   const [summaries, setSummaries] = useState<ProductionProcessSummary[]>([]);
@@ -196,8 +208,11 @@ const TrackerFollowUpPage: React.FC = () => {
   const [overKey, setOverKey] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderInfo[]>([]);
   const [shipOrders, setShipOrders] = useState<OrderInfo[]>([]);
+  const [shippedOrders, setShippedOrders] = useState<OrderInfo[]>([]);
   const [shipDrafts, setShipDrafts] = useState<Record<number, { tracking: string; carrier: string }>>({});
+  const [shippedDrafts, setShippedDrafts] = useState<Record<number, { tracking: string; carrier: string }>>({});
   const [shippingBusyId, setShippingBusyId] = useState<number | null>(null);
+  const [shipmentEditBusy, setShipmentEditBusy] = useState<string | null>(null);
   const dragPhotoId = useRef<number | null>(null);
   const [ghost, setGhost] = useState<{ url: string; x: number; y: number } | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -253,6 +268,26 @@ const TrackerFollowUpPage: React.FC = () => {
     } catch {
       setShipOrders([]);
     }
+    try {
+      const res = await orderService.workbenchTrackerShipped(0, 50);
+      const rows = res?.content ?? [];
+      setShippedOrders(rows);
+      setShippedDrafts((prev) => {
+        const next = { ...prev };
+        for (const order of rows) {
+          const id = order.baseInfo.id;
+          if (!next[id]) {
+            next[id] = {
+              tracking: order.shipment?.trackingNumber || '',
+              carrier: order.shipment?.carrierName || '',
+            };
+          }
+        }
+        return next;
+      });
+    } catch {
+      setShippedOrders([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -278,6 +313,20 @@ const TrackerFollowUpPage: React.FC = () => {
       pendingUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [pendingUrls]);
+
+  const selectFollowTab = useCallback((next: FollowTab) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === 'process') params.delete('tab');
+      else params.set('tab', next);
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const backToProcess = useCallback(() => {
+    setMode('home');
+    selectFollowTab('process');
+  }, [selectFollowTab]);
 
   const openCapture = (code: string) => {
     setProcessCode(code);
@@ -473,6 +522,39 @@ const TrackerFollowUpPage: React.FC = () => {
     });
   };
 
+  const patchShippedDraft = (orderId: number, patch: Partial<{ tracking: string; carrier: string }>) => {
+    setShippedDrafts((prev) => {
+      const current = prev[orderId] || { tracking: '', carrier: '' };
+      return { ...prev, [orderId]: { ...current, ...patch } };
+    });
+  };
+
+  const readShippedDraft = (orderId: number) => {
+    const order = shippedOrders.find((item) => item.baseInfo.id === orderId);
+    const draft = shippedDrafts[orderId] || {
+      tracking: order?.shipment?.trackingNumber || '',
+      carrier: order?.shipment?.carrierName || '',
+    };
+    return {
+      trackingNumber: draft.tracking.trim(),
+      carrierName: draft.carrier.trim(),
+    };
+  };
+
+  const applyShipmentUpdate = (orderId: number, shipment: OrderInfo['shipment']) => {
+    if (!shipment) return;
+    setShippedOrders((prev) => prev.map((order) => (
+      order.baseInfo.id === orderId ? { ...order, shipment } : order
+    )));
+    setShippedDrafts((prev) => ({
+      ...prev,
+      [orderId]: {
+        tracking: shipment.trackingNumber || '',
+        carrier: shipment.carrierName || '',
+      },
+    }));
+  };
+
   const submitShip = async (orderId: number) => {
     const draft = shipDrafts[orderId] || { tracking: '', carrier: '' };
     const trackingNumber = draft.tracking.trim();
@@ -500,6 +582,75 @@ const TrackerFollowUpPage: React.FC = () => {
     }
   };
 
+  const submitCorrectShipment = async (orderId: number) => {
+    const { trackingNumber, carrierName } = readShippedDraft(orderId);
+    if (!trackingNumber) {
+      message.warning('请填写国际物流单号');
+      return;
+    }
+    const current = shippedOrders.find((order) => order.baseInfo.id === orderId)?.shipment;
+    const sameNumber = trackingNumber === (current?.trackingNumber || '').trim();
+    const sameCarrier = carrierName === (current?.carrierName || '').trim() || !carrierName;
+    if (sameNumber && sameCarrier) {
+      message.warning('物流信息没有变化');
+      return;
+    }
+    setShipmentEditBusy(`correct:${orderId}`);
+    try {
+      const shipment = await orderService.correctShipment(orderId, {
+        trackingNumber,
+        carrierName: carrierName || undefined,
+      });
+      applyShipmentUpdate(orderId, shipment);
+      message.success('单号已更正，已通知客户按新单号查询');
+    } catch {
+      /* 拦截器已提示 */
+    } finally {
+      setShipmentEditBusy(null);
+    }
+  };
+
+  const submitReship = async (orderId: number) => {
+    const { trackingNumber, carrierName } = readShippedDraft(orderId);
+    if (!trackingNumber) {
+      message.warning('请填写国际物流单号');
+      return;
+    }
+    const current = shippedOrders.find((order) => order.baseInfo.id === orderId)?.shipment;
+    if (current?.trackingNumber && trackingNumber.toLowerCase() === current.trackingNumber.trim().toLowerCase()) {
+      message.warning('重新发货请填写新的国际物流单号');
+      return;
+    }
+    setShipmentEditBusy(`reship:${orderId}`);
+    try {
+      const shipment = await orderService.reshipOrder(orderId, {
+        trackingNumber,
+        carrierName: carrierName || undefined,
+      });
+      applyShipmentUpdate(orderId, shipment);
+      message.success('已重新发货，客户会看到新的物流单号');
+    } catch {
+      /* 拦截器已提示 */
+    } finally {
+      setShipmentEditBusy(null);
+    }
+  };
+
+  const confirmReship = (orderId: number) => {
+    const { trackingNumber } = readShippedDraft(orderId);
+    if (!trackingNumber) {
+      message.warning('请填写国际物流单号');
+      return;
+    }
+    Modal.confirm({
+      title: '确认重新发货？',
+      content: '这是新的一次发出。新单号会成为当前有效物流，并在客户聊天里发送「已重新发货」。订单仍保持已完成，不会退回生产中。',
+      okText: '重新发货',
+      cancelText: '取消',
+      onOk: () => submitReship(orderId),
+    });
+  };
+
   const unmatchedOf = (code: string) => summaries.find((item) => item.code === code)?.unmatchedCount || 0;
 
   return (
@@ -507,6 +658,32 @@ const TrackerFollowUpPage: React.FC = () => {
       <style>{`
         .follow-sync { display: flex; flex-direction: column; gap: 12px; min-height: 100%; min-width: 0; max-width: 100%; }
         .follow-sync__bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .follow-tabs { min-width: 0; }
+        .follow-tabs > .ant-tabs-nav { margin-bottom: 12px; }
+        .follow-tabs .ant-tabs-nav-wrap { flex: 1 1 auto; min-width: 0; }
+        .follow-tabs .ant-tabs-nav-list { width: 100%; }
+        .follow-tabs .ant-tabs-nav-operations { display: none; }
+        .follow-tabs .ant-tabs-tab {
+          flex: 1 1 0;
+          justify-content: center;
+          margin: 0 !important;
+          padding: 12px 6px;
+          min-height: 44px;
+          font-size: 15px;
+          touch-action: manipulation;
+        }
+        .follow-tabs .ant-tabs-extra-content .ant-btn { position: relative; min-width: 44px; min-height: 44px; }
+        @media (max-width: 520px) {
+          .follow-refresh-label {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+          }
+        }
+        .follow-pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+        @media (max-width: 400px) {
+          .follow-tabs .ant-tabs-tab { font-size: 14px; padding: 12px 2px; }
+          .follow-tabs .ant-tabs-extra-content .ant-btn { padding-inline: 8px; }
+        }
         .process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
         .process-card {
           min-height: 104px; border: 1px solid #eee; border-radius: 16px; background: #fff;
@@ -651,9 +828,17 @@ const TrackerFollowUpPage: React.FC = () => {
           border-radius: 10px; padding: 8px 12px; box-sizing: border-box;
         }
         .ship-card__form .ant-btn { min-height: 44px; font-size: 16px; width: 100%; }
+        .ship-card__current { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+        .ship-card__actions { display: flex; flex-direction: column; gap: 8px; }
+        .ship-card__yun.ant-btn { min-height: 44px; width: 100%; }
+        .ship-card__hint { margin: 0; font-size: 12px; line-height: 1.5; color: #888; }
+        .ship-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
         @media (min-width: 768px) {
           .ship-card__form { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) auto; align-items: end; gap: 8px; }
           .ship-card__form .ant-btn { width: auto; min-width: 112px; }
+          .ship-card__form--shipped { grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr); }
+          .ship-card__actions { grid-column: 1 / -1; flex-direction: row; }
+          .ship-card__actions .ant-btn { flex: 1; width: auto; }
         }
         @media (max-width: 767px) {
           .process-grid { grid-template-columns: 1fr 1fr; }
@@ -668,29 +853,49 @@ const TrackerFollowUpPage: React.FC = () => {
       `}</style>
 
       {mode === 'home' && (
-        <>
-          <div className="follow-sync__bar">
-            <div>
-              <Title level={4} style={{ margin: 0 }}>工序跟单</Title>
-              <Text type="secondary">现场按工序连续拍照，回公司后再拖到对应单件。</Text>
-            </div>
-            <Button icon={<ReloadOutlined />} onClick={() => { void loadSummary(); void loadOrders(); void loadShipping(); }}>刷新</Button>
-          </div>
-          <div className="process-grid">
-            {PROCESSES.map((process) => (
-              <div key={process.code} className="process-card">
-                <div>
-                  <strong>{process.label}</strong>
-                  <span>未匹配 {unmatchedOf(process.code)} 张</span>
+        <Tabs
+          className="follow-tabs"
+          activeKey={followTab}
+          onChange={(key) => selectFollowTab(key as FollowTab)}
+          tabBarExtraContent={{
+            right: (
+              <Button
+                icon={<ReloadOutlined />}
+                aria-label="刷新"
+                onClick={() => { void loadSummary(); void loadOrders(); void loadShipping(); }}
+              >
+                <span className="follow-refresh-label">刷新</span>
+              </Button>
+            ),
+          }}
+          items={[
+            {
+              key: 'process',
+              label: '工序跟单',
+              children: (
+                <div className="follow-pane">
+                  <Text type="secondary">现场按工序连续拍照，回公司后再拖到对应单件。</Text>
+                  <div className="process-grid">
+                    {PROCESSES.map((process) => (
+                      <div key={process.code} className="process-card">
+                        <div>
+                          <strong>{process.label}</strong>
+                          <span>未匹配 {unmatchedOf(process.code)} 张</span>
+                        </div>
+                        <div className="process-actions">
+                          <button type="button" onClick={() => openCapture(process.code)}>拍照</button>
+                          <button type="button" onClick={() => openSync(process.code)}>同步</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="process-actions">
-                  <button type="button" onClick={() => openCapture(process.code)}>拍照</button>
-                  <button type="button" onClick={() => openSync(process.code)}>同步</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Title level={5} style={{ marginBottom: 0 }}>生产收尾</Title>
+              ),
+            },
+            {
+              key: 'finish',
+              label: '生产收尾',
+              children: (
           <div className="finish-list">
             {orders.length === 0 ? <Empty description="暂无生产中的订单" /> : orders.map((order) => {
               const previews = finishPiecePreviews(order);
@@ -752,60 +957,163 @@ const TrackerFollowUpPage: React.FC = () => {
               );
             })}
           </div>
-          <Title level={5} style={{ marginBottom: 0 }}>待发货</Title>
-          <Text type="secondary">生产完成后在这里填写承运商和国际物流单号。客户已填的收货信息会显示在每张单上。</Text>
-          <div className="ship-list">
-            {shipOrders.length === 0 ? (
-              <Text type="secondary">暂无待发货订单</Text>
-            ) : shipOrders.map((order) => {
-              const lines = shippingLines(order);
-              const draft = shipDrafts[order.baseInfo.id] || { tracking: '', carrier: '' };
-              return (
-                <div key={order.baseInfo.id} className="ship-card">
-                  <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
-                  <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
-                  <div className="ship-card__addr">
-                    {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。已在订单群里请客户填写，也可以先录入物流单号。'}
-                  </div>
-                  <div className="ship-card__form">
-                    <label>
-                      承运商（可选）
-                      <input
-                        value={draft.carrier}
-                        autoComplete="off"
-                        placeholder="DHL / FedEx / UPS"
-                        onChange={(event) => patchShipDraft(order.baseInfo.id, { carrier: event.target.value })}
+              ),
+            },
+            {
+              key: 'ship',
+              label: '发货',
+              children: (
+                <div className="follow-pane">
+          <Text type="secondary">待发货先试算渠道再云途发货。已经发出的云途运单可以打面单、改重量、拦截或撤销。手工单号仍可更正。</Text>
+          <div className="ship-section">
+            <Text strong>待发货</Text>
+            <div className="ship-list">
+              {shipOrders.length === 0 ? (
+                <Text type="secondary">暂无待发货订单</Text>
+              ) : shipOrders.map((order) => {
+                const lines = shippingLines(order);
+                const draft = shipDrafts[order.baseInfo.id] || { tracking: '', carrier: '' };
+                return (
+                  <div key={order.baseInfo.id} className="ship-card">
+                    <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                    <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
+                    <div className="ship-card__addr">
+                      {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。已在订单群里请客户填写，也可以先录入物流单号。'}
+                    </div>
+                    <div className="ship-card__form">
+                      <label>
+                        承运商（可选）
+                        <input
+                          value={draft.carrier}
+                          autoComplete="off"
+                          placeholder="DHL / FedEx / UPS"
+                          onChange={(event) => patchShipDraft(order.baseInfo.id, { carrier: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        国际物流单号
+                        <input
+                          value={draft.tracking}
+                          autoComplete="off"
+                          inputMode="text"
+                          placeholder="物流单号"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') void submitShip(order.baseInfo.id);
+                          }}
+                          onChange={(event) => patchShipDraft(order.baseInfo.id, { tracking: event.target.value })}
+                        />
+                      </label>
+                      <Button
+                        type="primary"
+                        loading={shippingBusyId === order.baseInfo.id}
+                        onClick={() => void submitShip(order.baseInfo.id)}
+                      >
+                        确认发货
+                      </Button>
+                    </div>
+                    {lines.length > 0 ? (
+                      <YunexpressDesk
+                        orderId={order.baseInfo.id}
+                        hasAddress
+                        onUpdated={() => { void loadShipping(); }}
                       />
-                    </label>
-                    <label>
-                      国际物流单号
-                      <input
-                        value={draft.tracking}
-                        autoComplete="off"
-                        inputMode="text"
-                        placeholder="物流单号"
-                        onChange={(event) => patchShipDraft(order.baseInfo.id, { tracking: event.target.value })}
-                      />
-                    </label>
-                    <Button
-                      type="primary"
-                      loading={shippingBusyId === order.baseInfo.id}
-                      onClick={() => void submitShip(order.baseInfo.id)}
-                    >
-                      确认发货
-                    </Button>
+                    ) : (
+                      <p className="ship-card__hint">客户还没填写收货信息，暂不能使用云途快捷发货。</p>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </>
+          <div className="ship-section">
+            <Text strong>已发货</Text>
+            <Text type="secondary">保存更正只改当前这一条物流，承运商留空表示不改。重新发货用于发错货，必须填新单号；承运商留空则自动识别。订单不会退回生产中。</Text>
+            <div className="ship-list">
+              {shippedOrders.length === 0 ? (
+                <Text type="secondary">暂无已发货订单</Text>
+              ) : shippedOrders.map((order) => {
+                const lines = shippingLines(order);
+                const draft = shippedDrafts[order.baseInfo.id] || {
+                  tracking: order.shipment?.trackingNumber || '',
+                  carrier: order.shipment?.carrierName || '',
+                };
+                const orderId = order.baseInfo.id;
+                return (
+                  <div key={orderId} className="ship-card">
+                    <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                    <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
+                    <div className="ship-card__current">
+                      当前单号：{order.shipment?.trackingNumber || '—'}
+                      {order.shipment?.carrierName ? ` · ${order.shipment.carrierName}` : ''}
+                    </div>
+                    <div className="ship-card__addr">
+                      {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。'}
+                    </div>
+                    {(order.shipment?.carrierName === '云途' || (order.shipment?.carrierName || '').toLowerCase() === 'yunexpress') && (
+                      <YunexpressDesk
+                        orderId={orderId}
+                        hasAddress={lines.length > 0}
+                        shipment={order.shipment}
+                        onUpdated={() => { void loadShipping(); }}
+                      />
+                    )}
+                    <div className="ship-card__form ship-card__form--shipped">
+                      <label>
+                        承运商（可选）
+                        <input
+                          value={draft.carrier}
+                          autoComplete="off"
+                          placeholder="DHL / FedEx / UPS"
+                          onChange={(event) => patchShippedDraft(orderId, { carrier: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        国际物流单号
+                        <input
+                          value={draft.tracking}
+                          autoComplete="off"
+                          inputMode="text"
+                          placeholder="物流单号"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') void submitCorrectShipment(orderId);
+                          }}
+                          onChange={(event) => patchShippedDraft(orderId, { tracking: event.target.value })}
+                        />
+                      </label>
+                      <div className="ship-card__actions">
+                        <Button
+                          type="primary"
+                          loading={shipmentEditBusy === `correct:${orderId}`}
+                          disabled={shipmentEditBusy != null && shipmentEditBusy !== `correct:${orderId}`}
+                          onClick={() => void submitCorrectShipment(orderId)}
+                        >
+                          保存更正
+                        </Button>
+                        <Button
+                          loading={shipmentEditBusy === `reship:${orderId}`}
+                          disabled={shipmentEditBusy != null && shipmentEditBusy !== `reship:${orderId}`}
+                          onClick={() => confirmReship(orderId)}
+                        >
+                          手工重新发货
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+                </div>
+              ),
+            },
+          ]}
+        />
       )}
 
       {mode === 'capture' && (
         <>
           <div className="follow-sync__bar">
-            <Button onClick={() => setMode('home')}>返回</Button>
+            <Button onClick={backToProcess}>返回</Button>
             <Title level={4} style={{ margin: 0 }}>{processLabel}</Title>
             <Button type="primary" loading={uploading} onClick={() => void savePending()}>保存</Button>
           </div>
@@ -867,7 +1175,7 @@ const TrackerFollowUpPage: React.FC = () => {
       {mode === 'sync' && (
         <>
           <div className="follow-sync__bar">
-            <Button onClick={() => setMode('home')}>返回</Button>
+            <Button onClick={backToProcess}>返回</Button>
             <Title level={4} style={{ margin: 0 }}>{processLabel}进度同步</Title>
             <Button icon={<ReloadOutlined />} onClick={() => void loadBoard(processCode)} />
           </div>
@@ -959,6 +1267,7 @@ const TrackerFollowUpPage: React.FC = () => {
             {timelineLogs.map((log) => (
               <div key={log.id} className="log-item">
                 <strong>{log.processLabel || log.processCode || '记录'}</strong>
+                {log.processCode === 'WAX' ? <Text type="success"> · 工艺验证已通过</Text> : null}
                 <div>{log.note || '已更新生产进度'}</div>
                 {formatLogTime(log.createdAt) ? <Text type="secondary">{formatLogTime(log.createdAt)}</Text> : null}
               </div>

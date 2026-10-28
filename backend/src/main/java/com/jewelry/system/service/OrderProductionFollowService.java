@@ -42,10 +42,13 @@ public class OrderProductionFollowService {
     private final ObjectMapper objectMapper;
     private final OrderEventService orderEventService;
 
+    /**
+     * 已登录员工均可查看跟单过程。订单详情本身对全员开放，读记录不应再返回 403。
+     * 新增记录仍走 {@link #assertCanEditProductionFollow}。
+     */
     @Transactional(readOnly = true)
     public List<OrderProductionFollowLogDto> list(long orderId) {
-        Order order = loadOrder(orderId);
-        assertCanViewProductionFollow(order);
+        loadOrder(orderId);
         return logRepository.findByOrderIdOrderByIdAsc(orderId).stream()
                 .map(this::toDto)
                 .toList();

@@ -48,6 +48,7 @@ public class OrderAiConciergeService {
     private final PortalCustomerOrderBindingRepository bindingRepository;
     private final PortalCustomerAccountRepository accountRepository;
     private final OrderPieceRepository orderPieceRepository;
+    private final OrderCustomerBriefRepository briefRepository;
     private final ConversationService conversationService;
     private final DashScopeChatService dashScopeChatService;
     private final IntegrationSettingsService integrationSettingsService;
@@ -147,10 +148,11 @@ public class OrderAiConciergeService {
             conversationService.postAiAssistantMessage(conversationId, reply.text);
         }
 
-        boolean shouldComplete = intake.getTurnCount() >= MAX_INTAKE_TURNS
+        boolean briefDone = briefSubmitted(order.getId());
+        boolean shouldComplete = briefDone && (intake.getTurnCount() >= MAX_INTAKE_TURNS
                 || (intake.getTurnCount() >= MIN_INTAKE_TURNS_BEFORE_COMPLETE && (
                 reply.intakeComplete
-                        || (reply.collected != null && isIntakeSufficient(reply.collected, order))));
+                        || (reply.collected != null && isIntakeSufficient(reply.collected, order)))));
 
         if (shouldComplete && OrderAiIntake.STATUS_ACTIVE.equals(intake.getStatus())) {
             completeIntake(order, intake, reply.collected, lang);
@@ -251,23 +253,25 @@ public class OrderAiConciergeService {
 
         boolean en = lang != null && lang.toLowerCase(Locale.ROOT).startsWith("en");
         int turn = intake.getTurnCount();
+        String link = briefLink(order.getId());
+        if (!briefSubmitted(order.getId())) {
+            String text = en
+                    ? "The detail form is the best way to tell us category, size, plating, stones, enamel and budget for each piece: " + link
+                    : "请先打开定制细节问卷，按每一件填写品类、尺寸、电镀、镶石、珐琅和预算：" + link
+                    + "。设计师会尽可能采纳，但不能保证每一项都原样实现。";
+            return new ConciergeReply(text, false, collected);
+        }
 
         if (turn <= 1) {
             String text = en
-                    ? "Thank you! Could you tell me more about the style you want (classic, minimalist, vintage, etc.) and the metal preference (gold, silver, platinum)?"
-                    : "谢谢！能再介绍一下您想要的风格（如简约、复古、奢华等）和材质偏好（如 K 金、银、铂金）吗？";
+                    ? "Thank you, the form is in. Could you describe the style you want, such as classic, minimal or vintage, and any occasion?"
+                    : "问卷收到了。能再讲讲想要的风格吗？例如简约、复古、华丽，以及佩戴场合。金属、尺寸和工艺以问卷为准，这里不用重复。";
             return new ConciergeReply(text, false, collected);
         }
         if (turn == 2) {
             String text = en
-                    ? "Got it. For each piece, please share the jewelry type (ring, necklace, earrings, brooch) and sizes — finger size is required for rings; chain length is optional for necklaces."
-                    : "好的。请说明每件珠宝的类型（戒指/项链/耳钉/胸针等）及尺寸：戒指需手寸，项链链长可填可不填，耳钉胸针一般无需尺寸。";
-            return new ConciergeReply(text, false, collected);
-        }
-        if (turn == 3) {
-            String text = en
-                    ? "Any engraving text, wearing occasion, or budget/timeline we should note?"
-                    : "是否有字印内容、佩戴场景或预算/工期方面的要求？";
+                    ? "Any engraving, reference photos, or something the designer should know? We will follow your brief where material, craft and budget allow."
+                    : "还有字印、参考图，或特别希望设计师知道的事吗？设计师会尽可能采纳问卷里的选择，但不能保证每一项都原样实现。";
             return new ConciergeReply(text, false, collected);
         }
         if (turn < MIN_INTAKE_TURNS_BEFORE_COMPLETE + 1) {
@@ -316,24 +320,33 @@ public class OrderAiConciergeService {
         String service = order.getServiceType() != null ? order.getServiceType().getDescription() : "";
         return """
 你是珠宝定制品牌 duxury 的订单群聊 AI 客服。客户已支付定金并进入专属群聊，设计师稍后会进群。
-你的任务：友好问候，逐项了解定制需求（风格、材质、场景、字印、每件类型与手寸/链长、预算工期等），一次只问 1～2 个重点，语气专业温暖。
+金属已在支付定金时选择，不要再问金属。定制细节问卷链接：%s
+问卷状态：%s
+你的任务：请客户先完成问卷；问卷完成后，再了解风格、佩戴场景、参考图和字印。一次只问 1～2 个重点，语气专业温暖。
 已有下单信息：
 - 服务类型：%s
+- 金属：%s
 - 客户已填基础需求：%s
 - 单件概况：%s
 - 已收集草稿：%s
 %s
 规则：
-- 多轮对话：每次都要根据客户最新发言回应，并视情况追问；不要在第一轮就结束采集。
-- intake_complete 仅在风格/材质/尺寸等关键信息已基本齐全、且客户没有明显未答问题时才设为 true。
-- intake_complete 为 true 时 reply 简短说明将转达设计师，但不要暗示对话结束（客户仍可继续发言）。
+- 足金、足银不能镶嵌宝石，不要建议这两种材质镶石。
+- 问卷未提交时，提醒打开上面的链接，不要改用聊天逐项追问圈号、链子、电镀、镶石、珐琅和预算。
+- 问卷已提交后，不要重复追问这些项目。更高预算可以支持更复杂、更精细、更考究的设计与工艺。
+- 说明设计师会参考客户需求并尽可能采纳，但不保证每一项都原样实现。
+- 多轮对话：每次都要根据客户最新发言回应；不要在第一轮就结束采集。
+- intake_complete 仅在问卷已提交，且风格等补充信息已基本齐全时才设为 true。
+- intake_complete 为 true 时 reply 简短说明将转达设计师，但不要暗示对话结束。
 在回复末尾附带 JSON 代码块（仅此一处）：
 ```json
 {"reply":"给客户看的文字（勿重复 JSON）","intake_complete":true或false,"collected":{"stylePreference":"","materialPreference":"","occasion":"","engraving":"","budgetOrTimeline":"","sizeNotes":"","pieces":[{"pieceName":"","jewelryType":"","size":""}],"otherNotes":"","summary":"一段话汇总"}}
 ```
-戒指必须确认手寸；项链可确认链长；情侣款/多件需分别说明。
 """.formatted(
+                briefLink(order.getId()),
+                briefSubmitted(order.getId()) ? "已提交" : "未提交",
                 service,
+                nullToEmpty(order.getMaterialInfo()),
                 nullToEmpty(order.getBasicRequirements()),
                 pieces,
                 nullToEmpty(intake.getCollectedJson()),
@@ -419,14 +432,18 @@ public class OrderAiConciergeService {
     private String buildWelcomeMessage(Order order, String lang) {
         boolean en = lang != null && lang.toLowerCase(Locale.ROOT).startsWith("en");
         String name = order.getCustomerName() != null ? order.getCustomerName() : (en ? "there" : "您好");
+        String link = "order-brief.html?orderId=" + order.getId();
         if (en) {
-            return "Hi " + name + "! I'm the duxury AI assistant — your order is confirmed and this chat is now open.\n\n"
-                    + "Before your designer joins, I'd love to capture your ideas: style, metal, sizing for each piece (finger size for rings), engraving, and any timeline.\n\n"
-                    + "What vision do you have in mind for this piece?";
+            return "Hi " + name + "! I'm the duxury AI assistant. Your deposit is in, and this chat is open.\n\n"
+                    + "Please fill in the details form for each piece — category, size, plating, stones, enamel, and your budget:\n"
+                    + link + "\n\n"
+                    + "Your designer will use these choices wherever they can. Material, craft and budget may mean not every request can be followed exactly. "
+                    + "After the form, you can still describe the style or send reference photos here.";
         }
-        return name + "，您好！我是 duxury AI 客服助手，您的订单已确认，专属群聊已开启。\n\n"
-                + "在设计师进群前，我先帮您整理定制信息：款式风格、材质、每件珠宝的类型与手寸/链长（戒指需手寸）、字印与工期等。\n\n"
-                + "请先简单说说您心目中的这件/这批珠宝吧？";
+        return name + "，您好！我是 duxury 的 AI 客服。定金已收到，这是您的专属群聊。\n\n"
+                + "请先填写定制细节问卷。每一件都需要选择品类，并按品类填写圈号、链子或圈口，以及电镀、镶石、珐琅和预算：\n"
+                + link + "\n\n"
+                + "设计师会参考您的需求并尽可能采纳，但不能保证每一项都原样实现。填完后也可以在这里继续说风格，或发送参考图。";
     }
 
     private String buildClosingMessage(String lang) {
@@ -437,6 +454,16 @@ public class OrderAiConciergeService {
         }
         return "感谢您提供的信息！需求已整理并转达设计师，设计师会尽快进群。"
                 + "在此之前您仍可继续留言，我会帮您记录并回复。";
+    }
+
+    private boolean briefSubmitted(Long orderId) {
+        return briefRepository.findByOrderId(orderId)
+                .map(brief -> brief.getSubmittedAt() != null)
+                .orElse(false);
+    }
+
+    private static String briefLink(Long orderId) {
+        return "order-brief.html?orderId=" + orderId;
     }
 
     private String describePieces(Long orderId) {

@@ -11,6 +11,7 @@ import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.repository.OrderAccessLinkRepository;
 import com.jewelry.system.repository.OrderCustomerViewLinkRepository;
 import com.jewelry.system.repository.OrderRepository;
+import com.jewelry.system.repository.QuotationRepository;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.PortalCustomerAccountRepository;
@@ -59,6 +60,7 @@ public class PortalCustomerService {
     private final OrderCommandService orderCommandService;
     private final OrderEventCardService orderEventCardService;
     private final CustomerQuotationFlowService customerQuotationFlowService;
+    private final QuotationRepository quotationRepository;
 
     @Transactional
     public PortalCustomerLoginResponse register(PortalCustomerRegisterRequest req) {
@@ -177,6 +179,19 @@ public class PortalCustomerService {
                 .map(b -> {
                     Order o = orderRepository.findById(b.getOrderId())
                             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+                    CustomerOrderPublicDto summary = customerOrderViewService.buildPublicProgressDto(o);
+                    java.util.List<String> designImages = summary.getPieces() == null ? java.util.List.of()
+                            : summary.getPieces().stream()
+                            .flatMap(p -> (p.getDesignImages() != null ? p.getDesignImages() : java.util.List.<String>of()).stream())
+                            .toList();
+                    java.util.List<String> modelImages = summary.getPieces() == null ? java.util.List.of()
+                            : summary.getPieces().stream()
+                            .flatMap(p -> (p.getModelEffectImages() != null ? p.getModelEffectImages() : java.util.List.<String>of()).stream())
+                            .toList();
+                    java.util.List<String> referenceImages = summary.getPieces() == null ? java.util.List.of()
+                            : summary.getPieces().stream()
+                            .flatMap(p -> (p.getReferenceImages() != null ? p.getReferenceImages() : java.util.List.<String>of()).stream())
+                            .toList();
                     return PortalCustomerOrderListItemDto.builder()
                             .orderId(o.getId())
                             .orderNumber(o.getOrderNumber())
@@ -184,6 +199,13 @@ public class PortalCustomerService {
                             .currentStatus(o.getStatus().name())
                             .currentStatusLabel(o.getStatus().getDescription())
                             .createdAt(o.getCreatedAt() != null ? ISO.format(o.getCreatedAt()) : null)
+                            .designImages(designImages)
+                            .modelEffectImages(modelImages)
+                            .referenceImages(referenceImages)
+                            .designApproved(orderPieceService.allDesignConfirmed(o.getId()))
+                            .modelApproved(orderPieceService.allModelConfirmed(o.getId()))
+                            .canPublishToStorefront(storefrontService.canPublish(accountId, o.getId()))
+                            .salePrice(o.getSalePrice())
                             .build();
                 })
                 .toList();
@@ -246,6 +268,8 @@ public class PortalCustomerService {
             di.setCustomerApproved(true);
             di.setApprovalTime(LocalDateTime.now());
             di.setApprovalNotes("客户已确认设计稿（" + piece.getName() + "）");
+            di.setLastCustomerRejectReason(null);
+            di.setLastCustomerRejectAt(null);
             designInfoRepository.save(di);
             orderPieceService.markDesignConfirmed(orderId, pieceId);
             String title = "确认设计 · " + piece.getName();
@@ -298,19 +322,68 @@ public class PortalCustomerService {
                 pieceId, title);
         if (type == OrderEventType.DESIGN_REJECT) {
             orderPieceService.resetDesignConfirmation(orderId, pieceId);
-            designInfoRepository.findByPieceId(pieceId).ifPresent(di -> {
-                di.setCustomerApproved(false);
-                designInfoRepository.save(di);
+            DesignInfo di = designInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
+                DesignInfo d = new DesignInfo();
+                d.setOrderId(orderId);
+                d.setPieceId(pieceId);
+                d.setCustomerApproved(false);
+                return d;
             });
+            di.setCustomerApproved(false);
+            di.setApprovalTime(null);
+            String trimmed = reason != null ? reason.trim() : "";
+            di.setLastCustomerRejectReason(trimmed.isEmpty() ? null : trimmed);
+            di.setLastCustomerRejectAt(LocalDateTime.now());
+            designInfoRepository.save(di);
         } else {
             orderPieceService.resetModelConfirmation(orderId, pieceId);
-            modelingInfoRepository.findByPieceId(pieceId).ifPresent(mi -> {
-                mi.setCustomerApproved(false);
-                mi.setLastCustomerRejectReason(reason != null ? reason.trim() : null);
-                mi.setLastCustomerRejectAt(java.time.LocalDateTime.now());
-                modelingInfoRepository.save(mi);
+            ModelingInfo mi = modelingInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
+                ModelingInfo created = new ModelingInfo();
+                created.setOrderId(orderId);
+                created.setPieceId(pieceId);
+                created.setCustomerApproved(false);
+                return created;
             });
+            mi.setCustomerApproved(false);
+            String trimmed = reason != null ? reason.trim() : "";
+            mi.setLastCustomerRejectReason(trimmed.isEmpty() ? null : trimmed);
+            mi.setLastCustomerRejectAt(LocalDateTime.now());
+            modelingInfoRepository.save(mi);
         }
+    }
+
+    @Transactional
+    public void submitDesignOptions(long orderId, CustomerDesignOptionsRequest req) {
+        Long accountId = requireBoundAccount(orderId);
+        if (!orderPieceService.allDesignConfirmed(orderId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先确认全部设计稿");
+        }
+        if (req == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择生产选项");
+        }
+        Quotation quotation = quotationRepository.findByOrderId(orderId).orElseGet(() -> {
+            Quotation created = new Quotation();
+            created.setOrderId(orderId);
+            return created;
+        });
+        if (quotation.getDesignOptionsAt() != null) {
+            return;
+        }
+        quotation.setHasDesignCopyright(Boolean.TRUE.equals(req.getDesignBuyout()));
+        quotation.setHasCopyrightCertificate(Boolean.TRUE.equals(req.getCopyrightCertificate()));
+        quotation.setConfidential(Boolean.TRUE.equals(req.getConfidential()));
+        quotation.setDesignOptionsAt(LocalDateTime.now());
+        quotationRepository.save(quotation);
+        String content = "买断设计：" + yesNo(req.getDesignBuyout())
+                + "；版权证书：" + yesNo(req.getCopyrightCertificate())
+                + "；保密不宣传：" + yesNo(req.getConfidential());
+        orderEventService.record(orderId, OrderEventType.DESIGN_OPTIONS_FILLED,
+                AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
+                "已确认生产选项", content, null, null);
+    }
+
+    private static String yesNo(Boolean value) {
+        return Boolean.TRUE.equals(value) ? "是" : "否";
     }
 
     @Transactional
@@ -366,7 +439,7 @@ public class PortalCustomerService {
         return orderEventService.listByOrder(orderId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public OrderShipmentDto getOrderShipment(long orderId) {
         requireBoundAccount(orderId);
         return shipmentService.getShipmentForCustomer(orderId);
@@ -388,7 +461,7 @@ public class PortalCustomerService {
         if (order.getStatus() != OrderStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请在生产完成后再填写收货信息");
         }
-        if (shipmentService.getShipmentForCustomer(orderId) != null) {
+        if (shipmentService.hasShipment(orderId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "订单已发货，不能再修改收货信息");
         }
         if (req == null) {

@@ -139,6 +139,8 @@ export interface OrderBaseInfo {
   shippingCountry?: string;
   shippingAddress?: string;
   shippingPostalCode?: string;
+  serviceType?: string;
+  designerAssistPaid?: boolean;
   notes?: string;             // 备注
 }
 
@@ -154,6 +156,7 @@ export interface OrderDesignInfo {
   materialType?: MaterialType; // 材质类型
   materialDetail?: string;    // 材质详情
   handSize?: string;          // 手寸/链长
+  plating?: string;           // 电镀
   processInfo?: ProcessInfo[]; // 工艺信息
   stoneInfo?: StoneInfo[];    // 石料信息
   designImages?: string[];    // 设计图URL列表
@@ -163,6 +166,9 @@ export interface OrderDesignInfo {
   designPassedTime?: string;  // 设计通过时间
   createdAt: string;
   updatedAt: string;
+  /** 客户驳回该件设计稿的原话（待修改时由后端填充） */
+  lastCustomerDesignRejectReason?: string;
+  lastCustomerDesignRejectTime?: string;
 }
 
 // 订单建模信息
@@ -268,6 +274,7 @@ export interface OrderQuotationInfo {
   otherCost: number;          // 其他费用
   totalCost: number;          // 总费用
   quotationNotes?: string;    // 报价备注
+  finalized?: boolean;        // 最终尾款已确定并推送给客户
   createdAt: string;
   updatedAt: string;
 }
@@ -304,8 +311,27 @@ export interface OrderShipmentDto {
     statusCode?: string | null;
   }>;
   queryUrl?: string | null;
+  sandbox?: boolean | null;
+  trackingNote?: string | null;
+  lastMileName?: string | null;
+  lastMileTracking?: string | null;
+  lastMileSite?: string | null;
+  lastMilePhone?: string | null;
   shippedAt?: string | null;
   deliveredAt?: string | null;
+}
+
+export interface YunexpressQuote {
+  productCode: string;
+  productName?: string | null;
+  currency?: string | null;
+  amount?: string | null;
+  intervalDay?: string | null;
+}
+
+export interface YunexpressDocument {
+  url: string;
+  labelType?: string | null;
 }
 
 /** 订单单件（设计/建模按件） */
@@ -317,9 +343,22 @@ export interface OrderPieceInfo {
   jewelryType?: string;
   designConfirmed?: boolean;
   modelConfirmed?: boolean;
+  /** 该单件已喷蜡同步，工艺验证通过 */
+  processVerified?: boolean;
   referenceImages?: string[];
   design?: OrderDesignInfo;
   model?: OrderModelInfo;
+}
+
+/** 客户支付定金后填写的定制细节 */
+export interface CustomerBriefInfo {
+  submitted?: boolean;
+  metalCode?: string | null;
+  metalLabel?: string | null;
+  inlayAllowed?: boolean;
+  budgetBand?: string | null;
+  budgetLabel?: string | null;
+  pieces?: Array<{ pieceId: number; summary?: string | null }>;
 }
 
 // 完整订单信息
@@ -328,8 +367,13 @@ export interface OrderInfo {
   designInfo?: OrderDesignInfo;
   modelInfo?: OrderModelInfo;
   pieces?: OrderPieceInfo[];
+  /** 工作台：有单件被客户驳回，待设计师/建模师修改 */
+  pieceCustomerRevisionPending?: boolean;
   reviewInfo?: OrderReviewInfo;
   quotationInfo?: OrderQuotationInfo;
+  customerBrief?: CustomerBriefInfo | null;
+  /** 跟单已发货列表附带的当前物流 */
+  shipment?: OrderShipmentDto | null;
   productionInfo?: OrderProductionInfo;
   currentStatus: OrderStatus;
   assignedPreSalesId?: number; // 售前客服ID
@@ -360,6 +404,7 @@ export interface StoneInfo {
   shape: StoneShape;           // 形状
   size: string;                // 尺寸
   quantity: number;            // 数量
+  weight?: number | null;      // 重量
   price: number;               // 价格
   notes?: string;              // 备注
 }
@@ -455,6 +500,7 @@ export interface OrderDesignUpdateRequest {
   materialType?: MaterialType;
   materialDetail?: string;
   handSize?: string;
+  plating?: string;
   designerId?: number;
   processInfo?: ProcessInfo[];
   stoneInfo?: StoneInfo[];
@@ -526,6 +572,7 @@ export interface OrderModelVersion {
 
 /** 建模师驳回给设计师 */
 export interface ModelerRejectToDesignerRequest {
+  pieceId: number;
   message: string;
   attachmentFileIds?: number[];
 }

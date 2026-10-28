@@ -1,4 +1,4 @@
-import api from './api';
+import api, { quietRequest } from './api';
 import { downloadWithAuth, downloadPostWithAuth } from '@/utils/download';
 import {
   OrderInfo,
@@ -31,6 +31,8 @@ import {
   ProductionSyncBoard,
   ProductionPoolPhoto,
   OrderShipmentDto,
+  YunexpressQuote,
+  YunexpressDocument,
   OrderPieceInfo,
   OrderDesignVersion,
   OrderModelVersion,
@@ -39,9 +41,9 @@ import {
 // 订单服务
 export const orderService = {
   // 获取订单列表
-  async getOrders(params?: OrderQueryParams): Promise<PaginatedResponse<OrderInfo>> {
+  async getOrders(params?: OrderQueryParams, quiet = false): Promise<PaginatedResponse<OrderInfo>> {
     try {
-      const response = await api.get<PaginatedResponse<OrderInfo>>('/orders', { params });
+      const response = await api.get<PaginatedResponse<OrderInfo>>('/orders', quiet ? quietRequest({ params }) : { params });
       return response;
     } catch (error) {
       console.error('获取订单列表失败:', error);
@@ -50,22 +52,25 @@ export const orderService = {
   },
 
   /** 设计师工作台 */
-  async workbenchDesignerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/designer/todo', { params: { page, size, isB2b } });
+  async workbenchDesignerTodo(page: number, size: number, isB2b?: boolean, quiet = false): Promise<PaginatedResponse<OrderInfo>> {
+    const params = { page, size, isB2b };
+    return api.get('/orders/workbench/designer/todo', quiet ? quietRequest({ params }) : { params });
   },
   async workbenchDesignerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/designer/done', { params: { page, size, isB2b } });
   },
   /** 建模师工作台 */
-  async workbenchModelerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/modeler/todo', { params: { page, size, isB2b } });
+  async workbenchModelerTodo(page: number, size: number, isB2b?: boolean, quiet = false): Promise<PaginatedResponse<OrderInfo>> {
+    const params = { page, size, isB2b };
+    return api.get('/orders/workbench/modeler/todo', quiet ? quietRequest({ params }) : { params });
   },
   async workbenchModelerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/modeler/done', { params: { page, size, isB2b } });
   },
   /** 跟单员工作台 */
-  async workbenchTrackerTodo(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
-    return api.get('/orders/workbench/tracker/todo', { params: { page, size, isB2b } });
+  async workbenchTrackerTodo(page: number, size: number, isB2b?: boolean, quiet = false): Promise<PaginatedResponse<OrderInfo>> {
+    const params = { page, size, isB2b };
+    return api.get('/orders/workbench/tracker/todo', quiet ? quietRequest({ params }) : { params });
   },
   async workbenchTrackerDone(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/tracker/done', { params: { page, size, isB2b } });
@@ -73,12 +78,22 @@ export const orderService = {
   async workbenchTrackerProducing(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/tracker/producing', { params: { page, size, isB2b } });
   },
+  async workbenchTrackerBalanceTodo(page: number, size: number, isB2b?: boolean, quiet = false): Promise<PaginatedResponse<OrderInfo>> {
+    const params = { page, size, isB2b };
+    return api.get('/orders/workbench/tracker/balance-todo', quiet ? quietRequest({ params }) : { params });
+  },
+  async quoteOrderBalance(orderId: number, amount: number): Promise<OrderInfo> {
+    return api.post(`/orders/${orderId}/balance-quote`, { amount });
+  },
   async workbenchTrackerToShip(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
     return api.get('/orders/workbench/tracker/to-ship', { params: { page, size, isB2b } });
   },
+  async workbenchTrackerShipped(page: number, size: number, isB2b?: boolean): Promise<PaginatedResponse<OrderInfo>> {
+    return api.get('/orders/workbench/tracker/shipped', { params: { page, size, isB2b } });
+  },
 
   async listProductionFollowLogs(orderId: number): Promise<OrderProductionFollowLogDto[]> {
-    return api.get(`/orders/${orderId}/production-follow-logs`);
+    return api.get(`/orders/${orderId}/production-follow-logs`, quietRequest());
   },
 
   async addProductionFollowLog(orderId: number, body: OrderProductionFollowCreateRequest): Promise<OrderProductionFollowLogDto> {
@@ -117,10 +132,54 @@ export const orderService = {
     return api.post(`/orders/${orderId}/shipment`, body);
   },
 
+  async shipByYunexpress(orderId: number, body?: { productCode?: string; weightKg?: number }): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/yunexpress`, body || {});
+  },
+
+  async quoteYunexpress(orderId: number, weightKg?: number): Promise<YunexpressQuote[]> {
+    return api.post(`/orders/${orderId}/shipment/yunexpress/quote`, { weightKg });
+  },
+
+  async cancelYunexpress(orderId: number): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/yunexpress/cancel`, {});
+  },
+
+  async holdYunexpress(orderId: number): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/yunexpress/hold`, {});
+  },
+
+  async modifyYunexpressWeight(orderId: number, weightKg: number): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/yunexpress/weight`, { weightKg });
+  },
+
+  async yunexpressLabel(orderId: number): Promise<YunexpressDocument> {
+    return api.get(`/orders/${orderId}/shipment/yunexpress/label`);
+  },
+
+  async yunexpressShippingDocument(orderId: number): Promise<YunexpressDocument> {
+    return api.get(`/orders/${orderId}/shipment/yunexpress/shipping-document`);
+  },
+
+  async yunexpressPod(orderId: number): Promise<YunexpressDocument> {
+    return api.get(`/orders/${orderId}/shipment/yunexpress/pod`);
+  },
+
+  async correctShipment(orderId: number, body: { trackingNumber: string; carrierCode?: number; carrierName?: string }): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/correct`, body);
+  },
+
+  async reshipOrder(orderId: number, body: { trackingNumber: string; carrierCode?: number; carrierName?: string }): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/reship`, body);
+  },
+
+  async reshipByYunexpress(orderId: number, body?: { productCode?: string; weightKg?: number }): Promise<OrderShipmentDto> {
+    return api.post(`/orders/${orderId}/shipment/reship/yunexpress`, body || {});
+  },
+
   // 查询订单物流（员工）
   async getShipment(orderId: number): Promise<OrderShipmentDto | null> {
     try {
-      const response = await api.get<OrderShipmentDto | null>(`/orders/${orderId}/shipment`);
+      const response = await api.get<OrderShipmentDto | null>(`/orders/${orderId}/shipment`, quietRequest());
       return response;
     } catch (error) {
       console.error('获取物流信息失败:', error);
@@ -197,6 +256,10 @@ export const orderService = {
   },
   
   // 更新订单设计信息
+  async updatePieceStones(orderId: number, pieceId: number, stoneInfo: unknown): Promise<OrderInfo> {
+    return api.put(`/orders/${orderId}/pieces/${pieceId}/stones`, { stoneInfo });
+  },
+
   async updateOrderDesign(orderId: number, designData: OrderDesignUpdateRequest): Promise<OrderInfo> {
     try {
       const response = await api.put<OrderInfo>(`/orders/${orderId}/design`, designData);
@@ -255,7 +318,7 @@ export const orderService = {
   },
 
   async listModelVersions(orderId: number, pieceId: number): Promise<OrderModelVersion[]> {
-    return api.get(`/orders/${orderId}/pieces/${pieceId}/model-versions`);
+    return api.get(`/orders/${orderId}/pieces/${pieceId}/model-versions`, quietRequest());
   },
 
   async getModelVersion(orderId: number, pieceId: number, versionId: number): Promise<OrderModelVersion> {
@@ -351,9 +414,8 @@ export const orderService = {
     return api.post<OrderInfo>(`/orders/${orderId}/modeler/reject-to-designer`, body);
   },
 
-  /** 占位接口：后端返回 501 直至工作流对齐 */
-  async modelerRejectToCustomer(orderId: number): Promise<void> {
-    await api.post(`/orders/${orderId}/modeler/reject-to-customer`);
+  async modelerRejectToCustomer(orderId: number, body?: ModelerRejectToDesignerRequest): Promise<OrderInfo> {
+    return api.post<OrderInfo>(`/orders/${orderId}/modeler/reject-to-customer`, body ?? {});
   },
 
   // 上传建模文件
@@ -395,7 +457,7 @@ export const orderService = {
   async getOrderFiles(orderId: number, fileType?: string): Promise<FileInfo[]> {
     try {
       const params = fileType ? { fileType } : {};
-      const response = await api.get<FileInfo[]>(`/orders/${orderId}/files`, { params });
+      const response = await api.get<FileInfo[]>(`/orders/${orderId}/files`, quietRequest({ params }));
       return response;
     } catch (error) {
       console.error('获取文件列表失败:', error);
@@ -615,9 +677,9 @@ export const orderService = {
   },
   
   // 获取工艺配置
-  async getProcessConfig(): Promise<ProcessInfo[]> {
+  async getProcessConfig(quiet = false): Promise<ProcessInfo[]> {
     try {
-      const response = await api.get<ProcessInfo[]>('/orders/process-config');
+      const response = await api.get<ProcessInfo[]>('/orders/process-config', quiet ? quietRequest() : undefined);
       return response;
     } catch (error) {
       console.error('获取工艺配置失败:', error);
@@ -637,9 +699,9 @@ export const orderService = {
   },
   
   // 获取材质配置
-  async getMaterialConfig(): Promise<{ type: string; name: string; priceFormula: string }[]> {
+  async getMaterialConfig(quiet = false): Promise<{ type: string; name: string; priceFormula: string }[]> {
     try {
-      const response = await api.get('/orders/material-config');
+      const response = await api.get('/orders/material-config', quiet ? quietRequest() : undefined);
       return response;
     } catch (error) {
       console.error('获取材质配置失败:', error);

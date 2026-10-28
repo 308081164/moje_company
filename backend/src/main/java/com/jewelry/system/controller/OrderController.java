@@ -103,6 +103,14 @@ public class OrderController {
         return orderQueryService.pageTrackerTodo(pageable, uid, isB2b);
     }
 
+    @GetMapping("/workbench/tracker/balance-todo")
+    @Operation(summary = "跟单员工作台-尾款报价待办（建模已确认、尚未推送尾款）")
+    public Page<OrderInfoDto> trackerBalanceTodo(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
+        Long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerBalanceTodo(pageable, uid, isB2b);
+    }
+
     @GetMapping("/workbench/tracker/done")
     @Operation(summary = "跟单员工作台-已完成（仅已关闭订单）")
     public Page<OrderInfoDto> trackerDone(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
@@ -127,8 +135,16 @@ public class OrderController {
         return orderQueryService.pageTrackerAwaitingShipment(pageable, uid, isB2b);
     }
 
+    @GetMapping("/workbench/tracker/shipped")
+    @Operation(summary = "跟单员工作台-已发货，可改单号或重新发货")
+    public Page<OrderInfoDto> trackerShipped(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
+        Long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        return orderQueryService.pageTrackerShipped(pageable, uid, isB2b);
+    }
+
     @GetMapping("/{id:\\d+}/production-follow-logs")
-    @Operation(summary = "生产中跟单过程记录列表")
+    @Operation(summary = "生产中跟单过程记录列表（已登录员工可查看）")
     public List<OrderProductionFollowLogDto> listProductionFollowLogs(@PathVariable long id) {
         return orderProductionFollowService.list(id);
     }
@@ -152,6 +168,80 @@ public class OrderController {
     @Operation(summary = "发货（跟单员录入快递单号）")
     public OrderShipmentDto ship(@PathVariable long id, @RequestBody ShipOrderRequest body) {
         return shipmentService.ship(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/yunexpress")
+    @Operation(summary = "云途快捷发货（按订单收件信息向沙盒创建运单）")
+    public OrderShipmentDto shipByYunexpress(@PathVariable long id,
+                                            @RequestBody(required = false) YunexpressActionRequest body) {
+        String product = body == null ? null : body.getProductCode();
+        Double weight = body == null ? null : body.getWeightKg();
+        return shipmentService.shipByYunexpress(id, product, weight);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/yunexpress/quote")
+    @Operation(summary = "云途运费试算")
+    public List<YunexpressQuoteDto> quoteYunexpress(@PathVariable long id,
+                                                    @RequestBody(required = false) YunexpressActionRequest body) {
+        return shipmentService.quoteYunexpress(id, body == null ? null : body.getWeightKg());
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/yunexpress/cancel")
+    @Operation(summary = "撤销云途运单")
+    public OrderShipmentDto cancelYunexpress(@PathVariable long id) {
+        return shipmentService.cancelYunexpress(id);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/yunexpress/hold")
+    @Operation(summary = "拦截云途运单")
+    public OrderShipmentDto holdYunexpress(@PathVariable long id,
+                                           @RequestBody(required = false) YunexpressActionRequest body) {
+        return shipmentService.holdYunexpress(id, body == null ? null : body.getRemark());
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/yunexpress/weight")
+    @Operation(summary = "修改云途预报重量")
+    public OrderShipmentDto modifyYunexpressWeight(@PathVariable long id, @RequestBody YunexpressActionRequest body) {
+        return shipmentService.modifyYunexpressWeight(id, body == null ? null : body.getWeightKg());
+    }
+
+    @GetMapping("/{id:\\d+}/shipment/yunexpress/label")
+    @Operation(summary = "获取云途面单")
+    public YunexpressDocumentDto yunexpressLabel(@PathVariable long id) {
+        return shipmentService.yunexpressLabel(id);
+    }
+
+    @GetMapping("/{id:\\d+}/shipment/yunexpress/shipping-document")
+    @Operation(summary = "获取云途发货证明")
+    public YunexpressDocumentDto yunexpressShippingDocument(@PathVariable long id) {
+        return shipmentService.yunexpressShippingDocument(id);
+    }
+
+    @GetMapping("/{id:\\d+}/shipment/yunexpress/pod")
+    @Operation(summary = "获取云途签收证明")
+    public YunexpressDocumentDto yunexpressPod(@PathVariable long id) {
+        return shipmentService.yunexpressPod(id);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/correct")
+    @Operation(summary = "更正已发货订单的物流单号或承运商")
+    public OrderShipmentDto correctShipment(@PathVariable long id, @RequestBody ShipOrderRequest body) {
+        return shipmentService.correctTracking(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/reship")
+    @Operation(summary = "已发货订单重新发货（新包裹、新单号）")
+    public OrderShipmentDto reship(@PathVariable long id, @RequestBody ShipOrderRequest body) {
+        return shipmentService.reship(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/shipment/reship/yunexpress")
+    @Operation(summary = "云途重新发货（新运单成为当前有效单号）")
+    public OrderShipmentDto reshipByYunexpress(@PathVariable long id,
+                                              @RequestBody(required = false) YunexpressActionRequest body) {
+        String product = body == null ? null : body.getProductCode();
+        Double weight = body == null ? null : body.getWeightKg();
+        return shipmentService.reshipByYunexpress(id, product, weight);
     }
 
     @GetMapping("/{id:\\d+}/shipment")
@@ -225,6 +315,14 @@ public class OrderController {
     @Operation(summary = "批量删除订单")
     public void deleteBatch(@Valid @RequestBody OrderBatchDeleteRequest body) {
         orderCommandService.deleteBatch(body.getOrderIds());
+    }
+
+    @PutMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/stones")
+    @Operation(summary = "设计师填写、建模师可改的单件石料")
+    public OrderInfoDto updatePieceStones(@PathVariable long id, @PathVariable long pieceId,
+                                          @RequestBody java.util.Map<String, Object> body) {
+        orderCommandService.updatePieceStones(id, pieceId, body.get("stoneInfo"));
+        return orderQueryService.getOrder(id);
     }
 
     @GetMapping("/{id:\\d+}/pieces")
@@ -340,6 +438,12 @@ public class OrderController {
     @Operation(summary = "更新工艺评审")
     public OrderInfoDto updateReview(@PathVariable long id, @RequestBody OrderReviewUpdateRequest body) {
         return orderCommandService.updateReview(id, body);
+    }
+
+    @PostMapping("/{id:\\d+}/balance-quote")
+    @Operation(summary = "跟单员在客户确认全部建模稿后录入最终尾款金额并推送给客户")
+    public OrderInfoDto quoteBalance(@PathVariable long id, @RequestBody java.util.Map<String, Object> body) {
+        return orderCommandService.quoteBalance(id, body != null ? body.get("amount") : null);
     }
 
     @PutMapping("/{id:\\d+}/quotation")

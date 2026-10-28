@@ -21,8 +21,14 @@ public class OrderInfoDto {
     private OrderModelBlockDto modelInfo;
     /** 订单下各单件（含按件设计/建模块） */
     private java.util.List<OrderPieceDto> pieces;
+    /** 工作台列表：有单件被客户驳回且尚未再次确认 */
+    private Boolean pieceCustomerRevisionPending;
     private OrderReviewBlockDto reviewInfo;
     private OrderQuotationBlockDto quotationInfo;
+    /** 客户定金所选金属，以及下单后问卷 */
+    private CustomerBriefViewDto customerBrief;
+    /** 跟单「已发货」列表附带的当前物流；其它接口一般为 null。 */
+    private OrderShipmentDto shipment;
 
     /** 企业微信进群方式 config_id */
     private String wecomJoinConfigId;
@@ -61,5 +67,7 @@ public class OrderInfoDto {
         private String shippingCountry;
         private String shippingAddress;
         private String shippingPostalCode;
+        private String serviceType;
+        private Boolean designerAssistPaid;
     }
 }

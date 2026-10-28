@@ -10,4 +10,6 @@ public class StorefrontPublishRequest {
     private String title;
     private String description;
     private BigDecimal salePrice;
+    /** 卖家从作品图片中选定的店铺主图；为空时由系统挑选。 */
+    private String coverImageUrl;
 }

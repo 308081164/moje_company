@@ -1,0 +1,27 @@
+.yt-desk {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #d9e6e3;
+  border-radius: 12px;
+  background: #f7fbfa;
+}
+.yt-desk__title { font-weight: 600; margin-bottom: 8px; }
+.yt-desk__hint { margin: 8px 0 0; color: #667; font-size: 12px; line-height: 1.5; }
+.yt-desk__weight { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #555; margin: 8px 0; }
+.yt-desk__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.yt-desk__actions .ant-btn { min-height: 40px; }
+.yt-desk__quotes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.yt-desk__quotes label {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 8px; border-radius: 8px; background: #fff; border: 1px solid transparent;
+}
+.yt-desk__quotes label.is-on { border-color: #1f7a6b; }
+.yt-desk__quotes strong, .yt-desk__quotes em { display: block; font-style: normal; }
+.yt-desk__quotes em { color: #667; font-size: 12px; }
+.yt-desk__status { font-weight: 600; color: #1f7a6b; }
+.yt-desk__tl { list-style: none; margin: 8px 0 0; padding: 0; }
+.yt-desk__tl li { padding: 6px 0 6px 12px; border-left: 2px solid #c9a962; }
+.yt-desk__tl strong, .yt-desk__tl span { display: block; }
+.yt-desk__tl span { color: #778; font-size: 12px; }
+.yt-desk__again { margin-top: 10px; }
+.yt-desk__again summary { cursor: pointer; color: #1f7a6b; }

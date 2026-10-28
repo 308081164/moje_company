@@ -26,35 +26,49 @@ export interface TrackerReviewTodoPanelProps {
   orders: OrderInfo[];
   loading: boolean;
   onRefresh: () => void;
+  mode?: 'review' | 'balance';
 }
 
-const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders, loading, onRefresh }) => {
+const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders, loading, onRefresh, mode = 'review' }) => {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectOrderId, setRejectOrderId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quoteOrderId, setQuoteOrderId] = useState<number | null>(null);
+  const [quoteAmount, setQuoteAmount] = useState<string>('');
+  const [quoteSaving, setQuoteSaving] = useState(false);
+
+  const openQuote = (orderId: number) => {
+    setQuoteOrderId(orderId);
+    setQuoteAmount('');
+    setQuoteOpen(true);
+  };
+
+  const submitQuote = async () => {
+    if (quoteOrderId == null) return;
+    const amount = Number(quoteAmount);
+    if (!quoteAmount.trim() || !(amount > 0)) {
+      message.warning('请填写有效的尾款金额');
+      return;
+    }
+    setQuoteSaving(true);
+    try {
+      await orderService.quoteOrderBalance(quoteOrderId, amount);
+      message.success('尾款报价已推送给客户');
+      setQuoteOpen(false);
+      onRefresh();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e));
+    } finally {
+      setQuoteSaving(false);
+    }
+  };
 
   const openReject = (orderId: number) => {
     setRejectOrderId(orderId);
     setRejectReason('');
     setRejectOpen(true);
-  };
-
-  const submitPass = async (order: OrderInfo) => {
-    const id = order.baseInfo.id;
-    setSubmitting(true);
-    try {
-      await orderService.updateOrderReview(id, {
-        trackerId: order.reviewInfo?.trackerId,
-        reviewNotes: order.reviewInfo?.reviewNotes,
-      });
-      message.success('评审已通过，订单已进入生产中');
-      onRefresh();
-    } catch (e: unknown) {
-      message.error(String((e as Error)?.message || e));
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const submitReject = async () => {
@@ -83,7 +97,7 @@ const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders,
   };
 
   if (!loading && orders.length === 0) {
-    return <Card loading={loading}>暂无待工艺验证订单</Card>;
+    return <Card loading={loading}>{mode === 'balance' ? '暂无待尾款报价订单' : '暂无待工艺验证订单'}</Card>;
   }
 
   return (
@@ -109,12 +123,15 @@ const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders,
             }
             extra={
               <Space wrap>
-                <Button type="primary" onClick={() => void submitPass(order)} loading={submitting}>
-                  评审通过
-                </Button>
-                <Button danger onClick={() => openReject(id)} disabled={submitting}>
-                  评审驳回
-                </Button>
+                {mode === 'balance' ? (
+                  <Button type="primary" onClick={() => openQuote(id)} disabled={submitting || quoteSaving}>
+                    尾款报价
+                  </Button>
+                ) : (
+                  <Button danger onClick={() => openReject(id)} disabled={submitting}>
+                    评审驳回
+                  </Button>
+                )}
                 <Link to={`/orders/${id}`} target="_blank" rel="noreferrer">
                   打开订单详情
                 </Link>
@@ -122,6 +139,25 @@ const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders,
             }
           >
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <div>
+                <Text strong>单件工艺验证</Text>
+                <div style={{ marginTop: 8 }}>
+                  <Text type="secondary">
+                    喷蜡照片同步成功后，这一件自动通过。全部单件都喷蜡后，订单进入生产，不必再点评审通过。尚未喷蜡的单件仍可驳回。
+                  </Text>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {(order.pieces ?? []).length === 0 ? (
+                    <Text type="secondary">暂无单件</Text>
+                  ) : (
+                    (order.pieces ?? []).map((piece) => (
+                      <Tag key={piece.id} color={piece.processVerified ? 'success' : 'default'}>
+                        {piece.name || `单件${piece.seq}`} · {piece.processVerified ? '已通过' : '待喷蜡'}
+                      </Tag>
+                    ))
+                  )}
+                </div>
+              </div>
               <div>
                 <Text strong>设计图</Text>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
@@ -210,6 +246,25 @@ const TrackerReviewTodoPanel: React.FC<TrackerReviewTodoPanelProps> = ({ orders,
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           placeholder="例如：主石镶口尺寸与图纸不符，请建模师按新版说明修改。"
+        />
+      </Modal>
+
+      <Modal
+        title="尾款报价"
+        open={quoteOpen}
+        onCancel={() => setQuoteOpen(false)}
+        onOk={() => void submitQuote()}
+        okText="推送尾款报价"
+        okButtonProps={{ loading: quoteSaving, disabled: !quoteAmount.trim() }}
+        confirmLoading={quoteSaving}
+      >
+        <Text type="secondary">客户确认全部建模稿后，只填一个最终尾款金额（元）。提交后会推送给客户支付。</Text>
+        <Input
+          style={{ marginTop: 12 }}
+          inputMode="decimal"
+          value={quoteAmount}
+          onChange={(e) => setQuoteAmount(e.target.value)}
+          placeholder="例如 8000"
         />
       </Modal>
     </Space>

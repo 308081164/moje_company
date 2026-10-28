@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261022f">
+  <link rel="stylesheet" href="css/style.css?v=20261028e">
 </head>
 <body>
 
@@ -62,77 +62,134 @@
   </div>
 </section>
 
-<section class="section services" id="services">
+<section class="section paths" id="services">
   <div class="container">
     <div class="section__head reveal">
       <p class="section__eyebrow" data-i18n="svc.eyebrow">OUR SERVICES</p>
       <h2 class="section__title" data-i18n="svc.title">Choose Your Way</h2>
-      <p class="section__sub" data-i18n="svc.sub">A deposit unlocks your dedicated design team</p>
+      <p class="section__sub" data-i18n="svc.sub">Two clear paths — modeling from your drawings, or full design with our atelier</p>
     </div>
-    <div class="services__grid">
-      <article class="service-card reveal">
-        <div class="service-card__icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-        </div>
-        <h3 class="service-card__title" data-i18n="svc.custom.title">Bring Your Design</h3>
-        <p class="service-card__desc" data-i18n="svc.custom.desc">Submit your own design drawings and we craft it into reality.</p>
-        <div class="service-card__price">
-          <span class="service-card__amount" data-i18n="svc.custom.price">$49</span>
-          <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
-        </div>
-        <p class="service-card__note" data-i18n="svc.custom.note">Note: your drawing may not meet production standards, and the finished piece may deviate slightly from the design.</p>
+
+    <div class="paths__switch reveal" role="tablist" aria-label="Service paths">
+      <button type="button" class="paths__tab" role="tab" aria-selected="false" data-path-tab="custom">
+        <span class="paths__tab-price" data-i18n="svc.custom.price">$99</span>
+        <span class="paths__tab-label" data-i18n="svc.custom.title">Bring Your Design</span>
+      </button>
+      <button type="button" class="paths__tab is-active" role="tab" aria-selected="true" data-path-tab="designer">
+        <span class="paths__tab-price" data-i18n="svc.designer.price">$199</span>
+        <span class="paths__tab-label" data-i18n="svc.designer.title">Designer Design</span>
+      </button>
+    </div>
+
+    <div class="paths__grid">
+      <!-- Path A: Bring your design / modeling only -->
+      <article class="path-panel reveal" data-path-panel="custom">
+        <header class="path-panel__head">
+          <div class="path-panel__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+          </div>
+          <div>
+            <p class="path-panel__eyebrow" data-i18n="path.custom.tag">Modeling path</p>
+            <h3 class="path-panel__title" data-i18n="svc.custom.title">Bring Your Design</h3>
+          </div>
+          <div class="path-panel__price">
+            <span class="path-panel__amount" data-i18n="svc.custom.price">$99</span>
+            <span class="path-panel__unit" data-i18n="svc.deposit">deposit</span>
+          </div>
+        </header>
+        <p class="path-panel__desc" data-i18n="svc.custom.desc">You already have drawings. We model and produce — no designer consultation included.</p>
+        <ol class="path-flow__list">
+          <li class="path-flow__step">
+            <span class="path-flow__num">01</span>
+            <div>
+              <h4 data-i18n="path.custom.s1.title">Share drawings</h4>
+              <p data-i18n="path.custom.s1.desc">Upload references and describe materials, size and budget.</p>
+            </div>
+          </li>
+          <li class="path-flow__step path-flow__step--key">
+            <span class="path-flow__num">02</span>
+            <div>
+              <h4 data-i18n="path.custom.s2.title">Pay deposit</h4>
+              <p data-i18n="path.custom.s2.desc">$99 unlocks your order workspace — sales support, no designer seat.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">03</span>
+            <div>
+              <h4 data-i18n="path.custom.s3.title">Modeling confirm</h4>
+              <p data-i18n="path.custom.s3.desc">Review the 3D model against your drawings before production.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">04</span>
+            <div>
+              <h4 data-i18n="path.custom.s4.title">Produce &amp; deliver</h4>
+              <p data-i18n="path.custom.s4.desc">Craft, settle the balance, and receive with lifetime care.</p>
+            </div>
+          </li>
+        </ol>
+        <p class="path-panel__note" data-i18n="svc.custom.note">Note: your drawing may not meet production standards, and the finished piece may deviate slightly from the design.</p>
         <button class="btn btn--gold service-card__btn" data-service="custom" data-i18n="svc.select">Select &amp; Pay</button>
       </article>
 
-      <article class="service-card service-card--featured reveal">
-        <span class="service-card__badge" data-i18n="svc.popular">Most popular</span>
-        <div class="service-card__icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 6 0.1-4.8 3.6 1.8 5.7-4.9-3.5-4.9 3.5 1.8-5.7-4.8-3.6 6-0.1z"/></svg>
-        </div>
-        <h3 class="service-card__title" data-i18n="svc.designer.title">Designer Design</h3>
-        <p class="service-card__desc" data-i18n="svc.designer.desc">Commission our designers to create a bespoke design from your inspiration.</p>
-        <div class="service-card__price">
-          <span class="service-card__amount" data-i18n="svc.designer.price">$99</span>
-          <span class="service-card__unit" data-i18n="svc.deposit">deposit</span>
-        </div>
-        <p class="service-card__note" data-i18n="svc.designer.note">Includes one-on-one consultation, sketches and 3D preview before production.</p>
+      <!-- Path B: Designer design -->
+      <article class="path-panel path-panel--featured reveal is-active" data-path-panel="designer">
+        <span class="path-panel__badge" data-i18n="svc.popular">Most popular</span>
+        <header class="path-panel__head">
+          <div class="path-panel__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 6 0.1-4.8 3.6 1.8 5.7-4.9-3.5-4.9 3.5 1.8-5.7-4.8-3.6 6-0.1z"/></svg>
+          </div>
+          <div>
+            <p class="path-panel__eyebrow" data-i18n="path.designer.tag">Design path</p>
+            <h3 class="path-panel__title" data-i18n="svc.designer.title">Designer Design</h3>
+          </div>
+          <div class="path-panel__price">
+            <span class="path-panel__amount" data-i18n="svc.designer.price">$199</span>
+            <span class="path-panel__unit" data-i18n="svc.deposit">deposit</span>
+          </div>
+        </header>
+        <p class="path-panel__desc" data-i18n="svc.designer.desc">Start from inspiration. A designer shapes the piece with you before modeling.</p>
+        <ol class="path-flow__list">
+          <li class="path-flow__step path-flow__step--key">
+            <span class="path-flow__num">01</span>
+            <div>
+              <h4 data-i18n="path.designer.s1.title">Pay deposit</h4>
+              <p data-i18n="path.designer.s1.desc">$199 opens your workspace with a designer already on the team.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">02</span>
+            <div>
+              <h4 data-i18n="path.designer.s2.title">Consult</h4>
+              <p data-i18n="path.designer.s2.desc">One-on-one on style, stones, metal and budget.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">03</span>
+            <div>
+              <h4 data-i18n="path.designer.s3.title">Design confirm</h4>
+              <p data-i18n="path.designer.s3.desc">Review sketches and 3D proposals until you approve the look.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">04</span>
+            <div>
+              <h4 data-i18n="path.designer.s4.title">Model &amp; produce</h4>
+              <p data-i18n="path.designer.s4.desc">Modeling lock-in, then atelier production.</p>
+            </div>
+          </li>
+          <li class="path-flow__step">
+            <span class="path-flow__num">05</span>
+            <div>
+              <h4 data-i18n="path.designer.s5.title">Deliver</h4>
+              <p data-i18n="path.designer.s5.desc">Final settlement, shipping, and lifetime care.</p>
+            </div>
+          </li>
+        </ol>
         <button class="btn btn--gold service-card__btn" data-service="designer" data-i18n="svc.select">Select &amp; Pay</button>
       </article>
     </div>
     <p class="services__guarantee reveal" data-i18n="svc.guarantee">Fully refundable before production starts</p>
-  </div>
-</section>
-
-<section class="section process" id="process">
-  <div class="container">
-    <div class="section__head reveal">
-      <p class="section__eyebrow" data-i18n="process.eyebrow">PROCESS</p>
-      <h2 class="section__title" data-i18n="process.title">The Journey</h2>
-      <p class="section__sub" data-i18n="process.sub">From idea to finished piece, every step is clear</p>
-    </div>
-    <div class="process__steps">
-      <div class="step reveal">
-        <span class="step__num">01</span>
-        <h3 class="step__title" data-i18n="step1.title">Consultation</h3>
-        <p class="step__desc" data-i18n="step1.desc">One-on-one with a designer to discuss needs, style and budget.</p>
-      </div>
-      <div class="step reveal">
-        <span class="step__num">02</span>
-        <h3 class="step__title" data-i18n="step2.title">Proposal</h3>
-        <p class="step__desc" data-i18n="step2.desc">Sketches, 3D previews, material details and transparent pricing.</p>
-      </div>
-      <div class="step step--highlight reveal">
-        <span class="step__num">03</span>
-        <h3 class="step__title" data-i18n="step3.title">Deposit</h3>
-        <p class="step__desc" data-i18n="step3.desc">Pay a deposit to lock in service &mdash; your dedicated order chat opens instantly.</p>
-        <span class="step__badge" data-i18n="step3.badge">Key step</span>
-      </div>
-      <div class="step reveal">
-        <span class="step__num">04</span>
-        <h3 class="step__title" data-i18n="step4.title">Delivery</h3>
-        <p class="step__desc" data-i18n="step4.desc">Delivery and final settlement. Lifetime care keeps your jewelry timeless.</p>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -149,54 +206,12 @@
 </section>
 
 <section class="shop-spot" id="shop-spot">
-  <a class="shop-spot__inner" href="shop.html" data-i18n-aria="shopsp.aria">
+  <div class="shop-spot__inner">
     <div class="shop-spot__bg">
-      <div class="shop-wall" aria-hidden="true">
-        <div class="shop-wall__row shop-wall__row--a">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-        
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-        </div>
-        <div class="shop-wall__row shop-wall__row--b">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-        
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-        </div>
-        <div class="shop-wall__row shop-wall__row--c">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20diamond%20tennis%20bracelet%2C%20white%20gold%2C%20luxury%20jewelry%20product%20photography&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Oval%20ruby%20ring%20rose%20gold%20hand%20engraved%20band%2C%20luxury%20jewelry%20product%20photography%2C%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20sapphire%20engagement%20ring%20with%20diamond%20halo%2C%20white%20gold%2C%20product%20photography%2C%20clean%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Classic%20diamond%20stud%20earrings%20white%20gold%2C%20luxury%20jewelry%20macro%20photography%2C%20soft%20light&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20emerald%20pendant%20necklace%20on%20gold%20chain%2C%20luxury%20jewelry%2C%20dark%20elegant%20background&image_size=portrait_4_3" alt="" loading="lazy">
-          <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Custom%20pearl%20and%20gold%20drop%20earrings%2C%20luxury%20jewelry%2C%20minimal%20background&image_size=portrait_4_3" alt="" loading="lazy">
-        </div>
+      <div class="shop-wall" id="homeShopWall" aria-hidden="true">
+        <div class="shop-wall__row shop-wall__row--a" data-shop-row="a"></div>
+        <div class="shop-wall__row shop-wall__row--b" data-shop-row="b"></div>
+        <div class="shop-wall__row shop-wall__row--c" data-shop-row="c"></div>
       </div>
       <div class="shop-spot__overlay"></div>
     </div>
@@ -204,9 +219,10 @@
       <p class="section__eyebrow" data-i18n="shopsp.eyebrow">MAKER SHOP</p>
       <h2 class="shop-spot__title" data-i18n="shopsp.title">Enter the independent marketplace</h2>
       <p class="shop-spot__desc" data-i18n="shopsp.desc">Browse pieces published by our clients. We produce and ship every order.</p>
-      <span class="btn btn--gold btn--lg" data-i18n="shopsp.cta">Shop now</span>
+      <a href="shop.html" class="btn btn--gold btn--lg" data-i18n="shopsp.cta" data-i18n-aria="shopsp.aria">Shop now</a>
+      <p class="shop-spot__hint" data-i18n="shopsp.hint">Cards flip through more pieces — click any card to open details, then return to the shop.</p>
     </div>
-  </a>
+  </div>
 </section>
 
 <section class="section partner" id="partner">
@@ -332,20 +348,20 @@
     <div class="modal__divider"><span data-i18n="login.or">or</span></div>
     <div class="login-email">
       <input type="email" id="emailInput" placeholder="you@example.com" data-i18n-placeholder="login.email.ph">
-      <button class="btn btn--gold" id="emailContinue" data-i18n="login.continue">Continue</button>
+      <div class="login-code">
+        <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
+        <button type="button" class="login-code__send" id="emailContinue" data-i18n="login.send">获取验证码</button>
+      </div>
+      <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
+      <button type="button" class="btn btn--gold" id="codeConfirm" data-i18n="login.submit">登录</button>
     </div>
-    <div class="login-email" id="emailCodeStep" style="display:none">
-      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
-      <button class="btn btn--gold" id="codeConfirm" data-i18n="login.verify">Verify</button>
-    </div>
-    <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
   </div>
 </div>
 
 <!-- Checkout modal -->
 <div class="modal" id="checkoutModal" aria-hidden="true">
   <div class="modal__backdrop" data-modal-close></div>
-  <div class="modal__dialog">
+  <div class="modal__dialog modal__dialog--checkout">
     <button class="modal__close" data-modal-close aria-label="Close">&times;</button>
     <h3 class="modal__title" data-i18n="co.title">Secure Your Order</h3>
     <p class="modal__sub" data-i18n="co.sub">Pay your deposit to unlock the dedicated group chat</p>
@@ -359,32 +375,38 @@
         <span id="checkoutPrice">&mdash;</span>
       </div>
     </div>
-    <div class="checkout__requirements" id="checkoutRequirements" style="display:none">
-      <label class="checkout__label" data-i18n="co.requirements.label">Describe your requirements</label>
-      <textarea id="requirementInput" class="checkout__textarea" rows="4" data-i18n-placeholder="co.requirements.ph"></textarea>
-      <label class="checkout__label" data-i18n="co.requirements.material">Material / style (optional)</label>
-      <input type="text" id="materialInput" class="checkout__input" data-i18n-placeholder="co.requirements.material.ph">
-      <label class="checkout__label" data-i18n="co.requirements.image">Reference images (up to 5)</label>
-      <input type="file" id="referenceImageInput" accept="image/*" multiple style="display:none">
-      <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload reference images">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span class="upload-zone__text" data-i18n="co.requirements.image.upload">Click or drag images here &middot; up to 5</span>
+    <div class="checkout__grid" id="checkoutRequirements" style="display:none">
+      <div class="checkout__col">
+        <label class="checkout__label" data-i18n="co.requirements.label">Describe your requirements</label>
+        <textarea id="requirementInput" class="checkout__textarea" rows="4" data-i18n-placeholder="co.requirements.ph"></textarea>
+        <label class="checkout__label" data-i18n="co.requirements.image">Reference images (up to 5)</label>
+        <input type="file" id="referenceImageInput" accept="image/*" multiple style="display:none">
+        <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload reference images">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span class="upload-zone__text" data-i18n="co.requirements.image.upload">Click or drag images here &middot; up to 5</span>
+        </div>
+        <div class="image-preview" id="imagePreviewGrid"></div>
       </div>
-      <div class="image-preview" id="imagePreviewGrid"></div>
+      <div class="checkout__col">
+        <label class="checkout__label" data-i18n="co.metal">Metal</label>
+        <select id="metalInput" class="checkout__input"></select>
+        <p class="checkout__note" data-i18n="co.metal.note">Pure gold and fine silver cannot hold gemstones. The later form will not ask about setting stones.</p>
+        <label class="checkout__label" data-i18n="co.pieceCount">Number of jewelry pieces</label>
+        <select id="pieceCountInput" class="checkout__input" aria-describedby="pieceCountHint">
+          <option value="1" selected data-i18n="co.pieceCount.opt1">1 piece</option>
+          <option value="2" data-i18n="co.pieceCount.opt2">2 pieces</option>
+          <option value="3" data-i18n="co.pieceCount.opt3">3 pieces</option>
+          <option value="4" data-i18n="co.pieceCount.opt4">4 pieces</option>
+          <option value="5" data-i18n="co.pieceCount.opt5">5 pieces</option>
+        </select>
+        <p class="checkout__note" id="pieceCountHint" data-i18n="co.pieceCount.hint">Each piece is designed and confirmed separately (e.g. wedding set).</p>
+        <label class="checkout__label" data-i18n="co.referral">Referral code (optional)</label>
+        <input type="text" id="referralCodeInput" class="checkout__input" maxlength="16" autocomplete="off" autocapitalize="characters" data-i18n-placeholder="co.referral.ph" placeholder="Friend's code — they earn 5%">
+        <button type="button" class="btn btn--gold btn--lg checkout__pay" id="payDeposit" data-i18n="co.pay">Pay deposit</button>
+        <p class="checkout__error" id="checkoutError" hidden></p>
+        <p class="checkout__secure" data-i18n="co.secure">256-bit encrypted &middot; secure payment</p>
+      </div>
     </div>
-    <label class="checkout__label" data-i18n="co.pieceCount">Number of jewelry pieces</label>
-    <select id="pieceCountInput" class="checkout__input" aria-describedby="pieceCountHint">
-      <option value="1" selected data-i18n="co.pieceCount.opt1">1 piece</option>
-      <option value="2" data-i18n="co.pieceCount.opt2">2 pieces</option>
-      <option value="3" data-i18n="co.pieceCount.opt3">3 pieces</option>
-      <option value="4" data-i18n="co.pieceCount.opt4">4 pieces</option>
-      <option value="5" data-i18n="co.pieceCount.opt5">5 pieces</option>
-    </select>
-    <p class="checkout__secure" id="pieceCountHint" data-i18n="co.pieceCount.hint">Each piece is designed and confirmed separately (e.g. wedding set).</p>
-    <label class="checkout__label" data-i18n="co.referral">Referral code (optional)</label>
-    <input type="text" id="referralCodeInput" class="checkout__input" maxlength="16" autocapitalize="characters" data-i18n-placeholder="co.referral.ph" placeholder="Friend's code — they earn 5%">
-    <button class="btn btn--gold btn--lg checkout__pay" id="payDeposit" data-i18n="co.pay">Pay deposit</button>
-    <p class="checkout__secure" data-i18n="co.secure">256-bit encrypted &middot; secure payment</p>
     <div class="checkout__success" id="checkoutSuccess">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1DC981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       <p data-i18n="co.success">Deposit received &mdash; your group chat is ready!</p>
@@ -393,8 +415,10 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261020c"></script>
-<script src="js/api.js?v=20261019r"></script>
-<script src="js/main.js?v=20261022f"></script>
+<script src="js/i18n.js?v=20261028d"></script>
+<script src="js/jewelryType.js?v=20261020b"></script>
+<script src="js/api.js?v=20261026d"></script>
+<script src="js/main.js?v=20261028d"></script>
+<script src="js/storefront.js?v=20261028e"></script>
 </body>
 </html>

@@ -140,8 +140,24 @@ app:
     username: ${INLAY_DB_USERNAME:moje}
     password: ${INLAY_DB_PASSWORD:}
   # 国际物流：17TRACK 跟踪（未启用或查询失败时降级为「已发货（待物流更新）」）
+  # 云途开放平台：默认沙盒。appId、appSecret、sourceKey 只从环境变量读取，不要写进仓库。
   logistics:
     seventeen-track:
       enabled: ${SEVENTEEN_TRACK_ENABLED:false}
       api-key: ${SEVENTEEN_TRACK_API_KEY:}
       base-url: ${SEVENTEEN_TRACK_BASE_URL:https://api.17track.net/track/v2.4}
+    yunexpress:
+      env: ${YUNEXPRESS_ENV:sandbox}
+      app-id: ${YUNEXPRESS_APP_ID:}
+      app-secret: ${YUNEXPRESS_APP_SECRET:}
+      source-key: ${YUNEXPRESS_SOURCE_KEY:}
+      shipping-method: ${YUNEXPRESS_SHIPPING_METHOD:THPHR}
+      sandbox-base-url: ${YUNEXPRESS_SANDBOX_BASE_URL:https://openapi-sbx.yunexpress.cn}
+      production-base-url: ${YUNEXPRESS_PRODUCTION_BASE_URL:https://openapi.yunexpress.cn}
+      sender-name: ${YUNEXPRESS_SENDER_NAME:MOJE}
+      sender-phone: ${YUNEXPRESS_SENDER_PHONE:075512345678}
+      sender-country: ${YUNEXPRESS_SENDER_COUNTRY:CN}
+      sender-province: ${YUNEXPRESS_SENDER_PROVINCE:Guangdong}
+      sender-city: ${YUNEXPRESS_SENDER_CITY:Shenzhen}
+      sender-address: ${YUNEXPRESS_SENDER_ADDRESS:Nanshan Science Park}
+      sender-postal: ${YUNEXPRESS_SENDER_POSTAL:518000}

@@ -21,7 +21,9 @@ public enum OrderEventType {
     BALANCE_PAYMENT("支付尾款"),
     BALANCE_PAID("尾款已支付"),
     SHIPPING_ADDRESS_REQUEST("请完善收货信息"),
-    SHIPPING_ADDRESS_FILLED("已提交收货信息");
+    SHIPPING_ADDRESS_FILLED("已提交收货信息"),
+    DESIGN_OPTIONS_REQUEST("请确认生产选项"),
+    DESIGN_OPTIONS_FILLED("已确认生产选项");
 
     private final String description;
 

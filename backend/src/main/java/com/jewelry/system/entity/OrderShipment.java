@@ -59,6 +59,18 @@ public class OrderShipment {
     @Column(name = "last_sync_at")
     private LocalDateTime lastSyncAt;
 
+    @Transient
+    private String lastMileName;
+
+    @Transient
+    private String lastMileTracking;
+
+    @Transient
+    private String lastMileSite;
+
+    @Transient
+    private String lastMilePhone;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

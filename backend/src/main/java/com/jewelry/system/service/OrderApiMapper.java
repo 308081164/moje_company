@@ -43,6 +43,8 @@ public final class OrderApiMapper {
                 .shippingCountry(o.getShippingCountry())
                 .shippingAddress(o.getShippingAddress())
                 .shippingPostalCode(o.getShippingPostalCode())
+                .serviceType(o.getServiceType() != null ? o.getServiceType().name() : null)
+                .designerAssistPaid(Boolean.TRUE.equals(o.getDesignerAssistPaid()))
                 .build();
 
         User salesMid = o.getSalesMid();

@@ -27,7 +27,7 @@ const WorkbenchPage: React.FC = () => {
   const { user } = useAuthStore();
   const role = user?.role as UserRole | undefined;
 
-  const [tab, setTab] = useState<'todo' | 'done'>('todo');
+  const [tab, setTab] = useState<'todo' | 'balance' | 'done'>('todo');
   const [isB2b, setIsB2b] = useState<boolean | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<OrderInfo[]>([]);
@@ -61,7 +61,8 @@ const WorkbenchPage: React.FC = () => {
       return {
         todo: (p: number, s: number, b?: boolean) => orderService.workbenchTrackerTodo(p - 1, s, b),
         done: (p: number, s: number, b?: boolean) => orderService.workbenchTrackerDone(p - 1, s, b),
-        title: '跟单员工作台',
+        title: '工艺验证',
+        balance: (p: number, s: number, b?: boolean) => orderService.workbenchTrackerBalanceTodo(p - 1, s, b, true),
       };
     }
     return null;
@@ -71,7 +72,7 @@ const WorkbenchPage: React.FC = () => {
     if (!loader) return;
     setLoading(true);
     try {
-      const fn = tab === 'todo' ? loader.todo : loader.done;
+      const fn = tab === 'todo' ? loader.todo : tab === 'balance' && loader.balance ? loader.balance : loader.done;
       const res: any = await fn(page, pageSize, isB2b);
       setOrders(res?.content ?? []);
       setTotal(res?.totalElements ?? 0);
@@ -110,8 +111,11 @@ const WorkbenchPage: React.FC = () => {
         title: '状态',
         dataIndex: 'currentStatus',
         width: 130,
-        render: (v: string) => (
-          <Tag color={orderStatusColor(v)}>{orderStatusLabel(v)}</Tag>
+        render: (v: string, record) => (
+          <Space size={4} wrap>
+            <Tag color={orderStatusColor(v)}>{orderStatusLabel(v)}</Tag>
+            {record.pieceCustomerRevisionPending ? <Tag color="error">有单件待修改</Tag> : null}
+          </Space>
         ),
       },
       {
@@ -182,7 +186,7 @@ const WorkbenchPage: React.FC = () => {
         style={{ marginTop: 16 }}
         activeKey={tab}
         onChange={(k) => {
-          setTab(k as 'todo' | 'done');
+          setTab(k as 'todo' | 'balance' | 'done');
           setPage(1);
         }}
         items={[
@@ -195,6 +199,14 @@ const WorkbenchPage: React.FC = () => {
               </Space>
             ),
           },
+          ...(role === UserRole.TRACKER
+            ? [
+                {
+                  key: 'balance',
+                  label: '尾款报价',
+                },
+              ]
+            : []),
           {
             key: 'done',
             label: '已完成',
@@ -202,9 +214,9 @@ const WorkbenchPage: React.FC = () => {
         ]}
       />
 
-      {role === UserRole.TRACKER && tab === 'todo' ? (
+      {role === UserRole.TRACKER && (tab === 'todo' || tab === 'balance') ? (
         <>
-          <TrackerReviewTodoPanel orders={orders} loading={loading} onRefresh={() => void load()} />
+          <TrackerReviewTodoPanel orders={orders} loading={loading} onRefresh={() => void load()} mode={tab === 'balance' ? 'balance' : 'review'} />
           <Pagination
             style={{ marginTop: 16, textAlign: phone ? 'center' : 'right' }}
             current={page}
@@ -239,6 +251,11 @@ const WorkbenchPage: React.FC = () => {
                 <span>{record.baseInfo.customerName || '未填客户'}</span>
                 <span>{record.baseInfo.orderTime ? dayjs(record.baseInfo.orderTime).format('MM-DD HH:mm') : ''}</span>
               </div>
+              {record.pieceCustomerRevisionPending ? (
+                <div style={{ marginTop: 8 }}>
+                  <Tag color="error">有单件待修改</Tag>
+                </div>
+              ) : null}
             </button>
           ))}
         </div>

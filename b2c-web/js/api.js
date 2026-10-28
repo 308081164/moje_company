@@ -5,7 +5,66 @@
 (function () {
   'use strict';
 
-  var BASE = (window.DUXURY_API_BASE || '/api').replace(/\/+$/, '');
+  function resolveBase() {
+    if (window.DUXURY_API_BASE) return String(window.DUXURY_API_BASE).replace(/\/+$/, '');
+    var host = location.hostname;
+    var port = location.port;
+    var local = host === '127.0.0.1' || host === 'localhost';
+    // 8853 由 nginx 把 /api 反代到后端。静态服务直接打开页面时，POST /api 会得到 501 的 HTML 错误页。
+    if (local && port && port !== '8853') return 'http://127.0.0.1:8851/api';
+    return '/api';
+  }
+
+  var BASE = resolveBase();
+
+  var SESSION_KEYS = ['duxury-token', 'duxury-user', 'duxury-order', 'duxury-paid'];
+  var sessionNoticeSent = false;
+
+  function accessTokenExpired(token) {
+    var parts = String(token || '').split('.');
+    if (parts.length < 2) return false;
+    try {
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var payload = JSON.parse(atob(b64));
+      return !!(payload && payload.exp && payload.exp * 1000 <= Date.now() + 5000);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearStoredSession() {
+    SESSION_KEYS.forEach(function (key) { localStorage.removeItem(key); });
+  }
+
+  function endSession() {
+    var hadSession = !!localStorage.getItem('duxury-token') || !!localStorage.getItem('duxury-user');
+    if (!hadSession || sessionNoticeSent) return;
+    sessionNoticeSent = true;
+    clearStoredSession();
+    window.dispatchEvent(new CustomEvent('duxury:auth-expired'));
+  }
+
+  function expireIfNeeded() {
+    var token = localStorage.getItem('duxury-token');
+    if (!token || !accessTokenExpired(token)) return false;
+    clearStoredSession();
+    return true;
+  }
+
+  function isLoggedIn() {
+    var token = localStorage.getItem('duxury-token');
+    return !!token && !accessTokenExpired(token);
+  }
+
+  function readableError(res, data) {
+    var msg = data && data.message ? String(data.message) : '';
+    if (msg && msg.indexOf('<') === -1) return msg;
+    if (res.status === 501 || res.status === 502 || res.status === 503) {
+      return '登录服务暂时不可用，请刷新页面后重试';
+    }
+    return 'Request failed';
+  }
 
   function request(method, path, body) {
     var opts = {
@@ -13,6 +72,12 @@
       headers: { 'Content-Type': 'application/json' }
     };
     var token = localStorage.getItem('duxury-token');
+    if (token && accessTokenExpired(token)) {
+      endSession();
+      var expired = new Error('session expired');
+      expired.status = 401;
+      return Promise.reject(expired);
+    }
     if (token) {
       opts.headers['Authorization'] = 'Bearer ' + token;
     }
@@ -26,7 +91,8 @@
           try { data = JSON.parse(text); } catch (e) { data = { message: text }; }
         }
         if (!res.ok) {
-          var err = new Error(data && data.message ? data.message : 'Request failed');
+          if (res.status === 401 && token) endSession();
+          var err = new Error(readableError(res, data));
           err.status = res.status;
           throw err;
         }
@@ -42,6 +108,9 @@
 
   window.DUXURY_API = {
     base: BASE,
+    isLoggedIn: isLoggedIn,
+    expireIfNeeded: expireIfNeeded,
+    endSession: endSession,
     // 认证
     sendVerificationCode: function (email, purpose) {
       return post('/portal/c/account/send-verification-code', { email: email, purpose: purpose || 'LOGIN' });
@@ -96,6 +165,18 @@
     },
     submitQuotationOptions: function (orderId, body) {
       return post('/portal/c/orders/' + orderId + '/quotation-options', body);
+    },
+    payDesignerAssist: function (orderId) {
+      return post('/portal/c/orders/' + orderId + '/designer-assist/pay', {});
+    },
+    submitDesignOptions: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/design-options', body);
+    },
+    getOrderBrief: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/brief');
+    },
+    submitOrderBrief: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/brief', body);
     },
     // 查询订单物流（须已绑定）
     getShipment: function (orderId) {
@@ -159,6 +240,9 @@
     },
     getSellerDashboard: function () {
       return get('/portal/c/storefront/seller');
+    },
+    listMyOrders: function () {
+      return get('/portal/c/orders');
     },
     withdrawSeller: function (amount) {
       return post('/portal/c/storefront/seller/withdraw', { amount: amount });

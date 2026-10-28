@@ -2,6 +2,7 @@ package com.jewelry.system.dto.order;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
@@ -9,6 +10,9 @@ import java.util.List;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ModelerRejectToDesignerRequest {
+
+    @NotNull
+    private Long pieceId;
 
     @NotBlank
     private String message;

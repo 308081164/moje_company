@@ -18,6 +18,7 @@ public class OrderDesignBlockDto {
     private String materialType;
     private String materialDetail;
     private String handSize;
+    private String plating;
     private Object processInfo;
     private Object stoneInfo;
     private String designNotes;
@@ -26,4 +27,7 @@ public class OrderDesignBlockDto {
     private String designPassedTime;
     private String createdAt;
     private String updatedAt;
+    /** 客户最近一次驳回设计稿的原因（驳回后、设计师再次提交前有效） */
+    private String lastCustomerDesignRejectReason;
+    private String lastCustomerDesignRejectTime;
 }

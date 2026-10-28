@@ -14,6 +14,10 @@ public class PortalCustomerOrderCreateRequest {
     private String styleInfo;
     private String materialInfo;
     /**
+     * 支付定金时选择的金属。足金、足银不能镶嵌宝石。
+     */
+    private String metalCode;
+    /**
      * 已忽略。实收定金由服务端按服务单价 × 件数计算，不采用客户端传入金额。
      */
     private BigDecimal depositAmount;

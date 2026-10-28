@@ -48,7 +48,7 @@
     },
     'nav.services': { en: 'Services', fr: 'Services', de: 'Leistungen', es: 'Servicios', ja: 'サービス', ko: '서비스', 'zh-TW': '服務', 'zh-CN': '服务' },
     'nav.shop': { en: 'Shop', fr: 'Boutique', de: 'Shop', es: 'Tienda', ja: 'ショップ', ko: '스토어', 'zh-TW': '獨立站商城', 'zh-CN': '独立站商城' },
-    'nav.studio': { en: 'Studio', fr: 'Studio', de: 'Studio', es: 'Estudio', ja: 'スタジオ', ko: '스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台' },
+    'nav.studio': { en: 'My Assets', fr: 'Mes actifs', de: 'Meine Assets', es: 'Mis activos', ja: 'マイアセット', ko: '내 자산', 'zh-TW': '我的資產', 'zh-CN': '我的资产' },
     'auth.orders': {
       en: 'Order Center', fr: 'Centre de commandes', de: 'Bestellcenter', es: 'Centro de pedidos',
       ja: '注文センター', ko: '주문 센터', 'zh-TW': '訂單中心', 'zh-CN': '订单中心'
@@ -174,6 +174,20 @@
       en: 'Open the duxury marketplace', fr: 'Ouvrir la boutique duxury', de: 'duxury Shop öffnen',
       es: 'Abrir la tienda duxury', ja: 'duxury ショップを開く', ko: 'duxury 스토어 열기',
       'zh-TW': '打開 duxury 獨立站商城', 'zh-CN': '打开 duxury 独立站商城'
+    },
+    'shopsp.hint': {
+      en: 'Tiles keep flipping through more pieces — click one to open details, then return to the shop.',
+      fr: 'Les tuiles tournent pour d’autres pièces — cliquez pour les détails, puis revenez à la boutique.',
+      de: 'Kacheln drehen sich weiter — tippen für Details, zurück zum Shop.',
+      es: 'Las fichas rotan más piezas: haz clic para ver detalles y vuelve a la tienda.',
+      ja: 'タイルがめくれて別作品を表示。クリックで詳細、ショップに戻れます。',
+      ko: '타일이 뒤집히며 더 많은 작품을 보여줍니다. 클릭 후 스토어로 돌아올 수 있습니다.',
+      'zh-TW': '三排牆面保留滾動，單格會翻轉展示更多作品；點擊進入詳情，返回即可回到商城。',
+      'zh-CN': '三排墙面保留滚动，单格会翻转展示更多作品；点击进入详情，返回即可回到商城。'
+    },
+    'shopsp.preview': {
+      en: 'Featured piece', fr: 'Pièce en vedette', de: 'Highlight', es: 'Pieza destacada',
+      ja: '注目作品', ko: '추천 작품', 'zh-TW': '精選作品', 'zh-CN': '精选作品'
     },
 
     /* ---------- Partner ---------- */
@@ -387,6 +401,14 @@
     'ws.reject.empty': { en: 'Please enter a rejection reason', fr: 'Veuillez saisir un motif', de: 'Bitte Ablehnungsgrund eingeben', es: 'Introduzca el motivo', ja: '却下理由を入力してください', ko: '거부 사유를 입력하세요', 'zh-TW': '請填寫駁回原因', 'zh-CN': '请填写驳回原因' },
     'ws.reject.submit': { en: 'Submit rejection', fr: 'Envoyer le rejet', de: 'Ablehnung senden', es: 'Enviar rechazo', ja: '却下を送信', ko: '거부 제출', 'zh-TW': '提交駁回', 'zh-CN': '提交驳回' },
     'ws.reject.cancel': { en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', ja: 'キャンセル', ko: '취소', 'zh-TW': '取消', 'zh-CN': '取消' },
+    'ws.designopt.title': { en: 'Production options', fr: 'Options de production', de: 'Produktionsoptionen', es: 'Opciones de producción', ja: '製作オプション', ko: '제작 옵션', 'zh-TW': '生產選項', 'zh-CN': '生产选项' },
+    'ws.designopt.body': { en: 'Your design is approved. Please choose the options below.', fr: 'Le design est validé. Choisissez les options ci-dessous.', de: 'Das Design ist freigegeben. Bitte wählen Sie die Optionen.', es: 'El diseño está aprobado. Elija las opciones.', ja: 'デザインが承認されました。次の項目を選んでください。', ko: '디자인이 승인되었습니다. 아래 항목을 선택해 주세요.', 'zh-TW': '設計已通過。請選擇下面三項。', 'zh-CN': '设计已通过。请选择下面三项。' },
+    'ws.designopt.buyout': { en: 'Buy out the design', fr: 'Rachat du design', de: 'Design aufkaufen', es: 'Comprar el diseño', ja: 'デザインを買い取る', ko: '디자인 매입', 'zh-TW': '買斷設計', 'zh-CN': '买断设计' },
+    'ws.designopt.copyright': { en: 'Copyright certificate', fr: 'Certificat de droit d’auteur', de: 'Urheberzertifikat', es: 'Certificado de copyright', ja: '著作権証明書', ko: '저작권 증명서', 'zh-TW': '版權證書', 'zh-CN': '版权证书' },
+    'ws.designopt.confidential': { en: 'Keep private, do not promote', fr: 'Confidentiel, sans promotion', de: 'Vertraulich, keine Werbung', es: 'Confidencial, sin promoción', ja: '非公開・宣伝しない', ko: '비공개, 홍보하지 않음', 'zh-TW': '保密、不對外宣傳', 'zh-CN': '保密，不对外宣传' },
+    'ws.designopt.fill': { en: 'Choose options', fr: 'Choisir', de: 'Auswählen', es: 'Elegir', ja: '選択する', ko: '선택', 'zh-TW': '填寫選項', 'zh-CN': '填写选项' },
+    'ws.designopt.submit': { en: 'Submit', fr: 'Envoyer', de: 'Senden', es: 'Enviar', ja: '送信', ko: '제출', 'zh-TW': '提交', 'zh-CN': '提交' },
+    'ws.designopt.done': { en: 'Options saved', fr: 'Options enregistrées', de: 'Optionen gespeichert', es: 'Opciones guardadas', ja: '保存しました', ko: '저장되었습니다', 'zh-TW': '已保存', 'zh-CN': '已保存' },
     'ws.action.confirmDesign': { en: 'Approve design', fr: 'Valider le design', de: 'Design freigeben', es: 'Aprobar diseño', ja: 'デザインを承認', ko: '디자인 승인', 'zh-TW': '確認設計稿', 'zh-CN': '确认设计稿' },
     'ws.action.rejectDesign': { en: 'Reject design', fr: 'Rejeter le design', de: 'Design ablehnen', es: 'Rechazar diseño', ja: 'デザインを却下', ko: '디자인 거부', 'zh-TW': '駁回設計稿', 'zh-CN': '驳回设计稿' },
     'ws.action.confirmModel': { en: 'Approve 3D model', fr: 'Valider le modèle 3D', de: '3D-Modell freigeben', es: 'Aprobar modelo 3D', ja: 'モデルを承認', ko: '모델링 승인', 'zh-TW': '確認建模稿', 'zh-CN': '确认建模稿' },
@@ -465,8 +487,23 @@
     'ws.ship.carrier': { en: 'Carrier:', fr: 'Transporteur :', de: 'Versanddienst:', es: 'Transportista:', ja: '配送業者：', ko: '택배사:', 'zh-TW': '承運商：', 'zh-CN': '承运商：' },
     'ws.ship.status': { en: 'Status:', fr: 'Statut :', de: 'Status:', es: 'Estado:', ja: '状態：', ko: '상태:', 'zh-TW': '狀態：', 'zh-CN': '状态：' },
     'ws.ship.pending': { en: 'Shipped (tracking pending)', fr: 'Expédié (suivi en attente)', de: 'Versendet (Tracking ausstehend)', es: 'Enviado (seguimiento pendiente)', ja: '発送済み（追跡更新待ち）', ko: '발송됨(추적 대기)', 'zh-TW': '已發貨（待物流更新）', 'zh-CN': '已发货（待物流更新）' },
+    'ws.ship.sandbox': { en: 'This is the YunExpress sandbox. The events below were returned by the sandbox.', fr: 'Environnement de test YunExpress. Les étapes ci-dessous viennent du bac à sable.', de: 'YunExpress-Sandbox. Die folgenden Ereignisse kommen aus der Sandbox.', es: 'Entorno de prueba de YunExpress. Los eventos siguientes vienen del sandbox.', ja: '雲途のサンドボックスです。下の履歴はサンドボックスの返答です。', ko: '윈익스프레스 샌드박스입니다. 아래 내역은 샌드박스 응답입니다.', 'zh-TW': '目前是雲途沙盒環境，以下為沙盒返回的軌跡。', 'zh-CN': '当前是云途沙盒环境，以下为沙盒返回的轨迹。' },
+    'ws.ship.sandboxEmpty': { en: 'This is the YunExpress sandbox, and there are no tracking events yet.', fr: 'Environnement de test YunExpress : aucun événement de suivi pour le moment.', de: 'YunExpress-Sandbox: noch keine Sendungsverfolgung.', es: 'Entorno de prueba de YunExpress: aún no hay eventos.', ja: '雲途のサンドボックスです。追跡履歴はまだありません。', ko: '윈익스프레스 샌드박스이며, 아직 배송 이력이 없습니다.', 'zh-TW': '目前是雲途沙盒環境，暫無軌跡節點。', 'zh-CN': '当前是云途沙盒环境，暂无轨迹节点。' },
+    'ws.ship.noEvents': { en: 'No tracking events yet.', fr: 'Aucun événement de suivi pour le moment.', de: 'Noch keine Sendungsereignisse.', es: 'Aún no hay eventos de seguimiento.', ja: '追跡履歴はまだありません。', ko: '아직 배송 이력이 없습니다.', 'zh-TW': '暫無軌跡節點。', 'zh-CN': '暂无轨迹节点。' },
     'ws.ship.trackLink': { en: 'Track on 17TRACK', fr: 'Suivre sur 17TRACK', de: 'Auf 17TRACK verfolgen', es: 'Seguir en 17TRACK', ja: '17TRACKで追跡', ko: '17TRACK에서 조회', 'zh-TW': '在 17TRACK 查看完整軌跡', 'zh-CN': '在 17TRACK 查看完整轨迹' },
+    'ws.ship.lastMile': { en: 'Local carrier:', fr: 'Transporteur local :', de: 'Zusteller:', es: 'Transportista local:', ja: '現地配送：', ko: '현지 배송:', 'zh-TW': '末端派送：', 'zh-CN': '末端派送：' },
+    'ws.ship.lastMileLink': { en: 'Open the local carrier site', fr: 'Ouvrir le site du transporteur local', de: 'Zusteller-Website öffnen', es: 'Abrir el sitio del transportista local', ja: '現地配送会社のサイトを開く', ko: '현지 배송사 사이트 열기', 'zh-TW': '打開末端派送查詢', 'zh-CN': '打开末端派送查询' },
+    'ws.ship.cancelledTitle': { en: 'Waybill cancelled', fr: 'Lettre de transport annulée', de: 'Frachtbrief storniert', es: 'Guía cancelada', ja: '送り状を取り消しました', ko: '운송장이 취소되었습니다', 'zh-TW': '運單已撤銷', 'zh-CN': '运单已撤销' },
+    'ws.ship.heldTitle': { en: 'Shipment held', fr: 'Envoi intercepté', de: 'Sendung angehalten', es: 'Envío interceptado', ja: '配送を一時保留しました', ko: '배송이 일시 보류되었습니다', 'zh-TW': '運單已攔截', 'zh-CN': '运单已拦截' },
+    'ws.ship.cancelledBody': { en: 'This waybill has been cancelled and will not continue. If we ship again, you will receive a new tracking number.', fr: 'Cette lettre de transport est annulée. Si nous réexpédions, vous recevrez un nouveau numéro.', de: 'Dieser Frachtbrief wurde storniert. Bei erneutem Versand erhalten Sie eine neue Nummer.', es: 'Esta guía se canceló. Si volvemos a enviarlo, recibirá un número nuevo.', ja: 'この送り状は取り消され、配送は続きません。再発送する場合は新しい番号をお知らせします。', ko: '이 운송장은 취소되어 더 이상 배송되지 않습니다. 다시 보내면 새 번호를 안내합니다.', 'zh-TW': '這張運單已撤銷，暫不繼續派送。如需重新寄出，我們會再通知您新的單號。', 'zh-CN': '这张运单已撤销，暂不继续派送。如需重新寄出，我们会再通知您新的单号。' },
+    'ws.ship.heldBody': { en: 'The parcel is temporarily held. We are handling it and will update tracking.', fr: 'Le colis est temporairement retenu. Nous le traitons et mettrons le suivi à jour.', de: 'Das Paket ist vorübergehend angehalten. Wir bearbeiten es und aktualisieren die Sendung.', es: 'El paquete está retenido temporalmente. Lo estamos gestionando y actualizaremos el seguimiento.', ja: '荷物は一時保留中です。対応後に配送状況を更新します。', ko: '택배가 일시 보류되었습니다. 처리 후 배송 현황을 업데이트합니다.', 'zh-TW': '包裹已暫時攔截，我們正在處理，隨後會更新物流。', 'zh-CN': '包裹已暂时拦截，我们正在处理，随后会更新物流。' },
     'ws.ship.loadFail': { en: 'Failed to load shipment', fr: 'Échec du chargement', de: 'Laden fehlgeschlagen', es: 'Error al cargar envío', ja: '物流情報の読み込みに失敗', ko: '배송 정보 로드 실패', 'zh-TW': '物流資訊載入失敗', 'zh-CN': '物流信息加载失败' },
+    'ws.ship.current': { en: 'Use this current tracking number', fr: 'Utilisez ce numéro actuel', de: 'Diese aktuelle Sendungsnummer verwenden', es: 'Use este número actual', ja: 'この最新の追跡番号で照会してください', ko: '이 현재 운송장 번호로 조회하세요', 'zh-TW': '請按當前單號查詢', 'zh-CN': '请按当前单号查询' },
+    'ws.ship.correctedTitle': { en: 'Tracking number corrected', fr: 'Numéro de suivi corrigé', de: 'Sendungsnummer korrigiert', es: 'Número de seguimiento corregido', ja: '追跡番号を訂正しました', ko: '운송장 번호를 정정했습니다', 'zh-TW': '物流單號已更正', 'zh-CN': '物流单号已更正' },
+    'ws.ship.reshippedTitle': { en: 'Shipped again', fr: 'Réexpédié', de: 'Erneut versendet', es: 'Enviado de nuevo', ja: '再発送しました', ko: '다시 발송했습니다', 'zh-TW': '已重新發貨', 'zh-CN': '已重新发货' },
+    'ws.ship.correctedBody': { en: 'The tracking number has been corrected. Please track: {tracking}', fr: 'Le numéro de suivi a été corrigé. Suivez : {tracking}', de: 'Die Sendungsnummer wurde korrigiert. Bitte verfolgen: {tracking}', es: 'El número de seguimiento se ha corregido. Consulte: {tracking}', ja: '追跡番号を訂正しました。次の番号で照会してください：{tracking}', ko: '운송장 번호를 정정했습니다. 다음 번호로 조회해 주세요: {tracking}', 'zh-TW': '物流單號已更正。請按新單號查詢：{tracking}', 'zh-CN': '物流单号已更正。请按新单号查询：{tracking}' },
+    'ws.ship.reshippedBody': { en: 'Your order has been shipped again. Please track: {tracking}', fr: 'Votre commande a été réexpédiée. Suivez : {tracking}', de: 'Ihre Bestellung wurde erneut versendet. Bitte verfolgen: {tracking}', es: 'Su pedido se ha enviado de nuevo. Consulte: {tracking}', ja: '再発送しました。次の番号で照会してください：{tracking}', ko: '다시 발송했습니다. 다음 번호로 조회해 주세요: {tracking}', 'zh-TW': '已重新發貨。請按新單號查詢：{tracking}', 'zh-CN': '已重新发货。请按新单号查询：{tracking}' },
+    'ws.ship.carrierSuffix': { en: ' (Carrier: {carrier})', fr: ' (Transporteur : {carrier})', de: ' (Versanddienst: {carrier})', es: ' (Transportista: {carrier})', ja: '（配送業者：{carrier}）', ko: ' (택배사: {carrier})', 'zh-TW': '（承運商：{carrier}）', 'zh-CN': '（承运商：{carrier}）' },
     'ws.balance.title': { en: 'Pay balance', fr: 'Payer le solde', de: 'Restzahlung', es: 'Pagar saldo', ja: '尾金を支払う', ko: '잔금 결제', 'zh-TW': '支付尾款', 'zh-CN': '支付尾款' },
     'ws.balance.hint': { en: 'Demo checkout — confirm to mark as paid.', fr: 'Paiement démo — confirmer pour valider.', de: 'Demo-Zahlung — bestätigen gilt als bezahlt.', es: 'Pago de prueba — confirmar marca como pagado.', ja: 'デモ決済 — 確認で支払い完了扱い', ko: '데모 결제 — 확인 시 결제 완료 처리', 'zh-TW': '模擬支付流程，點擊確認即視為支付成功', 'zh-CN': '模拟支付流程，点击确认即视为支付成功' },
     'ws.balance.confirm': { en: 'Confirm payment', fr: 'Confirmer le paiement', de: 'Zahlung bestätigen', es: 'Confirmar pago', ja: '支払いを確認', ko: '결제 확인', 'zh-TW': '確認支付', 'zh-CN': '确认支付' },
@@ -474,6 +511,17 @@
     'ws.balance.success': { en: 'Payment successful', fr: 'Paiement réussi', de: 'Zahlung erfolgreich', es: 'Pago exitoso', ja: '支払い完了', ko: '결제 완료', 'zh-TW': '支付成功', 'zh-CN': '支付成功' },
     'ws.balance.paidAmount': { en: 'Balance {amount} paid', fr: 'Solde {amount} payé', de: 'Rest {amount} bezahlt', es: 'Saldo {amount} pagado', ja: '尾金 {amount} 支払済', ko: '잔금 {amount} 결제됨', 'zh-TW': '尾款 {amount} 已支付', 'zh-CN': '尾款 {amount} 已支付' },
     'ws.balance.done': { en: 'Done', fr: 'Terminé', de: 'Fertig', es: 'Listo', ja: '完了', ko: '완료', 'zh-TW': '完成', 'zh-CN': '完成' },
+    'ws.assist.title': { en: 'Add a designer', 'zh-TW': '加請設計師協助', 'zh-CN': '加请设计师协助' },
+    'ws.assist.body': {
+      en: 'This order was created from your reference images. Pay an extra fee to have a designer review your information and continue the design. The more complete your answers, the lower the fee: $100 before the form, $80 after it, $60 after the model is confirmed.',
+      'zh-TW': '這單是來圖定制。額外支付費用即可請設計師核對您已填寫的信息並繼續設計。信息越完整，費用越低：未填問卷 $100，已填問卷 $80，建模已確認 $60。',
+      'zh-CN': '这单是来图定制。额外支付费用即可请设计师核对您已填写的信息并继续设计。信息越完整，费用越低：未填问卷 $100，已填问卷 $80，建模已确认 $60。'
+    },
+    'ws.assist.pay': { en: 'Pay now', 'zh-TW': '立即支付', 'zh-CN': '立即支付' },
+    'ws.assist.later': { en: 'Not now', 'zh-TW': '暫時不需要', 'zh-CN': '暂时不需要' },
+    'ws.assist.done': { en: 'Your order is now designer design. The designer will review the information you already filled in.', 'zh-TW': '已轉為設計師設計。設計師會核對您已填寫的信息。', 'zh-CN': '已转为设计师设计。设计师会核对您已填写的信息。' },
+    'ws.assist.error': { en: 'Could not complete the upgrade', 'zh-TW': '升級未完成', 'zh-CN': '升级未完成' },
+    'ws.assist.price': { en: 'Your fee: $', 'zh-TW': '本次費用：$', 'zh-CN': '本次费用：$' },
     'profile.title': { en: 'Complete your profile', fr: 'Complétez votre profil', de: 'Profil vervollständigen', es: 'Complete su perfil', ja: 'プロフィールを入力', ko: '프로필을 완성해 주세요', 'zh-TW': '完善您的資料', 'zh-CN': '完善您的资料' },
     'profile.sub': { en: 'Help us serve you better with a few details.', fr: 'Quelques informations pour mieux vous servir.', de: 'Ein paar Angaben für besseren Service.', es: 'Algunos datos para atenderle mejor.', ja: 'より良いサービスのため、情報をご入力ください。', ko: '더 나은 서비스를 위해 정보를 입력해 주세요.', 'zh-TW': '為了更好的服務，請補充以下資訊', 'zh-CN': '为了更好的服务，请补充以下信息' },
     'profile.name': { en: 'Display name', fr: 'Nom affiché', de: 'Anzeigename', es: 'Nombre', ja: 'お名前', ko: '이름', 'zh-TW': '稱呼', 'zh-CN': '称呼' },
@@ -590,10 +638,14 @@
       'zh-TW': '選擇你的定制方式', 'zh-CN': '选择你的定制方式'
     },
     'svc.sub': {
-      en: 'A deposit unlocks your dedicated design team', fr: 'Un acompte débloque votre équipe dédiée',
-      de: 'Eine Anzahlung schaltet Ihr Team frei', es: 'Un depósito desbloquea su equipo dedicado',
-      ja: '内金で専用チームをアンロック', ko: '예약금으로 전담 팀을 이용하세요',
-      'zh-TW': '支付定金即可解鎖專屬設計團隊', 'zh-CN': '支付定金即可解锁专属设计团队'
+      en: 'Two clear paths — modeling from your drawings, or full design with our atelier',
+      fr: 'Deux parcours clairs — modelage depuis vos dessins, ou design complet avec notre atelier',
+      de: 'Zwei klare Wege — Modellierung nach Ihren Zeichnungen oder volles Design mit unserem Atelier',
+      es: 'Dos caminos claros: modelado desde sus dibujos, o diseño completo con nuestro atelier',
+      ja: '二つの道 — お持ちの図面からモデリング、またはアトリエでのフルデザイン',
+      ko: '두 가지 길 — 도면 기반 모델링, 또는 아틀리에 풀 디자인',
+      'zh-TW': '兩條清晰路徑 — 來圖建模，或與工作室一起完整設計',
+      'zh-CN': '两条清晰路径 — 来图建模，或与工作室一起完整设计'
     },
     'svc.custom.title': {
       en: 'Bring Your Design', fr: 'Apportez votre design', de: 'Eigenes Design',
@@ -601,14 +653,197 @@
       'zh-TW': '來圖定制', 'zh-CN': '来图定制'
     },
     'svc.custom.desc': {
-      en: 'Submit your own design drawings and we craft it into reality.',
-      fr: 'Soumettez vos propres dessins et nous les réalisons.',
-      de: 'Reichen Sie Ihre eigenen Entwürfe ein, wir setzen sie um.',
-      es: 'Envíe sus propios dibujos y los hacemos realidad.',
-      ja: 'お手持ちの設計図をお送りいただき、私たちが形にします。',
-      ko: '보유한 도면을 제출하시면 저희가 실물로 제작합니다.',
-      'zh-TW': '提交您自帶的設計圖，我們為您打造為實物。',
-      'zh-CN': '提交您自带的設計图，我们为您打造为实物。'
+      en: 'You already have drawings. We model and produce — no designer consultation included.',
+      fr: 'Vous avez déjà des dessins. Nous modélisons et produisons — sans consultation designer.',
+      de: 'Sie haben bereits Zeichnungen. Wir modellieren und fertigen — ohne Designer-Beratung.',
+      es: 'Ya tiene dibujos. Modelamos y producimos — sin consulta de diseñador.',
+      ja: '設計図をお持ちの方向け。モデリングと制作のみ — デザイナー相談は含みません。',
+      ko: '도면이 있는 경우. 모델링과 제작만 진행 — 디자이너 상담은 포함되지 않습니다.',
+      'zh-TW': '您已有設計圖。我們負責建模與制作 — 不含設計師一對一服務。',
+      'zh-CN': '您已有设计图。我们负责建模与制作 — 不含设计师一对一服务。'
+    },
+    'path.flow': {
+      en: 'Your journey', fr: 'Votre parcours', de: 'Ihr Ablauf', es: 'Su recorrido',
+      ja: 'ご案内の流れ', ko: '진행 과정', 'zh-TW': '流程說明', 'zh-CN': '流程说明'
+    },
+    'path.custom.tag': {
+      en: 'Modeling path', fr: 'Parcours modelage', de: 'Modellierungspfad', es: 'Ruta de modelado',
+      ja: 'モデリングコース', ko: '모델링 코스', 'zh-TW': '建模路徑', 'zh-CN': '建模路径'
+    },
+    'path.custom.in1': {
+      en: 'Upload your drawings & brief', fr: 'Envoyez dessins et brief', de: 'Zeichnungen & Brief hochladen',
+      es: 'Suba dibujos y brief', ja: '図面と要望をアップロード', ko: '도면과 요구사항 업로드',
+      'zh-TW': '上傳設計圖與需求說明', 'zh-CN': '上传设计图与需求说明'
+    },
+    'path.custom.in2': {
+      en: 'Dedicated order chat with our team', fr: 'Chat de commande dédié', de: 'Eigener Bestell-Chat',
+      es: 'Chat de pedido dedicado', ja: '専用の注文チャット', ko: '전용 주문 채팅',
+      'zh-TW': '專屬訂單群聊對接團隊', 'zh-CN': '专属订单群聊对接团队'
+    },
+    'path.custom.in3': {
+      en: '3D modeling, production & shipping', fr: 'Modélisation 3D, production et envoi',
+      de: '3D-Modellierung, Produktion & Versand', es: 'Modelado 3D, producción y envío',
+      ja: '3Dモデリング・制作・配送', ko: '3D 모델링·제작·배송',
+      'zh-TW': '3D 建模、制作與配送', 'zh-CN': '3D 建模、制作与配送'
+    },
+    'path.custom.out1': {
+      en: 'No one-on-one designer service', fr: 'Sans consultation designer individuelle',
+      de: 'Ohne 1:1-Designer-Service', es: 'Sin servicio de diseñador 1:1',
+      ja: 'デザイナー一対一サービスなし', ko: '디자이너 1:1 상담 없음',
+      'zh-TW': '不含設計師一對一服務', 'zh-CN': '不含设计师一对一服务'
+    },
+    'path.custom.s1.title': {
+      en: 'Share drawings', fr: 'Partager les dessins', de: 'Zeichnungen teilen', es: 'Compartir dibujos',
+      ja: '図面を共有', ko: '도면 공유', 'zh-TW': '提交來圖', 'zh-CN': '提交来图'
+    },
+    'path.custom.s1.desc': {
+      en: 'Upload references and describe materials, size and budget.',
+      fr: 'Uploadez vos références et précisez matériaux, taille et budget.',
+      de: 'Referenzen hochladen und Material, Größe und Budget angeben.',
+      es: 'Suba referencias y describa materiales, talla y presupuesto.',
+      ja: '参考画像を上げ、素材・サイズ・予算を伝えます。',
+      ko: '참고 이미지를 올리고 소재·사이즈·예산을 알려 주세요.',
+      'zh-TW': '上傳參考圖，並說明材質、尺寸與預算。',
+      'zh-CN': '上传参考图，并说明材质、尺寸与预算。'
+    },
+    'path.custom.s2.title': {
+      en: 'Pay deposit', fr: 'Verser l’acompte', de: 'Anzahlung zahlen', es: 'Pagar depósito',
+      ja: '内金を支払う', ko: '예약금 결제', 'zh-TW': '支付定金', 'zh-CN': '支付定金'
+    },
+    'path.custom.s2.desc': {
+      en: '$99 unlocks your order workspace — sales support, no designer seat.',
+      fr: '99 $ ouvre votre espace — support commercial, sans designer.',
+      de: '99 $ öffnet Ihren Arbeitsraum — Vertrieb, ohne Designer.',
+      es: '99 $ abre su espacio — soporte comercial, sin diseñador.',
+      ja: '99ドルで注文ワークスペースを開放 — 営業サポート、デザイナー席なし。',
+      ko: '99달러로 주문 워크스페이스 오픈 — 영업 지원, 디자이너 좌석 없음.',
+      'zh-TW': '99 美元解鎖訂單工作台 — 售中對接，不含設計師席位。',
+      'zh-CN': '99 美元解锁订单工作台 — 售中对接，不含设计师席位。'
+    },
+    'path.custom.s3.title': {
+      en: 'Modeling confirm', fr: 'Valider le modelage', de: 'Modellierung bestätigen', es: 'Confirmar modelado',
+      ja: 'モデリング確認', ko: '모델링 확인', 'zh-TW': '建模確認', 'zh-CN': '建模确认'
+    },
+    'path.custom.s3.desc': {
+      en: 'Review the 3D model against your drawings before production.',
+      fr: 'Vérifiez le modèle 3D par rapport à vos dessins avant production.',
+      de: 'Prüfen Sie das 3D-Modell anhand Ihrer Zeichnungen vor der Produktion.',
+      es: 'Revise el modelo 3D frente a sus dibujos antes de producir.',
+      ja: '制作前に3Dモデルを図面と照合して確認します。',
+      ko: '제작 전 3D 모델을 도면과 대조해 확인합니다.',
+      'zh-TW': '生產前對照來圖審核 3D 模型。',
+      'zh-CN': '生产前对照来图审核 3D 模型。'
+    },
+    'path.custom.s4.title': {
+      en: 'Produce & deliver', fr: 'Produire & livrer', de: 'Fertigen & liefern', es: 'Producir y entregar',
+      ja: '制作・納品', ko: '제작·배송', 'zh-TW': '制作交付', 'zh-CN': '制作交付'
+    },
+    'path.custom.s4.desc': {
+      en: 'Craft, settle the balance, and receive with lifetime care.',
+      fr: 'Fabrication, solde final, puis livraison avec entretien à vie.',
+      de: 'Fertigung, Restzahlung und Lieferung mit lebenslanger Pflege.',
+      es: 'Fabricación, saldo final y entrega con cuidado de por vida.',
+      ja: '制作・残金決済・納品。生涯アフターケア付き。',
+      ko: '제작·잔금 결제·배송. 평생 케어 포함.',
+      'zh-TW': '制作、結清尾款並交付，含終身保養。',
+      'zh-CN': '制作、结清尾款并交付，含终身保养。'
+    },
+    'path.designer.tag': {
+      en: 'Design path', fr: 'Parcours design', de: 'Designpfad', es: 'Ruta de diseño',
+      ja: 'デザインコース', ko: '디자인 코스', 'zh-TW': '設計路徑', 'zh-CN': '设计路径'
+    },
+    'path.designer.in1': {
+      en: 'One-on-one designer consultation', fr: 'Consultation designer en tête-à-tête',
+      de: '1:1-Designer-Beratung', es: 'Consulta 1:1 con diseñador',
+      ja: 'デザイナー一対一相談', ko: '디자이너 1:1 상담',
+      'zh-TW': '設計師一對一諮詢', 'zh-CN': '设计师一对一咨询'
+    },
+    'path.designer.in2': {
+      en: 'Sketches & 3D design preview', fr: 'Croquis et aperçu 3D', de: 'Skizzen & 3D-Vorschau',
+      es: 'Bocetos y vista 3D', ja: 'デザイン画と3Dプレビュー', ko: '스케치와 3D 미리보기',
+      'zh-TW': '設計手稿與 3D 預覽', 'zh-CN': '设计手稿与 3D 预览'
+    },
+    'path.designer.in3': {
+      en: 'Modeling, production & shipping', fr: 'Modelage, production et envoi',
+      de: 'Modellierung, Produktion & Versand', es: 'Modelado, producción y envío',
+      ja: 'モデリング・制作・配送', ko: '모델링·제작·배송',
+      'zh-TW': '建模、制作與配送', 'zh-CN': '建模、制作与配送'
+    },
+    'path.designer.in4': {
+      en: 'Dedicated order chat with your team', fr: 'Chat de commande dédié',
+      de: 'Eigener Bestell-Chat mit Ihrem Team', es: 'Chat de pedido con su equipo',
+      ja: '専用チームとの注文チャット', ko: '전담 팀과의 주문 채팅',
+      'zh-TW': '專屬訂單群聊對接團隊', 'zh-CN': '专属订单群聊对接团队'
+    },
+    'path.designer.s1.title': {
+      en: 'Pay deposit', fr: 'Verser l’acompte', de: 'Anzahlung zahlen', es: 'Pagar depósito',
+      ja: '内金を支払う', ko: '예약금 결제', 'zh-TW': '支付定金', 'zh-CN': '支付定金'
+    },
+    'path.designer.s1.desc': {
+      en: '$199 opens your workspace with a designer already on the team.',
+      fr: '199 $ ouvre votre espace avec un designer déjà dans l’équipe.',
+      de: '199 $ öffnet Ihren Raum — Designer ist bereits im Team.',
+      es: '199 $ abre su espacio con un diseñador ya en el equipo.',
+      ja: '199ドルでワークスペースを開放 — デザイナーが最初から参加。',
+      ko: '199달러로 워크스페이스 오픈 — 디자이너가 처음부터 합류.',
+      'zh-TW': '199 美元開啟工作台，設計師從一開始就在群內。',
+      'zh-CN': '199 美元开启工作台，设计师从一开始就在群内。'
+    },
+    'path.designer.s2.title': {
+      en: 'Consult', fr: 'Consultation', de: 'Beratung', es: 'Consulta',
+      ja: '相談', ko: '상담', 'zh-TW': '一對一溝通', 'zh-CN': '一对一沟通'
+    },
+    'path.designer.s2.desc': {
+      en: 'One-on-one on style, stones, metal and budget.',
+      fr: 'Échange individuel sur style, pierres, métal et budget.',
+      de: '1:1 zu Stil, Steinen, Metall und Budget.',
+      es: 'Cara a cara sobre estilo, piedras, metal y presupuesto.',
+      ja: 'スタイル・宝石・金属・予算を一対一で相談。',
+      ko: '스타일·원석·메탈·예산을 1:1로 상담.',
+      'zh-TW': '就風格、寶石、金屬與預算一對一溝通。',
+      'zh-CN': '就风格、宝石、金属与预算一对一沟通。'
+    },
+    'path.designer.s3.title': {
+      en: 'Design confirm', fr: 'Valider le design', de: 'Design bestätigen', es: 'Confirmar diseño',
+      ja: 'デザイン確認', ko: '디자인 확인', 'zh-TW': '設計確認', 'zh-CN': '设计确认'
+    },
+    'path.designer.s3.desc': {
+      en: 'Review sketches and 3D proposals until you approve the look.',
+      fr: 'Relisez croquis et propositions 3D jusqu’à validation.',
+      de: 'Skizzen und 3D-Vorschläge prüfen, bis Sie zustimmen.',
+      es: 'Revise bocetos y propuestas 3D hasta aprobar el look.',
+      ja: 'デザイン画と3D提案を確認し、承認するまで調整します。',
+      ko: '스케치와 3D 제안을 확인하며 승인할 때까지 조정합니다.',
+      'zh-TW': '審閱手稿與 3D 方案，確認造型後再進入下一步。',
+      'zh-CN': '审阅手稿与 3D 方案，确认造型后再进入下一步。'
+    },
+    'path.designer.s4.title': {
+      en: 'Model & produce', fr: 'Modeler & produire', de: 'Modellieren & fertigen', es: 'Modelar y producir',
+      ja: 'モデリング・制作', ko: '모델링·제작', 'zh-TW': '建模制作', 'zh-CN': '建模制作'
+    },
+    'path.designer.s4.desc': {
+      en: 'Modeling lock-in, then atelier production.',
+      fr: 'Verrouillage du modelage, puis production en atelier.',
+      de: 'Modellierung fixieren, dann Atelierfertigung.',
+      es: 'Cierre de modelado y luego producción en atelier.',
+      ja: 'モデリング確定後、工房で制作します。',
+      ko: '모델링 확정 후 공방에서 제작합니다.',
+      'zh-TW': '鎖定建模後進入工藝制作。',
+      'zh-CN': '锁定建模后进入工艺制作。'
+    },
+    'path.designer.s5.title': {
+      en: 'Deliver', fr: 'Livrer', de: 'Liefern', es: 'Entregar',
+      ja: '納品', ko: '배송', 'zh-TW': '交付', 'zh-CN': '交付'
+    },
+    'path.designer.s5.desc': {
+      en: 'Final settlement, shipping, and lifetime care.',
+      fr: 'Solde final, envoi et entretien à vie.',
+      de: 'Restzahlung, Versand und lebenslange Pflege.',
+      es: 'Liquidación final, envío y cuidado de por vida.',
+      ja: '残金決済・配送・生涯アフターケア。',
+      ko: '잔금 결제·배송·평생 케어.',
+      'zh-TW': '結清尾款、發貨與終身保養。',
+      'zh-CN': '结清尾款、发货与终身保养。'
     },
     'svc.custom.note': {
       en: 'Note: your drawing may not meet production standards, and the finished piece may deviate slightly from the design.',
@@ -620,21 +855,21 @@
       'zh-TW': '注意：設計圖可能不符合生產標準，成品可能存在一定偏差。',
       'zh-CN': '注意：设计图可能不符合生产标准，成品可能存在一定偏差。'
     },
-    'svc.custom.price': { en: '$49', fr: '49 $', de: '49 $', es: '49 $', ja: '$49', ko: '$49', 'zh-TW': '49美元', 'zh-CN': '49美元' },
+    'svc.custom.price': { en: '$99', fr: '99 $', de: '99 $', es: '99 $', ja: '$99', ko: '$99', 'zh-TW': '99美元', 'zh-CN': '99美元' },
     'svc.designer.title': {
       en: 'Designer Design', fr: 'Design par designer', de: 'Designer-Entwurf',
       es: 'Diseño por diseñador', ja: 'デザイナー設計', ko: '디자이너 디자인',
       'zh-TW': '設計師設計', 'zh-CN': '设计师设计'
     },
     'svc.designer.desc': {
-      en: 'Commission our designers to create a bespoke design from your inspiration.',
-      fr: 'Confiez à nos designers la création d’un design sur mesure.',
-      de: 'Lassen Sie unsere Designer ein maßgeschneidertes Design entwerfen.',
-      es: 'Encargue a nuestros diseñadores un diseño a medida.',
-      ja: 'あなたの着想から、デザイナーがオーダーメイドのデザインを制作します。',
-      ko: '영감을 바탕으로 디자이너가 맞춤 디자인을 제작합니다.',
-      'zh-TW': '委託我們的設計師，從您的靈感出發設計專屬款式。',
-      'zh-CN': '委托我们的设计师，从您的灵感出发设计专属款式。'
+      en: 'Start from inspiration. A designer shapes the piece with you before modeling.',
+      fr: 'Parte de l’inspiration. Un designer façonne la pièce avec vous avant le modelage.',
+      de: 'Starten Sie mit Inspiration. Ein Designer formt das Stück mit Ihnen vor der Modellierung.',
+      es: 'Parta de la inspiración. Un diseñador da forma a la pieza con usted antes del modelado.',
+      ja: '着想から始め、モデリング前にデザイナーと一緒に形を決めます。',
+      ko: '영감에서 시작해 모델링 전에 디자이너와 함께 형태를 잡습니다.',
+      'zh-TW': '從靈感出發，建模前由設計師與您一起打磨造型。',
+      'zh-CN': '从灵感出发，建模前由设计师与您一起打磨造型。'
     },
     'svc.designer.note': {
       en: 'Includes one-on-one consultation, sketches and 3D preview before production.',
@@ -646,7 +881,7 @@
       'zh-TW': '包含一對一諮詢、設計手稿與製作前3D預覽。',
       'zh-CN': '包含一对一咨询、设计手稿与制作前3D预览。'
     },
-    'svc.designer.price': { en: '$99', fr: '99 $', de: '99 $', es: '99 $', ja: '$99', ko: '$99', 'zh-TW': '99美元', 'zh-CN': '99美元' },
+    'svc.designer.price': { en: '$199', fr: '199 $', de: '199 $', es: '199 $', ja: '$199', ko: '$199', 'zh-TW': '199美元', 'zh-CN': '199美元' },
     'svc.deposit': { en: 'deposit', fr: 'acompte', de: 'Anzahlung', es: 'depósito', ja: '内金', ko: '예약금', 'zh-TW': '定金', 'zh-CN': '定金' },
     'svc.select': { en: 'Select & Pay', fr: 'Choisir & payer', de: 'Auswählen & zahlen', es: 'Seleccionar y pagar', ja: '選択して支払う', ko: '선택 및 결제', 'zh-TW': '選擇並支付', 'zh-CN': '选择并支付' },
     'svc.popular': { en: 'Most popular', fr: 'Le plus choisi', de: 'Am beliebtesten', es: 'Más popular', ja: '人気No.1', ko: '가장 인기', 'zh-TW': '最受歡迎', 'zh-CN': '最受欢迎' },
@@ -658,6 +893,16 @@
     },
 
     /* ---------- Login ---------- */
+    'login.expired': {
+      en: 'Your session has expired. Please sign in again.',
+      fr: 'Votre session a expiré. Veuillez vous reconnecter.',
+      de: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
+      es: 'Su sesión ha caducado. Vuelva a iniciar sesión.',
+      ja: 'ログインの有効期限が切れました。再度ログインしてください。',
+      ko: '로그인이 만료되었습니다. 다시 로그인해 주세요.',
+      'zh-TW': '登入已過期，請重新登入。',
+      'zh-CN': '登录已过期，请重新登录。'
+    },
     'login.title': {
       en: 'Sign in to continue', fr: 'Connectez-vous pour continuer', de: 'Anmelden zum Fortfahren',
       es: 'Inicie sesión para continuar', ja: '続行するにはログイン', ko: '계속하려면 로그인하세요',
@@ -691,8 +936,13 @@
     },
     'login.email.ph': { en: 'you@example.com', fr: 'vous@exemple.com', de: 'sie@beispiel.de', es: 'tu@ejemplo.com', ja: 'you@example.com', ko: 'you@example.com', 'zh-TW': 'you@example.com', 'zh-CN': 'you@example.com' },
     'login.continue': { en: 'Continue', fr: 'Continuer', de: 'Weiter', es: 'Continuar', ja: '続ける', ko: '계속', 'zh-TW': '繼續', 'zh-CN': '继续' },
+    'login.send': { en: 'Send code', fr: 'Envoyer', de: 'Code senden', es: 'Enviar código', ja: 'コード送信', ko: '코드 받기', 'zh-TW': '獲取驗證碼', 'zh-CN': '获取验证码' },
+    'login.resend': { en: 'Resend', fr: 'Renvoyer', de: 'Erneut senden', es: 'Reenviar', ja: '再送信', ko: '다시 받기', 'zh-TW': '重新發送', 'zh-CN': '重新发送' },
+    'login.submit': { en: 'Sign in', fr: 'Connexion', de: 'Anmelden', es: 'Entrar', ja: 'ログイン', ko: '로그인', 'zh-TW': '登入', 'zh-CN': '登录' },
     'login.or': { en: 'or', fr: 'ou', de: 'oder', es: 'o', ja: 'または', ko: '또는', 'zh-TW': '或', 'zh-CN': '或' },
     'login.code.ph': { en: 'Verification code', fr: 'Code de vérification', de: 'Bestätigungscode', es: 'Código de verificación', ja: '認証コード', ko: '인증 코드', 'zh-TW': '驗證碼', 'zh-CN': '验证码' },
+    'login.code.label': { en: 'Enter the code from your email', 'zh-TW': '請輸入郵箱中的驗證碼', 'zh-CN': '请输入邮箱中的验证码' },
+    'login.code.change': { en: 'Use a different email', 'zh-TW': '修改郵箱', 'zh-CN': '修改邮箱' },
     'login.verify': { en: 'Verify', fr: 'Vérifier', de: 'Bestätigen', es: 'Verificar', ja: '確認', ko: '확인', 'zh-TW': '驗證', 'zh-CN': '验证' },
     'login.code.sent': {
       en: 'Verification code sent to your email.',
@@ -750,6 +1000,12 @@
     'co.pieceCount.opt4': { en: '4 pieces', 'zh-CN': '4 件', 'zh-TW': '4 件' },
     'co.pieceCount.opt5': { en: '5 pieces', 'zh-CN': '5 件', 'zh-TW': '5 件' },
     'co.pay': { en: 'Pay deposit', fr: 'Payer l’acompte', de: 'Anzahlung zahlen', es: 'Pagar depósito', ja: '内金を支払う', ko: '예약금 결제', 'zh-TW': '支付定金', 'zh-CN': '支付定金' },
+    'co.pay.busy': { en: 'Submitting…', 'zh-TW': '正在提交…', 'zh-CN': '正在提交…' },
+    'co.referral.skipped': {
+      en: 'This referral code cannot be used on your own order. The order will continue without it.',
+      'zh-TW': '這個推廣碼不能用在您自己的訂單上，已忽略並繼續提交。',
+      'zh-CN': '这个推广码不能用在您自己的订单上，已忽略并继续提交。'
+    },
     'co.secure': { en: '256-bit encrypted · secure payment', fr: 'Chiffrement 256 bits · paiement sécurisé', de: '256-Bit-Verschlüsselung · sichere Zahlung', es: 'Cifrado de 256 bits · pago seguro', ja: '256bit暗号化 · 安全な決済', ko: '256비트 암호화 · 안전 결제', 'zh-TW': '256位元加密 · 安全支付', 'zh-CN': '256位加密 · 安全支付' },
     'co.back': { en: 'Back', fr: 'Retour', de: 'Zurück', es: 'Volver', ja: '戻る', ko: '뒤로', 'zh-TW': '返回', 'zh-CN': '返回' },
     'co.success': {
@@ -758,7 +1014,7 @@
       ja: '内金を受領しました — チャットの準備ができました！', ko: '예약금 수령 완료 — 채팅이 준비되었습니다!',
       'zh-TW': '定金已收到 — 您的群聊已就緒！', 'zh-CN': '定金已收到 — 您的群聊已就绪！'
     },
-    'co.enter': { en: 'Enter Order Workspace', fr: 'Entrer dans l’espace', de: 'Zum Workspace', es: 'Entrar al espacio', ja: 'ワークスペースへ', ko: '워크스페이스로 이동', 'zh-TW': '進入訂單工作台', 'zh-CN': '进入订单工作台' },
+    'co.enter': { en: 'Open this order chat', fr: 'Ouvrir le chat de cette commande', de: 'Zum Chat dieser Bestellung', es: 'Abrir el chat de este pedido', ja: 'この注文のチャットを開く', ko: '이 주문 채팅 열기', 'zh-TW': '進入這單群聊', 'zh-CN': '进入这单群聊' },
     'co.requirements.label': { en: 'Describe your requirements', fr: 'Décrivez vos besoins', de: 'Beschreiben Sie Ihre Anforderungen', es: 'Describa sus requisitos', ja: 'ご要望を記入', ko: '요구사항을 설명하세요', 'zh-TW': '描述您的需求', 'zh-CN': '描述您的需求' },
     'co.requirements.ph': { en: 'e.g. 18K gold diamond ring, size 12, princess cut…', fr: 'ex. bague diamant or 18K, taille 12…', de: 'z.B. 18K Gold-Diamantring, Größe 12…', es: 'ej. anillo de diamante oro 18K, talla 12…', ja: '例：18Kゴールド ダイヤリング 12号…', ko: '예: 18K 골드 다이아 반지 12호…', 'zh-TW': '例：18K金鑽石戒指 12號…', 'zh-CN': '例：18K金钻石戒指 12号…' },
     'co.requirements.material': { en: 'Material / style (optional)', fr: 'Matériau / style (optionnel)', de: 'Material / Stil (optional)', es: 'Material / estilo (opcional)', ja: '素材 / スタイル（任意）', ko: '소재 / 스타일 (선택)', 'zh-TW': '材質 / 款式（可選）', 'zh-CN': '材质 / 款式（可选）' },
@@ -850,6 +1106,16 @@
     'shop.addr': { en: 'Shipping address', fr: 'Adresse de livraison', de: 'Lieferadresse', es: 'Dirección de envío', ja: '配送先', ko: '배송지', 'zh-TW': '收貨地址', 'zh-CN': '收货地址' },
     'shop.type': { en: 'Type', fr: 'Type', de: 'Typ', es: 'Tipo', ja: 'タイプ', ko: '유형', 'zh-TW': '類型', 'zh-CN': '类型' },
     'shop.filter.all': { en: 'All types', fr: 'Tous', de: 'Alle', es: 'Todos', ja: 'すべて', ko: '전체', 'zh-TW': '全部類型', 'zh-CN': '全部类型' },
+    'shop.search.ph': {
+      en: 'Search title, maker or type…', fr: 'Rechercher titre, créateur ou type…',
+      de: 'Titel, Maker oder Typ suchen…', es: 'Buscar título, creador o tipo…',
+      ja: 'タイトル・作者・タイプで検索…', ko: '제목·메이커·유형 검색…',
+      'zh-TW': '搜尋標題、作者或類型…', 'zh-CN': '搜索标题、作者或类型…'
+    },
+    'shop.back': {
+      en: 'Back to shop', fr: 'Retour à la boutique', de: 'Zurück zum Shop', es: 'Volver a la tienda',
+      ja: 'ショップに戻る', ko: '스토어로 돌아가기', 'zh-TW': '返回商城', 'zh-CN': '返回商城'
+    },
     'shop.size.ring': { en: 'Finger size', fr: 'Taille de doigt', de: 'Ringgröße', es: 'Talla de anillo', ja: '指輪のサイズ', ko: '반지 사이즈', 'zh-TW': '手寸', 'zh-CN': '手寸' },
     'shop.size.ring.ph': { en: 'Required for rings, e.g. US 7 or HK 14', fr: 'Obligatoire pour les bagues', de: 'Pflichtangabe für Ringe', es: 'Obligatorio en anillos', ja: '指輪は必須', ko: '반지는 필수', 'zh-TW': '戒指必填，如港碼 14', 'zh-CN': '戒指必填，如港码 14' },
     'shop.size.chain': { en: 'Chain length', fr: 'Longueur de chaîne', de: 'Kettenlänge', es: 'Longitud de cadena', ja: 'チェーンの長さ', ko: '체인 길이', 'zh-TW': '鏈長', 'zh-CN': '链长' },
@@ -885,13 +1151,31 @@
     'shop.note': { en: 'Note (optional)', fr: 'Remarque (optionnel)', de: 'Hinweis (optional)', es: 'Nota (opcional)', ja: '備考（任意）', ko: '메모(선택)', 'zh-TW': '備註（選填）', 'zh-CN': '备注（选填）' },
     'shop.name': { en: 'Your name', fr: 'Votre nom', de: 'Ihr Name', es: 'Su nombre', ja: 'お名前', ko: '이름', 'zh-TW': '稱呼', 'zh-CN': '称呼' },
     'shop.contact': { en: 'Contact', fr: 'Contact', de: 'Kontakt', es: 'Contacto', ja: '連絡先', ko: '연락처', 'zh-TW': '聯繫方式', 'zh-CN': '联系方式' },
-    'studio.title': { en: 'Seller studio', fr: 'Espace vendeur', de: 'Verkäuferstudio', es: 'Estudio del vendedor', ja: '出品者スタジオ', ko: '판매자 스튜디오', 'zh-TW': '商家後台', 'zh-CN': '商家后台' },
-    'studio.sub': { en: 'Sales, listings and withdrawable balance', fr: 'Ventes, annonces et solde retirable', de: 'Verkäufe, Angebote und auszahlbares Guthaben', es: 'Ventas, listados y saldo retirable', ja: '売上・出品・出金可能残高', ko: '판매·상품·출금 가능 잔액', 'zh-TW': '銷售、上架作品與可提現餘額', 'zh-CN': '销售、上架作品与可提现金额' },
+    'studio.title': { en: 'My Assets', fr: 'Mes actifs', de: 'Meine Assets', es: 'Mis activos', ja: 'マイアセット', ko: '내 자산', 'zh-TW': '我的資產', 'zh-CN': '我的资产' },
+    'studio.sub': { en: 'Finished jewelry, listings, earnings and withdrawals. When nothing is listed yet, this page is your personal jewelry gallery.', fr: 'Bijoux terminés, annonces, revenus et retraits. Sans annonce, cette page est votre galerie personnelle.', de: 'Fertiger Schmuck, Angebote, Einnahmen und Auszahlungen. Ohne Angebot ist dies Ihre persönliche Galerie.', es: 'Joyería terminada, anuncios, ingresos y retiros. Sin anuncios, es tu galería personal.', ja: '完成したジュエリー、出品、収益、出金。出品がなくても個人ギャラリーとして使えます。', ko: '완성된 주얼리, 등록, 수익 및 출금. 등록이 없어도 개인 갤러리가 됩니다.', 'zh-TW': '已完成的珠寶資產、上架、收益與提現。未上架時，這裡就是您的個人珠寶展覽館。', 'zh-CN': '已完成的珠宝资产、上架、收益与提现。未上架时，这里就是您的个人珠宝展览馆。' },
     'studio.available': { en: 'Withdrawable', fr: 'Retirable', de: 'Auszahlbar', es: 'Retirable', ja: '出金可能', ko: '출금 가능', 'zh-TW': '可提現', 'zh-CN': '可提现' },
     'studio.pending': { en: 'Pending', fr: 'En attente', de: 'Ausstehend', es: 'Pendiente', ja: '保留中', ko: '대기 중', 'zh-TW': '待結算', 'zh-CN': '待结算' },
     'studio.earned': { en: 'Total earned', fr: 'Total gagné', de: 'Gesamtverdienst', es: 'Total ganado', ja: '累計収益', ko: '총수익', 'zh-TW': '累計收益', 'zh-CN': '累计收益' },
     'studio.withdraw': { en: 'Withdraw', fr: 'Retirer', de: 'Auszahlen', es: 'Retirar', ja: '出金', ko: '출금', 'zh-TW': '提現', 'zh-CN': '提现' },
-    'studio.listings': { en: 'My Shelf', fr: 'Mon étagère', de: 'Mein Regal', es: 'Mi estante', ja: 'マイシェルフ', ko: '내 진열대', 'zh-TW': '我的貨架', 'zh-CN': '我的货架' },
+    'studio.listings': { en: 'My shop', fr: 'Ma boutique', de: 'Mein Shop', es: 'Mi tienda', ja: 'マイショップ', ko: '내 가게', 'zh-TW': '我的小店', 'zh-CN': '我的小店' },
+    'studio.gallery': { en: 'My jewelry assets', fr: 'Mes bijoux', de: 'Meine Schmuckstücke', es: 'Mis joyas', ja: 'マイジュエリー', ko: '내 주얼리', 'zh-TW': '我的珠寶資產', 'zh-CN': '我的珠宝资产' },
+    'studio.gallery.sub': { en: 'Pieces you have completed or confirmed. This is your personal jewelry showroom.', fr: 'Pièces terminées ou confirmées. C’est votre vitrine personnelle.', de: 'Fertige oder bestätigte Stücke. Ihre persönliche Galerie.', es: 'Piezas terminadas o confirmadas. Tu vitrina personal.', ja: '完成または確認済みの作品。あなただけのギャラリーです。', ko: '완성했거나 확인한 작품입니다. 개인 갤러리입니다.', 'zh-TW': '已完成或已確認的作品，這裡是您的個人珠寶展廳。', 'zh-CN': '已完成或已确认的作品，这里是您的个人珠宝展厅。' },
+    'studio.gallery.empty': { en: 'Your finished pieces will appear here once they are ready.', fr: 'Vos pièces terminées apparaîtront ici.', de: 'Fertige Stücke erscheinen hier, sobald sie bereit sind.', es: 'Tus piezas terminadas aparecerán aquí cuando estén listas.', ja: '完成した作品はここに表示されます。', ko: '완성된 작품이 준비되면 여기에 표시됩니다.', 'zh-TW': '完成的作品會在這裡展示。', 'zh-CN': '完成的作品会在这里展示。' },
+    'studio.listings.sub': { en: 'Publish finished pieces to the shop, pause or relist them, and track sales.', fr: 'Publiez vos pièces terminées, mettez-les en pause ou republiez-les, et suivez les ventes.', de: 'Veröffentlichen Sie fertige Stücke, pausieren oder listen Sie sie erneut und verfolgen Sie Verkäufe.', es: 'Publica piezas terminadas, ponlas en pausa o vuelve a publicarlas y sigue las ventas.', ja: '完成した作品を出品・停止・再出品し、売上を追跡します。', ko: '완성된 작품을 게시하고 일시 중지하거나 다시 게시하며 판매를 추적합니다.', 'zh-TW': '將完成的作品上架、暫停或重新上架，並追蹤銷售。', 'zh-CN': '将完成的作品上架、暂停或重新上架，并追踪销售。' },
+    'studio.publish': { en: 'List in my shop', fr: 'Mettre dans ma boutique', de: 'In meinem Shop veröffentlichen', es: 'Publicar en mi tienda', ja: 'マイショップに出品', ko: '내 가게에 게시', 'zh-TW': '上架到我的小店', 'zh-CN': '上架到我的小店' },
+    'studio.total': { en: 'Total asset value', fr: 'Valeur totale des actifs', de: 'Gesamtwert der Assets', es: 'Valor total de los activos', ja: '資産の合計額', ko: '자산 총액', 'zh-TW': '資產總價值', 'zh-CN': '资产总价值' },
+    'studio.count': { en: 'pieces', fr: 'pièces', de: 'Stücke', es: 'piezas', ja: '点', ko: '점', 'zh-TW': '件', 'zh-CN': '件' },
+    'studio.promo': { en: 'Refer & earn', fr: 'Parrainez et gagnez', de: 'Empfehlen und verdienen', es: 'Invita y gana', ja: '紹介して稼ぐ', ko: '추천하고 수익', 'zh-TW': '推廣賺傭', 'zh-CN': '推广赚佣' },
+    'studio.promo.tip': { en: 'Share your link to earn commission when friends order.', 'zh-TW': '分享您的專屬連結，好友下單後賺取佣金。', 'zh-CN': '分享您的专属链接，好友下单后赚取佣金。' },
+    'studio.promo.code': { en: 'Referral code', 'zh-TW': '專屬推廣碼', 'zh-CN': '专属推广码' },
+    'studio.promo.rate': { en: 'Commission {rate}', 'zh-TW': '佣金 {rate}', 'zh-CN': '佣金 {rate}' },
+    'studio.promo.copy': { en: 'Copy link', 'zh-TW': '複製連結', 'zh-CN': '复制链接' },
+    'studio.promo.poster': { en: 'Download poster', 'zh-TW': '下載海報', 'zh-CN': '下载海报' },
+    'studio.promo.posterSoon': { en: 'Poster download will be added soon.', 'zh-TW': '海報下載稍後開放。', 'zh-CN': '海报下载稍后开放。' },
+    'studio.promo.copied': { en: 'Link copied', 'zh-TW': '連結已複製', 'zh-CN': '链接已复制' },
+    'studio.promo.bindings': { en: 'Referral orders', 'zh-TW': '推廣訂單', 'zh-CN': '推广订单' },
+    'studio.promo.txns': { en: 'Commission details', 'zh-TW': '佣金明細', 'zh-CN': '佣金明细' },
+    'studio.promo.withdrawals': { en: 'Withdrawals', 'zh-TW': '提現記錄', 'zh-CN': '提现记录' },
     'studio.sales': { en: 'Recent sales', fr: 'Ventes récentes', de: 'Letzte Verkäufe', es: 'Ventas recientes', ja: '最近の販売', ko: '최근 판매', 'zh-TW': '近期銷售', 'zh-CN': '近期销售' },
     'studio.pause': { en: 'Unlist', fr: 'Retirer', de: 'Abmelden', es: 'Retirar', ja: '非公開', ko: '내리기', 'zh-TW': '下架', 'zh-CN': '下架' },
     'studio.gate': { en: 'Sign in to manage your shop', fr: 'Connectez-vous pour gérer votre boutique', de: 'Melden Sie sich an, um Ihren Shop zu verwalten', es: 'Inicia sesión para gestionar tu tienda', ja: 'ショップ管理にはログインが必要です', ko: '스토어 관리를 위해 로그인하세요', 'zh-TW': '登入後管理您的商店', 'zh-CN': '登录后管理您的商店' },
@@ -910,7 +1194,57 @@
     'studio.form.invalid': { en: 'Please enter a title and a price above 0.', fr: 'Veuillez saisir un titre et un prix supérieur à 0.', de: 'Bitte Titel und einen Preis über 0 eingeben.', es: 'Introduce un título y un precio mayor que 0.', ja: 'タイトルと0より大きい価格を入力してください。', ko: '제목과 0보다 큰 가격을 입력하세요.', 'zh-TW': '請填寫標題與大於 0 的售價。', 'zh-CN': '请填写标题与大于 0 的售价。' },
     'pub.title': { en: 'Publish to shop', fr: 'Publier en boutique', de: 'Im Shop veröffentlichen', es: 'Publicar en la tienda', ja: 'ショップに公開', ko: '스토어에 게시', 'zh-TW': '一鍵上架獨立站', 'zh-CN': '一键上架独立站' },
     'pub.price': { en: 'Your sale price (USD)', fr: 'Votre prix de vente (USD)', de: 'Ihr Verkaufspreis (USD)', es: 'Su precio de venta (USD)', ja: '販売価格（USD）', ko: '판매가(USD)', 'zh-TW': '您的售價（美元）', 'zh-CN': '您的售价（美元）' },
-    'pub.submit': { en: 'Publish', fr: 'Publier', de: 'Veröffentlichen', es: 'Publicar', ja: '公開する', ko: '게시', 'zh-TW': '發布', 'zh-CN': '发布' }
+    'pub.submit': { en: 'Publish', fr: 'Publier', de: 'Veröffentlichen', es: 'Publicar', ja: '公開する', ko: '게시', 'zh-TW': '發布', 'zh-CN': '发布' },
+    'pub.cover': { en: 'Main image', 'zh-TW': '商品主圖', 'zh-CN': '商品主图' },
+    'pub.cover.hint': { en: 'Choose the photo shoppers see first.', 'zh-TW': '選擇買家第一眼看到的主圖。', 'zh-CN': '选择买家第一眼看到的主图。' },
+    'pub.cover.required': { en: 'Please choose a main image.', 'zh-TW': '請選擇一張商品主圖。', 'zh-CN': '请选择一张商品主图。' },
+    'pub.min': { en: 'The sale price cannot be below the production quote of $299.', 'zh-TW': '售價不能低於生產報價 299 美元。', 'zh-CN': '售价不能低于生产报价 299 美元。' },
+
+    'co.metal': { en: 'Metal', fr: 'Métal', de: 'Metall', es: 'Metal', ja: '金属', ko: '금속', 'zh-TW': '金屬材質', 'zh-CN': '金属材质' },
+    'co.metal.ph': { en: 'Choose a metal', 'zh-TW': '請選擇金屬', 'zh-CN': '请选择金属' },
+    'co.metal.note': {
+      en: 'Fine gold and fine silver cannot hold gemstones. If you choose either, the detail form will not offer stone setting.',
+      'zh-TW': '足金和足銀無法做寶石鑲嵌。選擇這兩種材質後，問卷中不提供寶石鑲嵌選項。',
+      'zh-CN': '足金和足银无法做宝石镶嵌。选择这两种材质后，问卷中不提供宝石镶嵌选项。'
+    },
+    'co.metal.required': { en: 'Please choose a metal before paying the deposit.', 'zh-TW': '支付定金前請先選擇金屬材質。', 'zh-CN': '支付定金前请先选择金属材质。' },
+    'co.metal.SILVER_925': { en: '925 silver', 'zh-TW': '925銀', 'zh-CN': '925银' },
+    'co.metal.PURE_SILVER': { en: 'Fine silver 999', 'zh-TW': '足銀999', 'zh-CN': '足银999' },
+    'co.metal.PURE_GOLD': { en: 'Fine gold', 'zh-TW': '足金', 'zh-CN': '足金' },
+    'co.metal.PLATINUM_950': { en: 'Platinum 950', 'zh-TW': '鉑金950', 'zh-CN': '铂金950' },
+    'co.metal.K9': { en: '9K gold', 'zh-TW': '9K', 'zh-CN': '9K' },
+    'co.metal.K14': { en: '14K gold', 'zh-TW': '14K', 'zh-CN': '14K' },
+    'co.metal.K18': { en: '18K gold', 'zh-TW': '18K', 'zh-CN': '18K' },
+    'co.metal.K_OTHER': { en: 'Other karat gold', 'zh-TW': 'K金（其他）', 'zh-CN': 'K金（其他）' },
+    'co.metal.COPPER': { en: 'Copper', 'zh-TW': '銅', 'zh-CN': '铜' },
+    'co.metal.OTHER': { en: 'Other', 'zh-TW': '其他', 'zh-CN': '其他' },
+    'brief.open': { en: 'Open the detail form', 'zh-TW': '打開定制細節問卷', 'zh-CN': '打开定制细节问卷' },
+    'brief.title': { en: 'Custom detail form', 'zh-TW': '定制細節問卷', 'zh-CN': '定制细节问卷' },
+    'brief.lead': {
+      en: 'Tell us about each piece. Your designer will follow these choices as far as material, craft and budget allow.',
+      'zh-TW': '請按每一件填寫。設計師會參考這些選擇，並在材質、工藝和預算允許的範圍內盡可能採納。',
+      'zh-CN': '请按每一件填写。设计师会参考这些选择，并在材质、工艺和预算允许的范围内尽可能采纳。'
+    },
+    'brief.disclaimer': {
+      en: 'We will use your answers as the brief. They will be adopted wherever possible, but we cannot promise every request will be followed exactly.',
+      'zh-TW': '設計師會參考您給出的需求，並盡可能採納；受材質、工藝和預算限制，不能保證每一項都按原樣實現。',
+      'zh-CN': '设计师会参考您给出的需求，并尽可能采纳；受材质、工艺和预算限制，不能保证每一项都按原样实现。'
+    },
+    'brief.budget.note': {
+      en: 'We will aim for the best result inside your budget. A higher budget can support more complex, finer and more considered design and craft.',
+      'zh-TW': '我們會根據您的預算，在這個範圍內做到能呈現的最好效果。更高的預算可以支持更複雜、更精細、更考究的設計與工藝，從而呈現更好的成品效果。',
+      'zh-CN': '我们会根据您的预算，在这个范围内做到能呈现的最好效果。更高的预算可以支持更复杂、更精细、更考究的设计与工艺，从而呈现更好的成品效果。'
+    },
+    'brief.submit': { en: 'Submit', 'zh-TW': '提交問卷', 'zh-CN': '提交问卷' },
+    'brief.done': { en: 'Received. You can return to the order chat.', 'zh-TW': '已收到。可以回到訂單群聊。', 'zh-CN': '已收到。可以回到订单群聊。' },
+    'brief.back': { en: 'Back to chat', 'zh-TW': '回到群聊', 'zh-CN': '回到群聊' },
+    'brief.metal.pure': {
+      en: 'Fine gold and fine silver cannot hold gemstones, so this form does not ask about stone setting.',
+      'zh-TW': '足金和足銀無法做寶石鑲嵌，因此問卷不提供寶石鑲嵌選項。',
+      'zh-CN': '足金和足银无法做宝石镶嵌，因此问卷不提供宝石镶嵌选项。'
+    },
+    'brief.missing': { en: 'Please complete every required choice.', 'zh-TW': '請把每一項必填內容選完。', 'zh-CN': '请把每一项必填内容选完。' },
+    'brief.login': { en: 'Sign in to fill in this form.', 'zh-TW': '請先登入再填寫問卷。', 'zh-CN': '请先登录再填写问卷。' }
   };
 
   var current = localStorage.getItem('duxury-lang') || 'en';
@@ -978,7 +1312,14 @@
   function localizeEventTitle(title, eventType) {
     if (eventType === 'SHIPPING_ADDRESS_REQUEST') return t('ws.shipaddr.title');
     if (eventType === 'SHIPPING_ADDRESS_FILLED') return t('ws.shipaddr.filledTitle');
-    if (eventType === 'SHIPPED') return t('ws.event.SHIPPED');
+    if (eventType === 'SHIPPED') {
+      var shippedTitle = title != null ? String(title).trim() : '';
+      if (shippedTitle === '物流单号已更正') return t('ws.ship.correctedTitle');
+      if (shippedTitle === '已重新发货') return t('ws.ship.reshippedTitle');
+      if (shippedTitle === '运单已撤销') return t('ws.ship.cancelledTitle');
+      if (shippedTitle === '运单已拦截') return t('ws.ship.heldTitle');
+      return t('ws.event.SHIPPED');
+    }
     var raw = title != null ? String(title).trim() : '';
     if (!raw) {
       return eventType ? localizeEventType(eventType) : '';

@@ -74,6 +74,15 @@ api.interceptors.request.use(
   }
 );
 
+/** 订单详情等后台读取：调用方自己处理失败，403 不再弹全局「权限不足」。 */
+export function quietRequest(config?: Record<string, unknown>) {
+  return { ...(config || {}), skipForbiddenToast: true };
+}
+
+function skipForbiddenToast(config: unknown): boolean {
+  return Boolean(config && typeof config === 'object' && (config as { skipForbiddenToast?: boolean }).skipForbiddenToast);
+}
+
 // 响应拦截器
 api.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -92,12 +101,17 @@ api.interceptors.response.use(
         const reqUrl = String((response.config && response.config.url) || '');
         if (!reqUrl.includes('/auth/login') && !reqUrl.includes('/auth/refresh-token')) {
           notifyAuthExpiredAndRedirect();
-        } else {
+        } else if (!skipForbiddenToast(response.config)) {
           message.error(errorMsg);
         }
         return Promise.reject(new Error(errorMsg));
       }
-      message.error(errorMsg);
+      if (data.code === 403 && skipForbiddenToast(response.config)) {
+        return Promise.reject(new Error(errorMsg));
+      }
+      if (!skipForbiddenToast(response.config) || data.code !== 403) {
+        message.error(errorMsg);
+      }
       return Promise.reject(new Error(errorMsg));
     }
     
@@ -107,6 +121,7 @@ api.interceptors.response.use(
     // 处理HTTP错误
     if (error.response) {
       const { status, data } = error.response;
+      const quiet403 = status === 403 && skipForbiddenToast(error.config);
       
       switch (status) {
         case 400:
@@ -122,7 +137,9 @@ api.interceptors.response.use(
           break;
         }
         case 403:
-          message.error('权限不足，无法访问');
+          if (!quiet403) {
+            message.error(data?.message || data?.detail || '权限不足，无法访问');
+          }
           break;
         case 409:
           message.warning(data?.message || data?.detail || '请求冲突');

@@ -1,28 +1,16 @@
 (function () {
   'use strict';
 
-  /* ============================================================
-     推广码落地：捕获 ?ref=CODE 并暂存，下单时随单提交
-  ============================================================ */
-  (function captureReferralRef() {
-    try {
-      var ref = new URLSearchParams(location.search).get('ref');
-      if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref.trim())) {
-        localStorage.setItem('duxury-ref', ref.trim().toUpperCase());
-      }
-    } catch (e) { /* 忽略异常参数 */ }
-  })();
-
-  function getStoredReferralCode() {
-    var v = localStorage.getItem('duxury-ref');
-    return v && v.trim() ? v.trim().toUpperCase() : '';
-  }
+  try { localStorage.removeItem('duxury-ref'); } catch (e) { /* 旧版会把链接里的推广码存下来自动填入，这里清掉 */ }
 
   /* ============================================================
      Workspace gate: orders page requires email sign-in
   ============================================================ */
+  var sessionExpiredOnLoad = !!(window.DUXURY_API && window.DUXURY_API.expireIfNeeded && window.DUXURY_API.expireIfNeeded());
   var isWorkspace = !!document.querySelector('.app-shell');
-  var workspaceLoggedIn = !isWorkspace || !!localStorage.getItem('duxury-token');
+  var workspaceLoggedIn = !isWorkspace || !!(window.DUXURY_API && window.DUXURY_API.isLoggedIn
+    ? window.DUXURY_API.isLoggedIn()
+    : localStorage.getItem('duxury-token'));
   if (isWorkspace && !workspaceLoggedIn) {
     var gateEl = document.getElementById('orderGate');
     var shellEl = document.querySelector('.app-shell');
@@ -331,7 +319,7 @@
   var selectedService = null; // 'custom' | 'designer'
 
   // 与后端 PortalDepositPricing 单价一致；实收金额由服务端按件数重算。
-  var SERVICE_UNIT = { custom: 49, designer: 99 };
+  var SERVICE_UNIT = { custom: 99, designer: 199 };
 
   function openModal(modal) {
     modal.classList.add('open');
@@ -344,12 +332,29 @@
     document.body.style.overflow = '';
   }
 
+  // Dual-path switcher (mobile): show one journey panel at a time
+  function setActivePath(path) {
+    document.querySelectorAll('[data-path-tab]').forEach(function (tab) {
+      var on = tab.getAttribute('data-path-tab') === path;
+      tab.classList.toggle('is-active', on);
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-path-panel]').forEach(function (panel) {
+      panel.classList.toggle('is-active', panel.getAttribute('data-path-panel') === path);
+    });
+  }
+  document.querySelectorAll('[data-path-tab]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      setActivePath(tab.getAttribute('data-path-tab'));
+    });
+  });
+
   // Service card buttons (homepage)
   document.querySelectorAll('.service-card__btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
       selectedService = btn.getAttribute('data-service');
       // Already signed in? skip login
-      if (localStorage.getItem('duxury-user')) {
+      if (window.DUXURY_API && window.DUXURY_API.isLoggedIn && window.DUXURY_API.isLoggedIn()) {
         showCheckout();
       } else {
         resetEmailLogin();
@@ -386,14 +391,82 @@
     return v && v.indexOf('@') !== -1;
   }
 
+  var codeCooldown = null;
+
+  function setSendLabel(text) {
+    if (emailContinue) emailContinue.textContent = text;
+  }
+
+  function stopCodeCooldown() {
+    if (codeCooldown) {
+      clearInterval(codeCooldown);
+      codeCooldown = null;
+    }
+    if (emailContinue) emailContinue.disabled = false;
+  }
+
+  function startCodeCooldown() {
+    var left = 60;
+    stopCodeCooldown();
+    if (!emailContinue) return;
+    emailContinue.disabled = true;
+    setSendLabel(left + 's');
+    codeCooldown = setInterval(function () {
+      left -= 1;
+      if (left <= 0) {
+        stopCodeCooldown();
+        setSendLabel(window.I18N.t('login.resend'));
+        return;
+      }
+      setSendLabel(left + 's');
+    }, 1000);
+  }
+
   function resetEmailLogin() {
     if (!emailInput) return;
-    if (emailInput.parentNode) emailInput.parentNode.style.display = '';
+    stopCodeCooldown();
+    setSendLabel(window.I18N.t('login.send'));
     if (emailCodeStep) emailCodeStep.style.display = 'none';
     if (emailCodeHint) { emailCodeHint.style.display = 'none'; emailCodeHint.textContent = ''; }
     if (codeInput) codeInput.value = '';
     emailInput.style.borderColor = '';
   }
+
+  function promptRelogin() {
+    workspaceLoggedIn = false;
+    if (typeof stopChatPoll === 'function') stopChatPoll();
+    if (typeof clearChatHeartbeat === 'function') clearChatHeartbeat();
+    if (typeof workspaceChatWs !== 'undefined' && workspaceChatWs) {
+      try { workspaceChatWs.close(); } catch (e) { /* ignore */ }
+      workspaceChatWs = null;
+    }
+    if (typeof chatReconnectTimer !== 'undefined' && chatReconnectTimer) {
+      clearTimeout(chatReconnectTimer);
+      chatReconnectTimer = null;
+    }
+    var gate = document.getElementById('orderGate');
+    var shell = document.querySelector('.app-shell');
+    if (isWorkspace && gate) gate.style.display = '';
+    if (isWorkspace && shell) shell.style.display = 'none';
+    if (typeof checkoutModal !== 'undefined' && checkoutModal && checkoutModal.classList.contains('open')) {
+      closeModal(checkoutModal);
+    }
+    if (typeof conversationList !== 'undefined' && conversationList) conversationList.innerHTML = '';
+    if (typeof chatBody !== 'undefined' && chatBody) chatBody.innerHTML = '';
+    renderAuthArea();
+    if (!loginModal) return;
+    resetEmailLogin();
+    openModal(loginModal);
+    if (emailCodeHint) {
+      emailCodeHint.style.display = 'block';
+      emailCodeHint.textContent = window.I18N.t('login.expired');
+    }
+  }
+
+  document.addEventListener('duxury:auth-expired', promptRelogin);
+  if (sessionExpiredOnLoad) promptRelogin();
+
+  if (codeInput) codeInput.removeAttribute('maxlength');
 
   if (emailContinue) {
     function doEmailContinue() {
@@ -404,15 +477,17 @@
         return;
       }
       emailInput.style.borderColor = '';
+      emailContinue.disabled = true;
       window.DUXURY_API.sendVerificationCode(v, 'LOGIN').then(function () {
-        emailInput.parentNode.style.display = 'none';
         if (emailCodeStep) emailCodeStep.style.display = '';
         if (emailCodeHint) {
           emailCodeHint.style.display = 'block';
           emailCodeHint.textContent = window.I18N.t('login.code.sent');
         }
+        startCodeCooldown();
         if (codeInput) codeInput.focus();
       }).catch(function (err) {
+        if (emailContinue) emailContinue.disabled = false;
         if (emailCodeHint) {
           emailCodeHint.style.display = 'block';
           emailCodeHint.textContent = err.message || window.I18N.t('login.code.error');
@@ -567,8 +642,31 @@
     }
   }
 
+  var METAL_CODES = ['SILVER_925', 'PURE_SILVER', 'PURE_GOLD', 'PLATINUM_950', 'K9', 'K14', 'K18', 'K_OTHER', 'COPPER', 'OTHER'];
+
+  function fillMetalSelect() {
+    var sel = document.getElementById('metalInput');
+    if (!sel || !window.I18N) return;
+    var current = sel.value;
+    sel.innerHTML = '';
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = window.I18N.t('co.metal.ph');
+    sel.appendChild(blank);
+    METAL_CODES.forEach(function (code) {
+      var opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = window.I18N.t('co.metal.' + code);
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  fillMetalSelect();
+
   function showCheckout() {
     if (!checkoutModal) return;
+    fillMetalSelect();
     var nameKey = selectedService === 'custom' ? 'svc.custom.title' : 'svc.designer.title';
     checkoutService.textContent = window.I18N.t(nameKey);
     renderCheckoutDue();
@@ -576,11 +674,8 @@
     payDeposit.style.display = '';
     var reqBox = document.getElementById('checkoutRequirements');
     if (reqBox) reqBox.style.display = '';
-    // 推广码（选填）：带来路 ref 参数访问时自动带出
     var refInput = document.getElementById('referralCodeInput');
-    if (refInput && !refInput.value.trim()) {
-      refInput.value = getStoredReferralCode();
-    }
+    if (refInput) refInput.value = '';
     selectedImages = [];
     renderImagePreview();
     openModal(checkoutModal);
@@ -598,6 +693,7 @@
       checkoutService.textContent = window.I18N.t(nameKey);
     }
     renderCheckoutDue();
+    fillMetalSelect();
   });
 
   function fileToDataUrl(file) {
@@ -700,54 +796,106 @@
 
   if (payDeposit) {
     payDeposit.addEventListener('click', function () {
+      var errorEl = document.getElementById('checkoutError');
+      function showPayError(message) {
+        if (!errorEl) {
+          alert(message);
+          return;
+        }
+        errorEl.hidden = false;
+        errorEl.textContent = message || '';
+      }
+      function clearPayError() {
+        if (!errorEl) return;
+        errorEl.hidden = true;
+        errorEl.textContent = '';
+      }
       var serviceType = selectedService === 'custom' ? 'CUSTOM_IMAGE' : 'DESIGNER_DESIGN';
       var reqInput = document.getElementById('requirementInput');
-      var matInput = document.getElementById('materialInput');
+      var metalSel = document.getElementById('metalInput');
+      var metalCode = metalSel ? metalSel.value : '';
       var requirement = reqInput ? reqInput.value.trim() : '';
-      var material = matInput ? matInput.value.trim() : '';
+      clearPayError();
+      if (!metalCode) {
+        showPayError(window.I18N.t('co.metal.required'));
+        if (metalSel) metalSel.focus();
+        return;
+      }
       var titleKey = serviceType === 'CUSTOM_IMAGE' ? 'svc.custom.title' : 'svc.designer.title';
       if (!requirement) {
         requirement = window.I18N.t(titleKey);
       }
 
       function finish(order) {
+        clearPayError();
         localStorage.setItem('duxury-paid', serviceType);
         if (order) {
           localStorage.setItem('duxury-order', JSON.stringify(order));
         }
+        payDeposit.disabled = false;
+        payDeposit.textContent = window.I18N.t('co.pay');
         payDeposit.style.display = 'none';
         checkoutSuccess.style.display = 'block';
+        var enter = checkoutSuccess ? checkoutSuccess.querySelector('a') : null;
+        if (enter) {
+          var query = '';
+          if (order && order.conversationId) query = '?conversationId=' + encodeURIComponent(order.conversationId);
+          else if (order && order.orderId) query = '?orderId=' + encodeURIComponent(order.orderId);
+          enter.href = 'order-workspace.html' + query;
+        }
       }
 
-      function doCreate(referenceImages) {
-        if (!localStorage.getItem('duxury-token')) {
-          alert(window.I18N.t('co.login.required'));
-          return;
-        }
+      function buildPayload(referenceImages, referralCode) {
         var currentUser = null;
         try { currentUser = JSON.parse(localStorage.getItem('duxury-user') || 'null'); } catch (e) { currentUser = null; }
         var customerName = currentUser && currentUser.displayName && currentUser.displayName !== currentUser.email
           ? currentUser.displayName : undefined;
-        var refInput = document.getElementById('referralCodeInput');
-        var referralCode = refInput && refInput.value.trim() ? refInput.value.trim().toUpperCase() : undefined;
         var pieceCount = readPieceCount();
         var unit = Object.prototype.hasOwnProperty.call(SERVICE_UNIT, selectedService)
           ? SERVICE_UNIT[selectedService]
           : SERVICE_UNIT.custom;
-        window.DUXURY_API.createOrder({
+        return {
           serviceType: serviceType,
           customerName: customerName,
           depositAmount: unit * pieceCount,
           pieceCount: pieceCount,
           basicRequirements: requirement,
-          materialInfo: material || undefined,
+          metalCode: metalCode,
           referenceImages: referenceImages || undefined,
-          referralCode: referralCode
-        }).then(function (order) {
-          if (referralCode) localStorage.removeItem('duxury-ref');
-          finish(order);
-        }).catch(function (err) {
-          alert(err.message || 'order create failed');
+          referralCode: referralCode || undefined
+        };
+      }
+
+      function doCreate(referenceImages) {
+        if (!localStorage.getItem('duxury-token') || (window.DUXURY_API.isLoggedIn && !window.DUXURY_API.isLoggedIn())) {
+          showPayError(window.I18N.t('co.login.required'));
+          if (typeof promptRelogin === 'function') promptRelogin();
+          return;
+        }
+        var refInput = document.getElementById('referralCodeInput');
+        var referralCode = refInput && refInput.value.trim() ? refInput.value.trim().toUpperCase() : '';
+        payDeposit.disabled = true;
+        payDeposit.textContent = window.I18N.t('co.pay.busy');
+          function place(code, skipped) {
+          return window.DUXURY_API.createOrder(buildPayload(referenceImages, code)).then(function (order) {
+            if (skipped && refInput) refInput.value = '';
+            finish(order);
+          });
+        }
+        place(referralCode, false).catch(function (err) {
+          var message = (err && err.message) || '';
+          if (referralCode && message.indexOf('推广码') >= 0) {
+            showPayError(window.I18N.t('co.referral.skipped'));
+            place('', true).catch(function (err2) {
+              payDeposit.disabled = false;
+              payDeposit.textContent = window.I18N.t('co.pay');
+              showPayError((err2 && err2.message) || 'order create failed');
+            });
+            return;
+          }
+          payDeposit.disabled = false;
+          payDeposit.textContent = window.I18N.t('co.pay');
+          showPayError(message || 'order create failed');
         });
       }
 
@@ -900,9 +1048,23 @@
     return fallbackLabel || orderStatus || '';
   }
 
+  function conversationSortTime(c) {
+    var raw = c && (c.lastMessageAt || c.createdAt);
+    var time = raw ? new Date(raw).getTime() : 0;
+    return isNaN(time) ? 0 : time;
+  }
+
+  function sortConversations(list) {
+    return (list || []).slice().sort(function (a, b) {
+      var diff = conversationSortTime(b) - conversationSortTime(a);
+      if (diff !== 0) return diff;
+      return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+    });
+  }
+
   function renderConversationList(items) {
     if (!conversationList) return;
-    workspace.allConversations = items || [];
+    workspace.allConversations = sortConversations(items);
     var q = (workspace.searchQuery || '').trim().toLowerCase();
     var filtered = workspace.allConversations.filter(function (c) {
       if (!matchesFilter(c)) return false;
@@ -944,14 +1106,35 @@
       conversationList.appendChild(el);
     });
     if (filtered.length && !workspace.currentId) {
-      var first = filtered[0];
-      openConversation(first.id, first.title, first.orderNumber, first.orderId, first.orderStatus, first.orderStatusLabel);
+      var chosen = preferredConversation(workspace.allConversations) || filtered[0];
+      openConversation(chosen.id, chosen.title, chosen.orderNumber, chosen.orderId, chosen.orderStatus, chosen.orderStatusLabel);
     }
+  }
+
+  function preferredConversation(list) {
+    var params;
+    try { params = new URLSearchParams(location.search); } catch (e) { return null; }
+    var cid = params.get('conversationId');
+    var oid = params.get('orderId');
+    if (!cid && !oid) return null;
+    var found = null;
+    if (cid) {
+      found = (list || []).find(function (c) { return String(c.id) === String(cid); });
+    }
+    if (!found && oid) {
+      found = (list || []).find(function (c) { return String(c.orderId) === String(oid); });
+    }
+    return found || null;
   }
 
   function openConversation(id, title, orderNumber, orderId, orderStatus, orderStatusLabel) {
     workspace.currentId = id;
     workspace.orderId = orderId || null;
+    if (orderId) {
+      window.DUXURY_API.getOrderSummary(orderId).then(function (summary) {
+        maybeOpenDesignerAssist(orderId, summary);
+      }).catch(function () {});
+    }
     var chatTitle = document.getElementById('chatTitle');
     var chatOrderId = document.getElementById('chatOrderId');
     var chatStage = document.getElementById('chatStage');
@@ -1161,10 +1344,126 @@
     }).join('');
   }
 
+  function localizeShipmentNotice(text) {
+    var raw = text || '';
+    var corrected = raw.match(/^物流单号已更正。请按新单号查询：(.+?)(?:（承运商：([^）]+)）)?$/);
+    var reshipped = corrected ? null : raw.match(/^已重新发货。请按新单号查询：(.+?)(?:（承运商：([^）]+)）)?$/);
+    var hit = corrected || reshipped;
+    if (hit) {
+      var body = window.I18N.t(corrected ? 'ws.ship.correctedBody' : 'ws.ship.reshippedBody').replace('{tracking}', hit[1]);
+      if (hit[2]) body += window.I18N.t('ws.ship.carrierSuffix').replace('{carrier}', hit[2]);
+      return body;
+    }
+    if (raw.indexOf('已撤销，暂不继续派送') >= 0) return window.I18N.t('ws.ship.cancelledBody');
+    if (raw.indexOf('已暂时拦截') >= 0) return window.I18N.t('ws.ship.heldBody');
+    return raw;
+  }
+
   function eventDisplayContent(ev) {
     if (!ev) return '';
     if (ev.eventType === 'SHIPPING_ADDRESS_REQUEST') return window.I18N.t('ws.shipaddr.body');
-    return localizeAdjustNotice(ev.content || '');
+    return localizeAdjustNotice(localizeShipmentNotice(ev.content || ''));
+  }
+
+  function showDesignerAssistPrompt(orderId) {
+    if (!orderId || !chatBody) return;
+    var card = document.createElement('div');
+    card.className = 'msg msg--card msg-card msg-card--balance';
+    card.innerHTML =
+      '<div class="balance-pay">' +
+        '<div class="balance-pay__icon">＋</div>' +
+        '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.assist.title')) + '</h3>' +
+        '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.assist.body')) + '</div>' +
+        '<div class="balance-pay__actions">' +
+          '<button class="prog-btn prog-btn--pay" id="assistPay">' + escapeHtml(window.I18N.t('ws.assist.pay')) + '</button>' +
+          '<button class="prog-btn prog-btn--no" id="assistLater">' + escapeHtml(window.I18N.t('ws.assist.later')) + '</button>' +
+        '</div>' +
+      '</div>';
+    card.querySelector('#assistLater').addEventListener('click', function () {
+      card.remove();
+    });
+    card.querySelector('#assistPay').addEventListener('click', function () {
+      window.DUXURY_API.payDesignerAssist(orderId).then(function (res) {
+        var price = res && res.assistPrice ? res.assistPrice : '';
+        alert(window.I18N.t('ws.assist.done') + (price ? '（' + window.I18N.t('ws.assist.price') + price + '）' : ''));
+        reloadChatAndProgress();
+        card.remove();
+      }).catch(function (err) {
+        alert(err.message || window.I18N.t('ws.assist.error'));
+      });
+    });
+    chatBody.appendChild(card);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function maybeOpenDesignerAssist(orderId, summary) {
+    if (!orderId || !summary || summary.serviceType !== 'CUSTOM_IMAGE' || summary.designerAssistPaid) return;
+    showDesignerAssistPrompt(orderId);
+  }
+
+  function maybeOpenDesignOptions(orderId) {
+    if (!orderId || sessionStorage.getItem('designopt-open-' + orderId)) return;
+    window.DUXURY_API.getOrderEvents(orderId).then(function (events) {
+      var pending = (events || []).some(function (ev) {
+        return ev && ev.eventType === 'DESIGN_OPTIONS_REQUEST' && ev.actionable;
+      });
+      if (pending) openDesignOptionsForm(orderId);
+    }).catch(function () {});
+  }
+
+  function openDesignOptionsForm(orderId) {
+    if (!orderId) return;
+    sessionStorage.setItem('designopt-open-' + orderId, '1');
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog shipaddr-dialog';
+    function choice(name, label) {
+      return '<fieldset class="shipaddr__label" style="border:0;padding:0;margin:12px 0">' +
+        '<legend>' + escapeHtml(label) + '</legend>' +
+        '<label style="margin-right:16px"><input type="radio" name="' + name + '" value="yes"> 是</label>' +
+        '<label><input type="radio" name="' + name + '" value="no" checked> 否</label>' +
+      '</fieldset>';
+    }
+    dialog.innerHTML =
+      '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.designopt.title')) + '</h3>' +
+      '<p class="shipaddr__hint">' + escapeHtml(window.I18N.t('ws.designopt.body')) + '</p>' +
+      '<form class="shipaddr" id="designoptForm">' +
+        choice('buyout', window.I18N.t('ws.designopt.buyout')) +
+        choice('copyright', window.I18N.t('ws.designopt.copyright')) +
+        choice('confidential', window.I18N.t('ws.designopt.confidential')) +
+        '<div class="shipaddr__error" id="designoptError" role="alert"></div>' +
+        '<div class="shipaddr__actions">' +
+          '<button type="button" class="prog-btn prog-btn--no" id="designoptCancel">' + escapeHtml(window.I18N.t('ws.reject.cancel')) + '</button>' +
+          '<button type="submit" class="prog-btn prog-btn--ok">' + escapeHtml(window.I18N.t('ws.designopt.submit')) + '</button>' +
+        '</div>' +
+      '</form>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.querySelector('#designoptCancel').addEventListener('click', close);
+    dialog.addEventListener('click', function (e) { e.stopPropagation(); });
+    dialog.querySelector('#designoptForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var picked = function (name) {
+        var el = dialog.querySelector('input[name="' + name + '"]:checked');
+        return !!(el && el.value === 'yes');
+      };
+      var errEl = dialog.querySelector('#designoptError');
+      window.DUXURY_API.submitDesignOptions(orderId, {
+        designBuyout: picked('buyout'),
+        copyrightCertificate: picked('copyright'),
+        confidential: picked('confidential')
+      }).then(function () {
+        close();
+        reloadChatAndProgress();
+      }).catch(function (err) {
+        errEl.textContent = (err && err.message) || window.I18N.t('ws.action.failed');
+      });
+    });
   }
 
   function openShippingAddressForm(orderId) {
@@ -1372,6 +1671,25 @@
       card.appendChild(lock);
     }
 
+    if (ev.actionable && ev.eventType === 'DESIGN_OPTIONS_REQUEST') {
+      var optActions = document.createElement('div');
+      optActions.className = 'msg-card__actions';
+      var optBtn = document.createElement('button');
+      optBtn.type = 'button';
+      optBtn.className = 'prog-btn prog-btn--ok msg-card__btn';
+      optBtn.textContent = window.I18N.t('ws.designopt.fill');
+      optBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!workspace.orderId) {
+          alert(window.I18N.t('ws.action.missingOrder'));
+          return;
+        }
+        openDesignOptionsForm(workspace.orderId);
+      });
+      optActions.appendChild(optBtn);
+      card.appendChild(optActions);
+    }
+
     if (ev.actionable && ev.eventType === 'SHIPPING_ADDRESS_REQUEST') {
       var addrActions = document.createElement('div');
       addrActions.className = 'msg-card__actions';
@@ -1405,6 +1723,10 @@
         confirmLabel = window.I18N.t('ws.action.confirmModel');
         rejectLabel = window.I18N.t('ws.action.rejectModel');
       }
+      var pieceName = pieceNameFromEventTitle(ev.title);
+      if (pieceName && rejectLabel) {
+        rejectLabel = rejectLabel + ' · ' + pieceName;
+      }
       if (confirmAct) {
         var actions = document.createElement('div');
         actions.className = 'msg-card__actions';
@@ -1425,7 +1747,12 @@
             var req = pieceId
               ? window.DUXURY_API.confirmPiece(orderId, pieceId, confirmAct)
               : window.DUXURY_API.confirmOrder(orderId, confirmAct);
-            req.then(reloadChatAndProgress)
+            req.then(function () {
+              reloadChatAndProgress();
+              if (confirmAct === 'DESIGN_CONFIRM') {
+                setTimeout(function () { maybeOpenDesignOptions(orderId); }, 700);
+              }
+            })
               .catch(function (err) { alert((err && err.message) || window.I18N.t('ws.action.failed')); })
               .finally(function () { okBtn.disabled = false; });
           });
@@ -1443,6 +1770,7 @@
               openRejectReasonModal({
                 rejectAct: rejectAct,
                 pieceId: pieceId,
+                pieceName: pieceName,
                 onSubmit: function (reason) {
                   if (pieceId) {
                     return window.DUXURY_API.rejectPiece(orderId, pieceId, rejectAct, reason);
@@ -1476,19 +1804,31 @@
 
   /**
    * 设计稿 / 建模稿驳回：自定义弹窗（替代浏览器 prompt）
-   * @param {{ rejectAct: string, pieceId?: number, onSubmit: (reason: string) => Promise<unknown> }} opts
+   * @param {{ rejectAct: string, pieceId?: number, pieceName?: string, onSubmit: (reason: string) => Promise<unknown> }} opts
    */
+  function pieceNameFromEventTitle(title) {
+    var raw = title != null ? String(title) : '';
+    var matched = raw.match(/(?:设计稿|建模稿|驳回设计|驳回建模)\s*[·•]\s*(.+)$/);
+    if (matched && matched[1]) return matched[1].trim();
+    return '';
+  }
+
   function openRejectReasonModal(opts) {
     var rejectAct = opts.rejectAct;
+    var pieceName = opts.pieceName ? String(opts.pieceName).trim() : '';
     var titleKey = rejectAct === 'MODEL_REJECT' ? 'ws.reject.model.title' : 'ws.reject.design.title';
+    var titleText = window.I18N.t(titleKey);
+    if (pieceName) titleText = titleText + ' · ' + pieceName;
+    var hintText = window.I18N.t('ws.reject.hint');
+    if (pieceName) hintText = '「' + pieceName + '」' + hintText;
     var overlay = document.createElement('div');
     overlay.className = 'event-detail';
     var dialog = document.createElement('div');
     dialog.className = 'event-detail__dialog reject-modal';
     dialog.innerHTML =
       '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
-      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t(titleKey)) + '</h3>' +
-      '<p class="reject-modal__hint">' + escapeHtml(window.I18N.t('ws.reject.hint')) + '</p>' +
+      '<h3 class="balance-pay__title">' + escapeHtml(titleText) + '</h3>' +
+      '<p class="reject-modal__hint">' + escapeHtml(hintText) + '</p>' +
       '<label class="reject-modal__label" for="rejectReasonInput">' + escapeHtml(window.I18N.t('ws.progress.reject.ph')) + '</label>' +
       '<textarea id="rejectReasonInput" class="checkout__input reject-modal__textarea" rows="4" maxlength="2000" placeholder="' + escapeAttr(window.I18N.t('ws.progress.reject.ph')) + '"></textarea>' +
       '<div class="reject-modal__error" id="rejectReasonError" role="alert"></div>' +
@@ -1557,7 +1897,7 @@
       '<label class="listing-label">' + escapeHtml(window.I18N.t('pub.title')) + '</label>' +
       '<input class="checkout__input" id="publishTitle" value="' + escapeAttr(summary.displayTitle || summary.orderNumber || '') + '">' +
       '<label class="listing-label">' + escapeHtml(window.I18N.t('pub.price')) + '</label>' +
-      '<input class="checkout__input" id="publishPrice" type="number" min="1" step="0.01" placeholder="399">' +
+      '<input class="checkout__input" id="publishPrice" type="number" min="299" step="0.01" placeholder="299">' +
       '<textarea class="checkout__input" id="publishDesc" rows="3" placeholder="..."></textarea>' +
       '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="publishConfirm">' + escapeHtml(window.I18N.t('pub.submit')) + '</button></div>';
     overlay.appendChild(dialog);
@@ -1575,7 +1915,7 @@
     }).catch(function () {});
     dialog.querySelector('#publishConfirm').addEventListener('click', function () {
       var price = Number(document.getElementById('publishPrice').value);
-      if (!price || price <= 0) { alert(window.I18N.t('pub.price')); return; }
+      if (!price || price < 299) { alert(window.I18N.t('pub.min')); return; }
       window.DUXURY_API.publishStorefront({
         sourceOrderId: orderId,
         title: document.getElementById('publishTitle').value.trim(),
@@ -1748,18 +2088,32 @@
           return;
         }
         var sh = '';
+        sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.current')) + '</div>';
         sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.tracking')) + ' ' + escapeHtml(s.trackingNumber || '-') + '</div>';
         if (s.carrierName || s.carrierCode) {
           sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.carrier')) + ' ' + escapeHtml(s.carrierName || s.carrierCode) + '</div>';
         }
-        sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.status')) + ' ' + escapeHtml(s.statusLabel || window.I18N.t('ws.ship.pending')) + '</div>';
+        sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.status')) + ' <strong>' + escapeHtml(s.statusLabel || window.I18N.t('ws.ship.pending')) + '</strong></div>';
+        if (s.lastMileName || s.lastMileTracking) {
+          sh += '<div class="event-detail__shipment-row">' + escapeHtml(window.I18N.t('ws.ship.lastMile')) + ' ' + escapeHtml(s.lastMileName || '') + (s.lastMileTracking ? ' · ' + escapeHtml(s.lastMileTracking) : '') + '</div>';
+        }
+        if (s.sandbox) {
+          var sandboxText = (s.events && s.events.length) ? window.I18N.t('ws.ship.sandbox') : window.I18N.t('ws.ship.sandboxEmpty');
+          sh += '<div class="event-detail__shipment-note">' + escapeHtml(sandboxText) + '</div>';
+        } else if (!s.events || !s.events.length) {
+          sh += '<div class="event-detail__shipment-note">' + escapeHtml(s.trackingNote || window.I18N.t('ws.ship.noEvents')) + '</div>';
+        }
         if (s.events && s.events.length) {
+          var events = s.events.slice().reverse();
           sh += '<div class="event-detail__timeline">';
-          s.events.forEach(function (e) {
-            sh += '<div class="event-detail__tl-item"><div class="event-detail__tl-desc">' + escapeHtml(e.description || '-') + '</div>';
+          events.forEach(function (e, index) {
+            sh += '<div class="event-detail__tl-item' + (index === 0 ? ' is-current' : '') + '"><div class="event-detail__tl-desc">' + escapeHtml(e.description || '-') + '</div>';
             sh += '<div class="event-detail__tl-meta">' + escapeHtml(e.time || '') + (e.location ? ' · ' + escapeHtml(e.location) : '') + '</div></div>';
           });
           sh += '</div>';
+        }
+        if (s.lastMileSite) {
+          sh += '<a class="prog-file" href="' + escapeAttr(s.lastMileSite) + '" target="_blank">' + escapeHtml(window.I18N.t('ws.ship.lastMileLink')) + '</a>';
         }
         if (s.queryUrl) {
           sh += '<a class="prog-file" href="' + escapeAttr(s.queryUrl) + '" target="_blank">' + escapeHtml(window.I18N.t('ws.ship.trackLink')) + '</a>';
@@ -1901,6 +2255,64 @@
     return !!chatBody.querySelector('[data-mid="' + String(messageId) + '"]');
   }
 
+  function escapeRichHtml(text) {
+    return String(text || '').replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+
+  function linkify(text) {
+    return text.replace(/(https?:\/\/[^\s<]+|order-brief\.html\?orderId=\d+)/g, function (match) {
+      var href = match;
+      if (match.indexOf('http') !== 0) href = match;
+      return '<a class="msg__link" href="' + href + '" target="_blank" rel="noopener noreferrer">' + match + '</a>';
+    });
+  }
+
+  function richLine(text) {
+    var html = escapeRichHtml(text);
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    return linkify(html);
+  }
+
+  function fillBubble(bubble, text) {
+    var value = String(text || '');
+    var lines = value.split(/\r?\n/);
+    var list = null;
+    function closeList() {
+      if (list) {
+        bubble.appendChild(list);
+        list = null;
+      }
+    }
+    lines.forEach(function (line) {
+      var trimmed = line.trim();
+      var bullet = trimmed.match(/^[-*•]\s+(.*)$/);
+      var numbered = trimmed.match(/^\d+[.、)]\s*(.*)$/);
+      if (bullet || numbered) {
+        if (!list) {
+          list = document.createElement('ul');
+          list.className = 'msg__list';
+        }
+        var item = document.createElement('li');
+        item.innerHTML = richLine(bullet ? bullet[1] : numbered[1]);
+        list.appendChild(item);
+        return;
+      }
+      closeList();
+      if (!trimmed) {
+        bubble.appendChild(document.createElement('br'));
+        return;
+      }
+      var p = document.createElement('div');
+      p.className = 'msg__line';
+      p.innerHTML = richLine(trimmed);
+      bubble.appendChild(p);
+    });
+    closeList();
+  }
+
   function appendChatMsg(text, dir, role, roleName, timeText, translated, messageId) {
     if (!chatBody) return;
     if (messageAlreadyRendered(messageId)) return;
@@ -1937,7 +2349,7 @@
     }
     var bubble = document.createElement('p');
     bubble.className = 'msg__bubble';
-    bubble.textContent = text;
+    fillBubble(bubble, text);
     content.appendChild(bubble);
     if (translated && translated !== text) {
       var trans = document.createElement('div');
@@ -1956,7 +2368,7 @@
       read.textContent = '✓✓';
       metaOut.appendChild(timeOut);
       metaOut.appendChild(read);
-      content.appendChild(metaOut);
+      content.insertBefore(metaOut, bubble);
     }
     // 他人文本消息：显示翻译按钮
     if (dir === 'in' && text && messageId != null) {

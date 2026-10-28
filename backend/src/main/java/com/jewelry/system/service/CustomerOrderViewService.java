@@ -280,6 +280,8 @@ public class CustomerOrderViewService {
                 .priceGuide(priceGuide)
                 .modelFiles(parseModelFiles(mi))
                 .shipment(shipmentService.getShipmentForCustomer(order.getId()))
+                .serviceType(order.getServiceType() != null ? order.getServiceType().name() : null)
+                .designerAssistPaid(Boolean.TRUE.equals(order.getDesignerAssistPaid()))
                 .pieces(pieces)
                 .build();
     }

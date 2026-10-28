@@ -1,0 +1,75 @@
+.modeler-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(680px, 1fr));
+  gap: 16px;
+  align-items: start;
+  width: 100%;
+}
+
+.modeler-piece {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.92fr) minmax(280px, 1.08fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 14px;
+  background: #fbfbfb;
+}
+
+.modeler-piece.is-active {
+  border-color: #1f7a6b;
+}
+
+.modeler-piece.is-locked {
+  background: #f7fbf9;
+}
+
+.modeler-piece__design,
+.modeler-piece__form {
+  min-width: 0;
+}
+
+.modeler-piece__form {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.modeler-piece__form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.modeler-piece__fields {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 8px;
+}
+
+.modeler-actions {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .modeler-board {
+    grid-template-columns: 1fr;
+  }
+
+  .modeler-piece {
+    grid-template-columns: 1fr;
+  }
+}

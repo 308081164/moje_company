@@ -9,10 +9,16 @@ import com.jewelry.system.dto.portal.CustomerOrderConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerOrderRejectRequest;
 import com.jewelry.system.dto.portal.CustomerPieceConfirmRequest;
 import com.jewelry.system.dto.portal.CustomerPieceRejectRequest;
+import com.jewelry.system.dto.portal.CustomerBriefFormDto;
+import com.jewelry.system.dto.portal.CustomerBriefSubmitRequest;
+import com.jewelry.system.dto.portal.CustomerDesignOptionsRequest;
+import com.jewelry.system.dto.portal.DesignerAssistPayResponse;
 import com.jewelry.system.dto.portal.CustomerQuotationOptionsRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
 import com.jewelry.system.dto.portal.PortalCustomerOrderListItemDto;
+import com.jewelry.system.service.CustomerOrderBriefService;
+import com.jewelry.system.service.DesignerAssistUpgradeService;
 import com.jewelry.system.service.PortalCustomerOrderService;
 import com.jewelry.system.service.PortalCustomerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +42,8 @@ public class PortalCustomerOrderController {
 
     private final PortalCustomerService portalCustomerService;
     private final PortalCustomerOrderService portalCustomerOrderService;
+    private final CustomerOrderBriefService customerOrderBriefService;
+    private final DesignerAssistUpgradeService designerAssistUpgradeService;
 
     @GetMapping
     @Operation(summary = "我的订单（已绑定）")
@@ -47,6 +55,12 @@ public class PortalCustomerOrderController {
     @Operation(summary = "C端自助下单（来图定制 / 设计师设计）")
     public ResponseEntity<PortalCustomerOrderCreateResponse> create(@RequestBody PortalCustomerOrderCreateRequest req) {
         return ResponseEntity.ok(portalCustomerOrderService.createOrder(req));
+    }
+
+    @PostMapping("/{orderId}/designer-assist/pay")
+    @Operation(summary = "来图定制客户支付 $40 请设计师协助，订单转为设计师设计（保留已填信息）")
+    public ResponseEntity<DesignerAssistPayResponse> payDesignerAssist(@PathVariable long orderId) {
+        return ResponseEntity.ok(designerAssistUpgradeService.upgrade(orderId));
     }
 
     @GetMapping("/{orderId}/summary")
@@ -102,6 +116,28 @@ public class PortalCustomerOrderController {
     @Operation(summary = "客户支付尾款（mock）")
     public ResponseEntity<Void> payBalance(@PathVariable long orderId) {
         portalCustomerService.payBalance(orderId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{orderId}/brief")
+    @Operation(summary = "下单后的定制细节问卷")
+    public ResponseEntity<CustomerBriefFormDto> brief(@PathVariable long orderId) {
+        return ResponseEntity.ok(customerOrderBriefService.formForCustomer(orderId));
+    }
+
+    @PostMapping("/{orderId}/brief")
+    @Operation(summary = "提交定制细节问卷")
+    public ResponseEntity<Void> submitBrief(@PathVariable long orderId,
+                                            @RequestBody CustomerBriefSubmitRequest body) {
+        customerOrderBriefService.submit(orderId, body);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{orderId}/design-options")
+    @Operation(summary = "设计全部确认后，客户选择买断、版权证书和是否保密")
+    public ResponseEntity<Void> submitDesignOptions(@PathVariable long orderId,
+                                                    @RequestBody CustomerDesignOptionsRequest body) {
+        portalCustomerService.submitDesignOptions(orderId, body);
         return ResponseEntity.ok().build();
     }
 

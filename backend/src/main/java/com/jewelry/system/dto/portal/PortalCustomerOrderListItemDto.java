@@ -12,4 +12,11 @@ public class PortalCustomerOrderListItemDto {
     private String currentStatus;
     private String currentStatusLabel;
     private String createdAt;
+    private java.util.List<String> designImages;
+    private java.util.List<String> modelEffectImages;
+    private java.util.List<String> referenceImages;
+    private Boolean designApproved;
+    private Boolean modelApproved;
+    private Boolean canPublishToStorefront;
+    private java.math.BigDecimal salePrice;
 }

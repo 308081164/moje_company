@@ -32,6 +32,15 @@ public class StorefrontService {
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
+    /** 生产报价下限。卖家售价不得低于此金额。暂时固定，后续改为按单报价。 */
+    public static final BigDecimal MIN_SALE_PRICE = new BigDecimal("299.00");
+
+    public static void assertSalePrice(BigDecimal price) {
+        if (price == null || price.compareTo(MIN_SALE_PRICE) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "售价不能低于生产报价 299 美元");
+        }
+    }
+
     private final SysConfigRepository sysConfigRepository;
     private final StorefrontListingRepository listingRepository;
     private final OrderRepository orderRepository;
@@ -99,9 +108,7 @@ public class StorefrontService {
         if (req == null || req.getSourceOrderId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少原订单");
         }
-        if (req.getSalePrice() == null || req.getSalePrice().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写售价");
-        }
+        assertSalePrice(req.getSalePrice());
         Order source = assertCanPublish(accountId, req.getSourceOrderId());
         StorefrontFeeGuideDto fees = feeGuide();
         StorefrontListing listing = listingRepository.findBySourceOrderId(source.getId()).orElseGet(StorefrontListing::new);
@@ -114,7 +121,7 @@ public class StorefrontService {
         listing.setProductionFeeMax(fees.getProductionFeeMax());
         listing.setShippingFeeMin(fees.getShippingFeeMin());
         listing.setShippingFeeMax(fees.getShippingFeeMax());
-        listing.setCoverImageUrl(resolveCover(source));
+        listing.setCoverImageUrl(chosenCover(source, req.getCoverImageUrl()));
         listing.setJewelryType(resolveListingJewelryType(source.getId()));
         listing.setStatus("PUBLISHED");
         if (listing.getSoldCount() == null) {
@@ -164,9 +171,7 @@ public class StorefrontService {
             listing.setDescription(req.getDescription());
         }
         if (req.getSalePrice() != null) {
-            if (req.getSalePrice().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "售价必须大于 0");
-            }
+            assertSalePrice(req.getSalePrice());
             listing.setSalePrice(req.getSalePrice().setScale(2, RoundingMode.HALF_UP));
         }
         if (req.getCoverImageUrl() != null) {
@@ -489,6 +494,14 @@ public class StorefrontService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先在设计中为作品选择珠宝类型后再上架");
         }
         return type;
+    }
+
+    private String chosenCover(Order source, String requested) {
+        if (!StringUtils.hasText(requested)) {
+            return resolveCover(source);
+        }
+        String url = requested.trim();
+        return url.length() > 1000 ? url.substring(0, 1000) : url;
     }
 
     private String resolveCover(Order source) {

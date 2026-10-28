@@ -293,23 +293,31 @@ public class ConversationService {
     @Transactional(readOnly = true)
     public List<ConversationDto> listMyConversations() {
         SecurityUserPrincipal principal = currentPrincipal();
-        if (isCurrentAdmin()) {
-            return conversationRepository.findAllByOrderByIdDesc().stream()
-                    .map(c -> {
-                        Order order = orderRepository.findById(c.getOrderId()).orElse(null);
-                        return toConversationDto(c, order, null);
-                    })
-                    .toList();
-        }
-        List<ConversationMember> members = memberRepository
-                .findByAccountTypeAndAccountId(principal.getAccountKind(), principal.getUserId());
         List<ConversationDto> result = new ArrayList<>();
-        for (ConversationMember member : members) {
-            conversationRepository.findById(member.getConversationId()).ifPresent(conversation -> {
+        if (isCurrentAdmin()) {
+            for (OrderConversation conversation : conversationRepository.findAllByOrderByIdDesc()) {
                 Order order = orderRepository.findById(conversation.getOrderId()).orElse(null);
-                result.add(toConversationDto(conversation, order, member));
-            });
+                result.add(toConversationDto(conversation, order, null));
+            }
+        } else {
+            List<ConversationMember> members = memberRepository
+                    .findByAccountTypeAndAccountId(principal.getAccountKind(), principal.getUserId());
+            for (ConversationMember member : members) {
+                conversationRepository.findById(member.getConversationId()).ifPresent(conversation -> {
+                    Order order = orderRepository.findById(conversation.getOrderId()).orElse(null);
+                    result.add(toConversationDto(conversation, order, member));
+                });
+            }
         }
+        result.sort((a, b) -> {
+            java.time.LocalDateTime ta = a.getLastMessageAt() != null ? a.getLastMessageAt() : a.getCreatedAt();
+            java.time.LocalDateTime tb = b.getLastMessageAt() != null ? b.getLastMessageAt() : b.getCreatedAt();
+            int cmp = tb.compareTo(ta);
+            if (cmp != 0) return cmp;
+            long ida = a.getId() != null ? a.getId() : 0L;
+            long idb = b.getId() != null ? b.getId() : 0L;
+            return Long.compare(idb, ida);
+        });
         return result;
     }
 
@@ -604,10 +612,37 @@ public class ConversationService {
                 .accountType(member.getAccountType().name())
                 .accountId(member.getAccountId())
                 .role(member.getRole())
-                .displayName(resolveDisplayName(member.getAccountType(), member.getAccountId()))
+                .displayName(memberDisplayName(member))
                 .lastReadMessageId(member.getLastReadMessageId())
                 .joinedAt(member.getJoinedAt())
                 .build();
+    }
+
+    private String memberDisplayName(ConversationMember member) {
+        String name = resolveDisplayName(member.getAccountType(), member.getAccountId());
+        if (member.getAccountType() != AccountKind.STAFF) {
+            return name;
+        }
+        String roleLabel = roleLabel(member.getRole());
+        if (!StringUtils.hasText(roleLabel) || !StringUtils.hasText(name)) {
+            return name;
+        }
+        return name + "（" + roleLabel + "）";
+    }
+
+    private static String roleLabel(String role) {
+        if (!StringUtils.hasText(role)) {
+            return null;
+        }
+        return switch (role.trim().toUpperCase()) {
+            case "DESIGNER" -> "设计师";
+            case "MODELER" -> "建模师";
+            case "FOLLOW_UP" -> "跟单员";
+            case "SALES_MID" -> "售中客服";
+            case "SALES_PRE" -> "售前客服";
+            case "ADMIN" -> "管理员";
+            default -> null;
+        };
     }
 
     private ConversationMessageDto toMessageDto(ConversationMessage message, String viewerLang) {
@@ -706,30 +741,15 @@ public class ConversationService {
         if (SUPER_SERVICE_ROLE.equals(message.getRole())) {
             return SUPER_SERVICE_NAME;
         }
-        if ("DESIGNER".equals(message.getRole()) || "MODELER".equals(message.getRole())) {
-            String assignee = resolveOrderAssigneeDisplayName(message.getConversationId(), message.getRole());
-            if (StringUtils.hasText(assignee)) {
-                return assignee;
+        if (message.getSenderType() == AccountKind.STAFF) {
+            String name = resolveDisplayName(message.getSenderType(), message.getSenderId());
+            String roleLabel = roleLabel(message.getRole());
+            if (StringUtils.hasText(name) && StringUtils.hasText(roleLabel)) {
+                return name + "（" + roleLabel + "）";
             }
+            return name;
         }
         return resolveDisplayName(message.getSenderType(), message.getSenderId());
-    }
-
-    private String resolveOrderAssigneeDisplayName(Long conversationId, String role) {
-        if (conversationId == null || !StringUtils.hasText(role)) {
-            return null;
-        }
-        return conversationRepository.findById(conversationId)
-                .map(OrderConversation::getOrderId)
-                .flatMap(orderRepository::findById)
-                .map(order -> {
-                    User user = "DESIGNER".equals(role) ? order.getDesigner() : order.getModeler();
-                    if (user == null) {
-                        return null;
-                    }
-                    return StringUtils.hasText(user.getRealName()) ? user.getRealName() : user.getUsername();
-                })
-                .orElse(null);
     }
 
     private String resolveDisplayName(AccountKind type, Long accountId) {

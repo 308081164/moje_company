@@ -96,9 +96,7 @@ public class AdminStorefrontService {
             listing.setDescription(req.getDescription());
         }
         if (req.getSalePrice() != null) {
-            if (req.getSalePrice().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "售价必须大于 0");
-            }
+            StorefrontService.assertSalePrice(req.getSalePrice());
             listing.setSalePrice(req.getSalePrice().setScale(2, RoundingMode.HALF_UP));
         }
         if (req.getCoverImageUrl() != null) {

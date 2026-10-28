@@ -16,6 +16,8 @@ public class OrderQuotationBlockDto {
     private Double weightCost;
     private Double laborCost;
     private Boolean designBuyout;
+    private Boolean copyrightCertificate;
+    private Boolean appraisalCertificate;
     private Double designBuyoutCost;
     private Double certificateCost;
     private List<String> certificateTypes;
@@ -23,6 +25,7 @@ public class OrderQuotationBlockDto {
     private Double otherCost;
     private Double totalCost;
     private String quotationNotes;
+    private Boolean finalized;
     private String createdAt;
     private String updatedAt;
 }

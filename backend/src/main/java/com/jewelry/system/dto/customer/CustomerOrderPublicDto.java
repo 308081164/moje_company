@@ -50,6 +50,9 @@ public class CustomerOrderPublicDto {
     /** 服务类型：CUSTOM_IMAGE / DESIGNER_DESIGN / B2B_MODEL / STOREFRONT */
     private String serviceType;
 
+    /** 来图定制客户已支付设计师协助费用并转为设计师设计 */
+    private Boolean designerAssistPaid;
+
     /** 当前账号是否可将此订单一键上架到独立站 */
     private Boolean canPublishToStorefront;
 

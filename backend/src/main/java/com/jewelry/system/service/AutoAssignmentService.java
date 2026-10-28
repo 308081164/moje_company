@@ -54,6 +54,15 @@ public class AutoAssignmentService {
     /**
      * B 端门户建单：跳过设计师，直接进入「建模中」并分配建模师（与 C 端先设计后建模区分）。
      */
+    /** 来图定制客户支付设计师协助费用后，补充分配设计师（保留已填信息）。 */
+    @Transactional
+    public void assignDesignerForAssistUpgrade(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        assignDesigner(order);
+        orderRepository.save(order);
+    }
+
     @Transactional
     public void autoAssignB2bNewOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)

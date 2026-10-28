@@ -1,0 +1,266 @@
+.settle-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 132px);
+}
+
+.settle-page .ant-tabs {
+  flex: 1;
+  min-height: 0;
+}
+
+.settle-page .ant-tabs-content,
+.settle-page .ant-tabs-tabpane {
+  height: 100%;
+}
+
+.settle-empty {
+  margin-top: 48px;
+}
+
+.settle-desk {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.settle-queue,
+.settle-stage {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+}
+
+.settle-queue {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 168px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settle-queue__bar {
+  padding: 12px;
+  border-bottom: 1px solid #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settle-queue__list {
+  overflow: auto;
+  padding: 8px;
+}
+
+.settle-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: #fafafa;
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.settle-card.is-active {
+  border-color: #c9a962;
+  background: #fffaf0;
+}
+
+.settle-card img,
+.settle-card__ph {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f0f0f0;
+}
+
+.settle-card__ph {
+  display: grid;
+  place-items: center;
+  color: #bfbfbf;
+  font-size: 12px;
+}
+
+.settle-card__title {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.settle-card__meta {
+  color: #8c8c8c;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.settle-stage {
+  padding: 16px;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.settle-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.settle-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.settle-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.settle-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.settle-images h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #595959;
+}
+
+.settle-images__row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 160px;
+}
+
+.settle-images__row .ant-image,
+.settle-images__row img {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.settle-score {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.settle-score h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.settle-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settle-option {
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  min-width: 132px;
+  text-align: left;
+}
+
+.settle-option.is-on {
+  border-color: #c9a962;
+  background: #fffaf0;
+}
+
+.settle-option b {
+  display: block;
+  font-size: 13px;
+}
+
+.settle-option span {
+  color: #8c6b2f;
+  font-size: 12px;
+}
+
+.settle-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.settle-count {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.settle-count small {
+  display: block;
+  color: #8c8c8c;
+}
+
+.settle-muted {
+  background: #fafafa;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.settle-footer {
+  position: static;
+  margin: 16px 0 0;
+  padding: 12px 0 0;
+  background: transparent;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.settle-total {
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.settle-total span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+  font-weight: 400;
+}
+
+@media (max-width: 960px) {
+  .settle-desk,
+  .settle-images {
+    grid-template-columns: 1fr;
+  }
+
+  .settle-queue {
+    position: static;
+    max-height: 320px;
+  }
+}

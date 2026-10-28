@@ -30,10 +30,10 @@ import {
   MenuOutlined,
   DownloadOutlined,
   HighlightOutlined,
-  PictureOutlined,
   DatabaseOutlined,
   UnorderedListOutlined,
   MessageOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -158,6 +158,11 @@ const AppLayout: React.FC = () => {
             ],
           },
           {
+            key: '/settlement',
+            icon: <AuditOutlined />,
+            label: '核算',
+          },
+          {
             key: '/workbench/modeling-archive',
             icon: <FileTextOutlined />,
             label: '建模归档任务池',
@@ -178,19 +183,9 @@ const AppLayout: React.FC = () => {
             label: '批量导出 ZIP',
           },
           {
-            key: '/admin-portal',
-            icon: <PictureOutlined />,
-            label: '门户展示配置',
-          },
-          {
             key: '/storefront-admin',
             icon: <ShopOutlined />,
             label: '商城管理',
-          },
-          {
-            key: '/legacy-archives',
-            icon: <DatabaseOutlined />,
-            label: '历史订单归档',
           },
           {
             key: '/social-publish',
@@ -284,7 +279,7 @@ const AppLayout: React.FC = () => {
           {
             key: '/workbench',
             icon: <FileTextOutlined />,
-            label: '我的工作台',
+            label: '工艺验证',
           },
           {
             key: '/workbench/tracker-follow-up',
@@ -429,12 +424,6 @@ const AppLayout: React.FC = () => {
     if (path.startsWith('/chat')) {
       return ['/chat'];
     }
-    if (path.startsWith('/admin-portal')) {
-      return ['/admin-portal'];
-    }
-    if (path.startsWith('/legacy-archives')) {
-      return ['/legacy-archives'];
-    }
     if (path.startsWith('/inlay-structure-library')) {
       return ['/inlay-structure-library'];
     }
@@ -446,6 +435,9 @@ const AppLayout: React.FC = () => {
     }
     if (path.startsWith('/exports')) {
       return ['/exports'];
+    }
+    if (path.startsWith('/settlement')) {
+      return ['/settlement'];
     }
     if (path.startsWith('/workbench/tracker-follow-up')) {
       return ['/workbench/tracker-follow-up'];
@@ -707,7 +699,7 @@ const AppLayout: React.FC = () => {
               onClick={() => navigateAndCloseMobile('/workbench')}
             >
               <FileTextOutlined />
-              <span>工作台</span>
+              <span>{user?.role === 'TRACKER' ? '工艺验证' : '工作台'}</span>
             </button>
           )}
           {user?.role === 'TRACKER' && (

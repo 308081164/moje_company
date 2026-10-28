@@ -36,8 +36,8 @@ final class OrderHtmlWorksheetRenderer {
         appendTitleRow(sb);
         appendHeaderBlock(sb, o);
         appendDesignBlock(sb, o);
-        appendStoneTable(sb, o.getDesignInfo());
-        appendProcessRequirementRow(sb, o.getDesignInfo());
+        appendStoneTable(sb, o);
+        appendProcessRequirementRow(sb, o);
         appendPricingBlock(sb, o);
         appendReviewBlock(sb, o.getReviewInfo());
         appendModelSupplementBlock(sb, o.getModelInfo());
@@ -132,13 +132,7 @@ final class OrderHtmlWorksheetRenderer {
         boolean confidential = o.getQuotationInfo() != null && Boolean.TRUE.equals(o.getQuotationInfo().getConfidential());
         boolean designBuyout = o.getQuotationInfo() != null && Boolean.TRUE.equals(o.getQuotationInfo().getDesignBuyout());
 
-        List<String> imageUrls = new ArrayList<>();
-        if (d != null && d.getDesignImages() != null) {
-            imageUrls.addAll(d.getDesignImages());
-        }
-        if (o.getModelInfo() != null && o.getModelInfo().getModelEffectImages() != null) {
-            imageUrls.addAll(o.getModelInfo().getModelEffectImages());
-        }
+        List<String> imageUrls = modelPreviewUrls(o);
 
         int imgRowSpan = 3;
         sb.append("<tr>");
@@ -150,14 +144,16 @@ final class OrderHtmlWorksheetRenderer {
         }
         sb.append("</td>");
         sb.append("<td rowspan=\"").append(imgRowSpan).append("\" colspan=\"6\" class=\"img-cell\">");
-        appendImageGrid(sb, imageUrls, "设计图");
+        appendImageGrid(sb, imageUrls, "建模预览");
         sb.append("</td></tr>\n");
 
         sb.append("<tr>");
+        boolean copyright = o.getQuotationInfo() != null && Boolean.TRUE.equals(o.getQuotationInfo().getCopyrightCertificate());
+        checkboxCell(sb, "设计买断", designBuyout);
+        checkboxCell(sb, "版权证书", copyright);
         checkboxCell(sb, "鉴定证书", cert);
         checkboxCell(sb, "保密不宣传", confidential);
-        checkboxCell(sb, "设计买断", designBuyout);
-        sb.append("<td colspan=\"6\" class=\"muted val\">").append(e(modelPassedLine(o.getModelInfo()))).append("</td></tr>\n");
+        sb.append("<td colspan=\"4\" class=\"muted val\">").append(e(modelPassedLine(o.getModelInfo()))).append("</td></tr>\n");
 
         if (d != null && d.getDesignPassedTime() != null && !d.getDesignPassedTime().isBlank()) {
             sb.append("<tr><td colspan=\"6\" class=\"muted val\">设计通过：")
@@ -165,41 +161,75 @@ final class OrderHtmlWorksheetRenderer {
         }
     }
 
-    private static void appendStoneTable(StringBuilder sb, OrderDesignBlockDto d) {
+    private static void appendStoneTable(StringBuilder sb, OrderInfoDto o) {
         sectionHeader(sb, "石料明细");
         sb.append("<tr class=\"th\">");
-        for (String h : new String[]{"石料类型", "形状", "尺寸", "数量", "价格", "备注"}) {
-            sb.append("<th colspan=\"2\">").append(h).append("</th>");
-        }
+        sb.append("<th colspan=\"2\">石料</th><th colspan=\"2\">形状</th><th colspan=\"2\">尺寸</th>");
+        sb.append("<th>数量</th><th>重量</th><th colspan=\"2\">价格</th><th colspan=\"2\">备注</th>");
         sb.append("</tr>\n");
 
-        List<StoneRow> rows = parseStoneRows(d != null ? d.getStoneInfo() : null);
+        List<StoneRow> rows = new ArrayList<>();
+        if (o.getPieces() != null) {
+            for (var piece : o.getPieces()) {
+                if (piece == null || piece.getDesign() == null) {
+                    continue;
+                }
+                String prefix = piece.getName() != null ? piece.getName() + " " : "";
+                for (StoneRow row : parseStoneRows(piece.getDesign().getStoneInfo())) {
+                    if (!prefix.isBlank() && !row.notes.startsWith(prefix)) {
+                        row.notes = (prefix + row.notes).trim();
+                    }
+                    rows.add(row);
+                }
+            }
+        }
+        if (rows.isEmpty()) {
+            rows.addAll(parseStoneRows(o.getDesignInfo() != null ? o.getDesignInfo().getStoneInfo() : null));
+        }
         for (StoneRow row : rows) {
             sb.append("<tr>");
-            stoneCell(sb, row.stoneType);
-            stoneCell(sb, row.shape);
-            stoneCell(sb, row.size);
-            stoneCell(sb, row.quantity);
-            stoneCell(sb, row.price);
-            stoneCell(sb, row.notes);
+            stoneCell(sb, row.stoneType, 2);
+            stoneCell(sb, row.shape, 2);
+            stoneCell(sb, row.size, 2);
+            stoneCell(sb, row.quantity, 1);
+            stoneCell(sb, row.weight, 1);
+            stoneCell(sb, row.price, 2);
+            stoneCell(sb, row.notes, 2);
             sb.append("</tr>\n");
         }
         int empty = Math.max(0, STONE_TABLE_MIN_ROWS - rows.size());
         for (int i = 0; i < empty; i++) {
             sb.append("<tr>");
-            for (int c = 0; c < 6; c++) {
-                stoneCell(sb, "");
-            }
+            stoneCell(sb, "", 2);
+            stoneCell(sb, "", 2);
+            stoneCell(sb, "", 2);
+            stoneCell(sb, "", 1);
+            stoneCell(sb, "", 1);
+            stoneCell(sb, "", 2);
+            stoneCell(sb, "", 2);
             sb.append("</tr>\n");
         }
     }
 
-    private static void stoneCell(StringBuilder sb, String text) {
-        sb.append("<td colspan=\"2\" class=\"center\">").append(text.isEmpty() ? "&nbsp;" : e(text)).append("</td>");
+    private static void stoneCell(StringBuilder sb, String text, int colspan) {
+        sb.append("<td colspan=\"").append(colspan).append("\" class=\"center\">")
+                .append(text == null || text.isEmpty() ? "&nbsp;" : e(text)).append("</td>");
     }
 
-    private static void appendProcessRequirementRow(StringBuilder sb, OrderDesignBlockDto d) {
-        Set<String> selected = collectProcessNames(d != null ? d.getProcessInfo() : null);
+    private static void appendProcessRequirementRow(StringBuilder sb, OrderInfoDto o) {
+        OrderDesignBlockDto d = o.getDesignInfo();
+        String plating = platingLine(o);
+        Set<String> selected = new LinkedHashSet<>();
+        if (o.getPieces() != null) {
+            for (var piece : o.getPieces()) {
+                if (piece != null && piece.getDesign() != null) {
+                    selected.addAll(collectProcessNames(piece.getDesign().getProcessInfo()));
+                }
+            }
+        }
+        if (selected.isEmpty()) {
+            selected.addAll(collectProcessNames(d != null ? d.getProcessInfo() : null));
+        }
         sectionHeader(sb, "工艺要求");
         sb.append("<tr>");
         processCheckbox(sb, "拉丝", selected);
@@ -210,10 +240,47 @@ final class OrderHtmlWorksheetRenderer {
         sb.append("<td colspan=\"2\" class=\"val\">").append(e(otherProcessesText(selected))).append("</td>");
         sb.append("</tr>\n");
         String detail = d != null ? processDetailNotes(d.getProcessInfo()) : "";
+        if (!plating.isBlank()) {
+            sb.append("<tr><td colspan=\"2\" class=\"lbl\">电镀</td><td colspan=\"")
+                    .append(COLS - 2).append("\" class=\"val\">").append(e(plating)).append("</td></tr>\n");
+        }
         if (!detail.isBlank()) {
             sb.append("<tr><td colspan=\"2\" class=\"lbl\">工艺备注</td><td colspan=\"")
                     .append(COLS - 2).append("\" class=\"val notes\">").append(e(detail)).append("</td></tr>\n");
         }
+    }
+
+    private static String platingLine(OrderInfoDto o) {
+        List<String> parts = new ArrayList<>();
+        if (o.getPieces() != null) {
+            for (var piece : o.getPieces()) {
+                if (piece == null || piece.getDesign() == null || piece.getDesign().getPlating() == null
+                        || piece.getDesign().getPlating().isBlank()) {
+                    continue;
+                }
+                String name = piece.getName() != null ? piece.getName() + "：" : "";
+                parts.add(name + piece.getDesign().getPlating().trim());
+            }
+        }
+        if (parts.isEmpty() && o.getDesignInfo() != null && o.getDesignInfo().getPlating() != null) {
+            return o.getDesignInfo().getPlating().trim();
+        }
+        return String.join("；", parts);
+    }
+
+    private static List<String> modelPreviewUrls(OrderInfoDto o) {
+        List<String> urls = new ArrayList<>();
+        if (o.getPieces() != null) {
+            for (var piece : o.getPieces()) {
+                if (piece != null && piece.getModel() != null && piece.getModel().getModelEffectImages() != null) {
+                    urls.addAll(piece.getModel().getModelEffectImages());
+                }
+            }
+        }
+        if (urls.isEmpty() && o.getModelInfo() != null && o.getModelInfo().getModelEffectImages() != null) {
+            urls.addAll(o.getModelInfo().getModelEffectImages());
+        }
+        return urls;
     }
 
     private static void appendPricingBlock(StringBuilder sb, OrderInfoDto o) {
@@ -387,7 +454,7 @@ final class OrderHtmlWorksheetRenderer {
 
     private static void appendImageGrid(StringBuilder sb, List<String> urls, String altPrefix) {
         if (urls == null || urls.isEmpty()) {
-            sb.append("<span class=\"muted\">（暂无设计图/效果图）</span>");
+            sb.append("<span class=\"muted\">（建模师上传效果图后自动填入）</span>");
             return;
         }
         sb.append("<div class=\"img-grid\">");
@@ -417,6 +484,7 @@ final class OrderHtmlWorksheetRenderer {
         String shape = "";
         String size = "";
         String quantity = "";
+        String weight = "";
         String price = "";
         String notes = "";
     }
@@ -437,6 +505,9 @@ final class OrderHtmlWorksheetRenderer {
             row.size = nv(text(node.get("size")));
             JsonNode qty = node.get("quantity");
             row.quantity = qty != null && qty.isNumber() ? String.valueOf(qty.asInt()) : nv(text(qty));
+            JsonNode weight = node.get("weight");
+            row.weight = weight != null && weight.isNumber()
+                    ? String.format(Locale.ROOT, "%.3f", weight.asDouble()) : nv(text(weight));
             JsonNode price = node.get("price");
             if (price != null && price.isNumber()) {
                 row.price = formatMoney(price.asDouble());
@@ -753,14 +824,8 @@ final class OrderHtmlWorksheetRenderer {
         if (materialType == null || materialType.isBlank()) {
             return "";
         }
-        return switch (materialType.trim().toUpperCase(Locale.ROOT)) {
-            case "SILVER_925" -> "925银";
-            case "PURE_SILVER" -> "足银";
-            case "PURE_GOLD" -> "足金";
-            case "K_GOLD" -> "K金";
-            case "OTHER" -> "其他";
-            default -> materialType;
-        };
+        String label = com.jewelry.system.customerbrief.CustomerBriefCatalog.materialLabel(materialType);
+        return label.isBlank() ? materialType : label;
     }
 
     private static String processTypeLabel(String processType) {

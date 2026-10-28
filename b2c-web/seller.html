@@ -3,46 +3,425 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>duxury &middot; Seller studio</title>
+  <meta name="description" content="My finished jewelry, listings, earnings and withdrawals.">
+  <title>duxury &middot; My Assets</title>
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261022f">
+  <link rel="stylesheet" href="css/style.css?v=20261027b">
   <style>
-    /* 「我的货架」卡片与编辑弹窗（scoped，仅本页使用） */
-    .sl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; margin-bottom: 32px; }
-    .sl-card { background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; }
-    .sl-card__img { position: relative; aspect-ratio: 1; background: #efe8dc; }
+    .assets-hero {
+      padding: 132px 0 24px;
+      background:
+        radial-gradient(900px 420px at 20% -10%, rgba(201, 169, 110, 0.14), transparent 60%),
+        radial-gradient(700px 320px at 85% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
+        #100f0e;
+      color: var(--text-light);
+      border-bottom: 1px solid rgba(201, 169, 110, 0.12);
+    }
+    .assets-hero .container { max-width: 1180px; }
+    .assets-hero__eyebrow { font-size: 0.8rem; letter-spacing: 0.22em; color: var(--gold); margin-bottom: 14px; text-transform: uppercase; }
+    .assets-hero__title { font-family: var(--font-serif); font-size: clamp(2.2rem, 4vw, 3.4rem); line-height: 1.08; margin: 0 0 12px; }
+    .assets-hero__sub { max-width: 52em; color: rgba(255, 247, 235, 0.78); line-height: 1.7; margin: 0; }
+    .assets-hero__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 28px 0 8px; }
+    .assets-kpi {
+      background: rgba(255, 252, 247, 0.04);
+      border: 1px solid rgba(201, 169, 110, 0.18);
+      border-radius: 18px;
+      padding: 16px 18px;
+      backdrop-filter: blur(8px);
+    }
+    .assets-kpi span { display: block; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 247, 235, 0.68); }
+    .assets-kpi strong { display: block; margin-top: 8px; font-family: var(--font-serif); font-size: 1.5rem; color: #fff7e8; }
+    .assets-withdraw {
+      margin-top: 18px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      max-width: 460px;
+    }
+    .assets-withdraw input {
+      flex: 1;
+      background: rgba(255, 252, 247, 0.06);
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      color: #fff7e8;
+    }
+    .assets-withdraw input::placeholder { color: rgba(255, 247, 235, 0.45); }
+    .assets-section {
+      padding: 40px 0 72px;
+      background: linear-gradient(180deg, #f6f1e8 0%, #efe7dc 100%);
+    }
+    .assets-tabs {
+      display: inline-flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      border: 1px solid rgba(226, 216, 196, 0.9);
+    }
+    .assets-tab {
+      border: 0;
+      background: transparent;
+      padding: 10px 16px;
+      border-radius: 999px;
+      color: #6d655b;
+      cursor: pointer;
+      font: inherit;
+    }
+    .assets-tab.is-on {
+      background: #fffdf8;
+      color: #2b261f;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      box-shadow: 0 6px 18px rgba(90, 70, 30, 0.08);
+    }
+    .assets-panel {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(226, 216, 196, 0.9);
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: 0 14px 34px rgba(90, 70, 30, 0.08);
+      backdrop-filter: blur(10px);
+    }
+    .assets-panel h2 {
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      margin: 0 0 14px;
+      color: #2b261f;
+    }
+    .assets-panel__sub { color: #6d655b; margin: -6px 0 14px; line-height: 1.6; }
+    .assets-panel--gallery {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 4px 0 0;
+      backdrop-filter: none;
+    }
+    .asset-value {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 0 18px;
+      padding: 18px 22px;
+      border-radius: 18px;
+      background:
+        radial-gradient(420px 120px at 100% 0%, rgba(201, 169, 110, 0.28), transparent 60%),
+        linear-gradient(135deg, #1a1713 0%, #2c261e 100%);
+      color: #fff7e8;
+      box-shadow: 0 16px 36px rgba(40, 28, 12, 0.16);
+    }
+    .asset-value span {
+      display: block;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      color: rgba(227, 207, 154, 0.78);
+    }
+    .asset-value strong {
+      display: block;
+      margin-top: 6px;
+      font-family: var(--font-serif);
+      font-size: 2rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .asset-value em {
+      font-style: normal;
+      font-size: 0.92rem;
+      color: rgba(255, 247, 235, 0.72);
+      padding-bottom: 4px;
+    }
+    .asset-grid, .sl-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 22px;
+    }
+    .asset-card, .sl-card {
+      position: relative;
+      background: #fffdf8;
+      border: 1px solid rgba(201, 169, 110, 0.32);
+      border-radius: 22px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 14px 32px rgba(70, 48, 18, 0.08);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .asset-card::before, .sl-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #c9a96e 20%, #f3e6c4 50%, #c9a96e 80%, transparent);
+      z-index: 2;
+    }
+    .asset-card:hover, .sl-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 22px 46px rgba(70, 48, 18, 0.14);
+    }
+    .asset-card__stage, .sl-card__img {
+      position: relative;
+      aspect-ratio: 4 / 5;
+      background:
+        radial-gradient(circle at 50% 38%, #fff 0%, #f7f1e6 52%, #e8dcc6 100%);
+      box-shadow: inset 0 -28px 36px rgba(120, 90, 40, 0.05);
+    }
+    .asset-card__stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 22px 18px 76px;
+    }
+    .sl-card__img { display: block; }
+    .asset-card__hero {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      cursor: zoom-in;
+      filter: drop-shadow(0 14px 16px rgba(60, 40, 12, 0.14));
+    }
     .sl-card__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .sl-card__ph { width: 100%; height: 100%; background: linear-gradient(135deg, #efe8dc, #e2d7c3); }
-    .sl-badge { position: absolute; top: 10px; left: 10px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.04em; }
-    .sl-badge--live { background: rgba(46, 125, 78, 0.92); color: #fff; }
-    .sl-badge--paused { background: rgba(217, 119, 6, 0.92); color: #fff; }
-    .sl-card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-    .sl-card__title { font-family: var(--font-serif); font-size: 1.05rem; margin: 0; line-height: 1.35; }
-    .sl-card__row { display: flex; justify-content: space-between; align-items: baseline; }
-    .sl-card__price { color: var(--gold-dark); font-weight: 600; }
-    .sl-card__meta { font-size: 0.8rem; color: var(--text-muted); }
-    .sl-card__actions { display: flex; gap: 8px; margin-top: auto; }
-    .sl-btn { padding: 7px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-light); background: #fff; color: inherit; }
+    .asset-card__ph, .sl-card__ph {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(160deg, #f6efe4, #e4d5be);
+      color: rgba(154, 125, 70, 0.7);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      font-family: var(--font-serif);
+      font-size: 1.1rem;
+    }
+    .asset-card__status, .sl-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 2;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      color: #fff7e8;
+      background: rgba(28, 24, 18, 0.72);
+      backdrop-filter: blur(8px);
+    }
+    .asset-card__status[data-status="COMPLETED"],
+    .sl-badge--live { background: rgba(47, 107, 74, 0.92); }
+    .asset-card__status[data-status="MODELING"],
+    .asset-card__status[data-status="DESIGNING"],
+    .asset-card__status[data-status="PENDING_MODEL"],
+    .asset-card__status[data-status="PENDING_DESIGN"],
+    .asset-card__status[data-status="PENDING_REVIEW"],
+    .sl-badge--paused { background: rgba(154, 106, 36, 0.92); }
+    .asset-card__thumbs {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      z-index: 2;
+    }
+    .asset-card__thumbs::-webkit-scrollbar { display: none; }
+    .asset-card__thumb {
+      flex: 0 0 52px;
+      width: 52px;
+      height: 52px;
+      padding: 0;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      background-color: #fff;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 6px 16px rgba(40, 28, 10, 0.16);
+      cursor: pointer;
+    }
+    .asset-card__thumb.is-on {
+      border-color: #c9a96e;
+      box-shadow: 0 0 0 2px #c9a96e, 0 6px 16px rgba(40, 28, 10, 0.16);
+    }
+    .asset-card__body, .sl-card__body {
+      padding: 16px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+    .asset-card__no {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #9a7d46;
+    }
+    .asset-card__title, .sl-card__title {
+      font-family: var(--font-serif);
+      font-size: 1.12rem;
+      font-weight: 500;
+      margin: 0;
+      line-height: 1.4;
+      color: #2b261f;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.8em;
+    }
+    .asset-card__price, .sl-card__price {
+      font-family: var(--font-serif);
+      font-size: 1.25rem;
+      color: #9a7d46;
+      letter-spacing: 0.02em;
+    }
+    .sl-card__row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .sl-card__meta { font-size: 0.8rem; color: #6d655b; }
+    .asset-card__cta, .sl-card__actions { margin-top: auto; }
+    .sl-card__actions { display: flex; gap: 8px; }
+    .asset-card__cta, .sl-btn {
+      border: 1px solid #d9c9a8;
+      background: #fff;
+      color: #2b261f;
+      cursor: pointer;
+      font: inherit;
+    }
+    .asset-card__cta {
+      width: 100%;
+      padding: 11px 16px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #e4cf9d 0%, #c4a15d 100%);
+      color: #1c1812;
+      font-size: 0.88rem;
+      letter-spacing: 0.04em;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+    .asset-card__cta:hover { filter: brightness(1.05); }
+    .sl-btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+    }
     .sl-btn:hover { border-color: var(--gold); }
-    .sl-btn--gold { background: var(--gold); border-color: var(--gold); color: #1a1814; }
-    .sl-btn--warn { background: transparent; color: #e05d5d; border: 1px solid #e05d5d; }
+    .sl-btn--gold { background: linear-gradient(180deg, #e4cf9d, #c4a15d); border-color: transparent; color: #1c1812; }
+    .sl-btn--warn { background: transparent; color: #a33; border-color: #e3b4b4; }
+    .asset-view {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(16, 14, 12, 0.82);
+      padding: 48px 72px;
+    }
+    .asset-view__img {
+      max-width: min(920px, 100%);
+      max-height: calc(100vh - 140px);
+      object-fit: contain;
+      background: #f7f1e6;
+      border-radius: 16px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+    }
+    .asset-view__close, .asset-view__nav {
+      position: absolute;
+      border: 0;
+      background: rgba(255, 247, 232, 0.12);
+      color: #fff7e8;
+      cursor: pointer;
+    }
+    .asset-view__close {
+      top: 18px;
+      right: 22px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 1.5rem;
+    }
+    .asset-view__nav {
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 1.8rem;
+      line-height: 1;
+    }
+    .asset-view__nav--prev { left: 18px; }
+    .asset-view__nav--next { right: 18px; }
+    .asset-view__count {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 247, 232, 0.8);
+      letter-spacing: 0.12em;
+      font-size: 0.82rem;
+    }
+    .seller-table { background: #fffdf8; border: 1px solid #e6dcc9; border-radius: 18px; }
+    .seller-row { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eadfc9; }
+    .seller-row:last-child { border-bottom: none; }
+    .seller-muted { color: #6d655b; font-size: 0.82rem; margin-top: 4px; }
     .sl-modal { position: fixed; inset: 0; display: none; z-index: 120; }
     .sl-modal.open { display: block; }
     .sl-modal__backdrop { position: absolute; inset: 0; background: rgba(20, 18, 14, 0.55); }
-    .sl-modal__dialog { position: relative; margin: 6vh auto; max-width: 720px; width: calc(100% - 32px); background: #fff; border-radius: var(--radius-lg); padding: 26px 28px; max-height: 88vh; overflow-y: auto; }
-    .sl-modal__close { position: absolute; top: 14px; right: 16px; border: none; background: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted-dark); }
-    .sl-modal__title { font-family: var(--font-serif); margin: 0 0 16px; font-size: 1.4rem; }
+    .sl-modal__dialog { position: relative; margin: 6vh auto; max-width: 720px; width: calc(100% - 32px); background: #fffdf8; border-radius: 20px; padding: 26px 28px; max-height: 88vh; overflow-y: auto; border: 1px solid #e6dcc9; box-shadow: 0 24px 70px rgba(0,0,0,0.22); }
+    .sl-modal__close { position: absolute; top: 14px; right: 16px; border: none; background: none; font-size: 1.4rem; cursor: pointer; color: #6d655b; }
+    .sl-modal__title { font-family: var(--font-serif); margin: 0 0 16px; font-size: 1.4rem; color: #2b261f; }
     .sl-edit { display: grid; grid-template-columns: 1fr 220px; gap: 20px; }
-    .sl-label { display: block; font-size: 0.8rem; color: var(--text-muted-dark); margin: 10px 0 4px; }
-    .sl-input { width: 100%; padding: 9px 12px; border: 1px solid var(--border-light); border-radius: 8px; font: inherit; background: #fff; box-sizing: border-box; }
+    .sl-label { display: block; font-size: 0.8rem; color: #6d655b; margin: 10px 0 4px; }
+    .sl-input { width: 100%; padding: 10px 12px; border: 1px solid #d9c9a8; border-radius: 10px; font: inherit; background: #fff; box-sizing: border-box; }
     .sl-input:focus { outline: none; border-color: var(--gold); }
-    .sl-edit__preview { aspect-ratio: 1; background: #efe8dc; border-radius: 8px; overflow: hidden; }
+    .sl-edit__preview { aspect-ratio: 1; background: #efe7dc; border-radius: 12px; overflow: hidden; }
     .sl-edit__preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .sl-modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-    @media (max-width: 640px) { .sl-edit { grid-template-columns: 1fr; } }
+    .sl-modal--publish { z-index: 1400; }
+    .sl-modal--publish .sl-modal__dialog { max-width: 880px; }
+    .pub-edit { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; }
+    .pub-hint { margin: 0 0 10px; color: #6d655b; font-size: 0.84rem; line-height: 1.5; }
+    .pub-stage {
+      aspect-ratio: 1;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #e6dcc9;
+      background: radial-gradient(circle at 50% 42%, #fff 0%, #f4efe6 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pub-stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .pub-picks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+    .pub-pick {
+      aspect-ratio: 1;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      padding: 0;
+      cursor: pointer;
+      background-color: #fff;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 4px 10px rgba(70, 48, 18, 0.08);
+    }
+    .pub-pick.is-on { border-color: #c9a96e; box-shadow: 0 0 0 1px #c9a96e; }
+    @media (max-width: 900px) {
+      .assets-grid { grid-template-columns: 1fr; }
+      .assets-hero__kpis { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .asset-grid, .sl-cards { grid-template-columns: 1fr; }
+      .asset-view { padding: 64px 16px; }
+      .asset-view__nav--prev { left: 8px; }
+      .asset-view__nav--next { right: 8px; }
+    }
+    @media (max-width: 640px) {
+      .sl-edit, .pub-edit { grid-template-columns: 1fr; }
+      .assets-withdraw { flex-direction: column; align-items: stretch; }
+    }
   </style>
 </head>
 <body class="storefront-page">
@@ -78,8 +457,69 @@
   </div>
 </div>
 
-<section class="section seller-page" id="sellerRoot" style="display:none">
-  <div class="container" id="sellerBody"></div>
+<section class="assets-hero" id="sellerRoot" style="display:none">
+  <div class="container" id="sellerBody">
+    <p class="assets-hero__eyebrow">MY ASSETS</p>
+    <h1 class="assets-hero__title" data-i18n="studio.title">My Assets</h1>
+    <p class="assets-hero__sub" data-i18n="studio.sub">Finished jewelry, listings, earnings and withdrawals. When nothing is listed yet, this page is your personal jewelry gallery.</p>
+    <div class="assets-hero__kpis" id="sellerKpis"></div>
+    <div class="assets-withdraw">
+      <input class="checkout__input" id="withdrawAmount" type="number" min="0" step="0.01" placeholder="Amount to withdraw">
+      <button class="btn btn--gold" id="withdrawBtn" data-i18n="studio.withdraw">Withdraw</button>
+    </div>
+  </div>
+</section>
+
+<section class="assets-section" id="sellerContent" style="display:none">
+  <div class="container">
+    <div class="assets-tabs" role="tablist">
+      <button class="assets-tab is-on" type="button" data-tab="gallery" data-i18n="studio.gallery">我的珠宝资产</button>
+      <button class="assets-tab" type="button" data-tab="shop" data-i18n="studio.listings">我的小店</button>
+      <button class="assets-tab" type="button" data-tab="promo" data-i18n="studio.promo">推广赚佣</button>
+    </div>
+    <div class="assets-panel assets-panel--gallery" id="galleryPanel">
+      <p class="assets-panel__sub" data-i18n="studio.gallery.sub">已完成或已确认的作品，这里是您的个人珠宝展厅。</p>
+      <div id="sellerGallery"></div>
+    </div>
+    <div class="assets-panel" id="listingsPanel" style="display:none">
+      <p class="assets-panel__sub" data-i18n="studio.listings.sub">将完成的作品上架、暂停或重新上架，并追踪销售。</p>
+      <div id="sellerListings"></div>
+    </div>
+    <div class="assets-panel" id="promoPanel" style="display:none">
+      <div class="pm-share">
+        <div class="pm-qr">
+          <img id="promoQr" alt="Referral QR code" style="display:none">
+          <div class="pm-qr__tip" data-i18n="studio.promo.tip">分享您的专属链接，邀请好友下单赚佣金</div>
+        </div>
+        <div class="pm-card">
+          <div class="pm-card__brand">duxury</div>
+          <div class="pm-card__label" data-i18n="studio.promo.code">专属推广码</div>
+          <div class="pm-card__code" id="promoCode">—</div>
+          <div class="pm-card__rate" id="promoRate">—</div>
+          <div class="pm-link" id="promoLink">—</div>
+          <div class="pm-card__row">
+            <button class="pm-btn pm-btn--gold" id="promoCopy" data-i18n="studio.promo.copy">复制链接</button>
+            <button class="pm-btn" id="promoPosterBtn" data-i18n="studio.promo.poster">下载海报</button>
+          </div>
+        </div>
+      </div>
+      <div class="pm-stats" id="promoStats"></div>
+      <div class="seller-withdraw" style="margin-top:12px">
+        <input class="checkout__input" id="promoWithdrawAmount" type="number" min="0" step="0.01" placeholder="Amount to withdraw">
+        <button class="btn btn--gold" id="promoWithdrawBtn" data-i18n="studio.withdraw">Withdraw</button>
+      </div>
+      <h2 class="seller-h" data-i18n="studio.promo.bindings">推广订单</h2>
+      <div id="promoBindings"></div>
+      <h2 class="seller-h" data-i18n="studio.promo.txns">佣金明细</h2>
+      <div id="promoTxns"></div>
+      <h2 class="seller-h" data-i18n="studio.promo.withdrawals">提现记录</h2>
+      <div id="promoWithdrawals"></div>
+    </div>
+    <div class="assets-panel" style="margin-top:20px" id="salesPanel">
+      <h2 data-i18n="studio.sales">Recent sales</h2>
+      <div id="sellerSales"></div>
+    </div>
+  </div>
 </section>
 
 <div class="modal" id="loginModal" aria-hidden="true">
@@ -96,13 +536,13 @@
     <div class="modal__divider"><span data-i18n="login.or">or</span></div>
     <div class="login-email">
       <input type="email" id="emailInput" placeholder="you@example.com" data-i18n-placeholder="login.email.ph">
-      <button class="btn btn--gold" id="emailContinue" data-i18n="login.continue">Continue</button>
+      <div class="login-code">
+        <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
+        <button type="button" class="login-code__send" id="emailContinue" data-i18n="login.send">获取验证码</button>
+      </div>
+      <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
+      <button type="button" class="btn btn--gold" id="codeConfirm" data-i18n="login.submit">登录</button>
     </div>
-    <div class="login-email" id="emailCodeStep" style="display:none">
-      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
-      <button class="btn btn--gold" id="codeConfirm" data-i18n="login.verify">Verify</button>
-    </div>
-    <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
   </div>
 </div>
 
@@ -118,7 +558,8 @@
         <label class="sl-label" for="slEditDesc" data-i18n="studio.field.desc">Description</label>
         <textarea class="sl-input" id="slEditDesc" rows="4"></textarea>
         <label class="sl-label" for="slEditPrice" data-i18n="studio.field.price">Sale price (USD)</label>
-        <input class="sl-input" id="slEditPrice" type="number" min="0.01" step="0.01">
+        <input class="sl-input" id="slEditPrice" type="number" min="299" step="0.01">
+        <p class="pub-hint" data-i18n="pub.min">售价不能低于生产报价 299 美元。</p>
         <label class="sl-label" for="slEditCover" data-i18n="studio.field.cover">Cover image URL</label>
         <input class="sl-input" id="slEditCover" placeholder="https://…">
       </div>
@@ -134,9 +575,9 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261020c"></script>
-<script src="js/api.js?v=20261019r"></script>
-<script src="js/main.js?v=20261022f"></script>
-<script src="js/storefront.js?v=20261020c"></script>
+<script src="js/i18n.js?v=20261027b"></script>
+<script src="js/api.js?v=20261026d"></script>
+<script src="js/main.js?v=20261027b"></script>
+<script src="js/storefront.js?v=20261026c"></script>
 </body>
 </html>

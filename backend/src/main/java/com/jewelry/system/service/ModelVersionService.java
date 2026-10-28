@@ -80,6 +80,28 @@ public class ModelVersionService {
         return toFullDto(v);
     }
 
+    /** 按已落库的单件建模资料打版本，供整单提交时给每一件各记一版。 */
+    @Transactional
+    public OrderModelVersionDto snapshotStoredPiece(
+            long orderId, OrderPiece piece, boolean submittedToCustomer, String label) {
+        OrderModelUpdateRequest req = new OrderModelUpdateRequest();
+        ModelingInfo mi = modelingInfoRepository.findByPieceId(piece.getId()).orElse(null);
+        if (mi != null) {
+            if (mi.getWeight() != null) {
+                req.setWeight(mi.getWeight().doubleValue());
+            }
+            req.setModelNotes(mi.getModelNotes());
+            req.setModelEffectImageUrls(parseStringList(mi.getModelEffectImagesJson()));
+        }
+        orderRepository.findById(orderId).ifPresent(order -> {
+            if (order.getModeler() != null) {
+                req.setModelerId(order.getModeler().getId());
+            }
+        });
+        String filesJson = mi != null ? mi.getModelFilesJson() : null;
+        return createVersionSnapshot(orderId, piece, req, filesJson, submittedToCustomer, label);
+    }
+
     @Transactional
     public void applyVersionToWorkingCopy(long orderId, long pieceId, long versionId) {
         Order order = orderRepository.findById(orderId)

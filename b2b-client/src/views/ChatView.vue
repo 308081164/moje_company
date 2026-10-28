@@ -247,7 +247,11 @@ function mine(m: ConversationMessage) {
 }
 
 function mineEvent(m: ConversationMessage) {
-  return m.event?.actorType !== 'STAFF'
+  const ev = m.event
+  if (!ev) return false
+  if (ev.eventType === 'BALANCE_PAYMENT' || ev.eventType === 'BALANCE_PAID') return false
+  if (ev.eventType === 'DESIGN_SUBMIT' || ev.eventType === 'MODEL_SUBMIT') return false
+  return ev.actorType === 'C_PORTAL_CUSTOMER' || ev.actorType === 'B2B_CLIENT'
 }
 
 const ROLE_HEX: Record<string, string> = {

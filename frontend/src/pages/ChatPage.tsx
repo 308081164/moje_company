@@ -23,6 +23,64 @@ const roleColor: Record<string, string> = {
   AI_ASSISTANT: 'cyan',
 };
 
+function escapeRichHtml(text: string): string {
+  return String(text || '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] as string));
+}
+
+function linkifyRich(text: string): string {
+  return text.replace(/(https?:\/\/[^\s<]+|order-brief\.html\?orderId=\d+)/g, (match) =>
+    `<a class="msg__link" href="${match}" target="_blank" rel="noopener noreferrer">${match}</a>`);
+}
+
+function renderRichLine(text: string): string {
+  let html = escapeRichHtml(text);
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  return linkifyRich(html);
+}
+
+function renderRichText(text: string): React.ReactNode {
+  const lines = String(text || '').split(/\r?\n/);
+  const nodes: React.ReactNode[] = [];
+  let list: React.ReactNode[] = [];
+  let key = 0;
+  const flush = () => {
+    if (list.length) {
+      nodes.push(
+        <ul key={`list-${key++}`} style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+          {list}
+        </ul>,
+      );
+      list = [];
+    }
+  };
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const bullet = trimmed.match(/^[-*•]\s+(.*)$/);
+    const numbered = trimmed.match(/^\d+[.、)]\s*(.*)$/);
+    if (bullet || numbered) {
+      list.push(
+        <li
+          key={key++}
+          style={{ margin: '2px 0' }}
+          dangerouslySetInnerHTML={{ __html: renderRichLine(bullet ? bullet[1] : numbered![1]) }}
+        />,
+      );
+      continue;
+    }
+    flush();
+    if (!trimmed) {
+      nodes.push(<div key={key++} style={{ height: 6 }} />);
+      continue;
+    }
+    nodes.push(
+      <div key={key++} style={{ margin: '0 0 6px' }} dangerouslySetInnerHTML={{ __html: renderRichLine(trimmed) }} />,
+    );
+  }
+  flush();
+  return <>{nodes}</>;
+}
+
 const roleHex: Record<string, string> = {
   CUSTOMER: '#2ea043',
   DESIGNER: '#c9a96e',
@@ -143,6 +201,15 @@ function mergeThread(
 
 type AdminChatPersona = 'SUPER_SERVICE' | 'DESIGNER' | 'MODELER';
 
+function sortConversations(list: Conversation[]): Conversation[] {
+  return [...list].sort((a, b) => {
+    const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
+    const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
+    if (tb !== ta) return tb - ta;
+    return (b.id ?? 0) - (a.id ?? 0);
+  });
+}
+
 const ChatPage: React.FC = () => {
   const { user } = useAuthStore();
   const isAdmin = useIsAdmin();
@@ -181,7 +248,7 @@ const ChatPage: React.FC = () => {
 
   const loadConversations = async () => {
     try {
-      const list = await conversationService.listConversations();
+      const list = sortConversations(await conversationService.listConversations());
       setConversations(list);
       if (list.length && currentIdRef.current == null) {
         const pending = (location.state as { conversationId?: number } | null)?.conversationId;
@@ -987,7 +1054,7 @@ const ChatPage: React.FC = () => {
                         wordBreak: 'break-word',
                       }}
                     >
-                      {m.content}
+                      {m.role === 'AI_ASSISTANT' ? renderRichText(m.content || '') : m.content}
                     </div>
                     {translated && (
                       <div

@@ -15,6 +15,8 @@ public class OrderDesignUpdateRequest {
     private String materialType;
     private String materialDetail;
     private String handSize;
+    /** 电镀 */
+    private String plating;
     private Long designerId;
     private Object processInfo;
     private Object stoneInfo;
@@ -25,8 +27,8 @@ public class OrderDesignUpdateRequest {
     /** 版本备注，如「客户驳回后修改」 */
     private String versionLabel;
     /**
-     * 是否向客户发起设计确认（会话设计稿卡片）。
-     * 未传时：有 designImages 则视为提交（兼容旧客户端）；显式 false 则仅保存草稿。
+     * 是否向客户发起设计确认。为 true 时按整单提交所有尚未确认的单件（每件一张卡片）；
+     * 已确认的件跳过。未传时：有 designImages 则视为提交（兼容旧客户端）；显式 false 则仅保存当前件草稿。
      */
     private Boolean submitToCustomer;
     /**

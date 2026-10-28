@@ -12,23 +12,23 @@ class PortalDepositPricingTest {
     @Test
     void designerDepositIsUnitTimesPieceCount() {
         assertThat(PortalDepositPricing.total(ServiceType.DESIGNER_DESIGN, 1))
-                .isEqualByComparingTo("99.00");
+                .isEqualByComparingTo("199.00");
         assertThat(PortalDepositPricing.total(ServiceType.DESIGNER_DESIGN, 4))
-                .isEqualByComparingTo("396.00");
+                .isEqualByComparingTo("796.00");
     }
 
     @Test
     void customImageDepositIsUnitTimesPieceCount() {
         assertThat(PortalDepositPricing.total(ServiceType.CUSTOM_IMAGE, 1))
-                .isEqualByComparingTo("49.00");
+                .isEqualByComparingTo("99.00");
         assertThat(PortalDepositPricing.total(ServiceType.CUSTOM_IMAGE, 3))
-                .isEqualByComparingTo("147.00");
+                .isEqualByComparingTo("297.00");
     }
 
     @Test
     void missingPieceCountChargesOneUnit() {
         assertThat(PortalDepositPricing.total(ServiceType.DESIGNER_DESIGN, null))
-                .isEqualByComparingTo("99.00");
+                .isEqualByComparingTo("199.00");
     }
 
     @Test

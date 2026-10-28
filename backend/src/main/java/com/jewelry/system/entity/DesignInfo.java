@@ -30,6 +30,10 @@ public class DesignInfo {
     @Column(name = "stone_info", columnDefinition = "json")
     private String stoneInfoJson;
 
+    /** 电镀，设计师填写 */
+    @Column(length = 120)
+    private String plating;
+
     @Column(name = "design_images", columnDefinition = "json")
     private String designImagesJson;
 
@@ -41,6 +45,12 @@ public class DesignInfo {
 
     @Column(name = "approval_notes", columnDefinition = "TEXT")
     private String approvalNotes;
+
+    @Column(name = "last_customer_reject_reason", columnDefinition = "TEXT")
+    private String lastCustomerRejectReason;
+
+    @Column(name = "last_customer_reject_at")
+    private LocalDateTime lastCustomerRejectAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

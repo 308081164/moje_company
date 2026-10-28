@@ -114,6 +114,13 @@ public class Order {
     @Column(name = "service_type", length = 30)
     private ServiceType serviceType;
 
+    /** 来图定制客户额外支付设计师协助费用后已转为设计师设计 */
+    @Column(name = "designer_assist_paid")
+    private Boolean designerAssistPaid = false;
+
+    @Column(name = "designer_assist_paid_at")
+    private LocalDateTime designerAssistPaidAt;
+
     /** 关联的站内聊天室 ID */
     @Column(name = "conversation_id")
     private Long conversationId;

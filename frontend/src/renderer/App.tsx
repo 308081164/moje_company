@@ -14,9 +14,8 @@ import WorkbenchPage from '@/pages/WorkbenchPage';
 import TrackerFollowUpPage from '@/pages/TrackerFollowUpPage';
 import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
-import PortalShowcaseAdminPage from '@/pages/PortalShowcaseAdminPage';
 import StorefrontAdminPage from '@/pages/StorefrontAdminPage';
-import LegacyOrderArchivePage from '@/pages/LegacyOrderArchivePage';
+import SettlementPage from '@/pages/settlement/SettlementPage';
 import InlayStructureLibraryPage from '@/pages/InlayStructureLibraryPage';
 import ChatPage from '@/pages/ChatPage';
 import ProfilePage from '@/pages/ProfilePage';
@@ -226,9 +225,8 @@ const App: React.FC = () => {
             />
             <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
-            <Route path="admin-portal" element={isAdmin ? <PortalShowcaseAdminPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="settlement" element={isAdmin ? <SettlementPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="storefront-admin" element={isAdmin ? <StorefrontAdminPage /> : <Navigate to="/dashboard" replace />} />
-            <Route path="legacy-archives" element={isAdmin ? <LegacyOrderArchivePage /> : <Navigate to="/dashboard" replace />} />
             <Route
               path="inlay-structure-library"
               element={

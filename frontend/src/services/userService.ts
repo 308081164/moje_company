@@ -16,9 +16,9 @@ import {
 // 用户服务
 export const userService = {
   // 获取用户列表
-  async getUsers(params?: UserQueryParams): Promise<PaginatedResponse<UserInfo>> {
+  async getUsers(params?: UserQueryParams, quiet = false): Promise<PaginatedResponse<UserInfo>> {
     try {
-      const response = await api.get<PaginatedResponse<UserInfo>>('/users', { params });
+      const response = await api.get<PaginatedResponse<UserInfo>>('/users', quiet ? { params, skipForbiddenToast: true } : { params });
       return response;
     } catch (error) {
       console.error('获取用户列表失败:', error);

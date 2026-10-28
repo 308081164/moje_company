@@ -42,6 +42,7 @@ public class ProductionSyncService {
     private final OrderFileService orderFileService;
     private final OrderEventService orderEventService;
     private final OrderProductionFollowService orderProductionFollowService;
+    private final OrderCommandService orderCommandService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -116,8 +117,11 @@ public class ProductionSyncService {
         Order order = orderRepository.findById(req.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
         assertCanTouch(order, uid);
-        if (order.getStatus() != OrderStatus.PRODUCING && order.getStatus() != OrderStatus.PENDING_PRODUCTION) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅生产中的订单可以同步工序进度");
+        if (!canSyncProcess(order.getStatus(), process)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    process == ProductionProcess.WAX
+                            ? "仅待工艺验证或生产中的订单可以同步喷蜡"
+                            : "仅生产中的订单可以同步工序进度");
         }
         OrderPiece piece = orderPieceRepository.findById(req.getPieceId())
                 .filter(p -> order.getId().equals(p.getOrderId()))
@@ -139,7 +143,7 @@ public class ProductionSyncService {
         } catch (JsonProcessingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片记录失败");
         }
-        logRepository.save(row);
+        logRepository.saveAndFlush(row);
 
         photo.setMatchedOrderId(order.getId());
         photo.setMatchedPieceId(piece.getId());
@@ -159,13 +163,21 @@ public class ProductionSyncService {
                 "生产进度 · " + process.getLabel(),
                 piece.getName() + " 已完成" + process.getLabel(),
                 null, List.of(file.getId()), piece.getId(), snapshot);
+        if (process == ProductionProcess.WAX) {
+            orderCommandService.passReviewIfAllPiecesWaxed(order.getId(), uid);
+        }
         return orderProductionFollowService.toDto(row);
     }
 
     private List<ProductionSyncDtos.PieceCard> openPieces(long uid, ProductionProcess process) {
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
-            predicates.add(root.get("status").in(OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
+            if (process == ProductionProcess.WAX) {
+                predicates.add(root.get("status").in(
+                        OrderStatus.PENDING_REVIEW, OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
+            } else {
+                predicates.add(root.get("status").in(OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
+            }
             if (!isAdmin()) {
                 predicates.add(cb.equal(root.get("followUp").get("id"), uid));
             }
@@ -261,6 +273,13 @@ public class ProductionSyncService {
 
     private boolean isAdmin() {
         return "ADMIN".equals(SecurityUtils.currentRoleApi().orElse(""));
+    }
+
+    private static boolean canSyncProcess(OrderStatus status, ProductionProcess process) {
+        if (status == OrderStatus.PRODUCING || status == OrderStatus.PENDING_PRODUCTION) {
+            return true;
+        }
+        return process == ProductionProcess.WAX && status == OrderStatus.PENDING_REVIEW;
     }
 
     private static ProductionProcess parseProcess(String code) {

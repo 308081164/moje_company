@@ -48,7 +48,9 @@ public class OrderEventCardService {
     public OrderEventDto assemble(OrderEvent event) {
         List<String> images = resolveImages(event);
         if (images == null || images.isEmpty()) {
-            if (isCraftReview(event.getEventType()) || isShippingAddressEvent(event.getEventType())) {
+            if (isCraftReview(event.getEventType()) || isShippingAddressEvent(event.getEventType())
+                    || event.getEventType() == OrderEventType.DESIGN_OPTIONS_REQUEST
+                    || event.getEventType() == OrderEventType.DESIGN_OPTIONS_FILLED) {
                 images = List.of();
             } else {
                 images = List.of(placeholderImage(event.getEventType()));
@@ -57,14 +59,17 @@ public class OrderEventCardService {
         String resolution = resolveResolution(event);
         String resolutionLabel = resolutionLabel(resolution);
         boolean addressRequest = event.getEventType() == OrderEventType.SHIPPING_ADDRESS_REQUEST;
+        boolean designOptions = event.getEventType() == OrderEventType.DESIGN_OPTIONS_REQUEST;
         boolean actionable = addressRequest
                 ? !hasLaterEvent(event, OrderEventType.SHIPPED)
+                : designOptions
+                ? !hasLaterEvent(event, OrderEventType.DESIGN_OPTIONS_FILLED)
                 : (event.getEventType() == OrderEventType.DESIGN_SUBMIT
                 || event.getEventType() == OrderEventType.MODEL_SUBMIT
                 || event.getEventType() == OrderEventType.BALANCE_PAYMENT)
                 && resolution == null;
         String actorRole = event.getActorRole();
-        String actorName = resolveActorName(event.getActorType(), event.getActorId());
+        String actorName = resolveActorName(event.getActorType(), event.getActorId(), actorRole);
         if (event.getEventType() == OrderEventType.BALANCE_PAYMENT
                 || event.getEventType() == OrderEventType.BALANCE_PAID) {
             actorRole = ConversationService.SYSTEM_EVENT_ROLE;
@@ -234,9 +239,9 @@ public class OrderEventCardService {
         return "data:image/svg+xml;base64," + encoded;
     }
 
-    private String resolveActorName(AccountKind type, Long accountId) {
+    private String resolveActorName(AccountKind type, Long accountId, String actorRole) {
         try {
-            return switch (type) {
+            String name = switch (type) {
                 case STAFF -> userRepository.findById(accountId)
                         .map(u -> StringUtils.hasText(u.getRealName()) ? u.getRealName() : u.getUsername())
                         .orElse(null);
@@ -249,10 +254,32 @@ public class OrderEventCardService {
                                 : (StringUtils.hasText(c.getContactPerson()) ? c.getContactPerson() : c.getContact()))
                         .orElse(null);
             };
+            if (type == AccountKind.STAFF && StringUtils.hasText(name)) {
+                String roleLabel = roleLabel(actorRole);
+                if (StringUtils.hasText(roleLabel)) {
+                    return name + "（" + roleLabel + "）";
+                }
+            }
+            return name;
         } catch (Exception e) {
             log.warn("解析事件操作者姓名失败 type={} id={}", type, accountId, e);
             return null;
         }
+    }
+
+    private static String roleLabel(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+        return switch (role.trim().toUpperCase()) {
+            case "DESIGNER" -> "设计师";
+            case "MODELER" -> "建模师";
+            case "FOLLOW_UP" -> "跟单员";
+            case "SALES_MID" -> "售中客服";
+            case "SALES_PRE" -> "售前客服";
+            case "ADMIN" -> "管理员";
+            default -> null;
+        };
     }
 
     private List<String> resolveImages(OrderEvent event) {

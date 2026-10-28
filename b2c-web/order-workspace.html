@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261022f">
+  <link rel="stylesheet" href="css/style.css?v=20261027b">
 </head>
 <body class="app-body">
 
@@ -142,18 +142,18 @@
     <div class="modal__divider"><span data-i18n="login.or">or</span></div>
     <div class="login-email">
       <input type="email" id="emailInput" placeholder="you@example.com" data-i18n-placeholder="login.email.ph">
-      <button class="btn btn--gold" id="emailContinue" data-i18n="login.continue">Continue</button>
+      <div class="login-code">
+        <input type="text" id="codeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
+        <button type="button" class="login-code__send" id="emailContinue" data-i18n="login.send">获取验证码</button>
+      </div>
+      <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
+      <button type="button" class="btn btn--gold" id="codeConfirm" data-i18n="login.submit">登录</button>
     </div>
-    <div class="login-email" id="emailCodeStep" style="display:none">
-      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="Verification code" data-i18n-placeholder="login.code.ph">
-      <button class="btn btn--gold" id="codeConfirm" data-i18n="login.verify">Verify</button>
-    </div>
-    <p class="login-email__hint" id="emailCodeHint" style="display:none"></p>
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261022e"></script>
-<script src="js/api.js?v=20261022e"></script>
-<script src="js/main.js?v=20261022f"></script>
+<script src="js/i18n.js?v=20261027b"></script>
+<script src="js/api.js?v=20261026d"></script>
+<script src="js/main.js?v=20261027b"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Form,
   Input,
@@ -35,6 +36,13 @@ import type {
 import { JEWELRY_TYPE_OPTIONS, handSizeFieldMeta } from '@/constants/jewelryType';
 import { UserRole } from '@/types/auth';
 import type { UserInfo } from '@/types/auth';
+import {
+  firstCustomerRejectPieceId,
+  hasDesignPiecesForCustomerSubmit,
+  pieceHasCustomerDesignReject,
+  piecesMissingCustomerSubmitImages,
+  sameImageList,
+} from '@/utils/pieceCustomerSubmit';
 
 const { Text, Paragraph } = Typography;
 
@@ -124,23 +132,23 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   }, []);
 
-  const refreshOrder = useCallback(async () => {
+  const refreshOrder = useCallback(async (preferRejected = false) => {
     if (orderId == null) return;
     setLoading(true);
     try {
       const [o, materials, processes, designerList] = await Promise.all([
         orderService.getOrderById(orderId),
-        orderService.getMaterialConfig(),
-        orderService.getProcessConfig(),
+        orderService.getMaterialConfig(true),
+        orderService.getProcessConfig(true),
         userService.getUsers({ page: 0, size: 500, role: UserRole.DESIGNER }).then((r) => r.content || []),
       ]);
       setOrder(o);
       setMaterialConfig(materials);
       setProcessConfig(processes);
       setDesigners(designerList);
-      const pid = activePieceId && o.pieces?.some((p) => p.id === activePieceId)
-        ? activePieceId
-        : o.pieces?.[0]?.id ?? null;
+      const rejectedId = firstCustomerRejectPieceId(o.pieces, 'design');
+      const keepCurrent = !preferRejected && activePieceId && o.pieces?.some((p) => p.id === activePieceId);
+      const pid = keepCurrent ? activePieceId : (rejectedId ?? o.pieces?.[0]?.id ?? null);
       setActivePieceId(pid);
       applyPieceToForm(o, pid);
       if (pid != null) {
@@ -156,7 +164,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
   useEffect(() => {
     if (open && orderId != null) {
       setVersionLabel('');
-      void refreshOrder();
+      void refreshOrder(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
@@ -193,8 +201,8 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   };
 
-  const buildPayload = async (): Promise<OrderDesignUpdateRequest> => {
-    const v = await form.validateFields();
+  const buildPayload = async (strict = true): Promise<OrderDesignUpdateRequest> => {
+    const v = strict ? await form.validateFields() : form.getFieldsValue();
     const processInfo = buildProcessInfoFromSelectKeys(selectedProcesses, processConfig);
     const designImages = collectDoneImageUrlsFromFileList(designImageFileList);
     return {
@@ -236,6 +244,10 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
 
   const saveDraft = async (createVersion: boolean) => {
     if (orderId == null) return;
+    if (activePiece?.designConfirmed) {
+      message.warning(`「${activePiece.name}」客户已确认，请勿修改`);
+      return;
+    }
     const payload = await buildPayload();
     if (createVersion && !payload.designImages?.length) {
       message.warning('新建版本请至少上传一张设计图');
@@ -263,11 +275,22 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
 
   const submitToCustomer = async () => {
     if (orderId == null) return;
-    const payload = await buildPayload();
-    if (!payload.designImages?.length) {
-      message.warning('请先上传设计图片');
+    const images = collectDoneImageUrlsFromFileList(designImageFileList);
+    if (!hasDesignPiecesForCustomerSubmit(pieces)) {
+      message.warning('没有待提交给客户的单件。已确认且未被建模师驳回的件不会再次发送。');
       return;
     }
+    const missing = piecesMissingCustomerSubmitImages(pieces, 'design', activePieceId, images);
+    if (missing.length) {
+      message.error(`以下单件还没有设计图，须这些件都有图后才能提交：${missing.join('、')}`);
+      return;
+    }
+    const sentBack = !!activePiece?.model?.lastRejectToDesignerMessage?.trim();
+    if (activePiece?.designConfirmed && !sentBack && !sameImageList(activePiece.design?.designImages, images)) {
+      message.error(`「${activePiece.name}」客户已确认，提交给客户时不能修改该件，也不会再次发送。`);
+      return;
+    }
+    const payload = await buildPayload(!activePiece?.designConfirmed);
     setBusy(true);
     try {
       await orderService.updateOrderDesign(orderId, {
@@ -275,7 +298,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         submitToCustomer: true,
         createVersion: true,
       });
-      message.success('设计稿已提交，客户将在会话中收到确认卡片');
+      message.success('已将未确认的单件一起提交，客户将按件收到确认卡片');
       onSubmitted();
       onClose();
     } catch (e) {
@@ -287,6 +310,10 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
 
   const restoreVersion = async (versionId: number) => {
     if (orderId == null || activePieceId == null) return;
+    if (activePiece?.designConfirmed) {
+      message.warning(`「${activePiece.name}」客户已确认，不能回退设计图`);
+      return;
+    }
     setBusy(true);
     try {
       const o = await orderService.restoreDesignVersion(orderId, activePieceId, versionId);
@@ -347,31 +374,51 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   };
 
+  const designRejectPieces = pieces.filter((piece) => pieceHasCustomerDesignReject(piece));
+  const activeDesignReject = activePiece && pieceHasCustomerDesignReject(activePiece) ? activePiece : null;
+  const pieceLocked = !!activePiece?.designConfirmed && !activePiece?.model?.lastRejectToDesignerMessage?.trim();
+  const designImageUrls = collectDoneImageUrlsFromFileList(designImageFileList);
+  const designMissing = piecesMissingCustomerSubmitImages(pieces, 'design', activePieceId, designImageUrls);
+  const designHasPending = hasDesignPiecesForCustomerSubmit(pieces);
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 768;
+
   return (
     <Modal
       title="提交设计稿"
       open={open}
       onCancel={onClose}
-      width={760}
+      width={narrow ? '100%' : 760}
+      style={narrow ? { top: 12, maxWidth: 'calc(100vw - 16px)', paddingBottom: 0 } : undefined}
       destroyOnClose
       confirmLoading={busy}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          取消
-        </Button>,
-        <Button key="draft" loading={busy} onClick={() => void saveDraft(false)}>
-          保存草稿
-        </Button>,
-        <Button key="version" loading={busy} onClick={() => void saveDraft(true)}>
-          保存为新版本
-        </Button>,
-        <Button key="submit" type="primary" loading={busy} onClick={() => void submitToCustomer()}>
-          提交给客户确认
-        </Button>,
-      ]}
+      footer={
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+          <Button key="cancel" onClick={onClose} style={{ minHeight: 40 }}>
+            取消
+          </Button>
+          <Button key="draft" loading={busy} disabled={pieceLocked} style={{ minHeight: 40 }} onClick={() => void saveDraft(false)}>
+            保存草稿
+          </Button>
+          <Button key="version" loading={busy} disabled={pieceLocked} style={{ minHeight: 40 }} onClick={() => void saveDraft(true)}>
+            保存为新版本
+          </Button>
+          <Button
+            key="submit"
+            type="primary"
+            loading={busy}
+            disabled={!designHasPending || designMissing.length > 0}
+            style={{ minHeight: 40 }}
+            onClick={() => void submitToCustomer()}
+          >
+            提交给客户确认
+          </Button>
+        </div>
+      }
     >
       <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
-        字段与订单详情「我的任务」一致。客户需按件确认全部设计稿后订单才进入建模；可先保存版本或草稿，再提交。
+        须全部未确认的单件都有设计图后才能一起提交；已确认的件不会再次发送。草稿仍按件保存。
+        {designMissing.length > 0 ? ` 还缺：${designMissing.join('、')}` : ''}
+        {!designHasPending ? ' 当前没有待提交的单件。' : ''}
       </Paragraph>
 
       {orderId != null && (
@@ -385,6 +432,36 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
           onPiecesChanged={afterPiecesChanged}
         />
       )}
+
+      {designRejectPieces.length > 0 ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`有单件待修改：${designRejectPieces.map((p) => p.name).join('、')}`}
+          description={
+            activeDesignReject?.design?.lastCustomerDesignRejectReason ? (
+              <div>
+                <Text strong>{activeDesignReject.name}</Text>
+                <Paragraph style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>
+                  {activeDesignReject.design.lastCustomerDesignRejectReason}
+                </Paragraph>
+              </div>
+            ) : (
+              <Text type="secondary">切换到标有「待修改」的单件，可看到客户原话。</Text>
+            )
+          }
+        />
+      ) : null}
+      {pieceLocked ? (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={`客户已确认「${activePiece?.name || '该单件'}」，请勿修改`}
+          description="已确认的件不会再次发送。"
+        />
+      ) : null}
 
       <Space wrap style={{ marginBottom: 12 }} align="start">
         <Select
@@ -408,7 +485,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         <Button
           size="small"
           icon={<RollbackOutlined />}
-          disabled={selectedVersionId == null}
+          disabled={selectedVersionId == null || pieceLocked}
           onClick={() => selectedVersionId != null && void restoreVersion(selectedVersionId)}
         >
           恢复
@@ -438,7 +515,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         />
       </Space>
 
-      <Form form={form} layout="vertical" disabled={loading}>
+      <Form form={form} layout="vertical" disabled={loading || pieceLocked}>
         <Form.Item name="designerId" label="设计师">
           <Select
             options={designers.map((u) => ({
@@ -509,7 +586,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         <Form.Item name="designNotes" label="设计备注">
           <Input.TextArea rows={3} />
         </Form.Item>
-        <Form.Item label="设计图片" extra="支持多张；提交客户确认前须至少一张。">
+        <Form.Item label="设计图片" extra="本单每一件未确认的单件都要有图，才能一起提交给客户。">
           <UploadWithImagePreview
             listType="picture-card"
             accept="image/*"

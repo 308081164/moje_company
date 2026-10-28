@@ -76,11 +76,37 @@ public class DesignVersionService {
         v.setDesignNotes(req.getDesignNotes());
         v.setProcessInfoJson(toJson(req.getProcessInfo()));
         v.setStoneInfoJson(toJson(req.getStoneInfo()));
+        v.setPlating(req.getPlating());
         v.setDesignImagesJson(toJson(req.getDesignImages()));
         v.setSubmittedToCustomer(submittedToCustomer);
         SecurityUtils.currentStaffUserId().ifPresent(v::setCreatedBy);
         versionRepository.save(v);
         return toFullDto(v);
+    }
+
+    /** 按已落库的单件设计资料打版本，供整单提交时给每一件各记一版。 */
+    @Transactional
+    public OrderDesignVersionDto snapshotStoredPiece(
+            long orderId, OrderPiece piece, boolean submittedToCustomer, String label) {
+        OrderDesignUpdateRequest req = new OrderDesignUpdateRequest();
+        orderRepository.findById(orderId).ifPresent(order -> {
+            if (order.getDesigner() != null) {
+                req.setDesignerId(order.getDesigner().getId());
+            }
+        });
+        orderDetailRepository.findByOrderId(orderId).ifPresent(od -> {
+            req.setEngravingText(od.getEngravingText());
+            req.setEngravingImages(parseStringList(od.getEngravingImagesJson()));
+            req.setMaterialType(od.getMaterialType());
+            req.setHandSize(od.getHandSize());
+            req.setDesignNotes(od.getDesignNotes());
+        });
+        designInfoRepository.findByPieceId(piece.getId()).ifPresent(di -> {
+            req.setProcessInfo(parseJson(di.getProcessInfoJson()));
+            req.setStoneInfo(parseJson(di.getStoneInfoJson()));
+            req.setDesignImages(parseStringList(di.getDesignImagesJson()));
+        });
+        return createVersionSnapshot(orderId, piece, req, submittedToCustomer, label);
     }
 
     @Transactional

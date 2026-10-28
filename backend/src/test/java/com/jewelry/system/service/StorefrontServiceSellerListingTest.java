@@ -111,6 +111,22 @@ class StorefrontServiceSellerListingTest {
     }
 
     @Test
+    void updateListing_rejectsPriceBelowProductionQuote() {
+        StorefrontListing existing = listing(1L, 7L, "PUBLISHED");
+        when(listingRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        StorefrontListingUpdateRequest req = new StorefrontListingUpdateRequest();
+        req.setSalePrice(new BigDecimal("298.99"));
+
+        assertThatThrownBy(() -> storefrontService.updateListing(1L, req))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getReason()).contains("299");
+                });
+        verify(listingRepository, never()).save(any());
+    }
+
+    @Test
     void updateListing_rejectsNonPositivePrice() {
         StorefrontListing existing = listing(1L, 7L, "PUBLISHED");
         when(listingRepository.findById(1L)).thenReturn(Optional.of(existing));

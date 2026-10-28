@@ -53,6 +53,9 @@ public class DesignInfoVersion {
     @Column(name = "stone_info", columnDefinition = "json")
     private String stoneInfoJson;
 
+    @Column(length = 120)
+    private String plating;
+
     @Column(name = "design_images", columnDefinition = "json")
     private String designImagesJson;
 

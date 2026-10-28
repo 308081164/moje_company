@@ -1,0 +1,29 @@
+.piece-design { margin-bottom: 16px; }
+.piece-design__title { font-weight: 600; margin-bottom: 4px; }
+.piece-design__hint { margin: 0 0 10px; color: #667; font-size: 12px; line-height: 1.5; }
+.piece-design__card {
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.piece-design__card.is-active { border-color: #1f7a6b; box-shadow: 0 0 0 1px #1f7a6b inset; }
+.modeler-piece .piece-design__card {
+  margin: 0;
+  height: 100%;
+  cursor: default;
+}
+.piece-design__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.piece-design__head span { color: #667; font-size: 12px; }
+.piece-design__meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 12px; margin: 0; }
+.piece-design__meta div { min-width: 0; }
+.piece-design__meta dt { color: #889; font-size: 12px; }
+.piece-design__meta dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.piece-design__notes, .piece-design__extra { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.piece-design__extra { color: #445; font-size: 13px; }
+.piece-design__block { margin-top: 10px; }
+.piece-design__label { font-size: 12px; color: #667; margin-bottom: 6px; }
+.piece-design__images { display: flex; flex-wrap: wrap; gap: 8px; }
+.piece-design__empty { margin: 0; color: #998; font-size: 13px; }
