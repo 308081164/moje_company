@@ -6,6 +6,7 @@ import com.jewelry.system.entity.ModelerWorkStatus.WorkMode;
 import com.jewelry.system.entity.ModelerWorkStatus.WorkStatus;
 import com.jewelry.system.entity.User;
 import com.jewelry.system.enums.UserRole;
+import com.jewelry.system.enums.UserStatus;
 import com.jewelry.system.repository.ModelerWorkStatusRepository;
 import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.util.SecurityUtils;
@@ -30,13 +31,20 @@ public class ModelerWorkStatusService {
     @Transactional
     public ModelerWorkStatusDto getCurrentModelerStatus() {
         return SecurityUtils.currentStaffUserId()
-                .map(this::getOrCreateStatus)
+                .map(userId -> {
+                    // 非建模师访问时不得写入 modeler_work_status，否则会被自动派单误选
+                    if (!isActiveModeler(userId)) {
+                        return null;
+                    }
+                    return getOrCreateStatus(userId);
+                })
                 .orElse(null);
     }
 
     @Transactional
     public ModelerWorkStatusDto updateWorkMode(String workMode) {
         Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        requireActiveModeler(userId);
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
 
         WorkMode mode;
@@ -55,6 +63,7 @@ public class ModelerWorkStatusService {
     @Transactional
     public ModelerWorkStatusDto updateWorkStatus(String workStatus, String pauseReason) {
         Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        requireActiveModeler(userId);
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
         
         status.setStatus(WorkStatus.valueOf(workStatus));
@@ -73,6 +82,7 @@ public class ModelerWorkStatusService {
     @Transactional
     public ModelerWorkStatusDto toggleAutoAssign(Boolean enabled) {
         Long userId = SecurityUtils.currentStaffUserId().orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        requireActiveModeler(userId);
         ModelerWorkStatus status = statusRepository.findByUserId(userId).orElseGet(() -> createDefaultStatus(userId));
         
         if (Boolean.TRUE.equals(enabled)) {
@@ -131,12 +141,32 @@ public class ModelerWorkStatusService {
             return null;
         }
         return available.stream()
-                .min((a, b) -> Integer.compare(a.getTodoCount(), b.getTodoCount()))
+                .filter(m -> m.getUserId() != null && isActiveModeler(m.getUserId()))
+                .min((a, b) -> Integer.compare(
+                        a.getTodoCount() != null ? a.getTodoCount() : 0,
+                        b.getTodoCount() != null ? b.getTodoCount() : 0))
                 .map(ModelerWorkStatus::getUserId)
                 .orElse(null);
     }
 
+    private boolean isActiveModeler(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        return userRepository.findById(userId)
+                .filter(u -> UserRole.MODELER.equals(u.getRole()))
+                .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .isPresent();
+    }
+
+    private void requireActiveModeler(Long userId) {
+        if (!isActiveModeler(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅建模师可维护接单工作状态");
+        }
+    }
+
     private ModelerWorkStatus createDefaultStatus(Long userId) {
+        requireActiveModeler(userId);
         ModelerWorkStatus status = new ModelerWorkStatus();
         status.setUserId(userId);
         status.setWorkMode(WorkMode.AUTO);

@@ -12,9 +12,9 @@ import SystemConfigPage from '@/pages/SystemConfigPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import WorkbenchPage from '@/pages/WorkbenchPage';
 import TrackerFollowUpPage from '@/pages/TrackerFollowUpPage';
-import ModelingArchivePoolPage from '@/pages/ModelingArchivePoolPage';
 import BulkExportPage from '@/pages/BulkExportPage';
 import StorefrontAdminPage from '@/pages/StorefrontAdminPage';
+import ServiceRequestPage from '@/pages/ServiceRequestPage';
 import SettlementPage from '@/pages/settlement/SettlementPage';
 import InlayStructureLibraryPage from '@/pages/InlayStructureLibraryPage';
 import ChatPage from '@/pages/ChatPage';
@@ -219,14 +219,24 @@ const App: React.FC = () => {
               element={user?.role === 'MODELER' ? <Navigate to="/dashboard" replace /> : <ChatPage />}
             />
             <Route path="workbench" element={<WorkbenchPage />} />
+            <Route path="workbench/quality" element={<WorkbenchPage />} />
             <Route
               path="workbench/tracker-follow-up"
               element={user?.role === 'TRACKER' ? <TrackerFollowUpPage /> : <Navigate to="/dashboard" replace />}
             />
-            <Route path="workbench/modeling-archive" element={<ModelingArchivePoolPage />} />
             <Route path="exports" element={isAdmin ? <BulkExportPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="settlement" element={isAdmin ? <SettlementPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="storefront-admin" element={isAdmin ? <StorefrontAdminPage /> : <Navigate to="/dashboard" replace />} />
+            <Route
+              path="service-requests"
+              element={
+                isAdmin || user?.role === 'TRACKER' || user?.role === 'SALES' || user?.role === 'PRE_SALES' ? (
+                  <ServiceRequestPage />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
             <Route
               path="inlay-structure-library"
               element={

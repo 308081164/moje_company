@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +27,31 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @EntityGraph(attributePaths = {"salesMid", "salesPre", "designer", "modeler", "followUp"})
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findWithGraphById(@Param("id") Long id);
+
+    /**
+     * 设计/建模阶段未指派且问卷已提交的 C 端订单（等待派单）。
+     */
+    @Query("""
+            SELECT o FROM Order o
+            WHERE o.status = :pendingDesign
+              AND o.designer IS NULL
+              AND EXISTS (
+                    SELECT 1 FROM OrderCustomerBrief b
+                    WHERE b.orderId = o.id AND b.submittedAt IS NOT NULL
+              )
+            """)
+    List<Order> findAwaitingDesignerWithBriefSubmitted(@Param("pendingDesign") OrderStatus pendingDesign);
+
+    @Query("""
+            SELECT o FROM Order o
+            WHERE o.status = :pendingModel
+              AND o.modeler IS NULL
+              AND EXISTS (
+                    SELECT 1 FROM OrderCustomerBrief b
+                    WHERE b.orderId = o.id AND b.submittedAt IS NOT NULL
+              )
+            """)
+    List<Order> findAwaitingModelerWithBriefSubmitted(@Param("pendingModel") OrderStatus pendingModel);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id")
@@ -72,6 +98,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     long countByDesignerIdAndStatusIn(Long designerId, List<OrderStatus> statuses);
 
+    /** 设计阶段未指派设计师的订单（工作台/群聊会漏单） */
+    List<Order> findByStatusInAndDesignerIsNull(Collection<OrderStatus> statuses);
+
+    List<Order> findByDesignerIdAndStatusIn(Long designerId, Collection<OrderStatus> statuses);
+
     long countByModelerIdAndStatusIn(Long modelerId, List<OrderStatus> statuses);
 
     long countByFollowUpIdAndStatusIn(Long followUpId, List<OrderStatus> statuses);
@@ -81,6 +112,32 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     Optional<Order> findFirstByB2bClientIdOrderByCreatedAtDesc(Long b2bClientId);
 
     Optional<Order> findByOrderNumber(String orderNumber);
+
+    /**
+     * 排队前方订单数：更高加急档，或同档更早入队（含同秒按 id）。
+     */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.status IN :statuses
+              AND (
+                    COALESCE(o.priorityTier, 0) > :tier
+                 OR (
+                        COALESCE(o.priorityTier, 0) = :tier
+                    AND (
+                            COALESCE(o.queueEnteredAt, o.orderTime, o.createdAt) < :entered
+                         OR (
+                                COALESCE(o.queueEnteredAt, o.orderTime, o.createdAt) = :entered
+                            AND o.id < :orderId
+                            )
+                        )
+                    )
+                  )
+            """)
+    long countAheadInQueue(
+            @Param("statuses") Collection<OrderStatus> statuses,
+            @Param("tier") int tier,
+            @Param("entered") LocalDateTime entered,
+            @Param("orderId") Long orderId);
 
     @Query("""
             SELECT DISTINCT o FROM Order o

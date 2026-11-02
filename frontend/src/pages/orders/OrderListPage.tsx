@@ -180,7 +180,13 @@ const OrderListPage: React.FC = () => {
       {
         title: '订单编号',
         dataIndex: ['baseInfo', 'orderNumber'],
-        width: 160,
+        width: 190,
+        render: (v: string, record) => (
+          <Space size={4} wrap>
+            <span>{v || '-'}</span>
+            {record.baseInfo?.rushPaid ? <Tag color="volcano">加急</Tag> : null}
+          </Space>
+        ),
       },
       {
         title: '客户',
@@ -401,6 +407,7 @@ const OrderListPage: React.FC = () => {
                       }}
                     />
                     <strong>{record.baseInfo.orderNumber || '-'}</strong>
+                    {record.baseInfo?.rushPaid ? <Tag color="volcano">加急</Tag> : null}
                     <Tag color={orderStatusColor(record.currentStatus)}>{orderStatusLabel(record.currentStatus)}</Tag>
                   </div>
                   <div className="order-phone-card__meta">

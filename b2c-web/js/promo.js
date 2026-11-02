@@ -95,7 +95,7 @@
       btn.textContent = t('copied');
       setTimeout(function () { btn.textContent = old; }, 1500);
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(done).catch(function () { fallback(); });
     } else {
       fallback();
@@ -233,7 +233,7 @@
     var withdrawals = data.withdrawals || [];
 
     var html = '';
-    html += '<div class="section__head"><p class="section__eyebrow">REFERRAL</p><h1 class="section__title">' + esc(t('title')) + '</h1><p class="section__sub">' + esc(t('sub')) + '</p></div>';
+    html += '<div class="pm-page-head"><p class="pm-page-head__eyebrow">REFERRAL</p><h1 class="pm-page-head__title">' + esc(t('title')) + '</h1><p class="pm-page-head__sub">' + esc(t('sub')) + '</p></div>';
 
     // 推广卡片 + 二维码
     html += '<div class="pm-share">';
@@ -256,22 +256,22 @@
       '<div style="margin-top:14px"><button class="btn btn--gold" id="pmSavePoster">' + esc(t('poster.save')) + '</button></div></div>';
 
     // 钱包三卡片 + 提现
-    html += '<div class="seller-kpis">';
-    html += '<div class="seller-kpi"><span>' + esc(t('wallet.available')) + '</span><strong>' + esc(money(data.availableBalance)) + '</strong></div>';
-    html += '<div class="seller-kpi"><span>' + esc(t('wallet.pending')) + '</span><strong>' + esc(money(data.pendingBalance)) + '</strong></div>';
-    html += '<div class="seller-kpi"><span>' + esc(t('wallet.earned')) + '</span><strong>' + esc(money(data.totalEarned)) + '</strong></div>';
+    html += '<div class="pm-stats">';
+    html += '<div class="pm-stat pm-stat--accent"><span>' + esc(t('wallet.available')) + '</span><strong>' + esc(money(data.availableBalance)) + '</strong></div>';
+    html += '<div class="pm-stat"><span>' + esc(t('wallet.pending')) + '</span><strong>' + esc(money(data.pendingBalance)) + '</strong></div>';
+    html += '<div class="pm-stat"><span>' + esc(t('wallet.earned')) + '</span><strong>' + esc(money(data.totalEarned)) + '</strong></div>';
     html += '</div>';
-    html += '<div class="seller-withdraw">' +
-      '<input class="checkout__input" id="pmWithdrawAmount" type="number" min="0" step="0.01" placeholder="' + esc(t('withdraw.ph')) + '">' +
+    html += '<div class="pm-cashout">' +
+      '<input id="pmWithdrawAmount" type="number" min="0" step="0.01" placeholder="' + esc(t('withdraw.ph')) + '">' +
       '<button class="sl-btn" id="pmWithdrawAll">' + esc(t('withdraw.all')) + '</button>' +
       '<button class="btn btn--gold" id="pmWithdrawBtn">' + esc(t('withdraw.cta')) + '</button></div>';
-    html += '<p class="seller-muted" style="margin-top:8px">' + esc(t('wallet.withdrawn')) + ': ' + esc(money(data.totalWithdrawn)) + '</p>';
+    html += '<p class="seller-muted" style="margin:0 0 24px">' + esc(t('wallet.withdrawn')) + ': ' + esc(money(data.totalWithdrawn)) + '</p>';
 
     // 统计
     html += '<div class="pm-stats">';
-    html += '<div class="seller-kpi"><span>' + esc(t('stats.buyers')) + '</span><strong>' + esc(data.boundBuyerCount || 0) + '</strong></div>';
-    html += '<div class="seller-kpi"><span>' + esc(t('stats.orders')) + '</span><strong>' + esc(data.boundOrderCount || 0) + '</strong></div>';
-    html += '<div class="seller-kpi"><span>' + esc(t('stats.settled')) + '</span><strong>' + esc(data.settledOrderCount || 0) + '</strong></div>';
+    html += '<div class="pm-stat"><span>' + esc(t('stats.buyers')) + '</span><strong>' + esc(data.boundBuyerCount || 0) + '</strong></div>';
+    html += '<div class="pm-stat"><span>' + esc(t('stats.orders')) + '</span><strong>' + esc(data.boundOrderCount || 0) + '</strong></div>';
+    html += '<div class="pm-stat"><span>' + esc(t('stats.settled')) + '</span><strong>' + esc(data.settledOrderCount || 0) + '</strong></div>';
     html += '</div>';
 
     // 佣金明细

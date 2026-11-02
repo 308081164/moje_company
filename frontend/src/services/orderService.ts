@@ -442,6 +442,29 @@ export const orderService = {
       throw error;
     }
   },
+
+  async uploadEngravingFile(orderId: number, file: File, notes?: string): Promise<FileInfo> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (notes) {
+        formData.append('notes', notes);
+      }
+      const response = await api.post<FileInfo>(
+        `/orders/${orderId}/model/engraving-files`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      return response;
+    } catch (error) {
+      console.error('上传刻字文件失败:', error);
+      throw error;
+    }
+  },
   
   // 删除文件
   async deleteFile(fileId: number): Promise<void> {
@@ -465,17 +488,25 @@ export const orderService = {
     }
   },
   
-  // 下载文件
+  // 下载文件（经后端鉴权返回字节流；勿依赖 302 跳转，Electron/axios 会把 302 当成错误）
   async downloadFile(fileId: number): Promise<Blob> {
-    try {
-      const response = await api.get(`/files/${fileId}/download`, {
-        responseType: 'blob',
-      });
-      return response.data;
-    } catch (error) {
-      console.error('下载文件失败:', error);
-      throw error;
+    const { API_ORIGIN } = await import('./api');
+    const token = localStorage.getItem('access_token');
+    const url = `${API_ORIGIN}/api/files/${fileId}/download?_t=${Date.now()}`;
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      redirect: 'follow',
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        const { notifyAuthExpiredAndRedirect } = await import('@/utils/clearClientAuthSession');
+        notifyAuthExpiredAndRedirect();
+        throw new Error('登录已过期');
+      }
+      const text = await res.text().catch(() => '');
+      throw new Error(text || `下载失败 HTTP ${res.status}`);
     }
+    return res.blob();
   },
   
   // 预览文件
@@ -726,6 +757,7 @@ export const orderService = {
     certificatePrice: number;
     silverPriceFormula: string;
     goldPriceFormula: string;
+    cnyPerUsd?: number;
   }> {
     try {
       const response = await api.get('/orders/system-config');
@@ -742,6 +774,7 @@ export const orderService = {
     certificatePrice?: number;
     silverPriceFormula?: string;
     goldPriceFormula?: string;
+    cnyPerUsd?: number;
   }): Promise<any> {
     try {
       const response = await api.put('/orders/system-config', config);

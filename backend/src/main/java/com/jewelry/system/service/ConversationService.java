@@ -24,8 +24,10 @@ import com.jewelry.system.enums.OrderSource;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 站内聊天室业务：开群、成员管理、消息收发持久化、已读回执。
@@ -56,6 +58,7 @@ public class ConversationService {
     private final OrderEventRepository orderEventRepository;
     private final OrderEventCardService orderEventCardService;
     private final DesignInfoRepository designInfoRepository;
+    private final CustomerOrderServiceRequestRepository serviceRequestRepository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -261,7 +264,18 @@ public class ConversationService {
      * 工艺验证通过后：确保跟单员在群内，并以跟单员本人身份告知客户后续由自己对接。
      */
     @Transactional
+    public void announceDesignReviewHandoff(Long orderId) {
+        announceQualityReviewToCustomer(orderId,
+                "设计稿已通过质量评审，请您审阅各单件设计图。全部确认后将进入建模环节。");
+    }
+
+    @Transactional
     public void announceTrackerHandoff(Long orderId) {
+        announceQualityReviewToCustomer(orderId,
+                "建模稿已通过质量评审，请您审阅各单件效果图。全部确认后我们将进入生产报价；尾款支付成功后才会安排生产。");
+    }
+
+    private void announceQualityReviewToCustomer(Long orderId, String body) {
         Order order = orderRepository.findById(orderId).orElse(null);
         if (order == null || order.getFollowUp() == null || order.getFollowUp().getId() == null) {
             return;
@@ -276,7 +290,7 @@ public class ConversationService {
             return;
         }
         String name = StringUtils.hasText(tracker.getRealName()) ? tracker.getRealName().trim() : tracker.getUsername();
-        String content = "您好，我是" + name + "。工艺验证已经通过，后续的生产与交付由我来和您对接，有任何问题可以直接在这里告诉我。";
+        String content = "您好，我是" + name + "。" + body + "有任何问题可以直接在这里告诉我。";
         ConversationMessage message = new ConversationMessage();
         message.setConversationId(conversation.getId());
         message.setSenderType(AccountKind.STAFF);
@@ -309,15 +323,14 @@ public class ConversationService {
                 });
             }
         }
-        result.sort((a, b) -> {
-            java.time.LocalDateTime ta = a.getLastMessageAt() != null ? a.getLastMessageAt() : a.getCreatedAt();
-            java.time.LocalDateTime tb = b.getLastMessageAt() != null ? b.getLastMessageAt() : b.getCreatedAt();
-            int cmp = tb.compareTo(ta);
-            if (cmp != 0) return cmp;
-            long ida = a.getId() != null ? a.getId() : 0L;
-            long idb = b.getId() != null ? b.getId() : 0L;
-            return Long.compare(idb, ida);
-        });
+        enrichRefundStatus(result);
+        result.sort((a, b) -> OrderQueueService.compareConversationRushThenTime(
+                a.getRushPaid(),
+                a.getLastMessageAt() != null ? a.getLastMessageAt() : a.getCreatedAt(),
+                a.getId(),
+                b.getRushPaid(),
+                b.getLastMessageAt() != null ? b.getLastMessageAt() : b.getCreatedAt(),
+                b.getId()));
         return result;
     }
 
@@ -370,6 +383,23 @@ public class ConversationService {
             // 新设计师进群（lastReadMessageId=0 可看全部历史）
             if (newDesignerId != null) {
                 addMemberIfAbsent(conversation.getId(), AccountKind.STAFF, newDesignerId, "DESIGNER");
+            }
+        });
+    }
+
+    /**
+     * 改派建模师后同步群成员：移除旧建模师，加入新建模师（可查看全部历史消息）。
+     */
+    @Transactional
+    public void syncModelerMember(Long orderId, Long newModelerId) {
+        conversationRepository.findByOrderId(orderId).ifPresent(conversation -> {
+            List<ConversationMember> modelers = memberRepository.findByConversationIdAndRole(conversation.getId(), "MODELER");
+            for (ConversationMember old : modelers) {
+                memberRepository.deleteByConversationIdAndAccountTypeAndAccountId(
+                        conversation.getId(), old.getAccountType(), old.getAccountId());
+            }
+            if (newModelerId != null) {
+                addMemberIfAbsent(conversation.getId(), AccountKind.STAFF, newModelerId, "MODELER");
             }
         });
     }
@@ -504,13 +534,14 @@ public class ConversationService {
                 unread = messageRepository.countByConversationIdAndIdGreaterThan(conversation.getId(), lastReadId);
             }
         }
-        return ConversationDto.builder()
+        ConversationDto dto = ConversationDto.builder()
                 .id(conversation.getId())
                 .orderId(conversation.getOrderId())
                 .orderNumber(order != null ? order.getOrderNumber() : null)
                 .title(order != null ? buildConversationTitle(order) : conversation.getTitle())
                 .orderStatus(order != null && order.getStatus() != null ? order.getStatus().name() : null)
                 .orderStatusLabel(order != null && order.getStatus() != null ? order.getStatus().getDescription() : null)
+                .rushPaid(order != null && OrderQueueService.isRush(order))
                 .serviceType(order != null && order.getServiceType() != null ? order.getServiceType().name() : null)
                 .serviceTypeLabel(order != null && order.getServiceType() != null ? order.getServiceType().getDescription() : null)
                 .avatarUrl(resolveAvatarUrl(order))
@@ -519,6 +550,52 @@ public class ConversationService {
                 .unreadCount(unread)
                 .createdAt(conversation.getCreatedAt())
                 .build();
+        applyRefundStatus(dto, conversation.getOrderId());
+        return dto;
+    }
+
+    private void enrichRefundStatus(List<ConversationDto> list) {
+        List<Long> orderIds = list.stream()
+                .map(ConversationDto::getOrderId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (orderIds.isEmpty()) {
+            return;
+        }
+        Map<Long, CustomerOrderServiceRequest> latest = new HashMap<>();
+        for (CustomerOrderServiceRequest row : serviceRequestRepository
+                .findByOrderIdInAndTypeOrderByCreatedAtDesc(orderIds, CustomerOrderServiceRequestService.TYPE_REFUND)) {
+            latest.putIfAbsent(row.getOrderId(), row);
+        }
+        for (ConversationDto dto : list) {
+            applyRefundStatusFromRow(dto, latest.get(dto.getOrderId()));
+        }
+    }
+
+    private void applyRefundStatus(ConversationDto dto, Long orderId) {
+        if (dto == null || orderId == null) {
+            return;
+        }
+        serviceRequestRepository
+                .findByOrderIdAndTypeOrderByCreatedAtDesc(orderId, CustomerOrderServiceRequestService.TYPE_REFUND)
+                .stream()
+                .findFirst()
+                .ifPresent(row -> applyRefundStatusFromRow(dto, row));
+    }
+
+    private static void applyRefundStatusFromRow(ConversationDto dto, CustomerOrderServiceRequest row) {
+        if (dto == null || row == null || !StringUtils.hasText(row.getStatus())) {
+            return;
+        }
+        String st = row.getStatus().trim().toUpperCase();
+        if ("OPEN".equals(st) || "IN_PROGRESS".equals(st)) {
+            dto.setRefundStatus("REQUESTED");
+            dto.setRefundStatusLabel("客户申请退款");
+        } else if ("RESOLVED".equals(st)) {
+            dto.setRefundStatus("REFUNDED");
+            dto.setRefundStatusLabel("已退款");
+        }
     }
 
     /** 群名：创建日期 + 客户邮箱/谷歌昵称（回退订单号）。 */

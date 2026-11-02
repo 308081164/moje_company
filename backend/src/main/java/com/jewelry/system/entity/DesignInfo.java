@@ -34,6 +34,10 @@ public class DesignInfo {
     @Column(length = 120)
     private String plating;
 
+    /** 该单件手寸/规格（客户问卷或设计师填写），与订单级 order_details.hand_size 解耦 */
+    @Column(name = "hand_size", length = 120)
+    private String handSize;
+
     @Column(name = "design_images", columnDefinition = "json")
     private String designImagesJson;
 

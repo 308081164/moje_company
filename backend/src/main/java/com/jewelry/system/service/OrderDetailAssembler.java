@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.order.*;
 import com.jewelry.system.entity.*;
 import com.jewelry.system.enums.OrderEventType;
+import com.jewelry.system.enums.ReviewKind;
 import com.jewelry.system.enums.ReviewResult;
 import com.jewelry.system.enums.ProductionProcess;
 import com.jewelry.system.repository.OrderEventRepository;
@@ -81,10 +82,12 @@ public class OrderDetailAssembler {
         Map<Long, DesignInfo> designByPiece = indexDesignByPiece(allDesign, di);
         Map<Long, ModelingInfo> modelByPiece = indexModelByPiece(allModel, mi);
         Set<Long> waxedPieceIds = waxedPieceIds(order.getId());
+        Map<Long, Boolean> engravingWants = customerOrderBriefService.engravingWantsByPiece(order.getId());
 
+        boolean multiPiece = pieceList.size() > 1;
         List<OrderPieceDto> pieceDtos = pieceList.stream()
                 .map(p -> {
-                    OrderDesignBlockDto design = buildDesign(order, od, designByPiece.get(p.getId()), p.getId());
+                    OrderDesignBlockDto design = buildDesign(order, od, designByPiece.get(p.getId()), p.getId(), multiPiece);
                     if (design != null) {
                         design.setDesignPassed(Boolean.TRUE.equals(p.getDesignConfirmed()));
                         if (!Boolean.TRUE.equals(p.getDesignConfirmed())) {
@@ -107,8 +110,11 @@ public class OrderDetailAssembler {
                             .jewelryType(p.getJewelryType() != null ? p.getJewelryType().name() : null)
                             .designConfirmed(p.getDesignConfirmed())
                             .modelConfirmed(p.getModelConfirmed())
+                            .designQualityPassed(p.getDesignQualityPassed())
+                            .modelQualityPassed(p.getModelQualityPassed())
                             .processVerified(p.getId() != null && waxedPieceIds.contains(p.getId()))
                             .referenceImages(orderPieceService.parseReferenceImages(p))
+                            .customerWantsEngraving(engravingWants.get(p.getId()))
                             .design(design)
                             .model(model)
                             .build();
@@ -119,9 +125,9 @@ public class OrderDetailAssembler {
         DesignInfo primaryDesign = pieceList.isEmpty() ? di : designByPiece.get(pieceList.get(0).getId());
         ModelingInfo primaryModel = pieceList.isEmpty() ? mi : modelByPiece.get(pieceList.get(0).getId());
         Long primaryPieceId = pieceList.isEmpty() ? null : pieceList.get(0).getId();
-        base.setDesignInfo(buildDesign(order, od, primaryDesign, primaryPieceId));
+        base.setDesignInfo(buildDesign(order, od, primaryDesign, primaryPieceId, multiPiece));
         base.setModelInfo(buildModel(order, primaryModel, primaryPieceId));
-        base.setReviewInfo(buildReview(order, pr));
+        base.setReviewInfo(buildReview(order, pr, ReviewKind.MODEL));
         base.setQuotationInfo(buildQuotation(q));
         base.setCustomerBrief(customerOrderBriefService.viewFor(order, od));
         return base;
@@ -175,7 +181,7 @@ public class OrderDetailAssembler {
         return map;
     }
 
-    private OrderDesignBlockDto buildDesign(Order order, OrderDetail od, DesignInfo di, Long pieceId) {
+    private OrderDesignBlockDto buildDesign(Order order, OrderDetail od, DesignInfo di, Long pieceId, boolean multiPiece) {
         User designer = order.getDesigner();
         Long designerId = designer != null ? designer.getId() : null;
         String designerName = designer != null
@@ -216,7 +222,7 @@ public class OrderDetailAssembler {
                 .engravingImages(od != null ? parseStringList(od.getEngravingImagesJson()) : null)
                 .materialType(od != null ? od.getMaterialType() : null)
                 .materialDetail(null)
-                .handSize(od != null ? firstNonBlank(od.getHandSize(), od.getChainLength()) : null)
+                .handSize(resolvePieceHandSize(order.getId(), od, di, pieceId, multiPiece))
                 .plating(di != null ? di.getPlating() : null)
                 .processInfo(di != null ? parseJson(di.getProcessInfoJson()) : null)
                 .stoneInfo(di != null ? parseJson(di.getStoneInfoJson()) : null)
@@ -227,6 +233,21 @@ public class OrderDetailAssembler {
                 .createdAt(created)
                 .updatedAt(updated)
                 .build();
+    }
+
+    private String resolvePieceHandSize(long orderId, OrderDetail od, DesignInfo di, Long pieceId, boolean multiPiece) {
+        if (di != null && StringUtils.hasText(di.getHandSize())) {
+            return di.getHandSize();
+        }
+        String fromBrief = customerOrderBriefService.sizeLabelForPiece(orderId, pieceId);
+        if (StringUtils.hasText(fromBrief)) {
+            return fromBrief;
+        }
+        if (multiPiece) {
+            // 多件订单不再把订单级汇总尺寸塞进每一件
+            return null;
+        }
+        return od != null ? firstNonBlank(od.getHandSize(), od.getChainLength()) : null;
     }
 
     private OrderModelBlockDto buildModel(Order order, ModelingInfo mi, Long pieceId) {
@@ -266,6 +287,7 @@ public class OrderDetailAssembler {
                 .modelerName(modelerName)
                 .weight(mi.getWeight() != null ? mi.getWeight().doubleValue() : null)
                 .modelFiles(parseJson(mi.getModelFilesJson()))
+                .engravingFiles(parseJson(mi.getEngravingFilesJson()))
                 .modelEffectImages(parseStringList(mi.getModelEffectImagesJson()))
                 .modelNotes(mi.getModelNotes())
                 .modelPassed(mi.getCustomerApproved())
@@ -353,18 +375,20 @@ public class OrderDetailAssembler {
         return Objects.equals(eventPieceId, targetPieceId);
     }
 
-    private OrderReviewBlockDto buildReview(Order order, ProcessReview pr) {
+    public OrderReviewBlockDto buildReview(Order order, ProcessReview pr, ReviewKind kind) {
         User tracker = order.getFollowUp();
         Long trackerId = tracker != null ? tracker.getId() : null;
         String trackerName = tracker != null
                 ? (tracker.getRealName() != null && !tracker.getRealName().isBlank()
                 ? tracker.getRealName() : tracker.getUsername())
                 : null;
+        ReviewKind resolved = kind != null ? kind : ReviewKind.MODEL;
 
         if (pr == null) {
             return OrderReviewBlockDto.builder()
                     .id(order.getId())
                     .orderId(order.getId())
+                    .reviewKind(resolved.name())
                     .trackerId(trackerId)
                     .trackerName(trackerName)
                     .rejectedProcesses(Collections.emptyList())
@@ -372,9 +396,11 @@ public class OrderDetailAssembler {
                     .build();
         }
         List<String> rejected = parseStringList(pr.getDeletedProcessesJson());
+        ReviewKind stored = pr.getReviewKind() != null ? pr.getReviewKind() : resolved;
         return OrderReviewBlockDto.builder()
                 .id(pr.getId())
                 .orderId(order.getId())
+                .reviewKind(stored.name())
                 .trackerId(trackerId)
                 .trackerName(trackerName)
                 .reviewNotes(pr.getReviewNotes())
@@ -409,8 +435,11 @@ public class OrderDetailAssembler {
                 .certificateCost(nz(q.getAppraisalCertificateFee()).doubleValue())
                 .certificateTypes(Collections.emptyList())
                 .confidential(Boolean.TRUE.equals(q.getConfidential()))
+                .designOptionsFilled(q.getDesignOptionsAt() != null)
                 .otherCost(nz(q.getOtherFees()).doubleValue())
                 .totalCost(total.doubleValue())
+                .staffAmountCny(q.getStaffAmountCny() != null ? q.getStaffAmountCny().doubleValue() : null)
+                .fxCnyPerUsd(q.getFxCnyPerUsd() != null ? q.getFxCnyPerUsd().doubleValue() : null)
                 .quotationNotes(q.getOtherNotes())
                 .finalized(Boolean.TRUE.equals(q.getFinalized()))
                 .createdAt(q.getCreatedAt() != null ? ISO.format(q.getCreatedAt()) : null)

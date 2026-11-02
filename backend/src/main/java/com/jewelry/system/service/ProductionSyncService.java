@@ -120,7 +120,7 @@ public class ProductionSyncService {
         if (!canSyncProcess(order.getStatus(), process)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     process == ProductionProcess.WAX
-                            ? "仅待工艺验证或生产中的订单可以同步喷蜡"
+                            ? "仅待发送生产或生产中的订单可以同步喷蜡"
                             : "仅生产中的订单可以同步工序进度");
         }
         OrderPiece piece = orderPieceRepository.findById(req.getPieceId())
@@ -174,7 +174,7 @@ public class ProductionSyncService {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
             if (process == ProductionProcess.WAX) {
                 predicates.add(root.get("status").in(
-                        OrderStatus.PENDING_REVIEW, OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
+                        OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
             } else {
                 predicates.add(root.get("status").in(OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
             }
@@ -216,9 +216,21 @@ public class ProductionSyncService {
     }
 
     private ProductionSyncDtos.PoolPhoto toPhoto(ProductionProcessPhoto photo) {
+        String previewUrl = null;
+        if (photo.getFileId() != null) {
+            previewUrl = fileEntityRepository.findById(photo.getFileId())
+                    .map(fe -> {
+                        if (fe.getFileUrl() != null && !fe.getFileUrl().isBlank()) {
+                            return fe.getFileUrl();
+                        }
+                        return fe.getFilePath();
+                    })
+                    .orElse(null);
+        }
         return ProductionSyncDtos.PoolPhoto.builder()
                 .id(photo.getId())
                 .fileId(photo.getFileId())
+                .previewUrl(previewUrl)
                 .createdAt(photo.getCreatedAt() != null ? ISO.format(photo.getCreatedAt()) : null)
                 .build();
     }
@@ -276,10 +288,11 @@ public class ProductionSyncService {
     }
 
     private static boolean canSyncProcess(OrderStatus status, ProductionProcess process) {
-        if (status == OrderStatus.PRODUCING || status == OrderStatus.PENDING_PRODUCTION) {
+        if (status == OrderStatus.PRODUCING) {
             return true;
         }
-        return process == ProductionProcess.WAX && status == OrderStatus.PENDING_REVIEW;
+        // 喷蜡：待发送生产（客户已确认建模）；其他工序仅生产中
+        return process == ProductionProcess.WAX && status == OrderStatus.PENDING_PRODUCTION;
     }
 
     private static ProductionProcess parseProcess(String code) {

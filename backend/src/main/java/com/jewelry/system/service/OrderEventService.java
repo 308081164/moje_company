@@ -52,7 +52,8 @@ public class OrderEventService {
         event.setPieceId(pieceId);
         event.setEventType(type);
         event.setActorType(actorType);
-        event.setActorId(actorId);
+        // DB actor_id NOT NULL；系统/无操作人事件用 0
+        event.setActorId(actorId != null ? actorId : 0L);
         event.setActorRole(actorRole);
         event.setTitle(title);
         event.setContent(content);
@@ -64,6 +65,13 @@ public class OrderEventService {
             conversationService.pushEventMessage(orderId, event.getId(), title, actorType, actorId, actorRole);
         }
         return event;
+    }
+
+    /** 是否已发生过尾款支付成功事件。 */
+    @Transactional(readOnly = true)
+    public boolean hasBalancePaid(long orderId) {
+        return eventRepository.findByOrderIdOrderByIdAsc(orderId).stream()
+                .anyMatch(e -> e.getEventType() == OrderEventType.BALANCE_PAID);
     }
 
     /** 是否存在尚未结清的尾款支付请求（有 BALANCE_PAYMENT 且其后无 BALANCE_PAID）。 */

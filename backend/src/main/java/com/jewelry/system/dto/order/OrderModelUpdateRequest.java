@@ -17,6 +17,8 @@ public class OrderModelUpdateRequest {
     private List<String> modelEffectImageUrls;
     /** 源文件：本订单下已上传文件的 ID（通常为 MODEL 类型） */
     private List<Long> modelSourceFileIds;
+    /** 刻字生产文件（fileType=ENGRAVING）；客户问卷选择需要刻字时必填 */
+    private List<Long> engravingFileIds;
     /** 保存时写入历史版本（草稿） */
     private Boolean createVersion;
     private String versionLabel;

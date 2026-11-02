@@ -14,11 +14,17 @@ import com.jewelry.system.dto.portal.CustomerBriefSubmitRequest;
 import com.jewelry.system.dto.portal.CustomerDesignOptionsRequest;
 import com.jewelry.system.dto.portal.DesignerAssistPayResponse;
 import com.jewelry.system.dto.portal.CustomerQuotationOptionsRequest;
+import com.jewelry.system.dto.portal.CustomerServiceRequestCreateRequest;
+import com.jewelry.system.dto.portal.CustomerServiceRequestDto;
+import com.jewelry.system.dto.portal.PortalBalancePayRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateRequest;
 import com.jewelry.system.dto.portal.PortalCustomerOrderCreateResponse;
 import com.jewelry.system.dto.portal.PortalCustomerOrderListItemDto;
+import com.jewelry.system.dto.portal.RushPayResponse;
 import com.jewelry.system.service.CustomerOrderBriefService;
+import com.jewelry.system.service.CustomerOrderServiceRequestService;
 import com.jewelry.system.service.DesignerAssistUpgradeService;
+import com.jewelry.system.service.OrderQueueService;
 import com.jewelry.system.service.PortalCustomerOrderService;
 import com.jewelry.system.service.PortalCustomerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +50,8 @@ public class PortalCustomerOrderController {
     private final PortalCustomerOrderService portalCustomerOrderService;
     private final CustomerOrderBriefService customerOrderBriefService;
     private final DesignerAssistUpgradeService designerAssistUpgradeService;
+    private final CustomerOrderServiceRequestService customerOrderServiceRequestService;
+    private final OrderQueueService orderQueueService;
 
     @GetMapping
     @Operation(summary = "我的订单（已绑定）")
@@ -61,6 +69,12 @@ public class PortalCustomerOrderController {
     @Operation(summary = "来图定制客户支付 $40 请设计师协助，订单转为设计师设计（保留已填信息）")
     public ResponseEntity<DesignerAssistPayResponse> payDesignerAssist(@PathVariable long orderId) {
         return ResponseEntity.ok(designerAssistUpgradeService.upgrade(orderId));
+    }
+
+    @PostMapping("/{orderId}/rush/pay")
+    @Operation(summary = "支付 $50 加急费用，优先安排设计/建模产能")
+    public ResponseEntity<RushPayResponse> payRush(@PathVariable long orderId) {
+        return ResponseEntity.ok(orderQueueService.payRush(orderId));
     }
 
     @GetMapping("/{orderId}/summary")
@@ -114,8 +128,9 @@ public class PortalCustomerOrderController {
 
     @PostMapping("/{orderId}/pay-balance")
     @Operation(summary = "客户支付尾款（mock）")
-    public ResponseEntity<Void> payBalance(@PathVariable long orderId) {
-        portalCustomerService.payBalance(orderId);
+    public ResponseEntity<Void> payBalance(@PathVariable long orderId,
+                                           @RequestBody(required = false) PortalBalancePayRequest body) {
+        portalCustomerService.payBalance(orderId, body);
         return ResponseEntity.ok().build();
     }
 
@@ -167,5 +182,33 @@ public class PortalCustomerOrderController {
             @PathVariable long orderId,
             @RequestBody CustomerShippingAddressRequest body) {
         return ResponseEntity.ok(portalCustomerService.submitShippingAddress(orderId, body));
+    }
+
+    @GetMapping("/{orderId}/service-requests")
+    @Operation(summary = "查询本订单的投诉/退款申请")
+    public ResponseEntity<List<CustomerServiceRequestDto>> listServiceRequests(@PathVariable long orderId) {
+        return ResponseEntity.ok(customerOrderServiceRequestService.listForCustomerOrder(orderId));
+    }
+
+    @PostMapping("/{orderId}/service-requests/complaint")
+    @Operation(summary = "提交投诉")
+    public ResponseEntity<CustomerServiceRequestDto> submitComplaint(
+            @PathVariable long orderId,
+            @RequestBody CustomerServiceRequestCreateRequest body) {
+        return ResponseEntity.ok(customerOrderServiceRequestService.submitComplaint(orderId, body));
+    }
+
+    @PostMapping("/{orderId}/service-requests/refund")
+    @Operation(summary = "申请退款")
+    public ResponseEntity<CustomerServiceRequestDto> submitRefund(
+            @PathVariable long orderId,
+            @RequestBody CustomerServiceRequestCreateRequest body) {
+        return ResponseEntity.ok(customerOrderServiceRequestService.submitRefund(orderId, body));
+    }
+
+    @PostMapping("/{orderId}/service-requests/refund/cancel")
+    @Operation(summary = "撤销进行中的退款申请")
+    public ResponseEntity<CustomerServiceRequestDto> cancelRefund(@PathVariable long orderId) {
+        return ResponseEntity.ok(customerOrderServiceRequestService.cancelOpenRefund(orderId));
     }
 }

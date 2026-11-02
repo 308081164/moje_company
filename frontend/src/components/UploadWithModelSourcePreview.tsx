@@ -44,7 +44,7 @@ const UploadWithModelSourcePreview: React.FC<UploadWithModelSourcePreviewProps> 
         return;
       }
       const kind = meshPreviewKind(file.name || '');
-      if (kind === 'stl' || kind === 'obj' || kind === 'none') {
+      if (kind === 'stl' || kind === 'obj' || kind === 'glb' || kind === 'step' || kind === 'none') {
         setMeshFile(file);
         setMeshOpen(true);
         return;

@@ -2,6 +2,7 @@
 set -euo pipefail
 cd /opt/moje
 tar -xzf moje-deploy.tgz
+rm -f b2c-web/works.html
 
 if [ -f .env ]; then
   ENV_TMP="$(mktemp)"
@@ -17,7 +18,7 @@ TAG="manual-$(date +%Y%m%d%H%M)"
 echo "=== Building images: $TAG ==="
 docker build -t "jewelry-backend:${TAG}" -f backend/Dockerfile backend
 docker build -t "moje-b2c-web:${TAG}" -f b2c-web/Dockerfile b2c-web
-docker build -t "moje-staff-web:${TAG}" -f frontend/Dockerfile.static frontend
+docker build -t "moje-staff-web:${TAG}" -f frontend/Dockerfile frontend
 export IMAGE_BACKEND="jewelry-backend:${TAG}"
 export IMAGE_B2C="moje-b2c-web:${TAG}"
 export IMAGE_STAFF="moje-staff-web:${TAG}"

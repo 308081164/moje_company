@@ -45,6 +45,7 @@ public class B2BOrderService {
     private final AutoAssignmentService autoAssignmentService;
     private final WeComCustomerGroupService weComCustomerGroupService;
     private final OrderFileService orderFileService;
+    private final OrderQueueService orderQueueService;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -93,6 +94,7 @@ public class B2BOrderService {
         order.setOrderNumber(generateOrderNumber());
         // B 端客户自带需求/参考图，跳过设计阶段，直接进入建模中并分配建模师
         order.setStatus(OrderStatus.PENDING_MODEL);
+        orderQueueService.enterQueue(order);
 
         orderRepository.save(order);
         autoAssignmentService.autoAssignB2bNewOrder(order.getId());

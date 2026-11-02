@@ -121,6 +121,24 @@ public class Order {
     @Column(name = "designer_assist_paid_at")
     private LocalDateTime designerAssistPaidAt;
 
+    /** 0=普通排队，1=已支付加急（置顶优先） */
+    @Column(name = "priority_tier", nullable = false)
+    private Integer priorityTier = 0;
+
+    /** 进入设计/建模处理队列的时间（FIFO 次级排序） */
+    @Column(name = "queue_entered_at")
+    private LocalDateTime queueEnteredAt;
+
+    @Column(name = "rush_paid_at")
+    private LocalDateTime rushPaidAt;
+
+    @Column(name = "rush_fee", precision = 10, scale = 2)
+    private BigDecimal rushFee;
+
+    /** 尾款支付时客户勾选：履约完成后自动上架小店 */
+    @Column(name = "auto_publish_to_storefront", nullable = false)
+    private Boolean autoPublishToStorefront = false;
+
     /** 关联的站内聊天室 ID */
     @Column(name = "conversation_id")
     private Long conversationId;
@@ -210,14 +228,28 @@ public class Order {
             );
         }
         
+        OrderStatus previous = this.status;
         // 记录状态变更时间
         switch (targetStatus) {
+            case PENDING_DESIGN:
+                if (previous != OrderStatus.PENDING_DESIGN && previous != OrderStatus.DESIGNING) {
+                    this.queueEnteredAt = LocalDateTime.now();
+                }
+                break;
             case DESIGNING:
                 this.designCompletedTime = null;
                 this.modelCompletedTime = null;
                 break;
+            case PENDING_DESIGN_REVIEW:
+                if (previous != OrderStatus.PENDING_DESIGN_REVIEW) {
+                    this.queueEnteredAt = LocalDateTime.now();
+                }
+                break;
             case PENDING_MODEL:
                 this.designCompletedTime = LocalDateTime.now();
+                if (previous != OrderStatus.PENDING_MODEL && previous != OrderStatus.MODELING) {
+                    this.queueEnteredAt = LocalDateTime.now();
+                }
                 break;
             case MODELING:
                 this.modelCompletedTime = null;

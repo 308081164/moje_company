@@ -29,6 +29,8 @@ import com.jewelry.system.enums.ServiceType;
 import com.jewelry.system.repository.DesignInfoRepository;
 import com.jewelry.system.repository.ModelingInfoRepository;
 import com.jewelry.system.repository.OrderCustomerViewLinkRepository;
+import com.jewelry.system.enums.WorkspaceBannerPhase;
+import com.jewelry.system.repository.OrderCustomerBriefRepository;
 import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.QuotationRepository;
 import com.jewelry.system.util.SecurityUtils;
@@ -52,6 +54,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -82,6 +86,10 @@ public class CustomerOrderViewService {
     private final OrderPieceService orderPieceService;
     private final CustomerQuotationFlowService customerQuotationFlowService;
     private final OrderConfigurationService orderConfigurationService;
+    private final OrderEventService orderEventService;
+    private final OrderQueueService orderQueueService;
+    private final OrderCustomerBriefRepository orderCustomerBriefRepository;
+    private final WorkspaceBannerService workspaceBannerService;
 
     /** 与 B2B 共用 Vue 门户基址（无路径），用于生成 {base}/portal/c/progress/{token} */
     @Value("${app.portal.base-url:http://localhost:8852}")
@@ -243,6 +251,11 @@ public class CustomerOrderViewService {
                     .laborCost(quotation.getLaborCost())
                     .additionalLaborCost(quotation.getAdditionalLaborCost())
                     .totalAmount(quotation.getTotalAmount())
+                    .currency(quotation.getStaffAmountCny() != null ? "USD" : null)
+                    .staffAmountCny(quotation.getStaffAmountCny())
+                    .fxCnyPerUsd(quotation.getFxCnyPerUsd())
+                    .amountBeforeDiscount(quotation.getUsdBeforeDiscount())
+                    .publicityDiscountUsd(quotation.getPublicityDiscountUsd())
                     .finalized(true)
                     .designBuyout(Boolean.TRUE.equals(quotation.getHasDesignCopyright()))
                     .designBuyoutCost(quotation.getDesignCopyrightFee())
@@ -263,6 +276,12 @@ public class CustomerOrderViewService {
                     .build();
         }
 
+        boolean briefCompleted = orderCustomerBriefRepository.findByOrderId(order.getId())
+                .map(b -> b.getSubmittedAt() != null)
+                .orElse(false);
+        WorkspaceBannerPhase bannerPhase = workspaceBannerService.resolve(order, briefCompleted);
+        boolean inQueueBanner = bannerPhase == WorkspaceBannerPhase.QUEUED;
+
         return CustomerOrderPublicDto.builder()
                 .orderNumber(order.getOrderNumber())
                 .displayTitle(resolveDisplayTitle(order))
@@ -282,8 +301,41 @@ public class CustomerOrderViewService {
                 .shipment(shipmentService.getShipmentForCustomer(order.getId()))
                 .serviceType(order.getServiceType() != null ? order.getServiceType().name() : null)
                 .designerAssistPaid(Boolean.TRUE.equals(order.getDesignerAssistPaid()))
+                .deposit(nzMoney(order.getDeposit()))
+                .refundableAmount(resolveRefundableAmount(order))
+                .inQueue(inQueueBanner)
+                .queueAheadCount(inQueueBanner ? orderQueueService.countAhead(order) : 0L)
+                .rushPaid(OrderQueueService.isRush(order))
+                .rushEligible(inQueueBanner && orderQueueService.canPayRush(order))
+                .rushFee(OrderQueueService.RUSH_FEE_USD.stripTrailingZeros().toPlainString())
                 .pieces(pieces)
+                .briefCompleted(briefCompleted)
+                .bannerPhase(bannerPhase.name())
+                .shippingAddressReady(StringUtils.hasText(order.getShippingAddress()))
                 .build();
+    }
+
+    private BigDecimal resolveRefundableAmount(Order order) {
+        BigDecimal total = nzMoney(order.getDeposit());
+        if (Boolean.TRUE.equals(order.getDesignerAssistPaid())) {
+            // 协助费未并入 deposit，按当时档位上界计入可退参考额
+            total = total.add(DesignerAssistUpgradeService.DESIGNER_ASSIST_PRICE_FULL);
+        }
+        if (OrderQueueService.isRush(order)) {
+            total = total.add(nzMoney(order.getRushFee() != null ? order.getRushFee() : OrderQueueService.RUSH_FEE_USD));
+        }
+        if (orderEventService.hasBalancePaid(order.getId())) {
+            total = total.add(nzMoney(customerQuotationFlowService.resolveBalanceAmount(order.getId())));
+        }
+        if (order.getSalePrice() != null && order.getSalePrice().compareTo(BigDecimal.ZERO) > 0
+                && total.compareTo(BigDecimal.ZERO) <= 0) {
+            total = order.getSalePrice();
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal nzMoney(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 
     private List<String> parseModelEffectImages(ModelingInfo mi) {

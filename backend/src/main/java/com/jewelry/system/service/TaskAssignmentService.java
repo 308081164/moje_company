@@ -54,9 +54,18 @@ public class TaskAssignmentService {
             return null;
         }
 
-        // 过滤掉超负载的建模师
+        // 过滤掉超负载、以及误写入工作状态表的非建模师账号（如跟单员/管理员）
         availableModelers = availableModelers.stream()
                 .filter(m -> !isModelerOverloaded(m))
+                .filter(m -> {
+                    if (m.getUserId() == null) {
+                        return false;
+                    }
+                    return userRepository.findById(m.getUserId())
+                            .filter(u -> u.getStatus() == com.jewelry.system.enums.UserStatus.ACTIVE)
+                            .filter(u -> u.getRole() == com.jewelry.system.enums.UserRole.MODELER)
+                            .isPresent();
+                })
                 .collect(Collectors.toList());
 
         if (availableModelers.isEmpty()) {
@@ -277,6 +286,11 @@ public class TaskAssignmentService {
     }
 
     private ModelerWorkStatus createDefaultStatus(Long userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.getRole() != com.jewelry.system.enums.UserRole.MODELER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "仅建模师可维护接单工作状态，用户 " + userId + " 不是建模师");
+        }
         ModelerWorkStatus status = new ModelerWorkStatus();
         status.setUserId(userId);
         status.setWorkMode(ModelerWorkStatus.WorkMode.AUTO);

@@ -1,0 +1,502 @@
+[
+  {
+    "demoKey": "DEMO-SF-001",
+    "title": "Stellar Sapphire Ring",
+    "description": "Oval sapphire halo in white gold — atelier confirmed model.",
+    "jewelryType": "RING",
+    "salePrice": 382.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 3
+  },
+  {
+    "demoKey": "DEMO-SF-002",
+    "title": "Aurora Ruby Ring",
+    "description": "Ruby center with pavé band, rose gold finish.",
+    "jewelryType": "RING",
+    "salePrice": 445.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 6
+  },
+  {
+    "demoKey": "DEMO-SF-003",
+    "title": "Lunar Pearl Signet",
+    "description": "Freshwater pearl set in brushed yellow gold signet.",
+    "jewelryType": "RING",
+    "salePrice": 507.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 9
+  },
+  {
+    "demoKey": "DEMO-SF-004",
+    "title": "Noir Onyx Band",
+    "description": "Black onyx inlay geometric band for everyday wear.",
+    "jewelryType": "RING",
+    "salePrice": 570.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 12
+  },
+  {
+    "demoKey": "DEMO-SF-005",
+    "title": "Celeste Diamond Solitaire",
+    "description": "Classic round brilliant solitaire, platinum setting.",
+    "jewelryType": "RING",
+    "salePrice": 632.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 15
+  },
+  {
+    "demoKey": "DEMO-SF-006",
+    "title": "Garden Moss Agate Ring",
+    "description": "Organic moss agate cabochon with vine shoulders.",
+    "jewelryType": "RING",
+    "salePrice": 695.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 18
+  },
+  {
+    "demoKey": "DEMO-SF-007",
+    "title": "Heritage Emerald Trilogy",
+    "description": "Three-stone emerald and diamond trilogy ring.",
+    "jewelryType": "RING",
+    "salePrice": 582.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 21
+  },
+  {
+    "demoKey": "DEMO-SF-008",
+    "title": "Mirage Opalescent Ring",
+    "description": "Ethiopian opal with diamond accents.",
+    "jewelryType": "RING",
+    "salePrice": 645.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1573408301185-9146fe634ad0?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 24
+  },
+  {
+    "demoKey": "DEMO-SF-009",
+    "title": "Atlas Wide Gold Band",
+    "description": "Chunky 18K yellow gold brushed band.",
+    "jewelryType": "RING",
+    "salePrice": 707.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 27
+  },
+  {
+    "demoKey": "DEMO-SF-010",
+    "title": "Petit Heart Ruby",
+    "description": "Petite heart ruby stacker ring.",
+    "jewelryType": "RING",
+    "salePrice": 770.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1588444837495-c6cfeb53f32d?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 30
+  },
+  {
+    "demoKey": "DEMO-SF-011",
+    "title": "Emerald Plume Pendant",
+    "description": "Teardrop emerald pendant on fine cable chain.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 832.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1622398925373-3f91b1e275f5?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 33
+  },
+  {
+    "demoKey": "DEMO-SF-012",
+    "title": "North Star Diamond Pendant",
+    "description": "Star motif diamond pendant, white gold.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 895.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1458538977777-0549b2370168?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 36
+  },
+  {
+    "demoKey": "DEMO-SF-013",
+    "title": "Tide Pearl Strand",
+    "description": "Graduated pearl strand with gold clasp.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 957.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515405295579-ba7b45403062?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 39
+  },
+  {
+    "demoKey": "DEMO-SF-014",
+    "title": "Amber Lantern Necklace",
+    "description": "Warm amber drops on twisted chain.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 845.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 2
+  },
+  {
+    "demoKey": "DEMO-SF-015",
+    "title": "Coin Medallion Gold",
+    "description": "Hammered gold medallion necklace.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 907.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 5
+  },
+  {
+    "demoKey": "DEMO-SF-016",
+    "title": "Crystal Dew Collar",
+    "description": "Delicate crystal collar necklace.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 970.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 8
+  },
+  {
+    "demoKey": "DEMO-SF-017",
+    "title": "Velvet Ribbon Choker",
+    "description": "Satin ribbon choker with central diamond.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 1032.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 11
+  },
+  {
+    "demoKey": "DEMO-SF-018",
+    "title": "Ocean Wave Pendant",
+    "description": "Wave-form pendant in mixed metals.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 1095.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 14
+  },
+  {
+    "demoKey": "DEMO-SF-019",
+    "title": "Celeste Diamond Studs",
+    "description": "Classic diamond studs, screw backs.",
+    "jewelryType": "EARRING",
+    "salePrice": 1157.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 17
+  },
+  {
+    "demoKey": "DEMO-SF-020",
+    "title": "Morning Dew Earrings",
+    "description": "Pearl drop hoops in yellow gold.",
+    "jewelryType": "EARRING",
+    "salePrice": 1220.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 20
+  },
+  {
+    "demoKey": "DEMO-SF-021",
+    "title": "Iris Amethyst Drops",
+    "description": "Amethyst briolette drop earrings.",
+    "jewelryType": "EARRING",
+    "salePrice": 1107.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 23
+  },
+  {
+    "demoKey": "DEMO-SF-022",
+    "title": "Bolt Gold Hoops",
+    "description": "Chunky polished gold hoop earrings.",
+    "jewelryType": "EARRING",
+    "salePrice": 1170.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 26
+  },
+  {
+    "demoKey": "DEMO-SF-023",
+    "title": "Petal Diamond Climbers",
+    "description": "Ear climbers with marquise diamonds.",
+    "jewelryType": "EARRING",
+    "salePrice": 1232.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 29
+  },
+  {
+    "demoKey": "DEMO-SF-024",
+    "title": "Smoke Quartz Huggies",
+    "description": "Smoky quartz huggie hoops.",
+    "jewelryType": "EARRING",
+    "salePrice": 1295.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 32
+  },
+  {
+    "demoKey": "DEMO-SF-025",
+    "title": "Baroque Pearl Twins",
+    "description": "Asymmetric baroque pearl studs.",
+    "jewelryType": "EARRING",
+    "salePrice": 1357.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1573408301185-9146fe634ad0?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 35
+  },
+  {
+    "demoKey": "DEMO-SF-026",
+    "title": "Sunburst Studs",
+    "description": "Radiating gold sunburst stud earrings.",
+    "jewelryType": "EARRING",
+    "salePrice": 1420.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 38
+  },
+  {
+    "demoKey": "DEMO-SF-027",
+    "title": "Lustre Tennis Bracelet",
+    "description": "Full diamond tennis bracelet, white gold.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1482.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1588444837495-c6cfeb53f32d?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 1
+  },
+  {
+    "demoKey": "DEMO-SF-028",
+    "title": "Cuff Open Horizon",
+    "description": "Open cuff with brushed finish.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1370.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1622398925373-3f91b1e275f5?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 4
+  },
+  {
+    "demoKey": "DEMO-SF-029",
+    "title": "Linked Coin Bracelet",
+    "description": "Coin-link yellow gold bracelet.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1432.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1458538977777-0549b2370168?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 7
+  },
+  {
+    "demoKey": "DEMO-SF-030",
+    "title": "Silk Cord Charm",
+    "description": "Silk cord with removable gold charm.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1495.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515405295579-ba7b45403062?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 10
+  },
+  {
+    "demoKey": "DEMO-SF-031",
+    "title": "Bangle Stack Duo",
+    "description": "Pair of slim stacking bangles.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1557.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 13
+  },
+  {
+    "demoKey": "DEMO-SF-032",
+    "title": "River Pearl Bracelet",
+    "description": "Pearl and gold bead bracelet.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1620.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 16
+  },
+  {
+    "demoKey": "DEMO-SF-033",
+    "title": "Mesh Glow Bracelet",
+    "description": "Fine mesh bracelet with clasp.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1682.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 19
+  },
+  {
+    "demoKey": "DEMO-SF-034",
+    "title": "Lock & Key Bracelet",
+    "description": "Padlock motif charm bracelet.",
+    "jewelryType": "BRACELET",
+    "salePrice": 1745.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 22
+  },
+  {
+    "demoKey": "DEMO-SF-035",
+    "title": "Art Deco Brooch Pin",
+    "description": "Geometric art deco brooch.",
+    "jewelryType": "BROOCH",
+    "salePrice": 1632.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 25
+  },
+  {
+    "demoKey": "DEMO-SF-036",
+    "title": "Botanical Leaf Brooch",
+    "description": "Hand-engraved leaf brooch.",
+    "jewelryType": "BROOCH",
+    "salePrice": 1695.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 28
+  },
+  {
+    "demoKey": "DEMO-SF-037",
+    "title": "Vintage Cameo Brooch",
+    "description": "Classic cameo on gold frame.",
+    "jewelryType": "BROOCH",
+    "salePrice": 1757.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 31
+  },
+  {
+    "demoKey": "DEMO-SF-038",
+    "title": "Bee Garden Brooch",
+    "description": "Enamel bee brooch with crystals.",
+    "jewelryType": "BROOCH",
+    "salePrice": 1820.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 34
+  },
+  {
+    "demoKey": "DEMO-SF-039",
+    "title": "Keepsake Locket Mini",
+    "description": "Oval locket for photos or notes.",
+    "jewelryType": "OTHER",
+    "salePrice": 1882.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 37
+  },
+  {
+    "demoKey": "DEMO-SF-040",
+    "title": "Charm Cluster Clip",
+    "description": "Multi-charm clip for bags or chains.",
+    "jewelryType": "OTHER",
+    "salePrice": 1945.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 0
+  },
+  {
+    "demoKey": "DEMO-SF-041",
+    "title": "Twilight Blue Topaz",
+    "description": "Swiss blue topaz oval ring.",
+    "jewelryType": "RING",
+    "salePrice": 2007.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 3
+  },
+  {
+    "demoKey": "DEMO-SF-042",
+    "title": "Ivory Enamel Band",
+    "description": "Enamel and gold patterned band.",
+    "jewelryType": "RING",
+    "salePrice": 1895.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1573408301185-9146fe634ad0?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 6
+  },
+  {
+    "demoKey": "DEMO-SF-043",
+    "title": "Lariat Cross Over",
+    "description": "Lariat necklace with sliding pearl.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 1957.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 9
+  },
+  {
+    "demoKey": "DEMO-SF-044",
+    "title": "Paperclip Gold Chain",
+    "description": "Trendy paperclip chain necklace.",
+    "jewelryType": "NECKLACE",
+    "salePrice": 2020.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1588444837495-c6cfeb53f32d?auto=format&fit=crop&w=900&h=1100&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 12
+  },
+  {
+    "demoKey": "DEMO-SF-045",
+    "title": "Threader Silk Lines",
+    "description": "Minimal threader earrings.",
+    "jewelryType": "EARRING",
+    "salePrice": 2082.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1622398925373-3f91b1e275f5?auto=format&fit=crop&w=900&h=1200&q=80",
+    "sellerDisplayName": "moonrise.jewels",
+    "soldCount": 15
+  },
+  {
+    "demoKey": "DEMO-SF-046",
+    "title": "Fan Crystal Ear Cuffs",
+    "description": "No-pierce fan ear cuffs.",
+    "jewelryType": "EARRING",
+    "salePrice": 2145.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1458538977777-0549b2370168?auto=format&fit=crop&w=900&h=950&q=80",
+    "sellerDisplayName": "crystal.forge",
+    "soldCount": 18
+  },
+  {
+    "demoKey": "DEMO-SF-047",
+    "title": "Identity ID Bracelet",
+    "description": "Engravable ID plate bracelet.",
+    "jewelryType": "BRACELET",
+    "salePrice": 2207.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1515405295579-ba7b45403062?auto=format&fit=crop&w=900&h=1050&q=80",
+    "sellerDisplayName": "vintage.vault",
+    "soldCount": 21
+  },
+  {
+    "demoKey": "DEMO-SF-048",
+    "title": "Twist Rope Gold",
+    "description": "Twisted rope gold bracelet.",
+    "jewelryType": "BRACELET",
+    "salePrice": 2270.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=900&h=1150&q=80",
+    "sellerDisplayName": "northlight.lab",
+    "soldCount": 24
+  },
+  {
+    "demoKey": "DEMO-SF-049",
+    "title": "Constellation Pin",
+    "description": "Star constellation brooch.",
+    "jewelryType": "BROOCH",
+    "salePrice": 2157.5,
+    "coverImageUrl": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=900&h=900&q=80",
+    "sellerDisplayName": "atelier.lin",
+    "soldCount": 27
+  },
+  {
+    "demoKey": "DEMO-SF-050",
+    "title": "Pocket Mirror Charm",
+    "description": "Compact mirror charm accessory.",
+    "jewelryType": "OTHER",
+    "salePrice": 2220.0,
+    "coverImageUrl": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&h=1000&q=80",
+    "sellerDisplayName": "goldleaf.studio",
+    "soldCount": 30
+  }
+]

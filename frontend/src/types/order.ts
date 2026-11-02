@@ -18,6 +18,7 @@ export type { PaginatedResponse } from './auth';
 export enum OrderStatus {
   PENDING_DESIGN = 'PENDING_DESIGN',
   DESIGNING = 'DESIGNING',
+  PENDING_DESIGN_REVIEW = 'PENDING_DESIGN_REVIEW',
   PENDING_MODEL = 'PENDING_MODEL',
   MODELING = 'MODELING',
   PENDING_REVIEW = 'PENDING_REVIEW',
@@ -141,6 +142,7 @@ export interface OrderBaseInfo {
   shippingPostalCode?: string;
   serviceType?: string;
   designerAssistPaid?: boolean;
+  rushPaid?: boolean;
   notes?: string;             // 备注
 }
 
@@ -180,6 +182,7 @@ export interface OrderModelInfo {
   modelerName?: string;       // 建模师姓名
   weight?: number;            // 克重（克）
   modelFiles?: FileInfo[];    // 建模文件
+  engravingFiles?: FileInfo[] | unknown;
   /** 效果图 URL 列表（与后端 modelEffectImages 一致） */
   modelEffectImages?: string[];
   modelNotes?: string;        // 建模备注
@@ -226,6 +229,8 @@ export interface ProductionPieceCard {
 export interface ProductionPoolPhoto {
   id: number;
   fileId: number;
+  /** 看板直接带回的预览地址；有则不必再调 preview 接口 */
+  previewUrl?: string;
   createdAt?: string;
 }
 
@@ -270,9 +275,14 @@ export interface OrderQuotationInfo {
   designBuyoutCost: number;   // 设计买断费用
   certificateCost: number;    // 证书费用
   certificateTypes?: CertificateType[]; // 证书类型
+  copyrightCertificate?: boolean;
+  appraisalCertificate?: boolean;
   confidential: boolean;      // 是否保密不宣传
+  designOptionsFilled?: boolean; // 客户已提交生产选项
   otherCost: number;          // 其他费用
-  totalCost: number;          // 总费用
+  totalCost: number;          // 总费用（客户应付美元）
+  staffAmountCny?: number;    // 跟单人民币报价
+  fxCnyPerUsd?: number;
   quotationNotes?: string;    // 报价备注
   finalized?: boolean;        // 最终尾款已确定并推送给客户
   createdAt: string;
@@ -343,9 +353,15 @@ export interface OrderPieceInfo {
   jewelryType?: string;
   designConfirmed?: boolean;
   modelConfirmed?: boolean;
+  /** 跟单设计质量评审是否已通过 */
+  designQualityPassed?: boolean;
+  /** 跟单建模质量评审是否已通过 */
+  modelQualityPassed?: boolean;
   /** 该单件已喷蜡同步，工艺验证通过 */
   processVerified?: boolean;
   referenceImages?: string[];
+  /** 客户问卷：是否需要刻字 */
+  customerWantsEngraving?: boolean | null;
   design?: OrderDesignInfo;
   model?: OrderModelInfo;
 }
@@ -370,8 +386,21 @@ export interface OrderInfo {
   /** 工作台：有单件被客户驳回，待设计师/建模师修改 */
   pieceCustomerRevisionPending?: boolean;
   reviewInfo?: OrderReviewInfo;
+  designReviewInfo?: OrderReviewInfo;
   quotationInfo?: OrderQuotationInfo;
   customerBrief?: CustomerBriefInfo | null;
+  /** 尾款报价是否已推送给客户 */
+  balanceQuoteSent?: boolean;
+  /** 客户是否已支付尾款 */
+  balancePaid?: boolean;
+  /** 工艺已通过，等待客户确认建模稿 */
+  awaitingCustomerModelConfirm?: boolean;
+  /** 设计评审已通过，等待客户确认设计稿 */
+  awaitingCustomerDesignConfirm?: boolean;
+  /** DESIGN / MODEL */
+  qualityReviewKind?: string;
+  /** 待发送生产且客户未付尾款（禁分享） */
+  balanceUnpaidPendingProduction?: boolean;
   /** 跟单已发货列表附带的当前物流 */
   shipment?: OrderShipmentDto | null;
   productionInfo?: OrderProductionInfo;
@@ -511,6 +540,8 @@ export interface OrderDesignUpdateRequest {
   submitToCustomer?: boolean;
   /** 建模师驳回后：不发给客户，直接交回建模师 */
   submitToModeler?: boolean;
+  /** 设计完成后提交跟单质量评审 */
+  submitToTracker?: boolean;
 }
 
 /** 单件设计稿历史版本 */
@@ -544,6 +575,7 @@ export interface OrderModelUpdateRequest {
   modelNotes?: string;
   modelEffectImageUrls?: string[];
   modelSourceFileIds?: number[];
+  engravingFileIds?: number[];
   createVersion?: boolean;
   versionLabel?: string;
   submitToCustomer?: boolean;
@@ -583,6 +615,10 @@ export interface OrderReviewUpdateRequest {
   reviewNotes?: string;
   rejectedProcesses?: string[];
   rejectionReason?: string;
+  /** DESIGN | MODEL */
+  reviewKind?: string;
+  /** 按件评审的单件 ID */
+  pieceId?: number;
 }
 
 // 订单报价更新请求

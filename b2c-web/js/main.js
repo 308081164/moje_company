@@ -349,19 +349,32 @@
     });
   });
 
-  // Service card buttons (homepage)
+  function beginServiceCheckout(service) {
+    selectedService = service || 'designer';
+    var pathsModal = document.getElementById('pathsModal');
+    if (pathsModal && pathsModal.classList.contains('open')) closeModal(pathsModal);
+    if (window.DUXURY_API && window.DUXURY_API.isLoggedIn && window.DUXURY_API.isLoggedIn()) {
+      showCheckout();
+    } else {
+      resetEmailLogin();
+      openModal(loginModal);
+    }
+  }
+
+  // Service card buttons (homepage + floating paths modal)
   document.querySelectorAll('.service-card__btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      selectedService = btn.getAttribute('data-service');
-      // Already signed in? skip login
-      if (window.DUXURY_API && window.DUXURY_API.isLoggedIn && window.DUXURY_API.isLoggedIn()) {
-        showCheckout();
-      } else {
-        resetEmailLogin();
-        openModal(loginModal);
-      }
+      beginServiceCheckout(btn.getAttribute('data-service'));
     });
   });
+
+  var fabCustom = document.getElementById('fabCustom');
+  var pathsModal = document.getElementById('pathsModal');
+  if (fabCustom && pathsModal) {
+    fabCustom.addEventListener('click', function () {
+      openModal(pathsModal);
+    });
+  }
 
   // Login modal close handlers
   document.querySelectorAll('[data-modal-close]').forEach(function (el) {
@@ -919,7 +932,9 @@
   var workspace = {
     currentId: null,
     orderId: null,
+    orderStatus: null,
     balanceAmount: null,
+    balanceQuote: null,
     members: {},
     allConversations: [],
     filter: 'all',
@@ -932,14 +947,85 @@
     return a.symbol + a.amount;
   }
 
+  function parseBalanceDiscount(content) {
+    var text = content ? String(content) : '';
+    var m = text.match(/限时优惠[^\n]*?-USD\s*([\d.]+)/i) || text.match(/-USD\s*([\d.]+)/i);
+    return m ? String(m[1]) : null;
+  }
+
   function parseBalanceAmount(ev) {
     var content = ev && ev.content ? String(ev.content) : '';
     var m = content.match(/(?:尾款金额|Balance(?:\s+amount)?)[：:]\s*([¥$€]?)([\d.,]+)/i);
-    if (m) return { symbol: m[1] || '¥', amount: m[2] };
-    if (workspace.balanceAmount != null) {
-      return { symbol: '¥', amount: String(workspace.balanceAmount) };
+    if (m) {
+      return {
+        symbol: m[1] || '$',
+        amount: m[2],
+        discountUsd: parseBalanceDiscount(content)
+      };
     }
-    return { symbol: '¥', amount: '—' };
+    if (workspace.balanceQuote && workspace.balanceQuote.totalAmount != null) {
+      return {
+        symbol: '$',
+        amount: String(workspace.balanceQuote.totalAmount),
+        discountUsd: workspace.balanceQuote.publicityDiscountUsd > 0
+          ? String(workspace.balanceQuote.publicityDiscountUsd)
+          : null
+      };
+    }
+    if (workspace.balanceAmount != null) {
+      return { symbol: '$', amount: String(workspace.balanceAmount), discountUsd: null };
+    }
+    return { symbol: '$', amount: '—', discountUsd: null };
+  }
+
+  function formatUsd(n) {
+    var x = Number(n);
+    if (!isFinite(x)) return String(n);
+    return x.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  }
+
+  function buildBalancePayBreakdownHtml(quote) {
+    if (!quote) return '';
+    var parts = [];
+    if (quote.staffAmountCny != null) {
+      parts.push(
+        '<div class="balance-pay__row"><span>' +
+          escapeHtml(window.I18N.t('ws.balance.cnyQuote')) +
+          '</span><strong>¥' +
+          escapeHtml(formatUsd(quote.staffAmountCny)) +
+          '</strong></div>'
+      );
+    }
+    if (quote.fxCnyPerUsd != null) {
+      parts.push(
+        '<div class="balance-pay__row"><span>' +
+          escapeHtml(window.I18N.t('ws.balance.fxRate')) +
+          '</span><strong>1 USD = ' +
+          escapeHtml(String(quote.fxCnyPerUsd)) +
+          ' CNY</strong></div>'
+      );
+    }
+    if (quote.amountBeforeDiscount != null && quote.publicityDiscountUsd > 0) {
+      parts.push(
+        '<div class="balance-pay__row"><span>' +
+          escapeHtml(window.I18N.t('ws.balance.beforeDiscount')) +
+          '</span><strong>$' +
+          escapeHtml(formatUsd(quote.amountBeforeDiscount)) +
+          '</strong></div>'
+      );
+    }
+    if (quote.publicityDiscountUsd > 0) {
+      parts.push(
+        '<div class="balance-pay__row balance-pay__row--discount">' +
+          '<span class="balance-pay__badge">' +
+          escapeHtml(window.I18N.t('ws.balance.discountBadge')) +
+          '</span><strong>-$' +
+          escapeHtml(formatUsd(quote.publicityDiscountUsd)) +
+          '</strong></div>'
+      );
+    }
+    if (!parts.length) return '';
+    return '<div class="balance-pay__breakdown">' + parts.join('') + '</div>';
   }
 
   function fillBalancePaymentCard(card, ev) {
@@ -947,6 +1033,7 @@
       ev.eventType === 'BALANCE_PAID' ||
       ev.resolution === 'PAID' ||
       (ev.resolution === 'CONFIRM' && ev.eventType === 'BALANCE_PAID');
+    var voided = ev.resolution === 'SUPERSEDED' || ev.resolution === 'VOIDED';
     var amount = parseBalanceAmount(ev);
     var titleText = window.I18N.localizeEventTitle(ev.title, ev.eventType) || window.I18N.t('ws.balance.title');
 
@@ -967,15 +1054,22 @@
     label.textContent = titleText;
     var sub = document.createElement('div');
     sub.className = 'pay-card__sub';
-    sub.textContent = paid
+    sub.textContent = voided
+      ? ((window.I18N && window.I18N.t('ws.pay.voidedSub')) || '该报价已作废，请以最新尾款为准')
+      : paid
       ? (window.I18N && window.I18N.t('ws.pay.paidSub')) || '尾款已结清，订单将继续推进'
       : (window.I18N && window.I18N.t('ws.pay.pendingSub')) || '确认金额后完成支付';
     headText.appendChild(label);
     headText.appendChild(sub);
 
     var status = document.createElement('span');
-    status.className = 'pay-card__status' + (paid ? ' pay-card__status--paid' : '');
-    status.textContent = paid
+    status.className =
+      'pay-card__status' +
+      (paid ? ' pay-card__status--paid' : '') +
+      (voided ? ' pay-card__status--voided' : '');
+    status.textContent = voided
+      ? (ev.resolutionLabel || ((window.I18N && window.I18N.t('ws.pay.statusVoided')) || '已作废'))
+      : paid
       ? ((window.I18N && window.I18N.t('ws.pay.statusPaid')) || '已支付')
       : ((window.I18N && window.I18N.t('ws.pay.statusPending')) || '待支付');
 
@@ -993,18 +1087,41 @@
     val.textContent = amount.amount;
     amountRow.appendChild(sym);
     amountRow.appendChild(val);
+    if (amount.discountUsd) {
+      var badge = document.createElement('span');
+      badge.className = 'pay-card__discount';
+      badge.textContent =
+        ((window.I18N && window.I18N.t('ws.balance.discountBadge')) || '限时优惠') +
+        ' -$' +
+        formatUsd(amount.discountUsd);
+      amountRow.appendChild(badge);
+    }
 
     card.appendChild(head);
     card.appendChild(amountRow);
 
     var detail = (ev.content && String(ev.content).trim()) || '';
-    detail = detail.replace(/(?:尾款金额|Balance(?:\s+amount)?)[：:][^\n]*/gi, '').trim();
+    detail = detail
+      .replace(/(?:尾款金额|Balance(?:\s+amount)?)[：:][^\n]*/gi, '')
+      .replace(/(?:人民币报价|汇率|换算后|限时优惠)[：:][^\n]*/gi, '')
+      .replace(/\n{2,}/g, '\n')
+      .trim();
+    if (amount.discountUsd) {
+      var discountNote = document.createElement('p');
+      discountNote.className = 'pay-card__note pay-card__note--discount';
+      discountNote.textContent =
+        ((window.I18N && window.I18N.t('ws.balance.discountNote')) ||
+          '已含公开宣传限时优惠') +
+        ' -USD ' +
+        formatUsd(amount.discountUsd);
+      card.appendChild(discountNote);
+    }
     if (detail) {
       var note = document.createElement('p');
       note.className = 'pay-card__note';
       note.textContent = detail;
       card.appendChild(note);
-    } else if (!paid) {
+    } else if (!paid && !amount.discountUsd) {
       var noteDefault = document.createElement('p');
       noteDefault.className = 'pay-card__note';
       noteDefault.textContent =
@@ -1012,7 +1129,7 @@
       card.appendChild(noteDefault);
     }
 
-    if (ev.actionable && ev.eventType === 'BALANCE_PAYMENT' && !paid) {
+    if (ev.actionable && ev.eventType === 'BALANCE_PAYMENT' && !paid && !voided) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pay-card__cta';
@@ -1130,10 +1247,18 @@
   function openConversation(id, title, orderNumber, orderId, orderStatus, orderStatusLabel) {
     workspace.currentId = id;
     workspace.orderId = orderId || null;
+    workspace.orderStatus = orderStatus || null;
+    closeChatMoreMenu();
     if (orderId) {
       window.DUXURY_API.getOrderSummary(orderId).then(function (summary) {
+        if (summary && summary.currentStatus) workspace.orderStatus = summary.currentStatus;
+        renderQueueBanner(summary);
         maybeOpenDesignerAssist(orderId, summary);
-      }).catch(function () {});
+      }).catch(function () {
+        renderQueueBanner(null);
+      });
+    } else {
+      renderQueueBanner(null);
     }
     var chatTitle = document.getElementById('chatTitle');
     var chatOrderId = document.getElementById('chatOrderId');
@@ -1200,21 +1325,17 @@
       var key = null;
       if (ev.eventType === 'DESIGN_CONFIRM' || ev.eventType === 'MODEL_CONFIRM') {
         key = ev.eventType + ':' + (ev.pieceId != null ? ev.pieceId : 'order');
-      } else if (ev.eventType === 'BALANCE_PAYMENT') {
-        key = 'BALANCE_PAYMENT';
       }
       if (key) lastIdxByKey[key] = idx;
     });
     if (!Object.keys(lastIdxByKey).length) return list;
+    // 尾款旧报价保留展示并由服务端标「已作废」；仅对确认类事件去重
     return list.filter(function (m, idx) {
       if (m.msgType !== 'event' || !m.event) return true;
       var ev = m.event;
       if (ev.eventType === 'DESIGN_CONFIRM' || ev.eventType === 'MODEL_CONFIRM') {
         var key = ev.eventType + ':' + (ev.pieceId != null ? ev.pieceId : 'order');
         return lastIdxByKey[key] === idx;
-      }
-      if (ev.eventType === 'BALANCE_PAYMENT') {
-        return lastIdxByKey.BALANCE_PAYMENT === idx;
       }
       return true;
     });
@@ -1257,6 +1378,50 @@
 
   function isReviewEvent(ev) {
     return ev && (ev.eventType === 'REVIEW_REJECT' || ev.eventType === 'REVIEW_PASS');
+  }
+
+  /** 设计师/建模师提交跟单评审：不对客户展示稿件预览 */
+  function isInternalQualityHandoffEvent(ev) {
+    if (!ev || ev.eventType !== 'STATUS_CHANGE') return false;
+    var t = ev.title || '';
+    return t.indexOf('跟单质量评审') >= 0
+      || t.indexOf('跟单工艺评审') >= 0
+      || t.indexOf('交回跟单') >= 0;
+  }
+
+  function eventCardImages(ev) {
+    if (isReviewEvent(ev) || isInternalQualityHandoffEvent(ev)) return [];
+    return (ev.images || []).filter(function (src) {
+      return String(src || '').indexOf('data:image/svg') !== 0;
+    });
+  }
+
+  function isCustomerServiceRequestEvent(eventType) {
+    return eventType === 'REFUND_REQUESTED' || eventType === 'COMPLAINT_SUBMITTED';
+  }
+
+  function withdrawRefundRequest(btn) {
+    var orderId = workspace.orderId;
+    if (!orderId) {
+      alert(window.I18N.t('ws.service.noOrder'));
+      return Promise.reject(new Error('no order'));
+    }
+    if (!window.confirm(window.I18N.t('ws.service.withdrawConfirm'))) {
+      return Promise.reject(new Error('cancelled'));
+    }
+    if (btn) btn.disabled = true;
+    return window.DUXURY_API.cancelRefundRequest(orderId)
+      .then(function () {
+        alert(window.I18N.t('ws.service.withdrawSuccess'));
+        return reloadChatAndProgress();
+      })
+      .catch(function (err) {
+        if (err && err.message === 'cancelled') return;
+        alert((err && err.message) || window.I18N.t('ws.action.failed'));
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
+      });
   }
 
   function fillReviewCard(card, ev) {
@@ -1361,8 +1526,8 @@
 
   function eventDisplayContent(ev) {
     if (!ev) return '';
-    if (ev.eventType === 'SHIPPING_ADDRESS_REQUEST') return window.I18N.t('ws.shipaddr.body');
-    return localizeAdjustNotice(localizeShipmentNotice(ev.content || ''));
+    var localized = window.I18N.localizeEventContent(ev);
+    return localizeAdjustNotice(localizeShipmentNotice(localized));
   }
 
   function showDesignerAssistPrompt(orderId) {
@@ -1401,6 +1566,69 @@
     showDesignerAssistPrompt(orderId);
   }
 
+  function renderQueueBanner(summary) {
+    var banner = document.getElementById('chatQueue');
+    var textEl = document.getElementById('chatQueueText');
+    var rushBtn = document.getElementById('chatQueueRush');
+    var spinner = document.getElementById('chatQueueSpinner');
+    if (!banner || !textEl || !rushBtn) return;
+    var phase = (summary && summary.bannerPhase) || (summary && summary.inQueue ? 'QUEUED' : 'NONE');
+    if (!summary || phase === 'NONE') {
+      banner.hidden = true;
+      rushBtn.hidden = true;
+      rushBtn.onclick = null;
+      if (spinner) spinner.hidden = true;
+      return;
+    }
+    var showSpinner = phase === 'DESIGNING' || phase === 'MODELING' || phase === 'PRODUCING';
+    if (spinner) spinner.hidden = !showSpinner;
+
+    if (phase === 'NEED_BRIEF') {
+      textEl.textContent = window.I18N.t('ws.queue.needBrief');
+    } else if (phase === 'DESIGNING') {
+      textEl.textContent = window.I18N.t('ws.queue.designing');
+    } else if (phase === 'MODELING') {
+      textEl.textContent = window.I18N.t('ws.queue.processing');
+    } else if (phase === 'PRODUCING') {
+      textEl.textContent = window.I18N.t('ws.queue.producing');
+    } else if (summary.rushPaid) {
+      textEl.textContent = window.I18N.t('ws.queue.rushActive');
+    } else {
+      var ahead = summary.queueAheadCount != null ? Number(summary.queueAheadCount) : 0;
+      if (ahead <= 0) {
+        textEl.textContent = window.I18N.t('ws.queue.next');
+      } else {
+        textEl.textContent = window.I18N.t('ws.queue.ahead').replace('{n}', String(ahead));
+      }
+    }
+    banner.hidden = false;
+    if (phase === 'QUEUED' && summary.rushEligible) {
+      var fee = summary.rushFee || '50';
+      rushBtn.textContent = window.I18N.t('ws.queue.rushPay').replace('{fee}', fee);
+      rushBtn.hidden = false;
+      rushBtn.onclick = function () {
+        var orderId = workspace.orderId;
+        if (!orderId) return;
+        if (!window.confirm(window.I18N.t('ws.queue.rushConfirm').replace('{fee}', fee))) return;
+        rushBtn.disabled = true;
+        window.DUXURY_API.payRush(orderId).then(function (res) {
+          alert((res && res.message) || window.I18N.t('ws.queue.rushDone'));
+          return window.DUXURY_API.getOrderSummary(orderId).then(function (s) {
+            renderQueueBanner(s);
+            return reloadChatAndProgress();
+          });
+        }).catch(function (err) {
+          alert((err && err.message) || window.I18N.t('ws.action.failed'));
+        }).finally(function () {
+          rushBtn.disabled = false;
+        });
+      };
+    } else {
+      rushBtn.hidden = true;
+      rushBtn.onclick = null;
+    }
+  }
+
   function maybeOpenDesignOptions(orderId) {
     if (!orderId || sessionStorage.getItem('designopt-open-' + orderId)) return;
     window.DUXURY_API.getOrderEvents(orderId).then(function (events) {
@@ -1418,13 +1646,19 @@
     overlay.className = 'event-detail';
     var dialog = document.createElement('div');
     dialog.className = 'event-detail__dialog shipaddr-dialog';
-    function choice(name, label) {
+    function choice(name, label, extra) {
+      var legend = escapeHtml(label);
+      if (name === 'confidential') {
+        legend += ' <span class="designopt-promo">' + escapeHtml(window.I18N.t('ws.designopt.promo')) + '</span>';
+      }
       return '<fieldset class="shipaddr__label" style="border:0;padding:0;margin:12px 0">' +
-        '<legend>' + escapeHtml(label) + '</legend>' +
+        '<legend>' + legend + '</legend>' +
         '<label style="margin-right:16px"><input type="radio" name="' + name + '" value="yes"> 是</label>' +
         '<label><input type="radio" name="' + name + '" value="no" checked> 否</label>' +
+        (extra || '') +
       '</fieldset>';
     }
+    var confidentialTip = '<p class="designopt-promo-tip">' + escapeHtml(window.I18N.t('ws.designopt.confidentialTip')) + '</p>';
     dialog.innerHTML =
       '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
       '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.designopt.title')) + '</h3>' +
@@ -1432,7 +1666,7 @@
       '<form class="shipaddr" id="designoptForm">' +
         choice('buyout', window.I18N.t('ws.designopt.buyout')) +
         choice('copyright', window.I18N.t('ws.designopt.copyright')) +
-        choice('confidential', window.I18N.t('ws.designopt.confidential')) +
+        choice('confidential', window.I18N.t('ws.designopt.confidential'), confidentialTip) +
         '<div class="shipaddr__error" id="designoptError" role="alert"></div>' +
         '<div class="shipaddr__actions">' +
           '<button type="button" class="prog-btn prog-btn--no" id="designoptCancel">' + escapeHtml(window.I18N.t('ws.reject.cancel')) + '</button>' +
@@ -1471,6 +1705,11 @@
       alert(window.I18N.t('ws.action.missingOrder'));
       return;
     }
+    if (!window.DUXURY_ADDRESS || !window.DUXURY_ADDRESS.renderFormHtml) {
+      alert(window.I18N.t('ws.action.failed'));
+      return;
+    }
+    var addrOpts = { idPrefix: 'ship' };
     var overlay = document.createElement('div');
     overlay.className = 'event-detail';
     var dialog = document.createElement('div');
@@ -1484,14 +1723,7 @@
         '<input class="checkout__input" id="shipaddrRecipient" autocomplete="name" maxlength="100">' +
         '<label class="shipaddr__label" for="shipaddrPhone">' + escapeHtml(window.I18N.t('ws.shipaddr.phone')) + '</label>' +
         '<input class="checkout__input" id="shipaddrPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="40">' +
-        '<label class="shipaddr__label" for="shipaddrCountry">' + escapeHtml(window.I18N.t('ws.shipaddr.country')) + '</label>' +
-        '<select class="checkout__input" id="shipaddrCountry">' +
-          '<option value="">' + escapeHtml(window.I18N.t('ws.shipaddr.countryPh')) + '</option>' +
-        '</select>' +
-        '<label class="shipaddr__label" for="shipaddrDetail">' + escapeHtml(window.I18N.t('ws.shipaddr.detail')) + '</label>' +
-        '<textarea class="checkout__input shipaddr__detail" id="shipaddrDetail" rows="3" maxlength="1000" autocomplete="street-address"></textarea>' +
-        '<label class="shipaddr__label" for="shipaddrPostal">' + escapeHtml(window.I18N.t('ws.shipaddr.postal')) + '</label>' +
-        '<input class="checkout__input" id="shipaddrPostal" autocomplete="postal-code" maxlength="20" placeholder="' + escapeAttr(window.I18N.t('ws.shipaddr.postalPh')) + '">' +
+        window.DUXURY_ADDRESS.renderFormHtml(addrOpts) +
         '<div class="shipaddr__error" id="shipaddrError" role="alert"></div>' +
         '<div class="shipaddr__actions">' +
           '<button type="button" class="prog-btn prog-btn--no" id="shipaddrCancel">' + escapeHtml(window.I18N.t('ws.shipaddr.cancel')) + '</button>' +
@@ -1512,22 +1744,18 @@
     dialog.querySelector('#shipaddrCancel').addEventListener('click', close);
     dialog.addEventListener('click', function (e) { e.stopPropagation(); });
 
-    var countryEl = dialog.querySelector('#shipaddrCountry');
-    function fillCountries(selected) {
-      countryEl.innerHTML =
-        '<option value="">' + escapeHtml(window.I18N.t('ws.shipaddr.countryPh')) + '</option>' +
-        shipCountryOptions(selected || '');
-      if (selected) countryEl.value = selected;
-    }
-    fillCountries('');
+    var addressForm = dialog.querySelector('#shipAddressForm');
+    window.DUXURY_ADDRESS.bind(addressForm);
 
     window.DUXURY_API.getShippingAddress(orderId).then(function (addr) {
       if (closed || !addr) return;
       if (addr.recipient) dialog.querySelector('#shipaddrRecipient').value = addr.recipient;
       if (addr.phone) dialog.querySelector('#shipaddrPhone').value = addr.phone;
-      if (addr.address) dialog.querySelector('#shipaddrDetail').value = addr.address;
-      if (addr.postalCode) dialog.querySelector('#shipaddrPostal').value = addr.postalCode;
-      if (addr.country) fillCountries(addr.country);
+      window.DUXURY_ADDRESS.fillForm(addressForm, {
+        country: addr.country,
+        address: addr.address,
+        postalCode: addr.postalCode
+      });
     }).catch(function () {});
 
     dialog.querySelector('#shipaddrForm').addEventListener('submit', function (e) {
@@ -1536,14 +1764,13 @@
       var submitBtn = dialog.querySelector('#shipaddrSubmit');
       var recipient = (dialog.querySelector('#shipaddrRecipient').value || '').trim();
       var phone = (dialog.querySelector('#shipaddrPhone').value || '').trim();
-      var country = countryEl.value || '';
-      var address = (dialog.querySelector('#shipaddrDetail').value || '').trim();
-      var postalCode = (dialog.querySelector('#shipaddrPostal').value || '').trim();
       var err = '';
       if (!recipient) err = window.I18N.t('ws.shipaddr.err.recipient');
       else if (!phone || !/\d/.test(phone)) err = window.I18N.t('ws.shipaddr.err.phone');
-      else if (!country) err = window.I18N.t('ws.shipaddr.err.country');
-      else if (!address) err = window.I18N.t('ws.shipaddr.err.detail');
+      var addrResult = err ? null : window.DUXURY_ADDRESS.validateAndFormat(addrOpts);
+      if (!err && (!addrResult || !addrResult.ok)) {
+        err = (addrResult && addrResult.message) || window.I18N.t('ws.shipaddr.err.detail');
+      }
       if (err) {
         if (errEl) errEl.textContent = err;
         return;
@@ -1553,9 +1780,9 @@
       window.DUXURY_API.submitShippingAddress(orderId, {
         recipient: recipient,
         phone: phone,
-        country: country,
-        address: address,
-        postalCode: postalCode || null
+        country: addrResult.countryLabel || addrResult.countryCode,
+        address: addrResult.shippingAddress,
+        postalCode: addrResult.postalCode || null
       }).then(function () {
         close();
         return reloadChatAndProgress();
@@ -1619,6 +1846,8 @@
       fillBalancePaymentCard(card, ev);
     } else if (isReviewEvent(ev)) {
       fillReviewCard(card, ev);
+    } else if (isDraftSubmitEvent(ev.eventType)) {
+      fillDraftSubmitCard(card, ev, style);
     } else if (ev.title) {
       var title = document.createElement('div');
       title.className = 'msg-card__title';
@@ -1626,10 +1855,8 @@
       title.textContent = window.I18N.localizeEventTitle(ev.title, ev.eventType);
       card.appendChild(title);
     }
-    if (!isBalance && !isReviewEvent(ev)) {
-    var images = (ev.images || []).filter(function (src) {
-      return String(src || '').indexOf('data:image/svg') !== 0;
-    });
+    if (!isBalance && !isReviewEvent(ev) && !isDraftSubmitEvent(ev.eventType)) {
+    var images = eventCardImages(ev);
     if (images.length) {
       var imgs = document.createElement('div');
       imgs.className = 'msg-card__imgs';
@@ -1654,7 +1881,7 @@
       contentEl.textContent = eventDisplayContent(ev);
       card.appendChild(contentEl);
     }
-    if (ev.reason) {
+    if (ev.reason && !isCustomerServiceRequestEvent(ev.eventType)) {
       var reason = document.createElement('div');
       reason.className = 'msg-card__reason';
       reason.textContent = ev.reason;
@@ -1711,8 +1938,25 @@
       card.appendChild(addrActions);
     }
 
+    if (ev.actionable && ev.eventType === 'REFUND_REQUESTED') {
+      var refundActions = document.createElement('div');
+      refundActions.className = 'msg-card__actions';
+      var withdrawBtn = document.createElement('button');
+      withdrawBtn.type = 'button';
+      withdrawBtn.className = 'prog-btn prog-btn--no msg-card__btn';
+      withdrawBtn.textContent = window.I18N.t('ws.service.withdraw');
+      withdrawBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        withdrawRefundRequest(withdrawBtn);
+      });
+      refundActions.appendChild(withdrawBtn);
+      card.appendChild(refundActions);
+    }
+
     // 操作按钮（阻止冒泡，避免触发详情）
-    if (ev.actionable && ev.eventType && !isBalance && ev.eventType !== 'SHIPPING_ADDRESS_REQUEST') {
+    if (ev.actionable && ev.eventType && !isBalance
+        && ev.eventType !== 'SHIPPING_ADDRESS_REQUEST'
+        && !isCustomerServiceRequestEvent(ev.eventType)) {
       var confirmAct, rejectAct, confirmLabel, rejectLabel;
       if (ev.eventType === 'DESIGN_SUBMIT') {
         confirmAct = 'DESIGN_CONFIRM'; rejectAct = 'DESIGN_REJECT';
@@ -1928,59 +2172,313 @@
     });
   }
 
-  // 模拟支付尾款弹窗
+  // 模拟支付尾款弹窗（客户侧展示美元；有优惠时明确标出）
   function openBalancePayModal() {
     var orderId = workspace.orderId;
     if (!orderId) return;
-    function showModal(amountText) {
-    var overlay = document.createElement('div');
-    overlay.className = 'event-detail';
-    var dialog = document.createElement('div');
-    dialog.className = 'event-detail__dialog balance-pay';
-    dialog.innerHTML =
-      '<button class="event-detail__close" aria-label="Close">&times;</button>' +
-      '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.title')) + '</h3>' +
-      '<div class="balance-pay__amount">' + escapeHtml(amountText || '—') + '</div>' +
-      '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.hint')) + '</div>' +
-      '<div class="balance-pay__actions">' +
-        '<button class="prog-btn prog-btn--pay" id="balancePayConfirm">' + escapeHtml(window.I18N.t('ws.balance.confirm')) + '</button>' +
-        '<button class="prog-btn prog-btn--no" id="balancePayCancel">' + escapeHtml(window.I18N.t('ws.balance.cancel')) + '</button>' +
-      '</div>';
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-    dialog.querySelector('.event-detail__close').addEventListener('click', close);
-    dialog.querySelector('#balancePayCancel').addEventListener('click', close);
-    dialog.querySelector('#balancePayConfirm').addEventListener('click', function () {
-      window.DUXURY_API.payBalance(orderId)
-        .then(function () {
-          dialog.innerHTML =
-            '<div class="balance-pay__success">✓</div>' +
-            '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.success')) + '</h3>' +
-            '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.paidAmount').replace('{amount}', amountText || '')) + '</div>' +
-            '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="balancePayDone">' + escapeHtml(window.I18N.t('ws.balance.done')) + '</button></div>';
-          dialog.querySelector('#balancePayDone').addEventListener('click', function () {
-            close();
-            reloadChatAndProgress();
-          });
-        })
-        .catch(function (err) { alert(err.message); });
-    });
-    }
-    if (workspace.balanceAmount != null) {
-      showModal('¥' + workspace.balanceAmount);
-      return;
+    function showModal(quote, summary) {
+      var amountText = quote && quote.totalAmount != null ? ('$' + formatUsd(quote.totalAmount)) : '—';
+      var addrReady = summary && summary.shippingAddressReady;
+      var overlay = document.createElement('div');
+      overlay.className = 'event-detail';
+      var dialog = document.createElement('div');
+      dialog.className = 'event-detail__dialog balance-pay';
+      dialog.innerHTML =
+        '<button class="event-detail__close" aria-label="Close">&times;</button>' +
+        '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.title')) + '</h3>' +
+        '<div class="balance-pay__amount">' + escapeHtml(amountText) + '</div>' +
+        buildBalancePayBreakdownHtml(quote) +
+        (addrReady ? '' : ('<p class="shipaddr__hint">' + escapeHtml(window.I18N.t('ws.balance.needAddress')) + '</p>' +
+          '<div class="balance-pay__actions" style="margin-bottom:12px"><button type="button" class="prog-btn prog-btn--ok" id="balanceAddrBtn">' +
+          escapeHtml(window.I18N.t('ws.shipaddr.fill')) + '</button></div>')) +
+        '<label class="balance-pay__check"><input type="checkbox" id="balanceAutoPublish"> ' +
+          escapeHtml(window.I18N.t('ws.balance.autoPublish')) + '</label>' +
+        '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.hint')) + '</div>' +
+        '<div class="balance-pay__actions">' +
+          '<button class="prog-btn prog-btn--pay" id="balancePayConfirm"' + (addrReady ? '' : ' disabled') + '>' +
+            escapeHtml(window.I18N.t('ws.balance.confirm')) + '</button>' +
+          '<button class="prog-btn prog-btn--no" id="balancePayCancel">' + escapeHtml(window.I18N.t('ws.balance.cancel')) + '</button>' +
+        '</div>';
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+      function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      dialog.querySelector('.event-detail__close').addEventListener('click', close);
+      dialog.querySelector('#balancePayCancel').addEventListener('click', close);
+      var addrBtn = dialog.querySelector('#balanceAddrBtn');
+      if (addrBtn) {
+        addrBtn.addEventListener('click', function () {
+          close();
+          openShippingAddressForm(orderId);
+        });
+      }
+      dialog.querySelector('#balancePayConfirm').addEventListener('click', function () {
+        var autoPub = dialog.querySelector('#balanceAutoPublish').checked;
+        window.DUXURY_API.payBalance(orderId, { autoPublishToStorefront: autoPub })
+          .then(function () {
+            dialog.innerHTML =
+              '<div class="balance-pay__success">✓</div>' +
+              '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t('ws.balance.success')) + '</h3>' +
+              '<div class="balance-pay__hint">' + escapeHtml(window.I18N.t('ws.balance.paidAmount').replace('{amount}', amountText || '')) + '</div>' +
+              '<div class="balance-pay__actions"><button class="prog-btn prog-btn--ok" id="balancePayDone">' + escapeHtml(window.I18N.t('ws.balance.done')) + '</button></div>';
+            dialog.querySelector('#balancePayDone').addEventListener('click', function () {
+              close();
+              reloadChatAndProgress();
+            });
+          })
+          .catch(function (err) { alert(err.message); });
+      });
     }
     window.DUXURY_API.getOrderSummary(orderId).then(function (s) {
-      var amt = s && s.quotation && s.quotation.totalAmount;
-      workspace.balanceAmount = amt != null ? amt : null;
-      showModal(amt != null ? ('¥' + amt) : '—');
-    }).catch(function () { showModal('—'); });
+      var q = (s && s.quotation) || null;
+      workspace.balanceQuote = q;
+      workspace.balanceAmount = q && q.totalAmount != null ? q.totalAmount : null;
+      showModal(q, s);
+    }).catch(function () { showModal(null, null); });
+  }
+
+  function isDraftSubmitEvent(eventType) {
+    return eventType === 'DESIGN_SUBMIT' || eventType === 'MODEL_SUBMIT';
+  }
+
+  function buildEventSubmitSpecElement(ev, compact) {
+    var spec = ev && ev.submitSpec;
+    if (!spec) return null;
+    var items = spec.items || [];
+    var engr = spec.engravingImages || [];
+    if (!items.length && !engr.length) return null;
+    var wrap = document.createElement('div');
+    wrap.className = 'submit-spec' + (compact ? ' submit-spec--compact' : '');
+    var head = document.createElement('div');
+    head.className = 'submit-spec__head';
+    head.textContent = window.I18N.t('ws.detail.specTitle');
+    wrap.appendChild(head);
+    var list = document.createElement('dl');
+    list.className = 'submit-spec__list';
+    items.forEach(function (row) {
+      if (!row || row.value == null || String(row.value).trim() === '') return;
+      var rowEl = document.createElement('div');
+      rowEl.className = 'submit-spec__row';
+      var dt = document.createElement('dt');
+      dt.textContent = row.label || '';
+      var dd = document.createElement('dd');
+      dd.textContent = String(row.value);
+      rowEl.appendChild(dt);
+      rowEl.appendChild(dd);
+      list.appendChild(rowEl);
+    });
+    wrap.appendChild(list);
+    if (engr.length) {
+      var sub = document.createElement('div');
+      sub.className = 'submit-spec__sub';
+      sub.textContent = window.I18N.t('ws.detail.engravingImages');
+      wrap.appendChild(sub);
+      var thumbs = document.createElement('div');
+      thumbs.className = 'submit-spec__thumbs';
+      engr.forEach(function (url) {
+        if (!url) return;
+        var a = document.createElement('a');
+        a.className = 'submit-spec__thumb';
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.addEventListener('click', function (e) { e.stopPropagation(); });
+        var im = document.createElement('img');
+        im.src = url;
+        im.alt = '';
+        a.appendChild(im);
+        thumbs.appendChild(a);
+      });
+      wrap.appendChild(thumbs);
+    }
+    return wrap;
+  }
+
+  function buildEventGalleryHtml(images) {
+    if (!images || !images.length) return '';
+    var html = '<div class="event-gallery" data-count="' + images.length + '">';
+    html += '<div class="event-gallery__stage">';
+    html += '<img class="event-gallery__img" alt="">';
+    html += '</div>';
+    if (images.length > 1) {
+      html += '<button type="button" class="event-gallery__nav event-gallery__nav--prev" aria-label="Previous">&#8249;</button>';
+      html += '<button type="button" class="event-gallery__nav event-gallery__nav--next" aria-label="Next">&#8250;</button>';
+      html += '<div class="event-gallery__count"></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function wireEventGallery(dialog, images, onEscape) {
+    if (!images.length) return function () {};
+    var galleryIndex = 0;
+    var galleryImg = dialog.querySelector('.event-gallery__img');
+    var galleryCount = dialog.querySelector('.event-gallery__count');
+    function showGallery(next) {
+      var total = images.length;
+      galleryIndex = (next + total) % total;
+      if (galleryImg) galleryImg.src = images[galleryIndex];
+      if (galleryCount) galleryCount.textContent = (galleryIndex + 1) + ' / ' + total;
+    }
+    showGallery(0);
+    var prevBtn = dialog.querySelector('.event-gallery__nav--prev');
+    var nextBtn = dialog.querySelector('.event-gallery__nav--next');
+    if (prevBtn) prevBtn.addEventListener('click', function (e) { e.stopPropagation(); showGallery(galleryIndex - 1); });
+    if (nextBtn) nextBtn.addEventListener('click', function (e) { e.stopPropagation(); showGallery(galleryIndex + 1); });
+    var touchX = 0;
+    var stage = dialog.querySelector('.event-gallery__stage');
+    if (stage && images.length > 1) {
+      stage.addEventListener('touchstart', function (e) {
+        touchX = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : 0;
+      }, { passive: true });
+      stage.addEventListener('touchend', function (e) {
+        var x = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : touchX;
+        var delta = x - touchX;
+        if (Math.abs(delta) < 40) return;
+        showGallery(galleryIndex + (delta < 0 ? 1 : -1));
+      }, { passive: true });
+    }
+    var onGalleryKey = null;
+    if (images.length > 1) {
+      onGalleryKey = function (e) {
+        if (e.key === 'ArrowLeft') showGallery(galleryIndex - 1);
+        else if (e.key === 'ArrowRight') showGallery(galleryIndex + 1);
+        else if (e.key === 'Escape' && onEscape) onEscape();
+      };
+      document.addEventListener('keydown', onGalleryKey);
+    }
+    return function detachGalleryKeys() {
+      if (onGalleryKey) document.removeEventListener('keydown', onGalleryKey);
+    };
+  }
+
+  function fillDraftSubmitCard(card, ev, style) {
+    card.classList.add('msg-card--draft-sheet');
+    var sheet = document.createElement('div');
+    sheet.className = 'draft-sheet';
+
+    var media = document.createElement('div');
+    media.className = 'draft-sheet__media';
+    var images = eventCardImages(ev);
+    if (images.length) {
+      var img = document.createElement('img');
+      img.className = 'draft-sheet__img';
+      img.src = images[0];
+      img.alt = ev.title || '';
+      img.loading = 'lazy';
+      media.appendChild(img);
+      if (images.length > 1) {
+        var more = document.createElement('span');
+        more.className = 'draft-sheet__more';
+        more.textContent = '+' + (images.length - 1);
+        media.appendChild(more);
+      }
+    } else {
+      media.classList.add('draft-sheet__media--empty');
+      media.textContent = window.I18N.localizeEventType(ev.eventType);
+    }
+    sheet.appendChild(media);
+
+    var body = document.createElement('div');
+    body.className = 'draft-sheet__body';
+    if (ev.title) {
+      var title = document.createElement('div');
+      title.className = 'draft-sheet__title';
+      title.style.color = style.color;
+      title.textContent = window.I18N.localizeEventTitle(ev.title, ev.eventType);
+      body.appendChild(title);
+    }
+    var specEl = buildEventSubmitSpecElement(ev, true);
+    if (specEl) body.appendChild(specEl);
+    else if (ev.content) {
+      var preview = document.createElement('div');
+      preview.className = 'draft-sheet__preview';
+      preview.textContent = eventDisplayContent(ev);
+      body.appendChild(preview);
+    }
+    if (ev.reason && !isCustomerServiceRequestEvent(ev.eventType)) {
+      var reason = document.createElement('div');
+      reason.className = 'draft-sheet__reason';
+      reason.textContent = ev.reason;
+      body.appendChild(reason);
+    }
+    sheet.appendChild(body);
+    card.appendChild(sheet);
+  }
+
+  function openDraftEventDetail(m) {
+    var ev = m.event || {};
+    var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
+    var senderMeta = eventCardSenderMeta(ev, m);
+    var typeLabel = window.I18N.localizeEventType(ev.eventType);
+    var images = eventCardImages(ev);
+
+    var overlay = document.createElement('div');
+    overlay.className = 'event-detail event-detail--landscape';
+    var dialog = document.createElement('div');
+    dialog.className = 'event-detail__dialog event-detail__dialog--landscape';
+
+    var html = '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>';
+    html += '<div class="event-detail__headland">';
+    html += '<div class="event-detail__headland-main">';
+    html += '<span class="event-detail__badge" style="background:' + style.color + '">' + escapeHtml(typeLabel) + '</span>';
+    html += '<h3 class="event-detail__title event-detail__title--inline" style="color:' + style.color + '">' +
+      escapeHtml(window.I18N.localizeEventTitle(ev.title, ev.eventType) || typeLabel) + '</h3>';
+    html += '</div>';
+    html += '<div class="event-detail__meta event-detail__meta--inline">' + escapeHtml(senderMeta.name) + ' · ' + escapeHtml(formatTime(m.createdAt)) + '</div>';
+    html += '</div>';
+    html += '<div class="event-detail__split">';
+    html += '<div class="event-detail__pane event-detail__pane--media">';
+    html += buildEventGalleryHtml(images);
+    html += '</div>';
+    html += '<div class="event-detail__pane event-detail__pane--info">';
+    var specEl = buildEventSubmitSpecElement(ev, false);
+    if (specEl) {
+      html += specEl.outerHTML;
+    }
+    if (ev.content) {
+      html += '<div class="event-detail__content event-detail__content--pane">' + escapeHtml(eventDisplayContent(ev)) + '</div>';
+    }
+    if (ev.reason && !isCustomerServiceRequestEvent(ev.eventType)) {
+      html += '<div class="event-detail__reason">' + escapeHtml(window.I18N.t('ws.detail.rejectReason')) + ' ' + escapeHtml(ev.reason) + '</div>';
+    }
+    html += '</div></div>';
+
+    dialog.innerHTML = html;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var detachGalleryKeys = function () {};
+    var detachEsc = function () {};
+    function close() {
+      detachGalleryKeys();
+      detachEsc();
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    dialog.querySelector('.event-detail__close').addEventListener('click', close);
+    dialog.addEventListener('click', function (e) { e.stopPropagation(); });
+    detachGalleryKeys = wireEventGallery(dialog, images, close);
+    if (images.length <= 1) {
+      function escOnce(e) {
+        if (e.key === 'Escape') close();
+      }
+      document.addEventListener('keydown', escOnce);
+      detachEsc = function () { document.removeEventListener('keydown', escOnce); };
+    }
+  }
+
+  function buildEventSubmitSpecHtml(ev) {
+    var el = buildEventSubmitSpecElement(ev, false);
+    return el ? el.outerHTML : '';
   }
 
   function openEventDetail(m) {
     var ev = m.event || {};
+    if (isDraftSubmitEvent(ev.eventType)) {
+      openDraftEventDetail(m);
+      return;
+    }
     var style = EVENT_STYLE[ev.eventType] || EVENT_STYLE._default;
     var senderMeta = eventCardSenderMeta(ev, m);
     var typeLabel = window.I18N.localizeEventType(ev.eventType);
@@ -1993,9 +2491,7 @@
     html += '<div class="event-detail__badge" style="background:' + style.color + '">' + escapeHtml(typeLabel) + '</div>';
     html += '<h3 class="event-detail__title" style="color:' + style.color + '">' + escapeHtml(window.I18N.localizeEventTitle(ev.title, ev.eventType) || typeLabel) + '</h3>';
     html += '<div class="event-detail__meta">' + escapeHtml(senderMeta.name) + ' · ' + escapeHtml(formatTime(m.createdAt)) + '</div>';
-    var images = isReviewEvent(ev) ? [] : (ev.images || []).filter(function (src) {
-      return String(src || '').indexOf('data:image/svg') !== 0;
-    });
+    var images = eventCardImages(ev);
     if (images.length) {
       html += '<div class="event-gallery" data-count="' + images.length + '">';
       html += '<div class="event-gallery__stage">';
@@ -2008,6 +2504,10 @@
       }
       html += '</div>';
     }
+    var submitSpecHtml = buildEventSubmitSpecHtml(ev);
+    if (submitSpecHtml) {
+      html += submitSpecHtml;
+    }
     if (ev.content || ev.eventType === 'SHIPPING_ADDRESS_REQUEST') {
       html += '<div class="event-detail__content">' + escapeHtml(eventDisplayContent(ev)) + '</div>';
     }
@@ -2016,7 +2516,14 @@
         escapeHtml(ev.resolution === 'FILLED' ? window.I18N.t('ws.shipaddr.edit') : window.I18N.t('ws.shipaddr.fill')) +
         '</button></div>';
     }
-    if (ev.reason) html += '<div class="event-detail__reason">' + escapeHtml(window.I18N.t('ws.detail.rejectReason')) + ' ' + escapeHtml(ev.reason) + '</div>';
+    if (ev.reason && !isCustomerServiceRequestEvent(ev.eventType)) {
+      html += '<div class="event-detail__reason">' + escapeHtml(window.I18N.t('ws.detail.rejectReason')) + ' ' + escapeHtml(ev.reason) + '</div>';
+    }
+    if (ev.eventType === 'REFUND_REQUESTED' && ev.actionable) {
+      html += '<div class="shipaddr__actions"><button type="button" class="prog-btn prog-btn--no" id="refundWithdrawBtn">' +
+        escapeHtml(window.I18N.t('ws.service.withdraw')) +
+        '</button></div>';
+    }
     // 物流事件：展示物流轨迹
     if (ev.eventType === 'SHIPPED' || ev.eventType === 'DELIVERED') {
       html += '<div class="event-detail__shipment" id="eventShipment">' + escapeHtml(window.I18N.t('ws.ship.loading')) + '</div>';
@@ -2039,6 +2546,13 @@
         e.stopPropagation();
         close();
         openShippingAddressForm(workspace.orderId);
+      });
+    }
+    var withdrawEl = dialog.querySelector('#refundWithdrawBtn');
+    if (withdrawEl) {
+      withdrawEl.addEventListener('click', function (e) {
+        e.stopPropagation();
+        withdrawRefundRequest(withdrawEl).then(function () { close(); }).catch(function () { /* ignore */ });
       });
     }
 
@@ -2214,6 +2728,12 @@
     DELIVERY_CONFIRM: { color: '#2ea043', label: '交付' },
     BALANCE_PAYMENT: { color: '#d97706', label: '支付尾款' },
     BALANCE_PAID: { color: '#2ea043', label: '已支付' },
+    COMPLAINT_SUBMITTED: { color: '#e05d5d', label: '投诉' },
+    REFUND_REQUESTED: { color: '#d97706', label: '退款' },
+    SERVICE_REQUEST_RESOLVED: { color: '#2ea043', label: '已处理' },
+    SERVICE_REQUEST_REJECTED: { color: '#999999', label: '未通过' },
+    SERVICE_REQUEST_CANCELLED: { color: '#6b7280', label: '已撤销' },
+    RUSH_PAID: { color: '#d97706', label: '加急' },
     _default: { color: '#6b7280', label: '事件' }
   };
 
@@ -2688,9 +3208,214 @@
   window.addEventListener('online', nudgeChatSocket);
   window.addEventListener('pageshow', nudgeChatSocket);
 
+  function closeChatMoreMenu() {
+    var menu = document.getElementById('chatMoreMenu');
+    var btn = document.getElementById('chatMoreBtn');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function formatUsdAmount(n) {
+    var num = Number(n);
+    if (!isFinite(num) || num <= 0) return '';
+    return (Math.round(num * 100) / 100).toFixed(2);
+  }
+
+  function openServiceRequestModal(kind) {
+    var orderId = workspace.orderId;
+    if (!orderId) {
+      alert(window.I18N.t('ws.service.noOrder'));
+      return;
+    }
+    if (workspace.orderStatus === 'CANCELLED') {
+      alert(window.I18N.t('ws.service.cancelled'));
+      return;
+    }
+    var isRefund = kind === 'REFUND';
+    var cats = isRefund
+      ? ['CHANGE_OF_MIND', 'DESIGN_UNSATISFIED', 'DELAY', 'PRICE', 'OTHER']
+      : ['QUALITY', 'SERVICE', 'DELAY', 'SHIPPING', 'OTHER'];
+    var defaultCat = isRefund ? 'CHANGE_OF_MIND' : 'OTHER';
+    var optionsHtml = cats.map(function (c) {
+      return '<option value="' + c + '"' + (c === defaultCat ? ' selected' : '') + '>' +
+        escapeHtml(window.I18N.t('ws.service.cat.' + c)) + '</option>';
+    }).join('');
+
+    function paintModal(fullAmount) {
+      var amountText = formatUsdAmount(fullAmount);
+      var defaultReason = isRefund
+        ? window.I18N.t('ws.service.refund.reasonDefault').replace('{amount}', amountText || '—')
+        : '';
+      var overlay = document.createElement('div');
+      overlay.className = 'event-detail';
+      var dialog = document.createElement('div');
+      dialog.className = 'event-detail__dialog reject-modal';
+      dialog.innerHTML =
+        '<button type="button" class="event-detail__close" aria-label="Close">&times;</button>' +
+        '<h3 class="balance-pay__title">' + escapeHtml(window.I18N.t(isRefund ? 'ws.service.refund.title' : 'ws.service.complaint.title')) + '</h3>' +
+        '<p class="service-req__hint">' + escapeHtml(window.I18N.t(isRefund ? 'ws.service.refund.hint' : 'ws.service.complaint.hint')) + '</p>' +
+        '<label class="service-req__label" for="serviceReqCategory">' + escapeHtml(window.I18N.t('ws.service.category')) + '</label>' +
+        '<select id="serviceReqCategory" class="checkout__input service-req__select">' + optionsHtml + '</select>' +
+        (isRefund
+          ? ('<label class="service-req__label" for="serviceReqScope">' + escapeHtml(window.I18N.t('ws.service.refundScope')) + '</label>' +
+             '<select id="serviceReqScope" class="checkout__input service-req__select">' +
+               '<option value="FULL" selected>' + escapeHtml(window.I18N.t('ws.service.refundScope.full')) + '</option>' +
+               '<option value="PARTIAL">' + escapeHtml(window.I18N.t('ws.service.refundScope.partial')) + '</option>' +
+             '</select>' +
+             '<label class="service-req__label" for="serviceReqAmount">' + escapeHtml(window.I18N.t('ws.service.amount')) + '</label>' +
+             '<input id="serviceReqAmount" class="checkout__input service-req__amount" type="number" min="0.01" step="0.01" placeholder="USD"' +
+               (amountText ? ' value="' + escapeAttr(amountText) + '"' : '') + '>')
+          : '') +
+        '<label class="service-req__label" for="serviceReqReason">' + escapeHtml(window.I18N.t('ws.service.reason')) + '</label>' +
+        '<textarea id="serviceReqReason" class="checkout__input reject-modal__textarea" rows="4" maxlength="2000" placeholder="' +
+          escapeAttr(window.I18N.t('ws.service.reason')) + '">' + escapeHtml(defaultReason) + '</textarea>' +
+        '<div class="reject-modal__error" id="serviceReqError" role="alert"></div>' +
+        '<div class="balance-pay__actions">' +
+          '<button type="button" class="prog-btn prog-btn--no" id="serviceReqCancel">' + escapeHtml(window.I18N.t('ws.service.cancel')) + '</button>' +
+          '<button type="button" class="prog-btn prog-btn--ok" id="serviceReqSubmit">' + escapeHtml(window.I18N.t('ws.service.submit')) + '</button>' +
+        '</div>';
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      var closed = false;
+      function close() {
+        if (closed) return;
+        closed = true;
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      dialog.querySelector('.event-detail__close').addEventListener('click', close);
+      dialog.querySelector('#serviceReqCancel').addEventListener('click', close);
+      dialog.addEventListener('click', function (e) { e.stopPropagation(); });
+
+      var reasonEl = dialog.querySelector('#serviceReqReason');
+      var errEl = dialog.querySelector('#serviceReqError');
+      var submitBtn = dialog.querySelector('#serviceReqSubmit');
+      var amountEl = dialog.querySelector('#serviceReqAmount');
+      var scopeEl = dialog.querySelector('#serviceReqScope');
+
+      function syncRefundFields(forceReason) {
+        if (!isRefund || !scopeEl || !amountEl) return;
+        var isFull = scopeEl.value === 'FULL';
+        if (isFull && amountText) {
+          amountEl.value = amountText;
+          amountEl.readOnly = true;
+        } else {
+          amountEl.readOnly = false;
+        }
+        if (forceReason && reasonEl) {
+          var amt = formatUsdAmount(amountEl.value) || amountText || '—';
+          reasonEl.value = window.I18N.t(isFull ? 'ws.service.refund.reasonDefault' : 'ws.service.refund.reasonPartial')
+            .replace('{amount}', amt);
+        }
+      }
+      if (isRefund) {
+        syncRefundFields(false);
+        if (scopeEl) {
+          scopeEl.addEventListener('change', function () { syncRefundFields(true); });
+        }
+        if (amountEl) {
+          amountEl.addEventListener('input', function () {
+            if (scopeEl && scopeEl.value === 'PARTIAL' && reasonEl) {
+              var amt = formatUsdAmount(amountEl.value) || '—';
+              reasonEl.value = window.I18N.t('ws.service.refund.reasonPartial').replace('{amount}', amt);
+            }
+          });
+        }
+      }
+      setTimeout(function () {
+        if (isRefund && amountEl && !amountEl.readOnly) amountEl.focus();
+        else if (reasonEl) reasonEl.focus();
+      }, 0);
+
+      submitBtn.addEventListener('click', function () {
+        if (submitBtn.disabled) return;
+        var reason = (reasonEl && reasonEl.value || '').trim();
+        if (reason.length < 5) {
+          if (errEl) errEl.textContent = window.I18N.t('ws.service.empty');
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        var categoryEl = dialog.querySelector('#serviceReqCategory');
+        var body = {
+          category: categoryEl ? categoryEl.value : 'OTHER',
+          reason: reason
+        };
+        if (isRefund) {
+          var rawAmt = amountEl && amountEl.value ? Number(amountEl.value) : NaN;
+          if (!isNaN(rawAmt) && rawAmt > 0) body.requestedAmount = rawAmt;
+        }
+        if (errEl) errEl.textContent = '';
+        submitBtn.disabled = true;
+        var apiCall = isRefund
+          ? window.DUXURY_API.submitRefundRequest(orderId, body)
+          : window.DUXURY_API.submitComplaint(orderId, body);
+        apiCall
+          .then(function () {
+            close();
+            alert(window.I18N.t('ws.service.success'));
+            return reloadChatAndProgress();
+          })
+          .catch(function (err) {
+            var msg = err && err.message ? err.message : String(err);
+            if (/进行中|already|open|Conflict|冲突/i.test(msg)) {
+              msg = window.I18N.t('ws.service.openExists');
+            }
+            if (errEl) errEl.textContent = msg;
+          })
+          .finally(function () {
+            submitBtn.disabled = false;
+          });
+      });
+    }
+
+    if (!isRefund) {
+      paintModal(null);
+      return;
+    }
+    window.DUXURY_API.getOrderSummary(orderId).then(function (summary) {
+      var amt = summary && (summary.refundableAmount != null ? summary.refundableAmount : summary.deposit);
+      paintModal(amt);
+    }).catch(function () {
+      paintModal(null);
+    });
+  }
+
+  function initChatMoreMenu() {
+    var wrap = document.getElementById('chatMore');
+    var btn = document.getElementById('chatMoreBtn');
+    var menu = document.getElementById('chatMoreMenu');
+    var complaintBtn = document.getElementById('chatComplaintBtn');
+    var refundBtn = document.getElementById('chatRefundBtn');
+    if (!wrap || !btn || !menu) return;
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) closeChatMoreMenu();
+    });
+    if (complaintBtn) {
+      complaintBtn.addEventListener('click', function () {
+        closeChatMoreMenu();
+        openServiceRequestModal('COMPLAINT');
+      });
+    }
+    if (refundBtn) {
+      refundBtn.addEventListener('click', function () {
+        closeChatMoreMenu();
+        openServiceRequestModal('REFUND');
+      });
+    }
+  }
+
   function startWorkspace() {
     connectChatSocket();
     loadConversations();
+    initChatMoreMenu();
   }
 
   if (localStorage.getItem('duxury-token') && chatApiReady()) {

@@ -273,21 +273,21 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     }
   };
 
-  const submitToCustomer = async () => {
+  const submitForReview = async () => {
     if (orderId == null) return;
     const images = collectDoneImageUrlsFromFileList(designImageFileList);
     if (!hasDesignPiecesForCustomerSubmit(pieces)) {
-      message.warning('没有待提交给客户的单件。已确认且未被建模师驳回的件不会再次发送。');
+      message.warning('当前没有待提交审核的单件。');
       return;
     }
     const missing = piecesMissingCustomerSubmitImages(pieces, 'design', activePieceId, images);
     if (missing.length) {
-      message.error(`以下单件还没有设计图，须这些件都有图后才能提交：${missing.join('、')}`);
+      message.error(`以下单件还没有设计图，须全部单件都有图后才能提交跟单评审：${missing.join('、')}`);
       return;
     }
     const sentBack = !!activePiece?.model?.lastRejectToDesignerMessage?.trim();
     if (activePiece?.designConfirmed && !sentBack && !sameImageList(activePiece.design?.designImages, images)) {
-      message.error(`「${activePiece.name}」客户已确认，提交给客户时不能修改该件，也不会再次发送。`);
+      message.error(`「${activePiece.name}」客户已确认，不能修改该件。请切换到待审核单件。`);
       return;
     }
     const payload = await buildPayload(!activePiece?.designConfirmed);
@@ -295,10 +295,11 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
     try {
       await orderService.updateOrderDesign(orderId, {
         ...payload,
-        submitToCustomer: true,
+        submitToCustomer: false,
+        submitToTracker: true,
         createVersion: true,
       });
-      message.success('已将未确认的单件一起提交，客户将按件收到确认卡片');
+      message.success('已提交跟单员质量评审；通过后系统将自动发给客户审阅');
       onSubmitted();
       onClose();
     } catch (e) {
@@ -319,7 +320,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
       const o = await orderService.restoreDesignVersion(orderId, activePieceId, versionId);
       setOrder(o);
       applyPieceToForm(o, activePieceId);
-      message.success('已恢复为该版本内容（未自动提交客户）');
+      message.success('已恢复为该版本内容（未自动提交审核）');
     } catch (e) {
       message.error(`回退失败：${String((e as Error)?.message || e)}`);
     } finally {
@@ -408,17 +409,17 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
             loading={busy}
             disabled={!designHasPending || designMissing.length > 0}
             style={{ minHeight: 40 }}
-            onClick={() => void submitToCustomer()}
+            onClick={() => void submitForReview()}
           >
-            提交给客户确认
+            提交审核
           </Button>
         </div>
       }
     >
       <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
-        须全部未确认的单件都有设计图后才能一起提交；已确认的件不会再次发送。草稿仍按件保存。
+        设计完成后提交跟单员质量评审；全部单件通过后系统才会发给客户。须全部待审单件都有设计图。草稿仍按件保存。
         {designMissing.length > 0 ? ` 还缺：${designMissing.join('、')}` : ''}
-        {!designHasPending ? ' 当前没有待提交的单件。' : ''}
+        {!designHasPending ? ' 当前没有待提交审核的单件。' : ''}
       </Paragraph>
 
       {orderId != null && (
@@ -586,7 +587,7 @@ const ChatDesignSubmitModal: React.FC<Props> = ({
         <Form.Item name="designNotes" label="设计备注">
           <Input.TextArea rows={3} />
         </Form.Item>
-        <Form.Item label="设计图片" extra="本单每一件未确认的单件都要有图，才能一起提交给客户。">
+        <Form.Item label="设计图片" extra="本单每一件待审的单件都要有图，才能一起提交跟单审核。">
           <UploadWithImagePreview
             listType="picture-card"
             accept="image/*"

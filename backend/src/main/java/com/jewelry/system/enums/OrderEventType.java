@@ -23,7 +23,13 @@ public enum OrderEventType {
     SHIPPING_ADDRESS_REQUEST("请完善收货信息"),
     SHIPPING_ADDRESS_FILLED("已提交收货信息"),
     DESIGN_OPTIONS_REQUEST("请确认生产选项"),
-    DESIGN_OPTIONS_FILLED("已确认生产选项");
+    DESIGN_OPTIONS_FILLED("已确认生产选项"),
+    COMPLAINT_SUBMITTED("客户提交投诉"),
+    REFUND_REQUESTED("客户申请退款"),
+    SERVICE_REQUEST_RESOLVED("售后申请已处理"),
+    SERVICE_REQUEST_REJECTED("售后申请未通过"),
+    SERVICE_REQUEST_CANCELLED("客户已撤销申请"),
+    RUSH_PAID("已支付加急费用");
 
     private final String description;
 

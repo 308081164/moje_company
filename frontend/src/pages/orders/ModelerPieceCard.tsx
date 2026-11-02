@@ -7,7 +7,7 @@ import { orderService } from '@/services/orderService';
 import UploadWithImagePreview from '@/components/UploadWithImagePreview';
 import UploadWithModelSourcePreview from '@/components/UploadWithModelSourcePreview';
 import { PieceDesignCard } from '@/pages/orders/PieceDesignBrief';
-import { StoneEditor, stonesForSave, stonesFromSaved, type StoneDraft } from '@/pages/orders/StoneEditor';
+import { StoneEditor, stonesFromSaved, type StoneDraft } from '@/pages/orders/StoneEditor';
 import {
   collectDoneImageUrlsFromFileList,
   normalizeDoneImageUploadFileList,
@@ -70,11 +70,14 @@ export function ModelerPieceCard({
   const [effects, setEffects] = useState<UploadFile[]>(() =>
     savedImageUrlsToUploadFileList(piece.model?.modelEffectImages || [], '效果图'));
   const [sources, setSources] = useState<UploadFile[]>(() => modelSourceUploadListFromSaved(piece.model?.modelFiles));
+  const [engravingFiles, setEngravingFiles] = useState<UploadFile[]>(() =>
+    modelSourceUploadListFromSaved(piece.model?.engravingFiles));
+  const wantsEngraving = piece.customerWantsEngraving === true;
   const [versions, setVersions] = useState<OrderModelVersion[]>([]);
   const [versionPick, setVersionPick] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const dirty = useRef(false);
-  const stamp = `${piece.model?.updatedAt || ''}|${(piece.model?.modelEffectImages || []).join(',')}|${piece.model?.modelNotes || ''}|${piece.model?.weight ?? ''}|${piece.model?.modelerId ?? ''}|${JSON.stringify(piece.design?.stoneInfo || [])}`;
+  const stamp = `${piece.model?.updatedAt || ''}|${(piece.model?.modelEffectImages || []).join(',')}|${piece.model?.modelNotes || ''}|${piece.model?.weight ?? ''}|${piece.model?.modelerId ?? ''}|${JSON.stringify(piece.design?.stoneInfo || [])}|${JSON.stringify(piece.model?.engravingFiles || [])}|${piece.customerWantsEngraving}`;
 
   useEffect(() => {
     if (dirty.current) return;
@@ -86,6 +89,7 @@ export function ModelerPieceCard({
     setStones(stonesFromSaved(piece.design?.stoneInfo));
     setEffects(savedImageUrlsToUploadFileList(piece.model?.modelEffectImages || [], '效果图'));
     setSources(modelSourceUploadListFromSaved(piece.model?.modelFiles));
+    setEngravingFiles(modelSourceUploadListFromSaved(piece.model?.engravingFiles));
   }, [form, piece.id, stamp]);
 
   useEffect(() => {
@@ -131,6 +135,21 @@ export function ModelerPieceCard({
     }
   };
 
+  const uploadEngraving: NonNullable<UploadProps['customRequest']> = async (options) => {
+    const { file, onError, onSuccess } = options;
+    try {
+      const res = await orderService.uploadEngravingFile(orderId, file as File);
+      let url = res.fileUrl?.trim();
+      if (!url) url = (await orderService.previewFile(res.id))?.trim();
+      dirty.current = true;
+      onSuccess?.(url ? { ...res, url } : res);
+      message.success(`「${piece.name}」刻字文件已上传，请保存这一件`);
+    } catch {
+      message.error('刻字文件上传失败');
+      onError?.(new Error('上传失败'));
+    }
+  };
+
   const save = async () => {
     if (locked) {
       message.warning(`「${piece.name}」客户已确认，请勿修改`);
@@ -139,7 +158,6 @@ export function ModelerPieceCard({
     try {
       setSaving(true);
       const values = form.getFieldsValue();
-      await orderService.updatePieceStones(orderId, piece.id, stonesForSave(stones));
       await orderService.updateOrderModel(orderId, {
         pieceId: piece.id,
         modelerId: values.modelerId,
@@ -147,6 +165,7 @@ export function ModelerPieceCard({
         modelNotes: values.modelNotes,
         modelEffectImageUrls: collectDoneImageUrlsFromFileList(effects),
         modelSourceFileIds: sourceIdsOf(sources),
+        engravingFileIds: wantsEngraving ? sourceIdsOf(engravingFiles) : [],
         createVersion: true,
         submitToCustomer: false,
       });
@@ -217,15 +236,32 @@ export function ModelerPieceCard({
           <Form.Item name="modelerId" label="建模师">
             <Select
               allowClear
-              options={modelers.map((user) => ({ value: user.id, label: user.realName || user.username }))}
+              placeholder="请选择建模师"
+              options={(() => {
+                const opts = modelers.map((user) => ({
+                  value: user.id,
+                  label: user.realName || user.username,
+                }));
+                const currentId = piece.model?.modelerId;
+                if (currentId != null && !opts.some((o) => Number(o.value) === Number(currentId))) {
+                  const fallback =
+                    piece.model?.modelerName?.trim() ||
+                    `用户 #${currentId}`;
+                  opts.unshift({
+                    value: currentId,
+                    label: `${fallback}（非建模师，请改派）`,
+                  });
+                }
+                return opts;
+              })()}
             />
           </Form.Item>
           <Form.Item name="weight" label="克重">
             <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
           </Form.Item>
         </div>
-        <Form.Item label="石料" extra="设计师已填的石料可以在这里改。保存这一件时一起写入。">
-          <StoneEditor rows={stones} disabled={readOnly} onChange={(rows) => { dirty.current = true; setStones(rows); }} />
+        <Form.Item label="石料" extra="石料由设计师填写，建模师仅可查看。">
+          <StoneEditor rows={stones} disabled onChange={() => undefined} />
         </Form.Item>
         <Form.Item name="modelNotes" label="建模备注">
           <Input.TextArea rows={2} placeholder="修改说明会随这一件的建模稿发给客户" />
@@ -272,6 +308,36 @@ export function ModelerPieceCard({
             <Button icon={<PlusOutlined />}>上传源文件</Button>
           </UploadWithModelSourcePreview>
         </Form.Item>
+        {wantsEngraving ? (
+          <Form.Item
+            label="刻字文件"
+            extra="客户问卷已选择需要刻字。请上传工厂用刻字/刀路文件；字印文案由设计师填写。交跟单前至少上传一个文件。"
+            style={{ marginBottom: 8 }}
+            required
+          >
+            <UploadWithModelSourcePreview
+              multiple
+              disabled={readOnly}
+              fileList={engravingFiles}
+              onChange={({ fileList }) => {
+                dirty.current = true;
+                setEngravingFiles(normalizeModelSourceUploadFileList(fileList));
+              }}
+              customRequest={uploadEngraving}
+              onDownloadFile={(fileId, fileName) => {
+                void orderService.downloadFile(fileId).then((blob) => {
+                  const link = document.createElement('a');
+                  link.href = URL.createObjectURL(blob);
+                  link.download = fileName || `engraving-${fileId}`;
+                  link.click();
+                  URL.revokeObjectURL(link.href);
+                }).catch((error: unknown) => message.error(String((error as Error)?.message || error)));
+              }}
+            >
+              <Button icon={<PlusOutlined />}>上传刻字文件</Button>
+            </UploadWithModelSourcePreview>
+          </Form.Item>
+        ) : null}
         <Button type="primary" block disabled={readOnly} loading={saving} onClick={() => void save()}>
           保存「{piece.name}」
         </Button>

@@ -8,6 +8,9 @@ import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderSource;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
+import com.jewelry.system.customerbrief.CustomerBriefCatalog;
+import com.jewelry.system.storefront.StorefrontSpecFormatter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.util.JewelryTypeRules;
 import com.jewelry.system.repository.*;
 import com.jewelry.system.security.AccountKind;
@@ -24,7 +27,9 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +65,7 @@ public class StorefrontService {
     private final SellerWalletRepository walletRepository;
     private final SellerWithdrawRequestRepository withdrawRepository;
     private final ReferralService referralService;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public StorefrontFeeGuideDto feeGuide() {
@@ -89,7 +95,7 @@ public class StorefrontService {
         if (!"PUBLISHED".equals(listing.getStatus())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "商品未上架");
         }
-        return toDto(listing);
+        return toDetailDto(listing);
     }
 
     @Transactional(readOnly = true)
@@ -100,6 +106,41 @@ public class StorefrontService {
         } catch (ResponseStatusException e) {
             return false;
         }
+    }
+
+    @Transactional
+    public void tryAutoPublishAfterDelivery(long orderId, long accountId) {
+        if (!canPublish(accountId, orderId)) {
+            return;
+        }
+        if (listingRepository.findBySourceOrderId(orderId).isPresent()) {
+            return;
+        }
+        Order source = orderRepository.findById(orderId).orElse(null);
+        if (source == null) {
+            return;
+        }
+        StorefrontPublishRequest req = new StorefrontPublishRequest();
+        req.setSourceOrderId(orderId);
+        req.setTitle(defaultTitle(source));
+        req.setDescription("客户尾款支付时选择自动上架");
+        req.setSalePrice(MIN_SALE_PRICE);
+        StorefrontFeeGuideDto fees = feeGuide();
+        StorefrontListing listing = new StorefrontListing();
+        listing.setSourceOrderId(source.getId());
+        listing.setSellerAccountId(accountId);
+        listing.setTitle(defaultTitle(source));
+        listing.setDescription(req.getDescription());
+        listing.setSalePrice(MIN_SALE_PRICE);
+        listing.setProductionFeeMin(fees.getProductionFeeMin());
+        listing.setProductionFeeMax(fees.getProductionFeeMax());
+        listing.setShippingFeeMin(fees.getShippingFeeMin());
+        listing.setShippingFeeMax(fees.getShippingFeeMax());
+        listing.setCoverImageUrl(chosenCover(source, null));
+        listing.setJewelryType(resolveListingJewelryType(source.getId()));
+        listing.setStatus("PUBLISHED");
+        listing.setSoldCount(0);
+        listingRepository.save(listing);
     }
 
     @Transactional
@@ -191,7 +232,7 @@ public class StorefrontService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该商品已下架");
         }
         JewelryType listingType = listing.getJewelryType();
-        JewelryTypeRules.validateBuyerSize(listingType, req != null ? req.getBuyerSize() : null);
+        String buyerSpec = JewelryTypeRules.validateAndSummarizeBuyerOptions(listingType, req);
         if (listing.getSellerAccountId().equals(buyerId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能购买自己发布的商品");
         }
@@ -223,9 +264,8 @@ public class StorefrontService {
         }
         String note = req != null && StringUtils.hasText(req.getNote()) ? req.getNote().trim() : "";
         String addr = req != null && StringUtils.hasText(req.getShippingAddress()) ? req.getShippingAddress().trim() : "";
-        String buyerSize = req != null && StringUtils.hasText(req.getBuyerSize()) ? req.getBuyerSize().trim() : "";
         order.setBasicRequirements("独立站寄售复产：" + listing.getTitle()
-                + (buyerSize.isBlank() ? "" : "\n买家规格：" + buyerSize)
+                + (buyerSpec.isBlank() ? "" : "\n买家规格：" + buyerSpec)
                 + (addr.isBlank() ? "" : "\n收货地址：" + addr)
                 + (note.isBlank() ? "" : "\n备注：" + note));
         order.setStyleInfo(source.getStyleInfo());
@@ -254,12 +294,7 @@ public class StorefrontService {
         }
 
         copyDesignAndModel(source.getId(), order.getId());
-        if (StringUtils.hasText(buyerSize)) {
-            orderDetailRepository.findByOrderId(order.getId()).ifPresent(od -> {
-                od.setHandSize(buyerSize);
-                orderDetailRepository.save(od);
-            });
-        }
+        applyBuyerSpecToOrderDetail(order.getId(), listingType, req, buyerSpec);
 
         LocalDateTime now = LocalDateTime.now();
         if (source.getDesignCompletedTime() != null) {
@@ -459,6 +494,17 @@ public class StorefrontService {
     }
 
     private StorefrontListingDto toDto(StorefrontListing listing) {
+        return toDtoBuilder(listing).build();
+    }
+
+    private StorefrontListingDto toDetailDto(StorefrontListing listing) {
+        StorefrontListingDto.StorefrontListingDtoBuilder b = toDtoBuilder(listing);
+        attachGallery(b, listing);
+        attachProductSpec(b, listing);
+        return b.build();
+    }
+
+    private StorefrontListingDto.StorefrontListingDtoBuilder toDtoBuilder(StorefrontListing listing) {
         String sellerName = accountRepository.findById(listing.getSellerAccountId())
                 .map(a -> StringUtils.hasText(a.getDisplayName()) ? a.getDisplayName() : "duxury maker")
                 .orElse("duxury maker");
@@ -480,8 +526,172 @@ public class StorefrontService {
                 .sellerDisplayName(sellerName)
                 .jewelryType(jt != null ? jt.name() : null)
                 .buyerSizeVisible(JewelryTypeRules.buyerNeedsSizeInput(jt))
-                .buyerSizeRequired(JewelryTypeRules.buyerSizeRequired(jt))
-                .build();
+                .buyerSizeRequired(JewelryTypeRules.buyerSizeRequired(jt));
+    }
+
+    private void attachGallery(StorefrontListingDto.StorefrontListingDtoBuilder b, StorefrontListing listing) {
+        List<String> design = new ArrayList<>();
+        List<String> model = new ArrayList<>();
+        List<String> photos = new ArrayList<>();
+        Long sourceOrderId = listing.getSourceOrderId();
+        if (sourceOrderId != null) {
+            List<OrderPiece> pieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(sourceOrderId);
+            for (OrderPiece piece : pieces) {
+                appendUnique(photos, orderPieceService.parseReferenceImages(piece));
+                designInfoRepository.findByPieceId(piece.getId()).ifPresent(di ->
+                        appendUnique(design, parseUrlList(di.getDesignImagesJson())));
+                modelingInfoRepository.findByPieceId(piece.getId()).ifPresent(mi ->
+                        appendUnique(model, parseUrlList(mi.getModelEffectImagesJson())));
+            }
+            if (design.isEmpty()) {
+                designInfoRepository.findByOrderId(sourceOrderId).ifPresent(di ->
+                        appendUnique(design, parseUrlList(di.getDesignImagesJson())));
+            }
+            if (model.isEmpty()) {
+                modelingInfoRepository.findByOrderId(sourceOrderId).ifPresent(mi ->
+                        appendUnique(model, parseUrlList(mi.getModelEffectImagesJson())));
+            }
+        }
+        if (StringUtils.hasText(listing.getCoverImageUrl())) {
+            String cover = listing.getCoverImageUrl().trim();
+            boolean known = design.contains(cover) || model.contains(cover) || photos.contains(cover);
+            if (!known) {
+                // 封面优先归入设计图，便于首图展示
+                design.add(0, cover);
+            }
+        }
+        b.designImages(design).modelEffectImages(model).photoImages(photos);
+    }
+
+    private void attachProductSpec(StorefrontListingDto.StorefrontListingDtoBuilder b, StorefrontListing listing) {
+        Long sourceOrderId = listing.getSourceOrderId();
+        if (sourceOrderId == null) {
+            return;
+        }
+        orderDetailRepository.findByOrderId(sourceOrderId).ifPresent(od -> {
+            String material = CustomerBriefCatalog.materialLabel(od.getMaterialType());
+            if (!StringUtils.hasText(material)) {
+                orderRepository.findById(sourceOrderId).ifPresent(o -> {
+                    if (StringUtils.hasText(o.getMaterialInfo())) {
+                        b.materialLabel(o.getMaterialInfo().trim());
+                    }
+                });
+            } else {
+                b.materialLabel(material);
+            }
+            if (StringUtils.hasText(od.getEngravingText())) {
+                b.engravingText(od.getEngravingText().trim());
+            }
+        });
+        List<StorefrontStoneLineDto> stones = new ArrayList<>();
+        Map<String, StorefrontProcessLineDto> processDedup = new LinkedHashMap<>();
+        String plating = null;
+        String weight = null;
+        for (OrderPiece piece : orderPieceRepository.findByOrderIdOrderBySeqAsc(sourceOrderId)) {
+            DesignInfo di = designInfoRepository.findByPieceId(piece.getId()).orElse(null);
+            if (di != null) {
+                stones.addAll(StorefrontSpecFormatter.parseStones(objectMapper, di.getStoneInfoJson()));
+                for (StorefrontProcessLineDto row : StorefrontSpecFormatter.parseProcesses(objectMapper, di.getProcessInfoJson())) {
+                    String key = (row.getName() != null ? row.getName() : "") + "|" + (row.getNotes() != null ? row.getNotes() : "");
+                    processDedup.putIfAbsent(key, row);
+                }
+                if (plating == null && StringUtils.hasText(di.getPlating())) {
+                    plating = di.getPlating().trim();
+                }
+            }
+            if (weight == null) {
+                ModelingInfo mi = modelingInfoRepository.findByPieceId(piece.getId()).orElse(null);
+                if (mi != null && mi.getWeight() != null) {
+                    weight = mi.getWeight().stripTrailingZeros().toPlainString() + " g";
+                }
+            }
+        }
+        if (stones.isEmpty()) {
+            designInfoRepository.findByOrderId(sourceOrderId).ifPresent(di -> {
+                stones.addAll(StorefrontSpecFormatter.parseStones(objectMapper, di.getStoneInfoJson()));
+                for (StorefrontProcessLineDto row : StorefrontSpecFormatter.parseProcesses(objectMapper, di.getProcessInfoJson())) {
+                    String key = (row.getName() != null ? row.getName() : "") + "|" + (row.getNotes() != null ? row.getNotes() : "");
+                    processDedup.putIfAbsent(key, row);
+                }
+            });
+        }
+        if (plating == null) {
+            designInfoRepository.findByOrderId(sourceOrderId).ifPresent(di -> {
+                if (StringUtils.hasText(di.getPlating())) {
+                    b.platingLabel(di.getPlating().trim());
+                }
+            });
+        }
+        if (StringUtils.hasText(plating)) {
+            b.platingLabel(plating);
+        }
+        if (StringUtils.hasText(weight)) {
+            b.weightLabel(weight);
+        }
+        if (!stones.isEmpty()) {
+            b.stones(stones);
+        }
+        if (!processDedup.isEmpty()) {
+            b.processes(new ArrayList<>(processDedup.values()));
+        }
+    }
+
+    private void applyBuyerSpecToOrderDetail(long orderId, JewelryType type,
+                                             StorefrontPurchaseRequest req, String buyerSpec) {
+        if (!StringUtils.hasText(buyerSpec) && (req == null || (!StringUtils.hasText(req.getBuyerSize())
+                && !StringUtils.hasText(req.getChainLength())))) {
+            return;
+        }
+        OrderDetail od = orderDetailRepository.findByOrderId(orderId).orElseGet(() -> {
+            OrderDetail created = new OrderDetail();
+            created.setOrderId(orderId);
+            return created;
+        });
+        if (type == JewelryType.RING && req != null && StringUtils.hasText(req.getBuyerSize())) {
+            String unit = StringUtils.hasText(req.getRingUnit()) ? req.getRingUnit() + " " : "";
+            od.setHandSize((unit + req.getBuyerSize()).trim());
+        } else if ((type == JewelryType.NECKLACE || type == JewelryType.COLLARBONE) && req != null) {
+            if (StringUtils.hasText(req.getChainLength())) {
+                od.setChainLength(req.getChainLength().trim());
+            }
+            if (StringUtils.hasText(buyerSpec)) {
+                od.setHandSize(buyerSpec);
+            }
+        } else if (type == JewelryType.BRACELET && req != null && StringUtils.hasText(req.getBuyerSize())) {
+            String measure = StringUtils.hasText(req.getBraceletMeasure()) ? req.getBraceletMeasure() + " " : "";
+            od.setHandSize((measure + req.getBuyerSize()).trim());
+        } else if (StringUtils.hasText(buyerSpec)) {
+            od.setHandSize(buyerSpec);
+        }
+        orderDetailRepository.save(od);
+    }
+
+    private static void appendUnique(List<String> target, List<String> urls) {
+        if (urls == null) {
+            return;
+        }
+        for (String u : urls) {
+            if (!StringUtils.hasText(u)) {
+                continue;
+            }
+            String url = u.trim();
+            if (!target.contains(url)) {
+                target.add(url);
+            }
+        }
+    }
+
+    private static List<String> parseUrlList(String json) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
+        try {
+            List<String> images = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                    json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+            return images != null ? images : List.of();
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private JewelryType resolveListingJewelryType(long sourceOrderId) {

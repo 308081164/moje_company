@@ -36,6 +36,7 @@ public class DesignerAssistUpgradeService {
     private final AutoAssignmentService autoAssignmentService;
     private final OrderEventService orderEventService;
     private final ConversationService conversationService;
+    private final OrderQueueService orderQueueService;
 
     @Transactional(readOnly = true)
     public boolean canUpgrade(long orderId) {
@@ -91,6 +92,7 @@ public class DesignerAssistUpgradeService {
         order.setDesignerAssistPaid(true);
         order.setDesignerAssistPaidAt(LocalDateTime.now());
         order.setStatus(OrderStatus.PENDING_DESIGN);
+        orderQueueService.enterQueue(order);
         orderRepository.save(order);
 
         autoAssignmentService.assignDesignerForAssistUpgrade(orderId);

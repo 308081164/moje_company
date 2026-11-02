@@ -137,6 +137,15 @@ public class OrderFileService {
         return save(orderId, file, "model/effect", "MODEL_EFFECT", notes, uid);
     }
 
+    /** 刻字生产文件（刀路/CAD 等），与客户问卷「需要刻字」配套 */
+    @Transactional
+    public FileInfoDto uploadEngravingFile(long orderId, MultipartFile file, String notes) throws IOException {
+        long uid = SecurityUtils.currentStaffUserId()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
+        assertCanUploadModel(orderId, uid);
+        return save(orderId, file, "model/engraving", "ENGRAVING", notes, uid);
+    }
+
     /** 跟单员在生产阶段上传过程记录附图 */
     @Transactional
     public FileInfoDto uploadProductionFollowImage(long orderId, MultipartFile file, String notes) throws IOException {

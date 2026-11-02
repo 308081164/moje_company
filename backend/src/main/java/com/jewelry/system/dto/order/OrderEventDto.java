@@ -23,6 +23,8 @@ public class OrderEventDto {
     private List<Long> fileIds;
     /** 关联图片 URL（设计稿 / 建模效果图等） */
     private List<String> images;
+    /** 设计稿/建模稿的设计师填写规格（弹窗展示） */
+    private CustomerSubmitSpecDto submitSpec;
     /** 客户是否可在卡片上操作（确认/驳回），DESIGN_SUBMIT / MODEL_SUBMIT 为 true */
     private Boolean actionable;
     /** 客户已作出的决策：CONFIRM / REJECT / PAID / null（未处理） */

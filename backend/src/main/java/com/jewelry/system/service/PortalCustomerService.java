@@ -322,6 +322,7 @@ public class PortalCustomerService {
                 pieceId, title);
         if (type == OrderEventType.DESIGN_REJECT) {
             orderPieceService.resetDesignConfirmation(orderId, pieceId);
+            orderPieceService.markDesignQualityPassed(orderId, pieceId, false);
             DesignInfo di = designInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 DesignInfo d = new DesignInfo();
                 d.setOrderId(orderId);
@@ -335,8 +336,20 @@ public class PortalCustomerService {
             di.setLastCustomerRejectReason(trimmed.isEmpty() ? null : trimmed);
             di.setLastCustomerRejectAt(LocalDateTime.now());
             designInfoRepository.save(di);
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+            OrderStatus st = order.getStatus();
+            if (st == OrderStatus.PENDING_DESIGN_REVIEW || st == OrderStatus.PENDING_MODEL) {
+                try {
+                    order.transitionTo(OrderStatus.DESIGNING);
+                    orderRepository.save(order);
+                } catch (IllegalStateException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+                }
+            }
         } else {
             orderPieceService.resetModelConfirmation(orderId, pieceId);
+            orderPieceService.markModelQualityPassed(orderId, pieceId, false);
             ModelingInfo mi = modelingInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
                 ModelingInfo created = new ModelingInfo();
                 created.setOrderId(orderId);
@@ -349,6 +362,18 @@ public class PortalCustomerService {
             mi.setLastCustomerRejectReason(trimmed.isEmpty() ? null : trimmed);
             mi.setLastCustomerRejectAt(LocalDateTime.now());
             modelingInfoRepository.save(mi);
+            // 客户驳回 → 退回建模师，重新走「建模→跟单评审→客户」循环
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+            OrderStatus st = order.getStatus();
+            if (st == OrderStatus.PENDING_REVIEW || st == OrderStatus.PENDING_PRODUCTION) {
+                try {
+                    order.transitionTo(OrderStatus.MODELING);
+                    orderRepository.save(order);
+                } catch (IllegalStateException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+                }
+            }
         }
     }
 
@@ -377,6 +402,11 @@ public class PortalCustomerService {
         String content = "买断设计：" + yesNo(req.getDesignBuyout())
                 + "；版权证书：" + yesNo(req.getCopyrightCertificate())
                 + "；保密不宣传：" + yesNo(req.getConfidential());
+        if (!Boolean.TRUE.equals(req.getConfidential())) {
+            content += "（限时优惠：允许宣传，尾款减免 USD "
+                    + PortalDepositPricing.PUBLICITY_ALLOW_DISCOUNT_USD.stripTrailingZeros().toPlainString()
+                    + "）";
+        }
         orderEventService.record(orderId, OrderEventType.DESIGN_OPTIONS_FILLED,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 "已确认生产选项", content, null, null);
@@ -396,8 +426,17 @@ public class PortalCustomerService {
      * 客户支付尾款（mock）：须已完成最终报价；记录尾款已支付事件卡片。
      */
     @Transactional
-    public void payBalance(long orderId) {
+    public void payBalance(long orderId, PortalBalancePayRequest body) {
         Long accountId = requireBoundAccount(orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        if (!StringUtils.hasText(order.getShippingAddress())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先确认收货地址后再支付尾款");
+        }
+        if (body != null && Boolean.TRUE.equals(body.getAutoPublishToStorefront())) {
+            order.setAutoPublishToStorefront(true);
+            orderRepository.save(order);
+        }
         BigDecimal amount = customerQuotationFlowService.resolveBalanceAmount(orderId);
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先完成报价确认后再支付尾款");
@@ -405,7 +444,7 @@ public class PortalCustomerService {
         if (!orderEventService.hasOpenBalancePayment(orderId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前没有待支付的尾款");
         }
-        String paidText = "尾款 ¥" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " 已支付（模拟）";
+        String paidText = "尾款 $" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " 已支付（模拟）";
         orderEventService.record(orderId, OrderEventType.BALANCE_PAID,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 OrderEventType.BALANCE_PAID.getDescription(),
@@ -428,6 +467,9 @@ public class PortalCustomerService {
         orderRepository.save(order);
         storefrontWalletService.settleOnCompleted(orderId);
         referralService.settleOnCompleted(orderId);
+        if (Boolean.TRUE.equals(order.getAutoPublishToStorefront())) {
+            storefrontService.tryAutoPublishAfterDelivery(orderId, accountId);
+        }
         orderEventService.record(orderId, OrderEventType.DELIVERY_CONFIRM,
                 AccountKind.C_PORTAL_CUSTOMER, accountId, "CUSTOMER",
                 "客户确认收货，订单已交付", "尾款已结清（mock）", null, null);
@@ -458,10 +500,16 @@ public class PortalCustomerService {
         Long accountId = requireBoundAccount(orderId);
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在"));
+        boolean balanceDue = orderEventService.hasOpenBalancePayment(orderId);
+        boolean allowBeforeComplete = balanceDue
+                || order.getStatus() == OrderStatus.PENDING_PRODUCTION
+                || order.getStatus() == OrderStatus.PRODUCING
+                || order.getStatus() == OrderStatus.PENDING_REVIEW;
         if (order.getStatus() != OrderStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请在生产完成后再填写收货信息");
-        }
-        if (shipmentService.hasShipment(orderId)) {
+            if (!allowBeforeComplete) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请在支付尾款前或生产阶段填写收货信息");
+            }
+        } else if (shipmentService.hasShipment(orderId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "订单已发货，不能再修改收货信息");
         }
         if (req == null) {
@@ -474,7 +522,8 @@ public class PortalCustomerService {
         }
         String country = requiredText(req.getCountry(), "国家或地区", 80);
         String address = requiredText(req.getAddress(), "详细地址", 1000);
-        String postal = optionalText(req.getPostalCode(), 20);
+        // 云途下单强制要求邮编，收货信息提交时一并必填
+        String postal = requiredText(req.getPostalCode(), "邮编", 20);
         order.setShippingRecipient(recipient);
         order.setShippingPhone(phone);
         order.setShippingCountry(country);
@@ -482,11 +531,11 @@ public class PortalCustomerService {
         order.setShippingPostalCode(postal);
         order.setShippingAddressAt(LocalDateTime.now());
         orderRepository.save(order);
+        // address 已是与独立站一致的多行结构化文本（国家/省州/城市/详细地址/邮编）
         String summary = "收货人：" + recipient
                 + "\n联系电话：" + phone
-                + "\n国家/地区：" + country
-                + "\n详细地址：" + address
-                + "\n邮编：" + (postal == null ? "未填" : postal);
+                + "\n" + address
+                + (postal == null || address.contains(postal) ? "" : ("\n邮编：" + postal));
         orderEventService.saveShippingAddressNotice(orderId, AccountKind.C_PORTAL_CUSTOMER, accountId, summary);
         return toShippingAddressDto(order);
     }

@@ -21,7 +21,6 @@ const ROOT_PATHS = new Set([
   '/orders',
   '/workbench',
   '/workbench/tracker-follow-up',
-  '/workbench/modeling-archive',
   '/social-publish',
 ]);
 

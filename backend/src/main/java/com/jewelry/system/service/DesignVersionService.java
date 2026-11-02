@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.format.DateTimeFormatter;
@@ -98,14 +99,18 @@ public class DesignVersionService {
             req.setEngravingText(od.getEngravingText());
             req.setEngravingImages(parseStringList(od.getEngravingImagesJson()));
             req.setMaterialType(od.getMaterialType());
-            req.setHandSize(od.getHandSize());
             req.setDesignNotes(od.getDesignNotes());
         });
         designInfoRepository.findByPieceId(piece.getId()).ifPresent(di -> {
+            req.setHandSize(di.getHandSize());
             req.setProcessInfo(parseJson(di.getProcessInfoJson()));
             req.setStoneInfo(parseJson(di.getStoneInfoJson()));
+            req.setPlating(di.getPlating());
             req.setDesignImages(parseStringList(di.getDesignImagesJson()));
         });
+        if (!StringUtils.hasText(req.getHandSize())) {
+            orderDetailRepository.findByOrderId(orderId).ifPresent(od -> req.setHandSize(od.getHandSize()));
+        }
         return createVersionSnapshot(orderId, piece, req, submittedToCustomer, label);
     }
 
@@ -126,7 +131,6 @@ public class DesignVersionService {
         od.setEngravingText(v.getEngravingText());
         od.setEngravingImagesJson(v.getEngravingImagesJson());
         od.setMaterialType(v.getMaterialType());
-        od.setHandSize(v.getHandSize());
         od.setDesignNotes(v.getDesignNotes());
         orderDetailRepository.save(od);
 
@@ -136,8 +140,10 @@ public class DesignVersionService {
             d.setPieceId(pieceId);
             return d;
         });
+        di.setHandSize(v.getHandSize());
         di.setProcessInfoJson(v.getProcessInfoJson());
         di.setStoneInfoJson(v.getStoneInfoJson());
+        di.setPlating(v.getPlating());
         di.setDesignImagesJson(v.getDesignImagesJson());
         designInfoRepository.save(di);
 

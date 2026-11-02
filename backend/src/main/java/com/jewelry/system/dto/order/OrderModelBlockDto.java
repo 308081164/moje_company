@@ -15,6 +15,7 @@ public class OrderModelBlockDto {
     private String modelerName;
     private Double weight;
     private Object modelFiles;
+    private Object engravingFiles;
     private List<String> modelEffectImages;
     private String modelNotes;
     private Boolean modelPassed;

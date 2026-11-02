@@ -5,6 +5,7 @@ import { ArrowLeftOutlined, ReloadOutlined, SendOutlined, FileTextOutlined, Form
 import ChatDesignSubmitModal from '@/components/ChatDesignSubmitModal';
 import type { InputRef } from 'antd/es/input';
 import { conversationService } from '@/services/conversationService';
+import { serviceRequestService } from '@/services/serviceRequestService';
 import { Conversation, ConversationMember, ConversationMessage, OrderEventCard } from '@/types/conversation';
 import { useAuthStore, useIsAdmin } from '@/stores/authStore';
 import { conversationSocket, setActiveConversationId } from '@/services/conversationSocket';
@@ -113,6 +114,12 @@ const EVENT_STYLE: Record<string, { color: string; label: string }> = {
   DELIVERY_CONFIRM: { color: '#2ea043', label: '交付' },
   BALANCE_PAYMENT: { color: '#d97706', label: '支付尾款' },
   BALANCE_PAID: { color: '#2ea043', label: '已支付' },
+  REFUND_REQUESTED: { color: '#e05d5d', label: '退款申请' },
+  COMPLAINT_SUBMITTED: { color: '#f59e0b', label: '投诉' },
+  SERVICE_REQUEST_RESOLVED: { color: '#2ea043', label: '售后已处理' },
+  SERVICE_REQUEST_REJECTED: { color: '#e05d5d', label: '售后未通过' },
+  SERVICE_REQUEST_CANCELLED: { color: '#6b7280', label: '已撤销申请' },
+  RUSH_PAID: { color: '#d97706', label: '加急' },
 };
 
 const eventStyleOf = (eventType?: string) =>
@@ -121,8 +128,15 @@ const eventStyleOf = (eventType?: string) =>
 const isCraftReviewEvent = (eventType?: string) =>
   eventType === 'REVIEW_PASS' || eventType === 'REVIEW_REJECT';
 
-const eventPreviewImages = (images?: string[], eventType?: string) => {
-  if (isCraftReviewEvent(eventType)) return [];
+/** 设计师/建模师提交跟单评审：不对客户展示稿件预览 */
+const isInternalQualityHandoffEvent = (eventType?: string, title?: string) => {
+  if (eventType !== 'STATUS_CHANGE') return false;
+  const t = title || '';
+  return t.includes('跟单质量评审') || t.includes('跟单工艺评审') || t.includes('交回跟单');
+};
+
+const eventPreviewImages = (images?: string[], eventType?: string, title?: string) => {
+  if (isCraftReviewEvent(eventType) || isInternalQualityHandoffEvent(eventType, title)) return [];
   return (images || []).filter((src) => !String(src).startsWith('data:image/svg'));
 };
 
@@ -139,6 +153,25 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const statusColorOf = (status?: string) => STATUS_COLOR[status || ''] || '#6b7280';
+
+const refundTagColor = (refundStatus?: string | null) =>
+  refundStatus === 'REFUNDED' ? '#6b7280' : '#e05d5d';
+
+const isCustomerServiceRequestEvent = (eventType?: string) =>
+  eventType === 'REFUND_REQUESTED' || eventType === 'COMPLAINT_SUBMITTED';
+
+const listStatusTag = (c: Conversation): { label: string; color: string } | null => {
+  if (c.refundStatus === 'REQUESTED' || c.refundStatus === 'REFUNDED') {
+    return {
+      label: c.refundStatusLabel || (c.refundStatus === 'REFUNDED' ? '已退款' : '客户申请退款'),
+      color: refundTagColor(c.refundStatus),
+    };
+  }
+  if (c.orderStatusLabel) {
+    return { label: c.orderStatusLabel, color: statusColorOf(c.orderStatus) };
+  }
+  return null;
+};
 
 const EMOJI_LIST = (
   '😀 😁 😂 🤣 😊 😍 😘 😜 🤔 😅 😭 😡 🥰 😎 🤗 🤩 🥳 😴 😢 😤 ' +
@@ -203,6 +236,9 @@ type AdminChatPersona = 'SUPER_SERVICE' | 'DESIGNER' | 'MODELER';
 
 function sortConversations(list: Conversation[]): Conversation[] {
   return [...list].sort((a, b) => {
+    const ar = !!a.rushPaid;
+    const br = !!b.rushPaid;
+    if (ar !== br) return ar ? -1 : 1;
     const ta = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
     const tb = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
     if (tb !== ta) return tb - ta;
@@ -229,6 +265,9 @@ const ChatPage: React.FC = () => {
   const [translations, setTranslations] = useState<Record<number, string>>({});
   const [detail, setDetail] = useState<ConversationMessage | null>(null);
   const [detailIndex, setDetailIndex] = useState(0);
+  const [refundActing, setRefundActing] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectNote, setRejectNote] = useState('');
   const [filter, setFilter] = useState<'all' | 'designing' | 'done'>('all');
   const [includeAll, setIncludeAll] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -548,6 +587,45 @@ const ChatPage: React.FC = () => {
   const isMine = (m: ConversationMessage) =>
     m.senderType === 'STAFF' && m.senderId === (user?.id ?? -1) && m.role !== 'SYSTEM';
 
+  const resolveRefundFromChat = async (status: 'RESOLVED' | 'REJECTED', staffNote?: string) => {
+    const orderId = detail?.event?.orderId ?? currentOrderId;
+    if (orderId == null) {
+      message.error('无法定位订单');
+      return;
+    }
+    setRefundActing(true);
+    try {
+      const list = await serviceRequestService.listByOrder(orderId);
+      const open = (Array.isArray(list) ? list : []).find(
+        (r) => r.type === 'REFUND' && (r.status === 'OPEN' || r.status === 'IN_PROGRESS')
+      );
+      if (!open) {
+        message.warning('没有待处理的退款申请');
+        return;
+      }
+      await serviceRequestService.resolve(open.id, {
+        status,
+        staffNote: staffNote?.trim() || undefined,
+      });
+      message.success(status === 'RESOLVED' ? '已同意退款' : '已驳回退款申请');
+      setDetail(null);
+      setRejectOpen(false);
+      setRejectNote('');
+      const latest = sortConversations(await conversationService.listConversations());
+      setConversations(latest);
+      if (currentIdRef.current != null) {
+        const cur = latest.find((c) => c.id === currentIdRef.current);
+        if (cur) setCurrentConv(cur);
+        const msgs = await conversationService.getMessages(currentIdRef.current, includeAllRef.current);
+        publishThread(currentIdRef.current, msgs);
+      }
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message || e || '处理失败'));
+    } finally {
+      setRefundActing(false);
+    }
+  };
+
   const currentOrderId = currentConv?.orderId ?? null;
   const orderDesignerUserId = members.find((m) => m.role === 'DESIGNER')?.accountId;
   const canSubmitDesignFromChat =
@@ -704,6 +782,11 @@ const ChatPage: React.FC = () => {
                     >
                       {c.orderNumber || c.title}
                     </span>
+                    {c.rushPaid && (
+                      <Tag color="volcano" style={{ flexShrink: 0, marginInlineEnd: 0 }}>
+                        加急
+                      </Tag>
+                    )}
                     {c.unreadCount > 0 && (
                       <Tag color="red" style={{ flexShrink: 0, marginInlineEnd: 0 }}>
                         {c.unreadCount}
@@ -729,22 +812,26 @@ const ChatPage: React.FC = () => {
                 }
                 description={
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, minWidth: 0 }}>
-                    {c.orderStatusLabel && (
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: '#fff',
-                          background: statusColorOf(c.orderStatus),
-                          padding: '1px 8px',
-                          borderRadius: 99,
-                          lineHeight: 1.6,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {c.orderStatusLabel}
-                      </span>
-                    )}
+                    {(() => {
+                      const tag = listStatusTag(c);
+                      if (!tag) return null;
+                      return (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: '#fff',
+                            background: tag.color,
+                            padding: '1px 8px',
+                            borderRadius: 99,
+                            lineHeight: 1.6,
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {tag.label}
+                        </span>
+                      );
+                    })()}
                     <span
                       style={{
                         fontSize: 12,
@@ -798,34 +885,37 @@ const ChatPage: React.FC = () => {
                 会话
               </Button>
             )}
-            {currentConv && (
-              <>
-                <Avatar style={{ background: statusColorOf(currentConv.orderStatus), color: '#fff', flexShrink: 0 }}>
-                  {(currentConv.orderNumber || currentConv.title || '#').charAt(0)}
-                </Avatar>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: '#2C2C2C', lineHeight: 1.3 }}>
-                    {currentConv.orderNumber || currentConv.title}
+            {currentConv && (() => {
+              const tag = listStatusTag(currentConv);
+              return (
+                <>
+                  <Avatar style={{ background: tag?.color || statusColorOf(currentConv.orderStatus), color: '#fff', flexShrink: 0 }}>
+                    {(currentConv.orderNumber || currentConv.title || '#').charAt(0)}
+                  </Avatar>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#2C2C2C', lineHeight: 1.3 }}>
+                      {currentConv.orderNumber || currentConv.title}
+                    </div>
+                    {tag && (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          fontSize: 11,
+                          color: '#fff',
+                          background: tag.color,
+                          padding: '1px 10px',
+                          borderRadius: 99,
+                          lineHeight: 1.6,
+                          marginTop: 2,
+                        }}
+                      >
+                        {tag.label}
+                      </span>
+                    )}
                   </div>
-                  {currentConv.orderStatusLabel && (
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        fontSize: 11,
-                        color: '#fff',
-                        background: statusColorOf(currentConv.orderStatus),
-                        padding: '1px 10px',
-                        borderRadius: 99,
-                        lineHeight: 1.6,
-                        marginTop: 2,
-                      }}
-                    >
-                      {currentConv.orderStatusLabel}
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
           </div>
           <Space wrap className="chat-thread__actions" style={{ flex: tier === 'phone' ? '1 1 100%' : '1 1 auto', minWidth: 0, justifyContent: 'flex-end' }}>
             {currentOrderId != null && (
@@ -924,14 +1014,14 @@ const ChatPage: React.FC = () => {
                         {isCraftReviewEvent(ev.eventType) && (
                           <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
                             {ev.eventType === 'REVIEW_REJECT'
-                              ? '跟单工艺验证未通过，需按说明修改'
-                              : '跟单工艺验证已通过'}
+                              ? '跟单工艺评审未通过，需按说明修改'
+                              : '跟单工艺评审已通过，已发给客户审阅'}
                           </div>
                         )}
-                        {eventPreviewImages(ev.images, ev.eventType).length > 0 && (
+                        {eventPreviewImages(ev.images, ev.eventType, ev.title).length > 0 && (
                           <div style={{ position: 'relative', marginBottom: 8 }}>
                             <img
-                              src={eventPreviewImages(ev.images, ev.eventType)[0]}
+                              src={eventPreviewImages(ev.images, ev.eventType, ev.title)[0]}
                               alt="design"
                               style={{
                                 width: '100%',
@@ -942,7 +1032,7 @@ const ChatPage: React.FC = () => {
                                 boxShadow: '0 4px 14px rgba(0,0,0,0.10)',
                               }}
                             />
-                            {eventPreviewImages(ev.images, ev.eventType).length > 1 && (
+                            {eventPreviewImages(ev.images, ev.eventType, ev.title).length > 1 && (
                               <span
                                 style={{
                                   position: 'absolute',
@@ -955,9 +1045,14 @@ const ChatPage: React.FC = () => {
                                   borderRadius: 99,
                                 }}
                               >
-                                +{eventPreviewImages(ev.images, ev.eventType).length - 1}
+                                +{eventPreviewImages(ev.images, ev.eventType, ev.title).length - 1}
                               </span>
                             )}
+                          </div>
+                        )}
+                        {isInternalQualityHandoffEvent(ev.eventType, ev.title) && !ev.content && (
+                          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
+                            内部质量评审中。通过后系统会将稿件发送给您确认。
                           </div>
                         )}
                         {ev.content && (
@@ -974,7 +1069,7 @@ const ChatPage: React.FC = () => {
                             {ev.content}
                           </div>
                         )}
-                        {ev.reason && (
+                        {ev.reason && !isCustomerServiceRequestEvent(ev.eventType) && (
                           <div
                             style={{
                               fontSize: 12,
@@ -988,6 +1083,38 @@ const ChatPage: React.FC = () => {
                             {ev.reason}
                           </div>
                         )}
+                        {isAdmin && ev.eventType === 'REFUND_REQUESTED' && ev.actionable && (
+                          <div
+                            style={{ display: 'flex', gap: 8, marginTop: 10 }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              size="small"
+                              type="primary"
+                              danger
+                              loading={refundActing}
+                              onClick={() => {
+                                setDetail(m);
+                                setDetailIndex(0);
+                                void resolveRefundFromChat('RESOLVED');
+                              }}
+                            >
+                              同意退款
+                            </Button>
+                            <Button
+                              size="small"
+                              loading={refundActing}
+                              onClick={() => {
+                                setDetail(m);
+                                setDetailIndex(0);
+                                setRejectNote('');
+                                setRejectOpen(true);
+                              }}
+                            >
+                              驳回
+                            </Button>
+                          </div>
+                        )}
                         {ev.resolution && ev.resolutionLabel && (
                           <div
                             style={{
@@ -996,8 +1123,10 @@ const ChatPage: React.FC = () => {
                               padding: '3px 10px',
                               borderRadius: 99,
                               display: 'inline-block',
-                              color: ev.resolution === 'REJECT' ? '#c0392b' : '#1c7c3c',
-                              background: ev.resolution === 'REJECT' ? 'rgba(224,93,93,0.15)' : 'rgba(46,160,67,0.15)',
+                              color: ev.resolution === 'REJECT' ? '#c0392b'
+                                : ev.resolution === 'SUPERSEDED' ? '#6b7280' : '#1c7c3c',
+                              background: ev.resolution === 'REJECT' ? 'rgba(224,93,93,0.15)'
+                                : ev.resolution === 'SUPERSEDED' ? 'rgba(107,114,128,0.15)' : 'rgba(46,160,67,0.15)',
                               marginTop: 6,
                             }}
                           >
@@ -1186,8 +1315,8 @@ const ChatPage: React.FC = () => {
               <div style={{ fontSize: 12, color: '#999', marginBottom: 14 }}>
                 {senderName} · {detail.createdAt ? new Date(detail.createdAt).toLocaleString() : ''}
               </div>
-              {eventPreviewImages(ev.images, ev.eventType).length > 0 && (() => {
-                const imgs = eventPreviewImages(ev.images, ev.eventType);
+              {eventPreviewImages(ev.images, ev.eventType, ev.title).length > 0 && (() => {
+                const imgs = eventPreviewImages(ev.images, ev.eventType, ev.title);
                 const index = Math.min(detailIndex, imgs.length - 1);
                 return (
                   <div style={{ position: 'relative', marginBottom: 14, background: '#f6f6f6', borderRadius: 12, overflow: 'hidden' }}>
@@ -1223,7 +1352,7 @@ const ChatPage: React.FC = () => {
                   {ev.content}
                 </div>
               )}
-              {ev.reason && (
+              {ev.reason && !isCustomerServiceRequestEvent(ev.eventType) && (
                 <div
                   style={{
                     fontSize: 13,
@@ -1238,9 +1367,54 @@ const ChatPage: React.FC = () => {
                   驳回原因：{ev.reason}
                 </div>
               )}
+              {isAdmin && ev.eventType === 'REFUND_REQUESTED' && ev.actionable && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+                  <Button
+                    loading={refundActing}
+                    onClick={() => {
+                      setRejectNote('');
+                      setRejectOpen(true);
+                    }}
+                  >
+                    驳回
+                  </Button>
+                  <Button
+                    type="primary"
+                    danger
+                    loading={refundActing}
+                    onClick={() => void resolveRefundFromChat('RESOLVED')}
+                  >
+                    同意退款
+                  </Button>
+                </div>
+              )}
             </div>
           );
         })()}
+      </Modal>
+
+      <Modal
+        open={rejectOpen}
+        title="驳回退款申请"
+        okText="确认驳回"
+        cancelText="取消"
+        confirmLoading={refundActing}
+        onCancel={() => {
+          if (refundActing) return;
+          setRejectOpen(false);
+          setRejectNote('');
+        }}
+        onOk={() => void resolveRefundFromChat('REJECTED', rejectNote)}
+        destroyOnClose
+      >
+        <Input.TextArea
+          rows={4}
+          value={rejectNote}
+          onChange={(e) => setRejectNote(e.target.value)}
+          placeholder="请填写驳回原因（可选）"
+          maxLength={1000}
+          showCount
+        />
       </Modal>
     </div>
   );

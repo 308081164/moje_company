@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jewelry.system.dto.conversation.OrderAiIntakeCollectedDto;
 import com.jewelry.system.entity.*;
+import com.jewelry.system.dto.portal.CustomerServiceRequestCreateRequest;
 import com.jewelry.system.enums.OrderSource;
+import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.ServiceType;
 import com.jewelry.system.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,7 @@ public class OrderAiConciergeService {
     private final DashScopeChatService dashScopeChatService;
     private final IntegrationSettingsService integrationSettingsService;
     private final ObjectMapper objectMapper;
+    private final CustomerOrderServiceRequestService customerOrderServiceRequestService;
 
     @Async("orderAiConciergeExecutor")
     @EventListener
@@ -159,10 +162,37 @@ public class OrderAiConciergeService {
         }
     }
 
-    /** 需求已转达设计师后：持续对话，回答追问并记录补充说明 */
+    /** 持续对话：回答追问并记录补充说明 */
     private void handleAssistingTurn(Order order, OrderAiIntake intake, String userText, String lang) {
         int assistingTurns = intake.getTurnCount();
         if (assistingTurns > MAX_ASSISTING_TURNS) {
+            return;
+        }
+        if (looksLikePricingQuestion(userText)) {
+            conversationService.postAiAssistantMessage(intake.getConversationId(),
+                    pricingDeclineMessage(lang));
+            return;
+        }
+        if (looksLikeRefundRequest(userText) && canAiOfferRefund(order)) {
+            Long accountId = bindingRepository.findByOrderId(order.getId())
+                    .map(b -> b.getPortalCustomerId())
+                    .orElse(null);
+            if (accountId != null) {
+                try {
+                    CustomerServiceRequestCreateRequest req = new CustomerServiceRequestCreateRequest();
+                    req.setCategory("CHANGE_OF_MIND");
+                    req.setReason(StringUtils.hasText(userText) ? userText.trim() : "客户通过 AI 客服申请退款");
+                    customerOrderServiceRequestService.submitRefundForAccount(order.getId(), accountId, req);
+                    conversationService.postAiAssistantMessage(intake.getConversationId(),
+                            refundCardSentMessage(lang));
+                    return;
+                } catch (Exception e) {
+                    log.debug("AI refund card skipped orderId={}: {}", order.getId(), e.getMessage());
+                }
+            }
+        } else if (looksLikeRefundRequest(userText) && !canAiOfferRefund(order)) {
+            conversationService.postAiAssistantMessage(intake.getConversationId(),
+                    refundManualMessage(lang));
             return;
         }
         String replyText = generateAssistingReply(order, intake, userText, lang);
@@ -338,6 +368,7 @@ public class OrderAiConciergeService {
 - 多轮对话：每次都要根据客户最新发言回应；不要在第一轮就结束采集。
 - intake_complete 仅在问卷已提交，且风格等补充信息已基本齐全时才设为 true。
 - intake_complete 为 true 时 reply 简短说明将转达设计师，但不要暗示对话结束。
+- 禁止回答或估算任何报价、询价、改价、折扣、具体金额或交付天数；若客户询问价格，请安抚并说明以设计师方案与正式报价卡片为准。
 在回复末尾附带 JSON 代码块（仅此一处）：
 ```json
 {"reply":"给客户看的文字（勿重复 JSON）","intake_complete":true或false,"collected":{"stylePreference":"","materialPreference":"","occasion":"","engraving":"","budgetOrTimeline":"","sizeNotes":"","pieces":[{"pieceName":"","jewelryType":"","size":""}],"otherNotes":"","summary":"一段话汇总"}}
@@ -359,6 +390,8 @@ public class OrderAiConciergeService {
 你是 duxury 订单群聊 AI 客服。初始需求已整理并转达设计师，设计师尚未进群或正在安排中。
 请持续与客户对话：回答追问、确认理解、鼓励补充参考图或细节；语气简洁专业。
 不要重复发送「已转达设计师」的结束语；每次针对客户最新消息回复。
+禁止回答或估算报价、询价、改价、具体金额或工期；以安抚为主，引导客户关注群内的正式报价卡片与进度通知。
+设计师尚未接单前，若客户明确要退款，可告知已在群内发送退款申请卡片；设计师已接单后请引导使用订单菜单或联系人工客服。
 已汇总需求草稿：%s
 %s
 仅输出给客户看的文字；如需结构化数据可附 JSON：```json
@@ -580,6 +613,52 @@ public class OrderAiConciergeService {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    private boolean canAiOfferRefund(Order order) {
+        return order != null
+                && order.getStatus() == OrderStatus.PENDING_DESIGN
+                && (order.getDesigner() == null || order.getDesigner().getId() == null);
+    }
+
+    private static boolean looksLikeRefundRequest(String text) {
+        if (!StringUtils.hasText(text)) {
+            return false;
+        }
+        String t = text.toLowerCase(Locale.ROOT);
+        return t.contains("退款") || t.contains("退钱") || t.contains("refund")
+                || t.contains("cancel order") || t.contains("不想做了") || t.contains("取消订单");
+    }
+
+    private static boolean looksLikePricingQuestion(String text) {
+        if (!StringUtils.hasText(text)) {
+            return false;
+        }
+        String t = text.toLowerCase(Locale.ROOT);
+        return t.contains("多少钱") || t.contains("报价") || t.contains("价格") || t.contains("询价")
+                || t.contains("how much") || t.contains("quote") || t.contains("price")
+                || t.contains("cost") || t.contains("fee");
+    }
+
+    private static String pricingDeclineMessage(String lang) {
+        if (lang != null && lang.startsWith("en")) {
+            return "Thanks for your patience. Pricing is confirmed by our designer and sent as an official quote card in this chat — I can't quote amounts here, but we're taking good care of your order.";
+        }
+        return "感谢耐心等待。具体费用需由设计师确认并通过群内正式报价卡片告知，我这边无法报价或询价，请您放心，我们会持续跟进您的订单进度。";
+    }
+
+    private static String refundCardSentMessage(String lang) {
+        if (lang != null && lang.startsWith("en")) {
+            return "I've sent a refund request card in this chat. Please follow the card to confirm or withdraw your request.";
+        }
+        return "已在群内为您发送退款申请卡片，请按卡片提示确认或撤销申请。";
+    }
+
+    private static String refundManualMessage(String lang) {
+        if (lang != null && lang.startsWith("en")) {
+            return "Your designer is already assigned. Please use the order menu to request a refund, or contact our support team in this chat.";
+        }
+        return "设计师已接单，如需退款请通过订单菜单提交申请，或在此群联系人工客服协助。";
     }
 
     private record ConciergeReply(String text, boolean intakeComplete, OrderAiIntakeCollectedDto collected) {}

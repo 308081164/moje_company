@@ -3,7 +3,6 @@ package com.jewelry.system.service;
 import com.jewelry.system.dto.order.OrderInfoDto;
 import com.jewelry.system.dto.order.OrderShipmentDto;
 import com.jewelry.system.entity.*;
-import com.jewelry.system.enums.OrderEventType;
 import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -41,8 +40,10 @@ public class OrderQueryService {
     private final QuotationRepository quotationRepository;
     private final OrderDetailAssembler orderDetailAssembler;
     private final OrderPieceRepository orderPieceRepository;
+    private final OrderPieceService orderPieceService;
     private final OrderShipmentRepository shipmentRepository;
     private final OrderEventRepository orderEventRepository;
+    private final OrderEventService orderEventService;
 
     @Transactional(readOnly = true)
     public Page<OrderInfoDto> pageOrders(
@@ -58,8 +59,16 @@ public class OrderQueryService {
         Specification<Order> spec = OrderSpecifications.build(
                 keyword, status, designerId, modelerId, salesId, startDate, endDate
         );
+        // 列表：加急置顶；其余按请求排序或创建时间倒序
+        Sort secondary = pageable.getSort().isSorted()
+                ? pageable.getSort()
+                : Sort.by(Sort.Order.desc("createdAt"));
+        Pageable sorted = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                OrderQueueService.rushFirstSort().and(secondary));
         // 列表：全员可浏览全部订单；具体操作权限在写接口与前端任务区控制
-        return orderRepository.findAll(spec, pageable).map(o -> OrderApiMapper.toOrderInfo(o, false));
+        return orderRepository.findAll(spec, sorted).map(o -> OrderApiMapper.toOrderInfo(o, false));
     }
 
     @Transactional(readOnly = true)
@@ -74,9 +83,37 @@ public class OrderQueryService {
         List<DesignInfo> allDesign = designInfoRepository.findAllByOrderId(id);
         List<ModelingInfo> allModel = modelingInfoRepository.findAllByOrderId(id);
         List<OrderPiece> pieces = orderPieceRepository.findByOrderIdOrderBySeqAsc(id);
-        ProcessReview pr = processReviewRepository.findTopByOrderIdOrderByIdDesc(id).orElse(null);
+        ProcessReview modelPr = processReviewRepository
+                .findTopByOrderIdAndReviewKindOrderByIdDesc(id, com.jewelry.system.enums.ReviewKind.MODEL)
+                .orElse(null);
+        ProcessReview designPr = processReviewRepository
+                .findTopByOrderIdAndReviewKindOrderByIdDesc(id, com.jewelry.system.enums.ReviewKind.DESIGN)
+                .orElse(null);
         Quotation q = quotationRepository.findByOrderId(id).orElse(null);
-        return orderDetailAssembler.enrich(dto, o, od, di, mi, pr, q, pieces, allDesign, allModel);
+        OrderInfoDto enriched = orderDetailAssembler.enrich(dto, o, od, di, mi, modelPr, q, pieces, allDesign, allModel);
+        enriched.setDesignReviewInfo(orderDetailAssembler.buildReview(o, designPr, com.jewelry.system.enums.ReviewKind.DESIGN));
+        boolean paid = orderEventService.hasBalancePaid(id);
+        boolean quoteOpen = orderEventService.hasOpenBalancePayment(id);
+        boolean finalized = enriched.getQuotationInfo() != null
+                && Boolean.TRUE.equals(enriched.getQuotationInfo().getFinalized());
+        enriched.setBalancePaid(paid);
+        enriched.setBalanceQuoteSent(paid || quoteOpen || finalized);
+        // 按件质量审：须「全部单件质量通过」才算进入客户审阅等待；不能再用最新一条 ProcessReview=PASSED
+        // （单件通过也会写 PASSED，否则会把仍有待审单件的订单从质量审核队列误剔除）。
+        enriched.setAwaitingCustomerModelConfirm(
+                o.getStatus() == OrderStatus.PENDING_REVIEW
+                        && orderPieceService.allModelQualityPassed(id));
+        enriched.setAwaitingCustomerDesignConfirm(
+                o.getStatus() == OrderStatus.PENDING_DESIGN_REVIEW
+                        && orderPieceService.allDesignQualityPassed(id));
+        if (o.getStatus() == OrderStatus.PENDING_DESIGN_REVIEW) {
+            enriched.setQualityReviewKind("DESIGN");
+        } else if (o.getStatus() == OrderStatus.PENDING_REVIEW) {
+            enriched.setQualityReviewKind("MODEL");
+        }
+        enriched.setBalanceUnpaidPendingProduction(
+                o.getStatus() == OrderStatus.PENDING_PRODUCTION && !paid);
+        return enriched;
     }
 
     @Transactional(readOnly = true)
@@ -100,7 +137,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return withPieceRevisionFlag(orderRepository.findAll(spec, pageable), true);
+        return withPieceRevisionFlag(orderRepository.findAll(spec, OrderQueueService.rushFirstPageable(pageable)), true);
     }
 
     @Transactional(readOnly = true)
@@ -135,7 +172,7 @@ public class OrderQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return withPieceRevisionFlag(orderRepository.findAll(spec, pageable), false);
+        return withPieceRevisionFlag(orderRepository.findAll(spec, OrderQueueService.rushFirstPageable(pageable)), false);
     }
 
     @Transactional(readOnly = true)
@@ -171,18 +208,34 @@ public class OrderQueryService {
         return orderRepository.findAll(spec, pageable).map(o -> getOrder(o.getId()));
     }
 
+    /**
+     * 质量审核待办：待设计评审 / 待建模评审，且尚有单件未过质量审（已全部通过、等客户审阅的不进队列）。
+     * 共享队列：不限 follow_up，任一跟单员可审；操作时会把跟单员记到订单上。
+     */
     @Transactional(readOnly = true)
     public Page<OrderInfoDto> pageTrackerTodo(Pageable pageable, Long trackerId, Boolean isB2b) {
+        // trackerId 保留入参：操作评审时仍会写入 follow_up；队列本身共享给所有跟单员
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
-            predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
-            predicates.add(cb.equal(root.get("status"), OrderStatus.PENDING_REVIEW));
+            predicates.add(root.get("status").in(
+                    OrderStatus.PENDING_DESIGN_REVIEW, OrderStatus.PENDING_REVIEW));
             if (isB2b != null) {
                 predicates.add(cb.equal(root.get("isB2b"), isB2b));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return orderRepository.findAll(spec, pageable).map(o -> getOrder(o.getId()));
+        // 先按加急序取足量候选，再按「是否仍待质量审」过滤（避免只取一页后被滤空）
+        int fetch = Math.max(pageable.getPageSize() * (pageable.getPageNumber() + 1) * 5, 50);
+        Pageable fetchPageable = OrderQueueService.rushFirstPageable(PageRequest.of(0, fetch));
+        List<OrderInfoDto> eligible = orderRepository.findAll(spec, fetchPageable).getContent().stream()
+                .map(o -> getOrder(o.getId()))
+                .filter(dto -> !Boolean.TRUE.equals(dto.getAwaitingCustomerModelConfirm())
+                        && !Boolean.TRUE.equals(dto.getAwaitingCustomerDesignConfirm()))
+                .toList();
+        int from = (int) pageable.getOffset();
+        int to = Math.min(from + pageable.getPageSize(), eligible.size());
+        List<OrderInfoDto> slice = from >= eligible.size() ? List.of() : eligible.subList(from, to);
+        return new PageImpl<>(slice, pageable, eligible.size());
     }
 
     @Transactional(readOnly = true)
@@ -190,7 +243,8 @@ public class OrderQueryService {
         Specification<Order> spec = (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("followUp").get("id"), trackerId));
-            predicates.add(root.get("status").in(OrderStatus.PENDING_REVIEW, OrderStatus.PENDING_PRODUCTION, OrderStatus.PRODUCING));
+            // 客户全件确认后进入待发送生产；未付尾款期间跟单可报价、禁止转发
+            predicates.add(cb.equal(root.get("status"), OrderStatus.PENDING_PRODUCTION));
             if (isB2b != null) {
                 predicates.add(cb.equal(root.get("isB2b"), isB2b));
             }
@@ -201,27 +255,19 @@ public class OrderQueryService {
                 .map(o -> getOrder(o.getId()))
                 .filter(this::needsTrackerBalanceQuote)
                 .toList();
-        return new PageImpl<>(filtered, pageable, page.getTotalElements());
+        return new PageImpl<>(filtered, pageable, filtered.size());
     }
 
+    /**
+     * 准备生产主列表：仍处「待发送生产」的订单。
+     * 含未报价、待付款，以及已付款但尚未进入生产中（跟单可标记转发喷蜡文件）的订单。
+     * 付尾款后不得从本列表消失，否则跟单无法再点「标记待发送」。
+     */
     private boolean needsTrackerBalanceQuote(OrderInfoDto dto) {
-        if (dto == null || dto.getPieces() == null || dto.getPieces().isEmpty()) {
+        if (dto == null) {
             return false;
         }
-        if (!dto.getPieces().stream().allMatch(p -> Boolean.TRUE.equals(p.getModelConfirmed()))) {
-            return false;
-        }
-        Long orderId = dto.getBaseInfo() != null ? dto.getBaseInfo().getId() : null;
-        if (orderId == null) {
-            return false;
-        }
-        boolean quoteSent = false;
-        boolean paid = false;
-        for (var ev : orderEventRepository.findByOrderIdOrderByIdAsc(orderId)) {
-            if (ev.getEventType() == OrderEventType.BALANCE_PAYMENT) quoteSent = true;
-            if (ev.getEventType() == OrderEventType.BALANCE_PAID) paid = true;
-        }
-        return !quoteSent && !paid;
+        return "PENDING_PRODUCTION".equals(dto.getCurrentStatus());
     }
 
     @Transactional(readOnly = true)

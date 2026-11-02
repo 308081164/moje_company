@@ -31,6 +31,8 @@ public final class ProductionSyncDtos {
     public static class PoolPhoto {
         private Long id;
         private Long fileId;
+        /** 可直接展示的地址，避免前端每次同步再逐张调 /files/{id}/preview */
+        private String previewUrl;
         private String createdAt;
     }
 

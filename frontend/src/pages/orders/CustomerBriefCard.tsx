@@ -12,7 +12,6 @@ export default function CustomerBriefCard({
 }) {
   if (!brief) return null;
   const current = brief.pieces?.find((p) => p.pieceId === pieceId);
-  const others = (brief.pieces || []).filter((p) => p.pieceId !== pieceId && p.summary);
   return (
     <Card size="small" title="客户定制问卷" style={{ marginBottom: 16 }}>
       <Paragraph style={{ marginBottom: 8 }}>
@@ -27,13 +26,8 @@ export default function CustomerBriefCard({
           <Paragraph style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>
             {current?.summary || '这一件还没有单独记录。'}
           </Paragraph>
-          {others.length > 0 ? (
-            <Paragraph type="secondary" style={{ marginBottom: 8 }}>
-              其他件：{others.map((p) => p.summary).join('；')}
-            </Paragraph>
-          ) : null}
           <Text type="secondary">
-            拉丝、喷砂、钉砂等其他工艺由设计师填写。客户的选择会尽可能被采纳，但不保证每一项都原样实现。
+            以上仅本单件信息。拉丝、喷砂、钉砂等其他工艺由设计师填写。客户的选择会尽可能被采纳，但不保证每一项都原样实现。
           </Text>
         </>
       )}

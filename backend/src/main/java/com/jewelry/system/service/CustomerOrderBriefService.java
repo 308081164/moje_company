@@ -54,6 +54,7 @@ public class CustomerOrderBriefService {
     private final OrderConversationRepository conversationRepository;
     private final ConversationService conversationService;
     private final ObjectMapper objectMapper;
+    private final FulfillmentDispatchService fulfillmentDispatchService;
 
     @Transactional(readOnly = true)
     public CustomerBriefFormDto formForCustomer(long orderId) {
@@ -128,9 +129,17 @@ public class CustomerOrderBriefService {
             detail = new OrderDetail();
             detail.setOrderId(orderId);
         }
+        // 多件尺寸只按单件写入 design_info；订单级 hand_size 仅在单件订单时同步，避免每件都显示全量汇总
         String previousSize = brief.getSizeSummary();
-        if (!StringUtils.hasText(detail.getHandSize()) || detail.getHandSize().equals(previousSize)) {
-            detail.setHandSize(StringUtils.hasText(nextSize) ? nextSize : null);
+        if (pieces.size() == 1) {
+            String only = CustomerBriefCatalog.sizeOnly(request.getPieces().get(0));
+            if (!StringUtils.hasText(detail.getHandSize()) || detail.getHandSize().equals(previousSize)
+                    || detail.getHandSize().equals(only)) {
+                detail.setHandSize(StringUtils.hasText(only) ? only : null);
+            }
+        } else if (StringUtils.hasText(detail.getHandSize()) && detail.getHandSize().equals(previousSize)) {
+            // 清掉历史「件A：…；件B：…」汇总，改由各件 design_info.hand_size 展示
+            detail.setHandSize(null);
         }
         orderDetailRepository.save(detail);
 
@@ -142,6 +151,7 @@ public class CustomerOrderBriefService {
             piece.setJewelryType(JewelryType.parse(answer.getJewelryType()));
             pieceRepository.save(piece);
             applyPlating(orderId, answer, previous.get(answer.getPieceId()));
+            applyHandSize(orderId, answer, previous.get(answer.getPieceId()));
         }
 
         brief.setBudgetBand(request.getBudgetBand().trim());
@@ -150,7 +160,56 @@ public class CustomerOrderBriefService {
         brief.setSubmittedAt(LocalDateTime.now());
         briefRepository.save(brief);
 
+        fulfillmentDispatchService.onBriefSubmitted(orderId);
         notifyChat(order, first);
+    }
+
+    /** 已提交问卷时返回指定单件的尺寸文案；未提交或无该件则空。用于多件订单展示本件尺寸。 */
+    @Transactional(readOnly = true)
+    public String sizeLabelForPiece(long orderId, Long pieceId) {
+        if (pieceId == null) {
+            return "";
+        }
+        OrderCustomerBrief brief = briefRepository.findByOrderId(orderId).orElse(null);
+        if (brief == null || brief.getSubmittedAt() == null) {
+            return "";
+        }
+        for (CustomerBriefSubmitRequest.Piece piece : readPieces(brief)) {
+            if (pieceId.equals(piece.getPieceId())) {
+                return CustomerBriefCatalog.sizeOnly(piece);
+            }
+        }
+        return "";
+    }
+
+    @Transactional(readOnly = true)
+    public boolean pieceWantsEngraving(long orderId, long pieceId) {
+        OrderCustomerBrief brief = briefRepository.findByOrderId(orderId).orElse(null);
+        if (brief == null || brief.getSubmittedAt() == null) {
+            return false;
+        }
+        for (CustomerBriefSubmitRequest.Piece piece : readPieces(brief)) {
+            if (pieceId == piece.getPieceId()) {
+                return CustomerBriefCatalog.wantsEngraving(piece);
+            }
+        }
+        return false;
+    }
+
+    /** pieceId -> 是否需要刻字；未提交问卷的件不在 map 中 */
+    @Transactional(readOnly = true)
+    public Map<Long, Boolean> engravingWantsByPiece(long orderId) {
+        OrderCustomerBrief brief = briefRepository.findByOrderId(orderId).orElse(null);
+        if (brief == null || brief.getSubmittedAt() == null) {
+            return Map.of();
+        }
+        Map<Long, Boolean> out = new HashMap<>();
+        for (CustomerBriefSubmitRequest.Piece piece : readPieces(brief)) {
+            if (piece.getPieceId() != null) {
+                out.put(piece.getPieceId(), CustomerBriefCatalog.wantsEngraving(piece));
+            }
+        }
+        return out;
     }
 
     @Transactional(readOnly = true)
@@ -191,17 +250,33 @@ public class CustomerOrderBriefService {
             return;
         }
         String prev = previous == null ? "" : CustomerBriefCatalog.platingLabel(previous.getPlating());
-        DesignInfo design = designInfoRepository.findByPieceId(answer.getPieceId()).orElseGet(() -> {
-            DesignInfo created = new DesignInfo();
-            created.setOrderId(orderId);
-            created.setPieceId(answer.getPieceId());
-            return created;
-        });
+        DesignInfo design = designInfoFor(orderId, answer.getPieceId());
         String current = design.getPlating();
         if (!StringUtils.hasText(current) || current.equals(prev)) {
             design.setPlating(next);
             designInfoRepository.save(design);
         }
+    }
+
+    private void applyHandSize(long orderId, CustomerBriefSubmitRequest.Piece answer,
+                               CustomerBriefSubmitRequest.Piece previous) {
+        String next = CustomerBriefCatalog.sizeOnly(answer);
+        String prev = previous == null ? "" : CustomerBriefCatalog.sizeOnly(previous);
+        DesignInfo design = designInfoFor(orderId, answer.getPieceId());
+        String current = design.getHandSize();
+        if (!StringUtils.hasText(current) || current.equals(prev)) {
+            design.setHandSize(StringUtils.hasText(next) ? next : null);
+            designInfoRepository.save(design);
+        }
+    }
+
+    private DesignInfo designInfoFor(long orderId, Long pieceId) {
+        return designInfoRepository.findByPieceId(pieceId).orElseGet(() -> {
+            DesignInfo created = new DesignInfo();
+            created.setOrderId(orderId);
+            created.setPieceId(pieceId);
+            return created;
+        });
     }
 
     private void notifyChat(Order order, boolean first) {

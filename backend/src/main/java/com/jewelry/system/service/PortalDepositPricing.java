@@ -1,5 +1,6 @@
 package com.jewelry.system.service;
 
+import com.jewelry.system.entity.Quotation;
 import com.jewelry.system.enums.ServiceType;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,8 +15,28 @@ public final class PortalDepositPricing {
 
     public static final BigDecimal DESIGNER_DESIGN_UNIT = new BigDecimal("199.00");
     public static final BigDecimal CUSTOM_IMAGE_UNIT = new BigDecimal("99.00");
+    /** 生产选项「保密不对外宣传」选「否」（允许宣传）时，尾款限时减免金额（USD）。 */
+    public static final BigDecimal PUBLICITY_ALLOW_DISCOUNT_USD = new BigDecimal("15.00");
 
     private PortalDepositPricing() {
+    }
+
+    /** 客户已填生产选项且明确选择不保密时，可享公开宣传限时优惠。 */
+    public static boolean qualifiesPublicityDiscount(Quotation quotation) {
+        return quotation != null
+                && quotation.getDesignOptionsAt() != null
+                && !Boolean.TRUE.equals(quotation.getConfidential());
+    }
+
+    public static BigDecimal applyPublicityDiscount(BigDecimal amount, Quotation quotation) {
+        if (amount == null) {
+            return BigDecimal.ZERO;
+        }
+        if (!qualifiesPublicityDiscount(quotation)) {
+            return amount;
+        }
+        BigDecimal next = amount.subtract(PUBLICITY_ALLOW_DISCOUNT_USD);
+        return next.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : next;
     }
 
     public static BigDecimal unitPrice(ServiceType type) {

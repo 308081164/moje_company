@@ -36,6 +36,7 @@ import { YunexpressDesk } from '@/pages/orders/YunexpressDesk';
 import { PieceDesignBrief } from '@/pages/orders/PieceDesignBrief';
 import { ModelerPieceCard } from '@/pages/orders/ModelerPieceCard';
 import { StoneEditor, stonesForSave, stonesFromSaved, type StoneDraft } from '@/pages/orders/StoneEditor';
+import ModelSourceFilesPanel from '@/components/ModelSourceFilesPanel';
 import './ModelerPieceCard.css';
 import './StoneEditor.css';
 import { conversationService } from '@/services/conversationService';
@@ -213,7 +214,6 @@ const OrderDetailPage: React.FC = () => {
   const [customerProgressBusy, setCustomerProgressBusy] = useState(false);
   const [openChatLoading, setOpenChatLoading] = useState(false);
   const [modelSaveLoading, setModelSaveLoading] = useState(false);
-  const [modelSubmitLoading, setModelSubmitLoading] = useState(false);
   const [modelTrackerLoading, setModelTrackerLoading] = useState(false);
   const [designHandoffLoading, setDesignHandoffLoading] = useState(false);
   const [modelVersions, setModelVersions] = useState<OrderModelVersion[]>([]);
@@ -225,6 +225,10 @@ const OrderDetailPage: React.FC = () => {
   const [shipmentEditBusy, setShipmentEditBusy] = useState<'correct' | 'reship' | null>(null);
   const [activePieceId, setActivePieceId] = useState<number | null>(null);
   const activePieceIdRef = useRef<number | null>(null);
+  /** 设计师/建模师默认停在「我的任务」，保存刷新时不得被重置到「订单信息」 */
+  const [detailTab, setDetailTab] = useState<'info' | 'task'>(() =>
+    isDesigner || isModeler ? 'task' : 'info'
+  );
 
   const activePiece = useMemo(() => {
     const pieces = order?.pieces ?? [];
@@ -382,9 +386,10 @@ const OrderDetailPage: React.FC = () => {
     [designForm, modelForm]
   );
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     if (!orderId || Number.isNaN(orderId)) return;
-    setLoading(true);
+    const silent = !!opts?.silent;
+    if (!silent) setLoading(true);
     try {
       const o = await orderService.getOrderById(orderId);
       latestOrderRef.current = o;
@@ -453,9 +458,13 @@ const OrderDetailPage: React.FC = () => {
       latestOrderRef.current = null;
       message.error('加载订单失败');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [orderId, designForm, modelForm, reviewForm, quoteForm, shipForm, applyPieceData, isDesigner, isModeler]);
+
+  useEffect(() => {
+    setDetailTab(isDesigner || isModeler ? 'task' : 'info');
+  }, [orderId, isDesigner, isModeler]);
 
   useEffect(() => {
     let cancelled = false;
@@ -544,12 +553,15 @@ const OrderDetailPage: React.FC = () => {
   );
   const balanceQuoteSent = useMemo(() => {
     if (!order) return false;
-    return !!order.quotationInfo?.finalized;
+    return !!order.quotationInfo?.finalized || !!order.balanceQuoteSent;
   }, [order]);
+  const balancePaid = useMemo(() => !!order?.balancePaid, [order]);
   const canQuoteBalance = useMemo(() => {
-    if (!order || !allModelsConfirmed || balanceQuoteSent) return false;
+    if (!order || !allModelsConfirmed || balancePaid) return false;
+    // 未付款前可首次报价或修改报价（修改后旧报价作废）
     return canOperateReview;
-  }, [order, allModelsConfirmed, balanceQuoteSent, canOperateReview]);
+  }, [order, allModelsConfirmed, balancePaid, canOperateReview]);
+  const revisingBalanceQuote = balanceQuoteSent && !balancePaid;
 
   const canEditLogistics = useMemo(() => {
     if (!order) return false;
@@ -730,7 +742,7 @@ const OrderDetailPage: React.FC = () => {
       await orderService.updateOrderPieceMeta(orderId, activePiece.id, { jewelryType });
       designForm.setFieldsValue({ jewelryType, handSize: undefined });
       message.success('珠宝类型已更新');
-      await refresh();
+      await refresh({ silent: true });
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
     }
@@ -793,30 +805,21 @@ const OrderDetailPage: React.FC = () => {
       submitToModeler: false,
     });
     message.success('设计信息已保存');
-    refresh();
+    void refresh({ silent: true });
   };
 
-  const handoffDesign = async (toModeler: boolean) => {
+  const handoffDesign = async (mode: 'tracker' | 'modeler') => {
     const images = collectDoneImageUrlsFromFileList(designImageFileList);
+    const toModeler = mode === 'modeler';
     if (toModeler) {
       if (!images.length) {
         message.warning('请先上传设计图');
         return;
       }
     } else {
-      const canAskCustomer = hasDesignPiecesForCustomerSubmit(order?.pieces);
-      if (!canAskCustomer) {
-        message.warning('没有待提交给客户的单件。已确认且未被建模师驳回的件不会再次发送。');
-        return;
-      }
       const missing = piecesMissingCustomerSubmitImages(order?.pieces, 'design', activePieceId, images);
       if (missing.length) {
-        message.error(`以下单件还没有设计图，须这些件都有图后才能提交：${missing.join('、')}`);
-        return;
-      }
-      const sentBack = !!activePiece?.model?.lastRejectToDesignerMessage?.trim();
-      if (activePiece?.designConfirmed && !sentBack && !sameImageList(activePiece.design?.designImages, images)) {
-        message.error(`「${activePiece.name}」客户已确认，提交给客户时不能修改该件，也不会再次发送。`);
+        message.error(`以下单件还没有设计图，须全部单件都有图后才能提交跟单评审：${missing.join('、')}`);
         return;
       }
     }
@@ -862,20 +865,19 @@ const OrderDetailPage: React.FC = () => {
         stoneInfo: stonesForSave(stoneRows),
         processInfo,
         createVersion: true,
-        submitToCustomer: !toModeler,
+        submitToCustomer: false,
         submitToModeler: toModeler,
+        submitToTracker: !toModeler,
       });
       if (toModeler) {
         const left = (updated.pieces ?? []).filter((p) => p.model?.lastRejectToDesignerMessage?.trim());
         message.success(left.length
           ? `「${activePiece?.name || '该单件'}」已交回。还要继续改：${left.map((p) => p.name).join('、')}`
           : '被驳回的单件已全部交回建模师');
-      } else if ((updated.pieces ?? []).some((p) => !p.designConfirmed && p.model?.lastRejectToDesignerMessage?.trim())) {
-        message.success('已请客户重新确认被驳回的单件。客户确认后，这些件会回到建模。');
       } else {
-        message.success('已将未确认的单件一起提交给客户');
+        message.success('已提交跟单员质量评审；通过后系统将自动发给客户审阅');
       }
-      refresh();
+      void refresh({ silent: true });
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) return;
       message.error(String((e as Error)?.message || e));
@@ -1012,7 +1014,7 @@ const OrderDetailPage: React.FC = () => {
         submitToCustomer: false,
       });
       message.success('建模信息已保存（已记入版本历史，未发送客户）');
-      await refresh();
+      await refresh({ silent: true });
       await loadModelVersions();
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) {
@@ -1041,12 +1043,22 @@ const OrderDetailPage: React.FC = () => {
 
   const submitModelToTracker = async () => {
     try {
+      const missing = piecesMissingCustomerSubmitImages(order?.pieces, 'model', null, []);
+      if (missing.length) {
+        message.error(`以下单件还没有已保存的效果图：${missing.join('、')}。须全部单件都有图后才能提交跟单评审。`);
+        return;
+      }
       const target = (order?.pieces ?? []).find((piece) => (piece.model?.modelEffectImages || []).some((url) => url?.trim()))
         ?? order?.pieces?.[0];
       if (!target || !(target.model?.modelEffectImages || []).some((url) => url?.trim())) {
         message.warning('请先在对应单件里上传效果图并保存');
         return;
       }
+      const review = order?.reviewInfo;
+      const fromCraftReject =
+        !!review &&
+        review.reviewPassed === false &&
+        !!(review.rejectionReason?.trim() || review.reviewNotes?.trim() || (review.rejectedProcesses || []).length);
       setModelTrackerLoading(true);
       await orderService.updateOrderModel(orderId, {
         ...savedModelPayload(target),
@@ -1054,51 +1066,18 @@ const OrderDetailPage: React.FC = () => {
         submitToCustomer: false,
         submitToTracker: true,
       });
-      message.success('已直接交回跟单员，客户不会看到这次工艺驳回');
-      await refresh();
+      message.success(
+        fromCraftReject
+          ? '已按工艺驳回修改并交回跟单员评审'
+          : '已提交跟单员工艺评审；通过后系统将自动发给客户审阅'
+      );
+      await refresh({ silent: true });
       await loadModelVersions();
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'errorFields' in e) return;
       message.error(String((e as Error)?.message || e));
     } finally {
       setModelTrackerLoading(false);
-    }
-  };
-
-  const submitModelToCustomer = async () => {
-    try {
-      if (!hasUnconfirmedPiece(order?.pieces, 'model')) {
-        message.warning('没有待提交给客户的单件。已确认的件不会再次发送。');
-        return;
-      }
-      const missing = piecesMissingCustomerSubmitImages(order?.pieces, 'model', null, []);
-      if (missing.length) {
-        message.error(`以下单件还没有已保存的效果图：${missing.join('、')}。请在对应卡片里上传并保存。`);
-        return;
-      }
-      const target = (order?.pieces ?? []).find((piece) => !piece.modelConfirmed) ?? order?.pieces?.[0];
-      if (!target) return;
-      setModelSubmitLoading(true);
-      await orderService.updateOrderModel(orderId, {
-        ...savedModelPayload(target),
-        createVersion: true,
-        submitToCustomer: true,
-      });
-      const review = order?.reviewInfo;
-      const rework =
-        !!review &&
-        review.reviewPassed === false &&
-        !!(review.rejectionReason?.trim() || review.reviewNotes?.trim() || (review.rejectedProcesses || []).length);
-      message.success(rework ? '已将未确认的单件发给客户确认调整。客户确认后才会进入工艺验证。' : '已将未确认的单件一起提交给客户审阅');
-      await refresh();
-      await loadModelVersions();
-    } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'errorFields' in e) {
-        return;
-      }
-      message.error(String((e as Error)?.message || e));
-    } finally {
-      setModelSubmitLoading(false);
     }
   };
 
@@ -1144,7 +1123,7 @@ const OrderDetailPage: React.FC = () => {
         if (activePieceId != null) {
           rejectDesignerForm.setFieldsValue({ pieceId: activePieceId });
         }
-        refresh();
+        void refresh({ silent: true });
       },
     });
   };
@@ -1161,7 +1140,7 @@ const OrderDetailPage: React.FC = () => {
       message: (v.rejectMessage as string) || '请按建模师的说明补充信息后重新提交。',
     }).then(() => {
       message.success('已驳回给客户');
-      refresh();
+      void refresh({ silent: true });
     }).catch(() => {
       /* 错误由 api 拦截器统一提示 */
     });
@@ -1176,27 +1155,54 @@ const OrderDetailPage: React.FC = () => {
           .filter(Boolean)
       : [];
     const hadReject = Boolean(v.rejectionReason?.trim()) || arr.length > 0;
+    const pieceId = activePieceId ?? order?.pieces?.[0]?.id;
+    if (pieceId == null) {
+      message.warning('请先选择要评审的单件');
+      return;
+    }
+    const reviewKind =
+      order?.currentStatus === OrderStatus.PENDING_DESIGN_REVIEW || order?.qualityReviewKind === 'DESIGN'
+        ? 'DESIGN'
+        : 'MODEL';
     const updated = await orderService.updateOrderReview(orderId, {
       trackerId: v.trackerId,
       reviewNotes: v.reviewNotes,
       rejectionReason: v.rejectionReason,
       rejectedProcesses: arr.length ? arr : undefined,
+      reviewKind,
+      pieceId,
     });
-    if (hadReject && updated.currentStatus === OrderStatus.MODELING) {
-      message.success('评审已保存，订单已打回建模师（建模修改中）');
+    if (hadReject && (updated.currentStatus === OrderStatus.MODELING || updated.currentStatus === OrderStatus.DESIGNING)) {
+      message.success(
+        updated.currentStatus === OrderStatus.DESIGNING
+          ? '本单件已驳回，订单退回设计师修改'
+          : '本单件已驳回，订单退回建模师修改'
+      );
     } else {
-      message.success('评审已保存');
+      const allPassed = (updated.pieces ?? []).every((p) =>
+        reviewKind === 'DESIGN' ? p.designQualityPassed : p.modelQualityPassed
+      );
+      message.success(allPassed ? '全部单件评审通过，已自动发给客户审阅' : '本单件评审已通过');
     }
-    refresh();
+    void refresh({ silent: true });
   };
+
+  useEffect(() => {
+    const cny = order?.quotationInfo?.staffAmountCny;
+    if (cny != null && Number(cny) > 0) {
+      balanceForm.setFieldsValue({ amount: Number(cny) });
+    }
+  }, [order?.quotationInfo?.staffAmountCny, order?.quotationInfo?.finalized, balanceForm]);
 
   const saveBalanceQuote = async () => {
     const v = await balanceForm.validateFields();
     setBalanceSaving(true);
     try {
       await orderService.quoteOrderBalance(orderId, Number(v.amount));
-      message.success('尾款报价已推送给客户');
-      refresh();
+      message.success(
+        revisingBalanceQuote ? '报价已修改并重新推送，原报价已作废' : '尾款报价已推送给客户'
+      );
+      void refresh({ silent: true });
     } finally {
       setBalanceSaving(false);
     }
@@ -1206,7 +1212,7 @@ const OrderDetailPage: React.FC = () => {
     const v = await quoteForm.validateFields();
     await orderService.updateOrderQuotation(orderId, v);
     message.success('报价已保存');
-    refresh();
+    void refresh({ silent: true });
   };
 
   const submitShipment = async () => {
@@ -1226,7 +1232,7 @@ const OrderDetailPage: React.FC = () => {
       setShipment(sh);
       message.success('发货成功，客户可在订单聊天里查看物流');
       shipForm.resetFields();
-      await refresh();
+      await refresh({ silent: true });
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { message?: string } } };
       message.error(err?.response?.data?.message || err?.message || '发货失败，请重试');
@@ -1396,7 +1402,7 @@ const OrderDetailPage: React.FC = () => {
           setActivePieceId(pieceId);
           applyPieceData(order, pieceId);
         }}
-        onPiecesChanged={refresh}
+        onPiecesChanged={() => void refresh({ silent: true })}
       />
     );
   };
@@ -1412,18 +1418,46 @@ const OrderDetailPage: React.FC = () => {
     const activeDesignReject = activePiece && pieceHasCustomerDesignReject(activePiece) ? activePiece : null;
     const designImageUrls = collectDoneImageUrlsFromFileList(designImageFileList);
     const designMissing = piecesMissingCustomerSubmitImages(order.pieces, 'design', activePieceId, designImageUrls);
-    const designHasPending = hasDesignPiecesForCustomerSubmit(order.pieces);
-    const designLocked = !!activePiece?.designConfirmed && !activeModelerReject;
-    const designSubmitDisabled = !canOperateDesign || !designHasPending || designMissing.length > 0;
+    const designRejectFromTracker =
+      !!order.designReviewInfo &&
+      order.designReviewInfo.reviewPassed === false &&
+      !!(order.designReviewInfo.rejectionReason?.trim()
+        || order.designReviewInfo.reviewNotes?.trim()
+        || (order.designReviewInfo.rejectedProcesses || []).length)
+      && (order.currentStatus === OrderStatus.DESIGNING || order.currentStatus === OrderStatus.PENDING_DESIGN);
+    const designLocked = !!activePiece?.designConfirmed && !activeModelerReject && !pieceHasCustomerDesignReject(activePiece);
+    const designSubmitDisabled = !canOperateDesign || designMissing.length > 0;
     return (
         <div className="designer-work">
           <CustomerBriefCard brief={order.customerBrief} pieceId={activePieceId} />
+          {designRejectFromTracker ? (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="跟单设计质量评审未通过，请按说明修改后重新提交跟单"
+              description={
+                <div>
+                  {order.designReviewInfo?.rejectionReason ? (
+                    <Paragraph style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+                      {order.designReviewInfo.rejectionReason}
+                    </Paragraph>
+                  ) : null}
+                  {order.designReviewInfo?.reviewNotes ? (
+                    <Paragraph type="secondary" style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                      评审备注：{order.designReviewInfo.reviewNotes}
+                    </Paragraph>
+                  ) : null}
+                </div>
+              }
+            />
+          ) : null}
           {designRejectPieces.length > 0 ? (
             <Alert
               type="error"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`有单件待修改：${designRejectPieces.map((p) => p.name).join('、')}`}
+              message={`客户驳回待修改：${designRejectPieces.map((p) => p.name).join('、')}`}
               description={
                 activeDesignReject?.design?.lastCustomerDesignRejectReason ? (
                   <div>
@@ -1550,7 +1584,7 @@ const OrderDetailPage: React.FC = () => {
             <Form.Item
               name="handSize"
               label={handSizeMeta.label}
-              extra="优先采用客户问卷。多件订单会汇总在这里，可以按生产需要改。"
+              extra="优先采用客户问卷中本单件的尺寸，可按生产需要修改。多件订单请分别切换单件查看与填写。"
               rules={
                 handSizeMeta.required
                   ? [{ required: true, message: `请填写${handSizeMeta.label}` }]
@@ -1573,7 +1607,7 @@ const OrderDetailPage: React.FC = () => {
               disabled={!canOperateDesign || designLocked}
             />
           </Form.Item>
-          <Form.Item label="石料" extra="客户问卷只记录偏好或「让设计师决定」。具体石料由设计师填写，建模师之后可以修改。">
+          <Form.Item label="石料" extra="客户问卷只记录偏好或「让设计师决定」。具体石料由设计师填写，建模师仅可查看。">
             <StoneEditor
               rows={stoneRows}
               disabled={!canOperateDesign || designLocked}
@@ -1586,7 +1620,7 @@ const OrderDetailPage: React.FC = () => {
           
           <Form.Item
             label="设计图片"
-            extra="可按件保存草稿。提交给客户前，每一件未确认的单件都要有设计图；已确认的件不会再次发送。"
+            extra="可按件保存草稿。提交跟单评审前，每一件都要有设计图。"
           >
             <UploadWithImagePreview
               listType="picture-card"
@@ -1630,26 +1664,29 @@ const OrderDetailPage: React.FC = () => {
                 disabled={!canOperateDesign || !activeModelerReject}
                 loading={designHandoffLoading}
                 style={{ minHeight: 40 }}
-                onClick={() => void handoffDesign(true)}
+                onClick={() => void handoffDesign('modeler')}
               >
                 {activeModelerReject ? `把「${activeModelerReject.name}」交回建模师` : '请先打开被驳回的单件'}
               </Button>
             ) : null}
-            <Button
-              type={designRework ? 'default' : 'primary'}
-              disabled={designSubmitDisabled}
-              loading={designHandoffLoading}
-              style={{ minHeight: 40 }}
-              onClick={() => void handoffDesign(false)}
-            >
-              {designRework ? '请客户确认后再交建模' : '提交给客户'}
-            </Button>
+            {!designRework ? (
+              <Button
+                type="primary"
+                disabled={designSubmitDisabled}
+                loading={designHandoffLoading}
+                style={{ minHeight: 40 }}
+                onClick={() => void handoffDesign('tracker')}
+              >
+                {designRejectFromTracker || designRejectPieces.length > 0
+                  ? '修改完成，提交跟单评审'
+                  : '提交跟单质量评审'}
+              </Button>
+            ) : null}
             <Text type="secondary" style={{ fontSize: 12, flex: '1 1 220px' }}>
               {designRework
-                ? `将请客户重新确认被驳回的单件：${modelerRejectPieces.map((p) => p.name).join('、')}。其他已确认的件不会再次发送。`
-                : '须全部单件都有设计图后才能一起提交；已确认的件不会再次发送。'}
+                ? `外观变化不大可直接交回建模师。涉及：${modelerRejectPieces.map((p) => p.name).join('、')}。`
+                : '设计完成后只能发给跟单员做质量评审；通过后系统自动发给客户。客户或跟单驳回后，改完再交回跟单。须全部单件都有设计图。'}
               {designMissing.length > 0 ? ` 还缺：${designMissing.join('、')}` : ''}
-              {!designRework && !designHasPending ? ' 当前没有待提交的单件。' : ''}
             </Text>
           </div>
 
@@ -1727,9 +1764,8 @@ const OrderDetailPage: React.FC = () => {
         !!(reviewRejectText || reviewNotes || rejectedProcesses.length);
       const reviewTime = review?.reviewPassedTime || review?.updatedAt;
       const modelMissing = piecesMissingCustomerSubmitImages(order.pieces, 'model', null, []);
-      const modelHasPending = hasUnconfirmedPiece(order.pieces, 'model');
-      const modelLocked = !!activePiece?.modelConfirmed && !showReviewReject;
-      const modelSubmitDisabled = !canOperateModel || !modelHasPending || modelMissing.length > 0;
+      const modelLocked = !!activePiece?.modelConfirmed && !showReviewReject && !showCustomerReject;
+      const modelSubmitDisabled = !canOperateModel || modelMissing.length > 0;
       return (
         <div>
           {(showReviewReject || showCustomerReject) && (
@@ -1738,7 +1774,7 @@ const OrderDetailPage: React.FC = () => {
                 <Alert
                   type="error"
                   showIcon
-                  message="跟单工艺验证未通过，请按说明修改后重新提交给客户"
+                  message="跟单工艺评审未通过，请按说明修改后重新提交给跟单员"
                   description={
                     <div>
                       {reviewRejectText ? (
@@ -1889,45 +1925,32 @@ const OrderDetailPage: React.FC = () => {
                 piece={piece}
                 modelers={modelers}
                 disabled={!canOperateModel}
-                locked={!!piece.modelConfirmed && !showReviewReject}
+                locked={!!piece.modelConfirmed && !showReviewReject && !showCustomerReject}
                 active={piece.id === activePieceId}
                 onFocus={() => {
                   activePieceIdRef.current = piece.id;
                   setActivePieceId(piece.id);
                 }}
                 onSaved={async () => {
-                  await refresh();
+                  await refresh({ silent: true });
                   await loadModelVersions();
                 }}
               />
             ))}
           </div>
             <div className="modeler-actions">
-              {showReviewReject ? (
-                <Button
-                  disabled={!canOperateModel}
-                  loading={modelTrackerLoading}
-                  style={{ minHeight: 40 }}
-                  onClick={() => void submitModelToTracker()}
-                >
-                  直接提交给跟单员
-                </Button>
-              ) : null}
               <Button
                 type="primary"
-                loading={modelSubmitLoading}
+                loading={modelTrackerLoading}
                 disabled={modelSubmitDisabled}
                 style={{ minHeight: 40 }}
-                onClick={() => void submitModelToCustomer()}
+                onClick={() => void submitModelToTracker()}
               >
-                {showReviewReject ? '请客户确认后再交跟单' : '提交给客户'}
+                {showReviewReject || showCustomerReject ? '修改完成，提交跟单评审' : '提交跟单工艺评审'}
               </Button>
               <Text type="secondary" style={{ fontSize: 12, flex: '1 1 220px' }}>
-                {showReviewReject
-                  ? '外观变化不大可直接交跟单，客户看不到这次驳回。提交给客户时，须全部未确认的单件都有效果图；已确认的件不会再次发送。'
-                  : '每件上传后先点该卡片的保存。全部未确认的单件都保存了效果图后，才能一起提交；已确认的件不会再次发送。'}
+                建模完成后只能发给跟单员做工艺评审；通过后系统自动发给客户。客户驳回或跟单驳回后，改完再交回跟单。须全部单件都有效果图。
                 {modelMissing.length > 0 ? ` 还缺：${modelMissing.join('、')}` : ''}
-                {!modelHasPending ? ' 当前没有待提交的单件。' : ''}
               </Text>
             </div>
         </div>
@@ -1969,7 +1992,7 @@ const OrderDetailPage: React.FC = () => {
               <YunexpressDesk
                 orderId={orderId}
                 hasAddress={orderHasShippingAddress(order.baseInfo)}
-                onUpdated={() => { void refresh(); }}
+                onUpdated={() => { void refresh({ silent: true }); }}
               />
             </Form>
           </Card>
@@ -2003,7 +2026,7 @@ const OrderDetailPage: React.FC = () => {
                 orderId={orderId}
                 hasAddress={orderHasShippingAddress(order.baseInfo)}
                 shipment={shipment}
-                onUpdated={() => { void refresh(); }}
+                onUpdated={() => { void refresh({ silent: true }); }}
               />
             )}
             {shipment.events && shipment.events.length > 0 && (
@@ -2081,6 +2104,12 @@ const OrderDetailPage: React.FC = () => {
               message="当前订单的工艺评审由其他跟单同事负责，您可查看信息，无法在此保存。"
             />
           )}
+          <Card size="small" title="建模源文件预览" style={{ marginBottom: 16 }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              按单件在页面内直接预览 STEP / STL / OBJ / GLB（默认开启 360° 旋转），无需弹窗。
+            </Text>
+            <ModelSourceFilesPanel order={order} title="各单件源文件" autoPreview />
+          </Card>
           <Form form={reviewForm} layout="vertical" disabled={!canOperateReview}>
           <Form.Item name="trackerId" label="跟单员">
             <Select
@@ -2106,30 +2135,48 @@ const OrderDetailPage: React.FC = () => {
         </Form>
 
         <Divider />
-        <Card size="small" title="尾款报价" style={{ marginTop: 16 }}>
+        <Card size="small" title="尾款报价（人民币）" style={{ marginTop: 16 }}>
           <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            客户确认全部建模稿后，在这里只填一个最终尾款金额。提交后会推送给客户支付，支付后订单才进入生产环节。
+            按人民币填写最终尾款。系统会按汇率自动换算为美元推送给客户。客户支付前可修改报价，修改后旧支付卡自动作废。
           </Text>
-          {order.quotationInfo?.finalized ? (
-            <Alert type="success" showIcon message={`尾款 ¥${order.quotationInfo.totalCost ?? '-'} 已推送给客户`} />
+          {balancePaid ? (
+            <Alert
+              type="success"
+              showIcon
+              message={`尾款已支付：$${order.quotationInfo?.totalCost ?? '-'} USD`}
+            />
           ) : !allModelsConfirmed ? (
             <Alert type="info" showIcon message="客户还没有确认全部建模稿，暂时不能填写尾款报价。" />
           ) : (
-            <Form form={balanceForm} layout="vertical" disabled={!canQuoteBalance}>
-              <Form.Item
-                name="amount"
-                label="最终尾款金额（元）"
-                rules={[
-                  { required: true, message: '请输入最终尾款金额' },
-                  { type: 'number', min: 0.01, message: '请填写有效金额' },
-                ]}
-              >
-                <InputNumber style={{ width: '100%' }} min={0.01} step={0.01} placeholder="只填一个数字" />
-              </Form.Item>
-              <Button type="primary" onClick={saveBalanceQuote} loading={balanceSaving} block style={{ minHeight: 44 }}>
-                推送尾款报价
-              </Button>
-            </Form>
+            <>
+              {revisingBalanceQuote ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={`当前已推送 $${order.quotationInfo?.totalCost ?? '-'} USD${
+                    order.quotationInfo?.staffAmountCny != null
+                      ? `（人民币 ¥${order.quotationInfo.staffAmountCny}）`
+                      : ''
+                  }。修改并重新推送后，原报价作废。`}
+                />
+              ) : null}
+              <Form form={balanceForm} layout="vertical" disabled={!canQuoteBalance}>
+                <Form.Item
+                  name="amount"
+                  label="人民币尾款金额（元）"
+                  rules={[
+                    { required: true, message: '请输入人民币尾款金额' },
+                    { type: 'number', min: 0.01, message: '请填写有效金额' },
+                  ]}
+                >
+                  <InputNumber style={{ width: '100%' }} min={0.01} step={0.01} placeholder="例如 8000" addonBefore="¥" />
+                </Form.Item>
+                <Button type="primary" onClick={saveBalanceQuote} loading={balanceSaving} block style={{ minHeight: 44 }}>
+                  {revisingBalanceQuote ? '修改并重新推送（原报价作废）' : '换算并推送美元报价'}
+                </Button>
+              </Form>
+            </>
           )}
         </Card>
 
@@ -2155,7 +2202,7 @@ const OrderDetailPage: React.FC = () => {
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message="建模确认后请在此录入工艺费、克重费等基础费用；买断设计、鉴定证书、保密不宣传由客户在 C 端选择后系统自动计入尾款。"
+            message="建模确认后请在此录入工艺费、克重费等基础费用；买断设计、鉴定证书、保密不宣传由客户在 C 端选择后系统自动计入尾款。客户选择「保密不宣传 = 否」时，尾款限时减免 USD 15。"
           />
           <Form form={quoteForm} layout="vertical" disabled={isSales && !canOperateQuote}>
           <Space wrap>
@@ -2349,6 +2396,8 @@ const OrderDetailPage: React.FC = () => {
                   </div>
                 </>
               )}
+              <Divider style={{ margin: '16px 0 8px 0' }}>建模源文件</Divider>
+              <ModelSourceFilesPanel order={order} title="源文件（可 360° 预览）" compact />
             </>
           ) : (
             <Text type="secondary">暂无建模信息</Text>
@@ -2416,7 +2465,16 @@ const OrderDetailPage: React.FC = () => {
                 )}
               </Descriptions.Item>
               <Descriptions.Item label="保密不宣传">
-                {order.quotationInfo.confidential ? <Tag color="red">是</Tag> : <Tag>否</Tag>}
+                {order.quotationInfo.confidential ? (
+                  <Tag color="red">是</Tag>
+                ) : (
+                  <Space size={4} wrap>
+                    <Tag>否</Tag>
+                    {order.quotationInfo.designOptionsFilled ? (
+                      <Tag color="gold">限时优惠 -USD 15</Tag>
+                    ) : null}
+                  </Space>
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="报价备注" span={2}>
                 {order.quotationInfo.quotationNotes || '-'}
@@ -2507,6 +2565,9 @@ const OrderDetailPage: React.FC = () => {
           }}
         >
           <Tabs
+            activeKey={detailTab}
+            onChange={(key) => setDetailTab(key === 'task' ? 'task' : 'info')}
+            destroyInactiveTabPane={false}
             items={[
               {
                 key: 'info',
@@ -2518,7 +2579,6 @@ const OrderDetailPage: React.FC = () => {
                 label: '✏️ 我的任务',
                 children: getTaskForm(),
               },
-              ...([]),
             ]}
           />
         </div>

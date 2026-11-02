@@ -36,6 +36,9 @@ public class ModelingInfo {
     @Column(name = "model_effect_images", columnDefinition = "json")
     private String modelEffectImagesJson;
 
+    @Column(name = "engraving_files", columnDefinition = "json")
+    private String engravingFilesJson;
+
     @Column(name = "modeler_reject_to_designer_message", columnDefinition = "TEXT")
     private String modelerRejectToDesignerMessage;
 

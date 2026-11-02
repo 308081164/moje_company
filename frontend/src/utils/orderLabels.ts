@@ -9,10 +9,11 @@ export function orderStatusLabel(status: string): string {
   const map: Record<string, string> = {
     [OrderStatus.PENDING_DESIGN]: '设计中',
     [OrderStatus.DESIGNING]: '设计复审中',
+    [OrderStatus.PENDING_DESIGN_REVIEW]: '待设计评审',
     [OrderStatus.PENDING_MODEL]: '建模中',
     [OrderStatus.MODELING]: '建模修改中',
-    [OrderStatus.PENDING_REVIEW]: '待工艺验证',
-    [OrderStatus.PENDING_PRODUCTION]: '待生产',
+    [OrderStatus.PENDING_REVIEW]: '待建模评审',
+    [OrderStatus.PENDING_PRODUCTION]: '待发送生产',
     [OrderStatus.PRODUCING]: '生产中',
     [OrderStatus.COMPLETED]: '已完成',
     [OrderStatus.CANCELLED]: '已取消',
@@ -23,6 +24,7 @@ export function orderStatusLabel(status: string): string {
 export function orderStatusColor(status: string): string {
   switch (status) {
     case OrderStatus.PENDING_DESIGN:
+    case OrderStatus.PENDING_DESIGN_REVIEW:
     case OrderStatus.PENDING_MODEL:
     case OrderStatus.PENDING_REVIEW:
     case OrderStatus.PENDING_PRODUCTION:

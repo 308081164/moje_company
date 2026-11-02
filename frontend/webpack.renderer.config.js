@@ -52,11 +52,24 @@ module.exports = {
       '@services': path.resolve(__dirname, 'src/services'),
       '@stores': path.resolve(__dirname, 'src/stores'),
       '@types': path.resolve(__dirname, 'src/types')
-    }
+    },
+    // occt-import-js 的 emscripten 产物会引用 Node 模块；浏览器/Electron 渲染进程不需要
+    fallback: {
+      fs: false,
+      path: false,
+      crypto: false,
+    },
   },
   plugins: [
     new CopyWebpackPlugin({
-      patterns: [{ from: path.join(__dirname, 'public'), to: path.join(__dirname, 'dist') }],
+      patterns: [
+        { from: path.join(__dirname, 'public'), to: path.join(__dirname, 'dist') },
+        // STEP 预览依赖的 OpenCascade WASM
+        {
+          from: path.join(__dirname, 'node_modules/occt-import-js/dist/occt-import-js.wasm'),
+          to: path.join(__dirname, 'dist/occt-import-js.wasm'),
+        },
+      ],
     }),
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',

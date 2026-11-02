@@ -34,6 +34,7 @@ import {
   UnorderedListOutlined,
   MessageOutlined,
   AuditOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppStore } from '@/stores/appStore';
@@ -163,11 +164,6 @@ const AppLayout: React.FC = () => {
             label: '核算',
           },
           {
-            key: '/workbench/modeling-archive',
-            icon: <FileTextOutlined />,
-            label: '建模归档任务池',
-          },
-          {
             key: '/users',
             icon: <TeamOutlined />,
             label: '用户管理',
@@ -188,6 +184,11 @@ const AppLayout: React.FC = () => {
             label: '商城管理',
           },
           {
+            key: '/service-requests',
+            icon: <CustomerServiceOutlined />,
+            label: '售后申请',
+          },
+          {
             key: '/social-publish',
             icon: <HighlightOutlined />,
             label: '社媒发布',
@@ -201,6 +202,11 @@ const AppLayout: React.FC = () => {
             icon: <ShoppingCartOutlined />,
             label: '订单管理',
             children: [{ key: '/orders', label: '订单列表' }],
+          },
+          {
+            key: '/service-requests',
+            icon: <CustomerServiceOutlined />,
+            label: '售后申请',
           },
           {
             key: '/social-publish',
@@ -219,10 +225,15 @@ const AppLayout: React.FC = () => {
               { key: '/orders', label: '全部订单' },
               { key: '/orders?status=PENDING_DESIGN', label: '待设计' },
               { key: '/orders?status=PENDING_MODEL', label: '建模中' },
-              { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
-              { key: '/orders?status=PENDING_PRODUCTION', label: '待生产' },
-              { key: '/workbench/modeling-archive', label: '建模归档任务池' },
+              { key: '/orders?status=PENDING_DESIGN_REVIEW', label: '待设计评审' },
+              { key: '/orders?status=PENDING_REVIEW', label: '待建模评审' },
+              { key: '/orders?status=PENDING_PRODUCTION', label: '待发送生产' },
             ],
+          },
+          {
+            key: '/service-requests',
+            icon: <CustomerServiceOutlined />,
+            label: '售后申请',
           },
           {
             key: '/social-publish',
@@ -277,9 +288,14 @@ const AppLayout: React.FC = () => {
         return [
           ...homeItems,
           {
-            key: '/workbench',
+            key: '/workbench/quality',
             icon: <FileTextOutlined />,
-            label: '工艺验证',
+            label: '质量审核',
+          },
+          {
+            key: '/workbench',
+            icon: <UnorderedListOutlined />,
+            label: '准备生产',
           },
           {
             key: '/workbench/tracker-follow-up',
@@ -292,8 +308,15 @@ const AppLayout: React.FC = () => {
             label: '订单列表',
             children: [
               { key: '/orders', label: '全部订单' },
-              { key: '/orders?status=PENDING_REVIEW', label: '待工艺验证' },
+              { key: '/orders?status=PENDING_DESIGN_REVIEW', label: '待设计评审' },
+              { key: '/orders?status=PENDING_REVIEW', label: '待建模评审' },
+              { key: '/orders?status=PENDING_PRODUCTION', label: '待发送生产' },
             ],
+          },
+          {
+            key: '/service-requests',
+            icon: <CustomerServiceOutlined />,
+            label: '售后申请',
           },
         ];
       case 'DATA_ARCHIVIST':
@@ -303,11 +326,6 @@ const AppLayout: React.FC = () => {
             key: '/inlay-structure-library',
             icon: <DatabaseOutlined />,
             label: '珠宝结构库',
-          },
-          {
-            key: '/workbench/modeling-archive',
-            icon: <FileTextOutlined />,
-            label: '建模归档任务池',
           },
           {
             key: '/orders',
@@ -430,17 +448,23 @@ const AppLayout: React.FC = () => {
     if (path.startsWith('/social-publish')) {
       return ['/social-publish'];
     }
-    if (path.startsWith('/workbench/modeling-archive')) {
-      return ['/workbench/modeling-archive'];
-    }
     if (path.startsWith('/exports')) {
       return ['/exports'];
     }
     if (path.startsWith('/settlement')) {
       return ['/settlement'];
     }
+    if (path.startsWith('/storefront-admin')) {
+      return ['/storefront-admin'];
+    }
+    if (path.startsWith('/service-requests')) {
+      return ['/service-requests'];
+    }
     if (path.startsWith('/workbench/tracker-follow-up')) {
       return ['/workbench/tracker-follow-up'];
+    }
+    if (path.startsWith('/workbench/quality')) {
+      return ['/workbench/quality'];
     }
     if (path.startsWith('/workbench')) {
       return ['/workbench'];
@@ -692,14 +716,34 @@ const AppLayout: React.FC = () => {
             <ShoppingCartOutlined />
             <span>订单</span>
           </button>
-          {['DESIGNER', 'MODELER', 'TRACKER'].includes(user?.role || '') && (
+          {['DESIGNER', 'MODELER'].includes(user?.role || '') && (
             <button
               type="button"
               className={`nav-item${location.pathname === '/workbench' ? ' is-active' : ''}`}
               onClick={() => navigateAndCloseMobile('/workbench')}
             >
               <FileTextOutlined />
-              <span>{user?.role === 'TRACKER' ? '工艺验证' : '工作台'}</span>
+              <span>工作台</span>
+            </button>
+          )}
+          {user?.role === 'TRACKER' && (
+            <button
+              type="button"
+              className={`nav-item${location.pathname.startsWith('/workbench/quality') ? ' is-active' : ''}`}
+              onClick={() => navigateAndCloseMobile('/workbench/quality')}
+            >
+              <FileTextOutlined />
+              <span>质量</span>
+            </button>
+          )}
+          {user?.role === 'TRACKER' && (
+            <button
+              type="button"
+              className={`nav-item${location.pathname === '/workbench' ? ' is-active' : ''}`}
+              onClick={() => navigateAndCloseMobile('/workbench')}
+            >
+              <UnorderedListOutlined />
+              <span>生产</span>
             </button>
           )}
           {user?.role === 'TRACKER' && (
@@ -710,16 +754,6 @@ const AppLayout: React.FC = () => {
             >
               <UnorderedListOutlined />
               <span>跟单</span>
-            </button>
-          )}
-          {['ADMIN', 'SALES', 'DATA_ARCHIVIST'].includes(user?.role || '') && (
-            <button
-              type="button"
-              className={`nav-item${location.pathname.startsWith('/workbench/modeling-archive') ? ' is-active' : ''}`}
-              onClick={() => navigateAndCloseMobile('/workbench/modeling-archive')}
-            >
-              <DatabaseOutlined />
-              <span>归档</span>
             </button>
           )}
           {['ADMIN', 'PRE_SALES', 'SALES'].includes(user?.role || '') && (

@@ -1,9 +1,12 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { pathToFileURL } from 'url';
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess, execFile } from 'child_process';
+import { promisify } from 'util';
 import { autoUpdater } from 'electron-updater';
+
+const execFileAsync = promisify(execFile);
 
 // 保持窗口对象的全局引用，避免被垃圾回收
 let mainWindow: BrowserWindow | null = null;
@@ -692,6 +695,151 @@ ipcMain.handle('quit-and-install-update', () => {
     autoUpdater.quitAndInstall();
   }
 });
+
+function sanitizeShareFileName(name: string): string {
+  const base = path.basename(String(name || 'model.stl')).replace(/[\\/:*?"<>|]/g, '_').trim();
+  return base || 'model.stl';
+}
+
+function findWeChatExe(): string | undefined {
+  if (process.platform !== 'win32') return undefined;
+  const candidates = [
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Tencent', 'WeChat', 'WeChat.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Tencent', 'WeChat', 'WeChat.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Tencent', 'WeChat', 'WeChat.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Tencent', 'WeChat', 'WeChat.exe'),
+  ];
+  return candidates.find((p) => p && fs.existsSync(p));
+}
+
+async function tryLaunchWeChat(): Promise<boolean> {
+  const exe = findWeChatExe();
+  if (!exe) return false;
+  try {
+    spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 电脑端：每次批量发送写入独立批次文件夹 → 复制剪贴板 → 打开该批次目录并拉起微信 */
+ipcMain.handle(
+  'share-files-for-wechat',
+  async (
+    event,
+    payload: {
+      files?: { name?: string; data?: number[] | Uint8Array | Buffer }[];
+      batchId?: string;
+    }
+  ) => {
+    const list = Array.isArray(payload?.files) ? payload.files : [];
+    if (!list.length) {
+      return { ok: false, method: 'none', message: '没有可分享的文件' };
+    }
+
+    const root = path.join(app.getPath('temp'), 'jewelry-wechat-share');
+    fs.mkdirSync(root, { recursive: true });
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    try {
+      for (const f of fs.readdirSync(root)) {
+        const full = path.join(root, f);
+        try {
+          const st = fs.statSync(full);
+          if (st.mtimeMs >= cutoff) continue;
+          if (st.isDirectory()) {
+            fs.rmSync(full, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(full);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const stamp = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const autoId = `batch-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`;
+    const batchId = sanitizeShareFileName(payload?.batchId || autoId).replace(/\.(stl|obj|step|stp)$/i, '') || autoId;
+    const batchDir = path.join(root, batchId);
+    fs.mkdirSync(batchDir, { recursive: true });
+
+    const savedPaths: string[] = [];
+    const usedNames = new Set<string>();
+    for (const item of list) {
+      let name = sanitizeShareFileName(item?.name || 'model.stl');
+      if (usedNames.has(name.toLowerCase())) {
+        const ext = path.extname(name);
+        const stem = path.basename(name, ext);
+        let i = 2;
+        while (usedNames.has(`${stem}_${i}${ext}`.toLowerCase())) i += 1;
+        name = `${stem}_${i}${ext}`;
+      }
+      usedNames.add(name.toLowerCase());
+      const raw = item?.data;
+      const buf = Buffer.isBuffer(raw)
+        ? raw
+        : raw instanceof Uint8Array
+          ? Buffer.from(raw)
+          : Array.isArray(raw)
+            ? Buffer.from(raw)
+            : null;
+      if (!buf || buf.length === 0) continue;
+      const full = path.join(batchDir, name);
+      fs.writeFileSync(full, buf);
+      savedPaths.push(full);
+    }
+    if (!savedPaths.length) {
+      return { ok: false, method: 'none', message: '文件写入失败' };
+    }
+
+    void event;
+
+    let clipped = false;
+    if (process.platform === 'win32') {
+      try {
+        const joined = savedPaths.map((p) => p.replace(/'/g, "''")).join("','");
+        const script = `Set-Clipboard -Path @('${joined}')`;
+        await execFileAsync(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-Command', script],
+          { windowsHide: true, timeout: 8000 }
+        );
+        clipped = true;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    try {
+      await shell.openPath(batchDir);
+    } catch {
+      try {
+        shell.showItemInFolder(savedPaths[0]);
+      } catch {
+        /* ignore */
+      }
+    }
+    const launched = await tryLaunchWeChat();
+    return {
+      ok: true,
+      method: 'folder',
+      batchId,
+      batchDir,
+      message: clipped
+        ? launched
+          ? `本批 ${savedPaths.length} 个文件已放入独立文件夹并复制到剪贴板；请在微信搜索聊天后按 Ctrl+V 发送`
+          : `本批 ${savedPaths.length} 个文件已放入独立文件夹并复制到剪贴板：请打开微信，搜索聊天后按 Ctrl+V 发送`
+        : launched
+          ? `本批文件目录已打开并尝试启动微信，请选择聊天后发送（共 ${savedPaths.length} 个）`
+          : `本批文件目录已打开（共 ${savedPaths.length} 个），请打开微信选择聊天后发送`,
+      paths: savedPaths,
+    };
+  }
+);
 
 // 处理渲染进程崩溃
 app.on('render-process-gone', (event, webContents, details) => {

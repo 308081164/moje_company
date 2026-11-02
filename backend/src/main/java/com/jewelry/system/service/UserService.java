@@ -8,6 +8,7 @@ import com.jewelry.system.repository.UserRepository;
 import com.jewelry.system.util.ApiRoleMapper;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -27,6 +29,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
+    private final AutoAssignmentService autoAssignmentService;
 
     @Transactional(readOnly = true)
     public Page<UserResponse> list(String username, String realName, String roleApi, String statusStr, Pageable pageable) {
@@ -86,6 +89,8 @@ public class UserService {
     public UserResponse update(long id, UserUpdateRequest req) {
         User u = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        boolean wasActiveDesigner = isActiveDesigner(u);
+        boolean wasActiveModeler = isActiveModeler(u);
         if (req.getUsername() != null && !req.getUsername().isBlank()) {
             String next = req.getUsername().trim();
             if (!next.equals(u.getUsername()) && userRepository.existsByUsername(next)) {
@@ -109,14 +114,26 @@ public class UserService {
             u.setStatus(parseStatus(req.getStatus(), u.getStatus()));
         }
         userRepository.save(u);
+        if (wasActiveDesigner && !isActiveDesigner(u)) {
+            reassignOnDesignerUnavailable(u.getId(), u.getUsername());
+        }
+        if (wasActiveModeler && !isActiveModeler(u)) {
+            reassignOnModelerUnavailable(u.getId(), u.getUsername());
+        }
         auditLogService.log("USER_UPDATE", "USER", u.getId(), "更新用户信息: " + u.getUsername());
         return UserMapper.toResponse(u);
     }
 
     @Transactional
     public void delete(long id) {
-        if (!userRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+        User u = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        if (isActiveDesigner(u) || UserRole.DESIGNER.equals(u.getRole())) {
+            // 先改派再删，避免外键/订单挂在已删账号上
+            reassignOnDesignerUnavailable(u.getId(), u.getUsername());
+        }
+        if (isActiveModeler(u) || UserRole.MODELER.equals(u.getRole())) {
+            reassignOnModelerUnavailable(u.getId(), u.getUsername());
         }
         userRepository.deleteById(id);
         auditLogService.log("USER_DELETE", "USER", id, "删除用户 ID=" + id);
@@ -124,6 +141,19 @@ public class UserService {
 
     @Transactional
     public void deleteBatch(List<Long> userIds) {
+        for (Long uid : userIds) {
+            if (uid == null) {
+                continue;
+            }
+            userRepository.findById(uid).ifPresent(u -> {
+                if (UserRole.DESIGNER.equals(u.getRole())) {
+                    reassignOnDesignerUnavailable(u.getId(), u.getUsername());
+                }
+                if (UserRole.MODELER.equals(u.getRole())) {
+                    reassignOnModelerUnavailable(u.getId(), u.getUsername());
+                }
+            });
+        }
         userRepository.deleteAllById(userIds);
         auditLogService.log("USER_DELETE_BATCH", "USER", null, "批量删除用户: " + userIds);
     }
@@ -153,9 +183,43 @@ public class UserService {
     public void disable(long id) {
         User u = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        boolean designerRole = UserRole.DESIGNER.equals(u.getRole());
+        boolean modelerRole = UserRole.MODELER.equals(u.getRole());
         u.setStatus(UserStatus.INACTIVE);
         userRepository.save(u);
+        if (designerRole) {
+            reassignOnDesignerUnavailable(u.getId(), u.getUsername());
+        }
+        if (modelerRole) {
+            reassignOnModelerUnavailable(u.getId(), u.getUsername());
+        }
         auditLogService.log("USER_DISABLE", "USER", u.getId(), "禁用用户: " + u.getUsername());
+    }
+
+    private static boolean isActiveDesigner(User u) {
+        return u != null
+                && UserRole.DESIGNER.equals(u.getRole())
+                && UserStatus.ACTIVE.equals(u.getStatus());
+    }
+
+    private static boolean isActiveModeler(User u) {
+        return u != null
+                && UserRole.MODELER.equals(u.getRole())
+                && UserStatus.ACTIVE.equals(u.getStatus());
+    }
+
+    private void reassignOnDesignerUnavailable(long designerId, String username) {
+        int n = autoAssignmentService.reassignDesignOrdersFromDisabledDesigner(designerId);
+        log.info("设计师 {}({}) 不可用，已改派 {} 笔设计阶段订单", username, designerId, n);
+        auditLogService.log("USER_DESIGNER_ORDERS_REASSIGNED", "USER", designerId,
+                "设计师不可用，改派设计阶段订单数: " + n);
+    }
+
+    private void reassignOnModelerUnavailable(long modelerId, String username) {
+        int n = autoAssignmentService.reassignModelingOrdersFromDisabledModeler(modelerId);
+        log.info("建模师 {}({}) 不可用，已改派 {} 笔建模阶段订单", username, modelerId, n);
+        auditLogService.log("USER_MODELER_ORDERS_REASSIGNED", "USER", modelerId,
+                "建模师不可用，改派建模阶段订单数: " + n);
     }
 
     private static UserStatus parseStatus(String raw, UserStatus defaultStatus) {

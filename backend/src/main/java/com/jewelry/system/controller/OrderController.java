@@ -2,6 +2,7 @@ package com.jewelry.system.controller;
 
 import com.jewelry.system.dto.customer.CustomerProgressLinkResponseDto;
 import com.jewelry.system.dto.order.*;
+import com.jewelry.system.dto.portal.CustomerServiceRequestDto;
 import com.jewelry.system.service.*;
 import com.jewelry.system.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,6 +46,7 @@ public class OrderController {
     private final CustomerOrderViewService customerOrderViewService;
     private final OrderProductionFollowService orderProductionFollowService;
     private final ShipmentService shipmentService;
+    private final CustomerOrderServiceRequestService customerOrderServiceRequestService;
 
     @GetMapping
     @Operation(summary = "订单分页列表")
@@ -104,7 +106,7 @@ public class OrderController {
     }
 
     @GetMapping("/workbench/tracker/balance-todo")
-    @Operation(summary = "跟单员工作台-尾款报价待办（建模已确认、尚未推送尾款）")
+    @Operation(summary = "跟单员工作台-准备生产待办（待发送生产：含待报价、待付款、已付款待转发）")
     public Page<OrderInfoDto> trackerBalanceTodo(Pageable pageable, @RequestParam(required = false) Boolean isB2b) {
         Long uid = SecurityUtils.currentStaffUserId()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未登录"));
@@ -318,7 +320,7 @@ public class OrderController {
     }
 
     @PutMapping("/{id:\\d+}/pieces/{pieceId:\\d+}/stones")
-    @Operation(summary = "设计师填写、建模师可改的单件石料")
+    @Operation(summary = "设计师填写单件石料（建模师只读）")
     public OrderInfoDto updatePieceStones(@PathVariable long id, @PathVariable long pieceId,
                                           @RequestBody java.util.Map<String, Object> body) {
         orderCommandService.updatePieceStones(id, pieceId, body.get("stoneInfo"));
@@ -456,6 +458,26 @@ public class OrderController {
     @Operation(summary = "变更订单状态")
     public OrderInfoDto changeStatus(@PathVariable long id, @Valid @RequestBody OrderStatusChangeRequest body) {
         return orderCommandService.changeStatus(id, body);
+    }
+
+    @GetMapping("/service-requests/open")
+    @Operation(summary = "待处理的客户投诉/退款申请")
+    public List<CustomerServiceRequestDto> openServiceRequests() {
+        return customerOrderServiceRequestService.listOpenForStaff();
+    }
+
+    @GetMapping("/{id:\\d+}/service-requests")
+    @Operation(summary = "订单下的投诉/退款申请")
+    public List<CustomerServiceRequestDto> orderServiceRequests(@PathVariable long id) {
+        return customerOrderServiceRequestService.listForStaffOrder(id);
+    }
+
+    @PatchMapping("/service-requests/{requestId:\\d+}")
+    @Operation(summary = "处理客户投诉/退款申请（退款仅 ADMIN）")
+    public CustomerServiceRequestDto resolveServiceRequest(
+            @PathVariable long requestId,
+            @RequestBody ServiceRequestResolveRequest body) {
+        return customerOrderServiceRequestService.resolve(requestId, body);
     }
 
     @PutMapping("/{id:\\d+}/assign")
@@ -638,6 +660,16 @@ public class OrderController {
             @RequestParam(required = false) String notes
     ) throws IOException {
         return orderFileService.uploadModelEffectImage(id, file, notes);
+    }
+
+    @PostMapping(value = "/{id:\\d+}/model/engraving-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传刻字生产文件")
+    public FileInfoDto uploadEngravingFile(
+            @PathVariable long id,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(required = false) String notes
+    ) throws IOException {
+        return orderFileService.uploadEngravingFile(id, file, notes);
     }
 
     @PostMapping("/{id:\\d+}/modeler/reject-to-designer")

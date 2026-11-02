@@ -3,6 +3,7 @@ package com.jewelry.system.service;
 import com.jewelry.system.entity.ModelerWorkStatus;
 import com.jewelry.system.entity.Order;
 import com.jewelry.system.entity.User;
+import com.jewelry.system.enums.OrderStatus;
 import com.jewelry.system.enums.UserRole;
 import com.jewelry.system.enums.UserStatus;
 import com.jewelry.system.repository.ModelerWorkStatusRepository;
@@ -10,6 +11,7 @@ import com.jewelry.system.repository.OrderRepository;
 import com.jewelry.system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,14 +28,58 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AutoAssignmentService {
 
+    private static final List<OrderStatus> DESIGN_STAGE_STATUSES = List.of(
+            OrderStatus.PENDING_DESIGN,
+            OrderStatus.DESIGNING,
+            OrderStatus.PENDING_DESIGN_REVIEW
+    );
+
+    /** 仍依赖建模师接手/返修的阶段（含待工艺评审，驳回后仍需原建模师） */
+    private static final List<OrderStatus> MODELING_STAGE_STATUSES = List.of(
+            OrderStatus.PENDING_MODEL,
+            OrderStatus.MODELING,
+            OrderStatus.PENDING_REVIEW
+    );
+
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final ModelerWorkStatusRepository modelerWorkStatusRepository;
     private final TaskAssignmentService taskAssignmentService;
     private final AuditLogService auditLogService;
     private final WebSocketService webSocketService;
+    private final ObjectProvider<ConversationService> conversationServiceProvider;
+
+    @Transactional
+    public void assignSalesMidOnly(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("订单不存在"));
+        assignSalesMid(order);
+        orderRepository.save(order);
+    }
+
+    public void notifyDesignerAssigned(Order order, User designer) {
+        if (order == null || designer == null) {
+            return;
+        }
+        syncDesignerConversation(order.getId(), designer.getId());
+        webSocketService.notifyNewOrder(designer.getId(), order.getId(), order.getOrderNumber());
+    }
+
+    @Transactional
+    public void assignModelerToOrder(Order order, Long modelerUserId, String auditNote) {
+        replaceModeler(order, modelerUserId, auditNote);
+        syncModelerConversation(order.getId(), modelerUserId);
+    }
 
     private final Map<Long, LocalDateTime> lastAssignedTime = new ConcurrentHashMap<>();
+
+    private int countDesignerActiveSlots(long designerId) {
+        return (int) orderRepository.countByDesignerIdAndStatusIn(designerId, DESIGN_STAGE_STATUSES);
+    }
+
+    private int countModelerActiveSlots(long modelerId) {
+        return (int) orderRepository.countByModelerIdAndStatusIn(modelerId, MODELING_STAGE_STATUSES);
+    }
 
     /**
      * 自动分配：售中与设计师仍在建单时分配；建模师、跟单员延后到对应阶段再分配，避免长周期流程中人员离职导致错绑。
@@ -105,6 +151,161 @@ public class AutoAssignmentService {
     }
 
     /**
+     * 设计阶段保障已指派设计师。未指派时按负载自动分配。
+     * @return true 表示本次新写入了设计师
+     */
+    @Transactional
+    public boolean ensureDesignerAssigned(Order order) {
+        if (order == null) {
+            return false;
+        }
+        OrderStatus st = order.getStatus();
+        if (st != OrderStatus.PENDING_DESIGN && st != OrderStatus.DESIGNING
+                && st != OrderStatus.PENDING_DESIGN_REVIEW) {
+            return false;
+        }
+        if (order.getDesigner() != null && order.getDesigner().getId() != null) {
+            return false;
+        }
+        assignDesigner(order);
+        if (order.getDesigner() == null || order.getDesigner().getId() == null) {
+            log.warn("订单 {} 处于 {} 但暂无可自动分配的设计师", order.getOrderNumber(), st);
+            return false;
+        }
+        orderRepository.save(order);
+        auditLogService.log("ORDER_ENSURE_DESIGNER", "ORDER", order.getId(),
+                "设计阶段补充分配设计师: " + order.getDesigner().getUsername());
+        return true;
+    }
+
+    /**
+     * 扫描并修复「设计中/设计复审中但未指派设计师」的漏单。
+     * @return 本次新分配的订单数
+     */
+    @Transactional
+    public int healUnassignedDesignOrders() {
+        List<Order> orphans = orderRepository.findByStatusInAndDesignerIsNull(List.of(
+                OrderStatus.PENDING_DESIGN, OrderStatus.DESIGNING));
+        int fixed = 0;
+        for (Order order : orphans) {
+            if (ensureDesignerAssigned(order)) {
+                syncDesignerConversation(order.getId(), order.getDesigner().getId());
+                fixed++;
+            }
+        }
+        return fixed;
+    }
+
+    /**
+     * 设计师账号停用/删除时：将其名下仍处于设计阶段的订单改派给其他在职设计师，并同步群聊成员。
+     * @return 成功改派的订单数
+     */
+    @Transactional
+    public int reassignDesignOrdersFromDisabledDesigner(long disabledDesignerId) {
+        List<Order> held = orderRepository.findByDesignerIdAndStatusIn(disabledDesignerId, DESIGN_STAGE_STATUSES);
+        if (held.isEmpty()) {
+            return 0;
+        }
+        int reassigned = 0;
+        for (Order order : held) {
+            User next = pickActiveDesignerExcluding(disabledDesignerId);
+            if (next == null) {
+                log.warn("设计师 {} 停用后，订单 {} 暂无其他可用设计师可接手", disabledDesignerId, order.getOrderNumber());
+                order.setDesigner(null);
+                orderRepository.save(order);
+                syncDesignerConversation(order.getId(), null);
+                auditLogService.log("ORDER_DESIGNER_UNASSIGNED_ON_DISABLE", "ORDER", order.getId(),
+                        "原设计师已停用且无替代人选，已清空指派，待有可用设计师后补充分配");
+                continue;
+            }
+            order.setDesigner(next);
+            order.setAssignedToDesignerAt(LocalDateTime.now());
+            orderRepository.save(order);
+            syncDesignerConversation(order.getId(), next.getId());
+            webSocketService.notifyNewOrder(next.getId(), order.getId(), order.getOrderNumber());
+            auditLogService.log("ORDER_DESIGNER_REASSIGN_ON_DISABLE", "ORDER", order.getId(),
+                    "原设计师已停用，设计阶段订单改派给: " + next.getUsername());
+            reassigned++;
+        }
+        return reassigned;
+    }
+
+    private void syncDesignerConversation(Long orderId, Long designerId) {
+        ConversationService conversationService = conversationServiceProvider.getIfAvailable();
+        if (conversationService != null) {
+            conversationService.syncDesignerMember(orderId, designerId);
+        }
+    }
+
+    private void syncModelerConversation(Long orderId, Long modelerId) {
+        ConversationService conversationService = conversationServiceProvider.getIfAvailable();
+        if (conversationService != null) {
+            conversationService.syncModelerMember(orderId, modelerId);
+        }
+    }
+
+    private User pickActiveDesignerExcluding(long excludeUserId) {
+        List<User> designers = userRepository.findByRole(UserRole.DESIGNER).stream()
+                .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .filter(u -> u.getId() != null && !u.getId().equals(excludeUserId))
+                .collect(Collectors.toList());
+        if (designers.isEmpty()) {
+            return null;
+        }
+        return findUserWithLeastWorkload(designers, "DESIGNER");
+    }
+
+    /**
+     * 建模师账号停用/删除时：将其名下仍处于建模阶段的订单改派给其他可接单建模师，并同步群聊成员。
+     * @return 成功改派的订单数
+     */
+    @Transactional
+    public int reassignModelingOrdersFromDisabledModeler(long disabledModelerId) {
+        List<Order> held = orderRepository.findByModelerIdAndStatusIn(disabledModelerId, MODELING_STAGE_STATUSES);
+        if (held.isEmpty()) {
+            return 0;
+        }
+        int reassigned = 0;
+        for (Order order : held) {
+            Long nextId = resolveModelerUserIdExcluding(order, disabledModelerId);
+            if (nextId == null) {
+                log.warn("建模师 {} 停用后，订单 {} 暂无其他可用建模师可接手", disabledModelerId, order.getOrderNumber());
+                order.setModeler(null);
+                orderRepository.save(order);
+                syncModelerConversation(order.getId(), null);
+                auditLogService.log("ORDER_MODELER_UNASSIGNED_ON_DISABLE", "ORDER", order.getId(),
+                        "原建模师已停用且无替代人选，已清空指派，待有可用建模师后补充分配");
+                continue;
+            }
+            replaceModeler(order, nextId, "原建模师已停用，建模阶段订单改派");
+            orderRepository.save(order);
+            syncModelerConversation(order.getId(), nextId);
+            reassigned++;
+        }
+        return reassigned;
+    }
+
+    private Long resolveModelerUserIdExcluding(Order order, long excludeUserId) {
+        Long auto = Boolean.TRUE.equals(order.getIsB2b())
+                ? taskAssignmentService.findSuitableModelerForB2B()
+                : taskAssignmentService.findSuitableModelerForC2C();
+        if (auto != null && !auto.equals(excludeUserId)
+                && isModelerEligibleForAutoAssign(auto, order.getIsB2b())) {
+            return auto;
+        }
+        List<User> modelers = userRepository.findByRole(UserRole.MODELER).stream()
+                .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .filter(u -> u.getId() != null && !u.getId().equals(excludeUserId))
+                .filter(u -> isModelerEligibleForAutoAssign(u.getId(), order.getIsB2b()))
+                .collect(Collectors.toList());
+        if (modelers.isEmpty()) {
+            return null;
+        }
+        User best = findUserWithLeastWorkload(modelers, "MODELER");
+        return best != null ? best.getId() : null;
+    }
+
+    /**
      * 订单进入「建模中」阶段时调用：优先保留原建模师（若仍在职且可接单），否则按负载均衡重选。
      */
     @Transactional
@@ -113,12 +314,12 @@ public class AutoAssignmentService {
         if (current != null && isModelerEligibleForAutoAssign(current.getId(), order.getIsB2b())) {
             return;
         }
-        Long preferredId = current != null ? current.getId() : null;
-        Long picked = resolveModelerUserId(order, preferredId);
+        Long picked = resolveModelerUserIdWithCapacity(order, current != null ? current.getId() : null);
         if (picked != null) {
             replaceModeler(order, picked, "进入建模阶段分配建模师");
+            syncModelerConversation(order.getId(), picked);
         } else {
-            log.warn("订单 {} 暂无可自动分配的建模师", order.getOrderNumber());
+            log.warn("订单 {} 暂无可自动分配的建模师（可能已满负荷）", order.getOrderNumber());
         }
     }
 
@@ -186,7 +387,8 @@ public class AutoAssignmentService {
         Long auto = Boolean.TRUE.equals(order.getIsB2b())
                 ? taskAssignmentService.findSuitableModelerForB2B()
                 : taskAssignmentService.findSuitableModelerForC2C();
-        if (auto != null) {
+        // 与 resolveModelerUserIdExcluding 一致：工作状态表可能混入非建模师账号，必须再校验角色
+        if (auto != null && isModelerEligibleForAutoAssign(auto, order.getIsB2b())) {
             return auto;
         }
         // 仅查询已维护 ModelerWorkStatus 的建模师；若库中无工作台记录则上面为空，退化为在职建模师 + 负载
@@ -206,11 +408,15 @@ public class AutoAssignmentService {
         if (oldId != null && oldId.equals(newModelerUserId)) {
             return;
         }
+        User modeler = userRepository.findById(newModelerUserId)
+                .orElseThrow(() -> new IllegalArgumentException("建模师不存在: " + newModelerUserId));
+        if (!UserStatus.ACTIVE.equals(modeler.getStatus()) || !UserRole.MODELER.equals(modeler.getRole())) {
+            throw new IllegalArgumentException("只能指派在职建模师，用户 " + newModelerUserId + " 角色为 "
+                    + (modeler.getRole() != null ? modeler.getRole().name() : "空"));
+        }
         if (oldId != null && isModelerEligibleForAutoAssign(oldId, order.getIsB2b())) {
             taskAssignmentService.decrementModelerTodo(oldId, order.getIsB2b());
         }
-        User modeler = userRepository.findById(newModelerUserId)
-                .orElseThrow(() -> new IllegalArgumentException("建模师不存在: " + newModelerUserId));
         order.setModeler(modeler);
         order.setAssignedToModelerAt(LocalDateTime.now());
         taskAssignmentService.incrementModelerTodo(newModelerUserId, order.getIsB2b());
@@ -275,9 +481,10 @@ public class AutoAssignmentService {
 
         List<User> designers = userRepository.findByRole(UserRole.DESIGNER).stream()
                 .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .filter(u -> countDesignerActiveSlots(u.getId()) < FulfillmentDispatchService.MAX_CONCURRENT_SLOTS)
                 .collect(Collectors.toList());
         if (designers.isEmpty()) {
-            log.warn("没有可用的设计师");
+            log.warn("没有可用的设计师（可能均已满负荷）");
             return;
         }
 
@@ -287,6 +494,23 @@ public class AutoAssignmentService {
             order.setAssignedToDesignerAt(LocalDateTime.now());
             log.info("订单 {} 自动分配设计师: {}", order.getOrderNumber(), bestDesigner.getUsername());
         }
+    }
+
+    private Long resolveModelerUserIdWithCapacity(Order order, Long preferredId) {
+        if (preferredId != null && isModelerEligibleForAutoAssign(preferredId, order.getIsB2b())
+                && countModelerActiveSlots(preferredId) < FulfillmentDispatchService.MAX_CONCURRENT_SLOTS) {
+            return preferredId;
+        }
+        List<User> modelers = userRepository.findByRole(UserRole.MODELER).stream()
+                .filter(u -> UserStatus.ACTIVE.equals(u.getStatus()))
+                .filter(u -> isModelerEligibleForAutoAssign(u.getId(), order.getIsB2b()))
+                .filter(u -> countModelerActiveSlots(u.getId()) < FulfillmentDispatchService.MAX_CONCURRENT_SLOTS)
+                .collect(Collectors.toList());
+        if (modelers.isEmpty()) {
+            return null;
+        }
+        User best = findUserWithLeastWorkload(modelers, "MODELER");
+        return best != null ? best.getId() : null;
     }
 
     private User findUserWithLeastWorkload(List<User> users, String role) {
@@ -323,12 +547,14 @@ public class AutoAssignmentService {
                             com.jewelry.system.enums.OrderStatus.PENDING_MODEL));
             case "DESIGNER" -> (int) orderRepository.countByDesignerIdAndStatusIn(user.getId(),
                     List.of(com.jewelry.system.enums.OrderStatus.PENDING_DESIGN,
-                            com.jewelry.system.enums.OrderStatus.DESIGNING));
+                            com.jewelry.system.enums.OrderStatus.DESIGNING,
+                            com.jewelry.system.enums.OrderStatus.PENDING_DESIGN_REVIEW));
             case "MODELER" -> (int) orderRepository.countByModelerIdAndStatusIn(user.getId(),
                     List.of(com.jewelry.system.enums.OrderStatus.MODELING,
                             com.jewelry.system.enums.OrderStatus.PENDING_MODEL));
             case "TRACKER" -> (int) orderRepository.countByFollowUpIdAndStatusIn(user.getId(),
-                    List.of(com.jewelry.system.enums.OrderStatus.PENDING_REVIEW,
+                    List.of(com.jewelry.system.enums.OrderStatus.PENDING_DESIGN_REVIEW,
+                            com.jewelry.system.enums.OrderStatus.PENDING_REVIEW,
                             com.jewelry.system.enums.OrderStatus.PENDING_PRODUCTION));
             default -> 0;
         };

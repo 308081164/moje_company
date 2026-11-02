@@ -10,6 +10,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.ArrayList
 import java.util.Locale
 
 class MainActivity : FlutterActivity() {
@@ -17,16 +18,98 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
-                if (call.method != "contentUris") {
-                    result.notImplemented()
-                    return@setMethodCallHandler
+                when (call.method) {
+                    "contentUris" -> {
+                        val paths = call.argument<List<String>>("paths").orEmpty()
+                        try {
+                            result.success(paths.mapNotNull { toContentUri(it) })
+                        } catch (e: Exception) {
+                            result.error("content_uri", e.message ?: "无法生成照片地址", null)
+                        }
+                    }
+                    "shareFiles" -> {
+                        val paths = call.argument<List<String>>("paths").orEmpty()
+                        val preferWeChat = call.argument<Boolean>("preferWeChat") ?: true
+                        try {
+                            shareFiles(paths, preferWeChat)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("share_files", e.message ?: "分享失败", null)
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
-                val paths = call.argument<List<String>>("paths").orEmpty()
-                try {
-                    result.success(paths.mapNotNull { toContentUri(it) })
-                } catch (e: Exception) {
-                    result.error("content_uri", e.message ?: "无法生成照片地址", null)
-                }
+            }
+    }
+
+    private fun shareFiles(paths: List<String>, preferWeChat: Boolean) {
+        val uris = ArrayList<Uri>()
+        for (raw in paths) {
+            val file = fileFromPath(raw) ?: continue
+            if (!file.isFile || file.length() <= 0L) continue
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            grantRead(uri)
+            // 额外授权给微信
+            try {
+                grantUriPermission(WECHAT_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {
+            }
+            uris.add(uri)
+        }
+        if (uris.isEmpty()) {
+            throw IllegalStateException("没有可分享的文件")
+        }
+
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = mimeForFileName(uris[0].lastPathSegment)
+                putExtra(Intent.EXTRA_STREAM, uris[0])
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+
+        if (preferWeChat) {
+            intent.setPackage(WECHAT_PACKAGE)
+            try {
+                startActivity(intent)
+                return
+            } catch (_: Exception) {
+                intent.setPackage(null)
+            }
+        }
+        startActivity(Intent.createChooser(intent, "分享到微信"))
+    }
+
+    private fun fileFromPath(raw: String): File? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        return if (trimmed.startsWith("file://")) {
+            val path = Uri.parse(trimmed).path ?: return null
+            File(path)
+        } else {
+            File(trimmed)
+        }
+    }
+
+    private fun mimeForFileName(name: String?): String {
+        val ext = name
+            ?.substringAfterLast('.', "")
+            ?.lowercase(Locale.US)
+            ?.filter { it.isLetterOrDigit() }
+            .orEmpty()
+        if (ext.isEmpty()) return "application/octet-stream"
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: when (ext) {
+                "stl" -> "model/stl"
+                "step", "stp" -> "application/step"
+                "obj" -> "text/plain"
+                else -> "application/octet-stream"
             }
     }
 
@@ -103,7 +186,7 @@ class MainActivity : FlutterActivity() {
 
     private fun grantRead(uri: Uri) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-        val packages = linkedSetOf(packageName, "com.google.android.webview", "com.android.chrome")
+        val packages = linkedSetOf(packageName, "com.google.android.webview", "com.android.chrome", WECHAT_PACKAGE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 WebView.getCurrentWebViewPackage()?.packageName?.let { packages.add(it) }
@@ -120,5 +203,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "com.moje.shell/files"
+        private const val WECHAT_PACKAGE = "com.tencent.mm"
     }
 }

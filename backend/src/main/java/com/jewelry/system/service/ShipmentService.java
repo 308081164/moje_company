@@ -49,7 +49,8 @@ public class ShipmentService {
     private static final Pattern COUNTRY_CODE = Pattern.compile("\\(([A-Z]{2})\\)");
     private static final Pattern CITY_LINE = Pattern.compile("(?i)^(城市|市|City|Ville|Stadt|Ciudad)\\s*[:：]\\s*(.+)$");
     private static final Pattern STATE_LINE = Pattern.compile("(?i)^(省|州/省|州|Province|State(?:/Province)?)\\s*[:：]\\s*(.+)$");
-    private static final Pattern STREET_LINE = Pattern.compile("(?i)^(详细地址|地址|Address|Adresse)\\s*[:：]\\s*(.+)$");
+    private static final Pattern DISTRICT_LINE = Pattern.compile("(?i)^(区/县|區/縣|区|縣|District)\\s*[:：]\\s*(.+)$");
+    private static final Pattern STREET_LINE = Pattern.compile("(?i)^(详细地址|詳細地址|地址|Address|Adresse)\\s*[:：]\\s*(.+)$");
     private static final Set<String> EU_COUNTRIES = Set.of(
             "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
             "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
@@ -575,6 +576,7 @@ public class ShipmentService {
         }
         String city = null;
         String state = null;
+        String district = null;
         List<String> streetParts = new ArrayList<>();
         for (String line : addressRaw.split("\\r?\\n")) {
             String trimmed = line.trim();
@@ -584,16 +586,22 @@ public class ShipmentService {
             Matcher cityMatcher = CITY_LINE.matcher(trimmed);
             Matcher stateMatcher = STATE_LINE.matcher(trimmed);
             Matcher streetMatcher = STREET_LINE.matcher(trimmed);
+            Matcher districtMatcher = DISTRICT_LINE.matcher(trimmed);
             if (cityMatcher.matches()) {
                 city = cityMatcher.group(2).trim();
             } else if (stateMatcher.matches()) {
                 state = stateMatcher.group(2).trim();
+            } else if (districtMatcher.matches()) {
+                district = districtMatcher.group(2).trim();
             } else if (streetMatcher.matches()) {
                 streetParts.add(streetMatcher.group(2).trim());
             } else if (!trimmed.matches("(?i)^(国家|Country|Pays|Land|País)\\s*[:：].*")
-                    && !trimmed.matches("(?i)^(邮编|Postal|Code postal|PLZ)\\s*[:：].*")) {
+                    && !trimmed.matches("(?i)^(邮编|郵編|Postal|Code postal|PLZ)\\s*[:：].*")) {
                 streetParts.add(trimmed);
             }
+        }
+        if (StringUtils.hasText(district)) {
+            streetParts.add(0, district);
         }
         String streetSource = streetParts.isEmpty() ? addressRaw : String.join(", ", streetParts);
         if (!StringUtils.hasText(city)) {

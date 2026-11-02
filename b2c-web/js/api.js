@@ -160,14 +160,17 @@
     confirmDelivery: function (orderId) {
       return post('/portal/c/orders/' + orderId + '/confirm-delivery', {});
     },
-    payBalance: function (orderId) {
-      return post('/portal/c/orders/' + orderId + '/pay-balance', {});
+    payBalance: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/pay-balance', body || {});
     },
     submitQuotationOptions: function (orderId, body) {
       return post('/portal/c/orders/' + orderId + '/quotation-options', body);
     },
     payDesignerAssist: function (orderId) {
       return post('/portal/c/orders/' + orderId + '/designer-assist/pay', {});
+    },
+    payRush: function (orderId) {
+      return post('/portal/c/orders/' + orderId + '/rush/pay', {});
     },
     submitDesignOptions: function (orderId, body) {
       return post('/portal/c/orders/' + orderId + '/design-options', body);
@@ -187,6 +190,18 @@
     },
     submitShippingAddress: function (orderId, body) {
       return post('/portal/c/orders/' + orderId + '/shipping-address', body);
+    },
+    listServiceRequests: function (orderId) {
+      return get('/portal/c/orders/' + orderId + '/service-requests');
+    },
+    submitComplaint: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/service-requests/complaint', body);
+    },
+    submitRefundRequest: function (orderId, body) {
+      return post('/portal/c/orders/' + orderId + '/service-requests/refund', body);
+    },
+    cancelRefundRequest: function (orderId) {
+      return post('/portal/c/orders/' + orderId + '/service-requests/refund/cancel');
     },
     // 站内聊天
     listConversations: function () {

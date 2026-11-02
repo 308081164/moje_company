@@ -217,6 +217,7 @@ const TrackerFollowUpPage: React.FC = () => {
   const [ghost, setGhost] = useState<{ url: string; x: number; y: number } | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const albumRef = useRef<HTMLInputElement>(null);
+  const photoUrlsRef = useRef<Record<number, string>>({});
 
   const processLabel = PROCESSES.find((p) => p.code === processCode)?.label || processCode;
 
@@ -228,27 +229,63 @@ const TrackerFollowUpPage: React.FC = () => {
     }
   }, []);
 
-  const loadBoard = useCallback(async (code: string) => {
-    setLoading(true);
+  /**
+   * soft：刷新时不卸掉整页（避免建模图/现场照因 Spin 卸载而重新拉流量）。
+   * 已缓存的 fileId 复用本地预览 URL；看板若已带 previewUrl 则不再调 preview 接口。
+   */
+  const loadBoard = useCallback(async (code: string, opts?: { soft?: boolean }) => {
+    const soft = Boolean(opts?.soft);
+    if (!soft) setLoading(true);
     try {
       const board = await orderService.productionSyncBoard(code);
-      setPieces(board.pieces || []);
-      setPhotos(board.photos || []);
-      const urls: Record<number, string> = {};
-      await Promise.all(
-        (board.photos || []).map(async (photo) => {
-          try {
-            urls[photo.fileId] = await orderService.previewFile(photo.fileId);
-          } catch {
-            /* 单张失败不影响其余 */
-          }
-        })
-      );
-      setPhotoUrls(urls);
+      const nextPieces = board.pieces || [];
+      const nextPhotos = board.photos || [];
+      setPieces(nextPieces);
+      setPhotos(nextPhotos);
+
+      const prev = photoUrlsRef.current;
+      const nextUrls: Record<number, string> = {};
+      const toFetch: number[] = [];
+      for (const photo of nextPhotos) {
+        if (photo.fileId == null) continue;
+        const fromBoard = resolveMediaUrl(photo.previewUrl);
+        if (fromBoard) {
+          // 同一地址复用旧字符串，减少无 src 导致的重复请求
+          nextUrls[photo.fileId] =
+            prev[photo.fileId] === fromBoard ? prev[photo.fileId] : fromBoard;
+          continue;
+        }
+        if (prev[photo.fileId]) {
+          nextUrls[photo.fileId] = prev[photo.fileId];
+          continue;
+        }
+        toFetch.push(photo.fileId);
+      }
+      photoUrlsRef.current = nextUrls;
+      setPhotoUrls(nextUrls);
+
+      if (toFetch.length) {
+        const fetched: Record<number, string> = {};
+        await Promise.all(
+          toFetch.map(async (fileId) => {
+            try {
+              const url = resolveMediaUrl(await orderService.previewFile(fileId));
+              if (url) fetched[fileId] = url;
+            } catch {
+              /* 单张失败不影响其余 */
+            }
+          })
+        );
+        if (Object.keys(fetched).length) {
+          const merged = { ...photoUrlsRef.current, ...fetched };
+          photoUrlsRef.current = merged;
+          setPhotoUrls(merged);
+        }
+      }
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
     } finally {
-      setLoading(false);
+      if (!soft) setLoading(false);
     }
   }, []);
 
@@ -416,8 +453,18 @@ const TrackerFollowUpPage: React.FC = () => {
       });
       message.success('该订单生产状态已更新');
       setPieces((prev) => prev.filter((item) => item.pieceId !== piece.pieceId));
-      setPhotos((prev) => prev.filter((item) => item.id !== photoId));
-      await loadBoard(processCode);
+      setPhotos((prev) => {
+        const removed = prev.find((item) => item.id === photoId);
+        if (removed?.fileId != null) {
+          const nextUrls = { ...photoUrlsRef.current };
+          delete nextUrls[removed.fileId];
+          photoUrlsRef.current = nextUrls;
+          setPhotoUrls(nextUrls);
+        }
+        return prev.filter((item) => item.id !== photoId);
+      });
+      // 软刷新：对齐服务端，不卸图、不重拉已缓存预览
+      await loadBoard(processCode, { soft: true });
       await loadSummary();
     } catch (e: unknown) {
       message.error(String((e as Error)?.message || e));
@@ -483,12 +530,12 @@ const TrackerFollowUpPage: React.FC = () => {
           throw e;
         }
         setPhotos((prev) => prev.filter((item) => item.id !== photo.id));
-        setPhotoUrls((prev) => {
-          if (!(photo.fileId in prev)) return prev;
-          const next = { ...prev };
+        if (photo.fileId in photoUrlsRef.current) {
+          const next = { ...photoUrlsRef.current };
           delete next[photo.fileId];
-          return next;
-        });
+          photoUrlsRef.current = next;
+          setPhotoUrls(next);
+        }
         message.success('已从照片池删除');
         try {
           await loadSummary();
@@ -510,7 +557,7 @@ const TrackerFollowUpPage: React.FC = () => {
         message.success('生产已完成，已请客户填写收货信息');
         await loadOrders();
         await loadShipping();
-        if (mode === 'sync') await loadBoard(processCode);
+        if (mode === 'sync') await loadBoard(processCode, { soft: true });
       },
     });
   };
@@ -815,24 +862,94 @@ const TrackerFollowUpPage: React.FC = () => {
           }
           .finish-thumbs { width: auto; }
         }
-        .ship-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .ship-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
         .ship-card {
-          background: #fff; border-radius: 12px; padding: 12px;
-          display: flex; flex-direction: column; gap: 8px; min-width: 0;
+          background: #faf9f7;
+          border: 1px solid #e8e4dc;
+          border-radius: 14px;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          min-width: 0;
+          overflow: hidden;
         }
-        .ship-card__addr { font-size: 13px; line-height: 1.55; color: #444; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .ship-card__head {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 6px 12px;
+          padding: 12px 14px;
+          background: #fff;
+          border-bottom: 1px solid #eee9e0;
+        }
+        .ship-card__head .finish-row__no { margin: 0; }
+        .ship-card__customer { font-size: 13px; color: #666; }
+        .ship-card__body {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 12px 14px 14px;
+        }
+        .ship-card__addr {
+          font-size: 13px;
+          line-height: 1.55;
+          color: #444;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          padding: 10px 12px;
+          background: #fff;
+          border: 1px solid #eee9e0;
+          border-radius: 10px;
+        }
         .ship-card__form { display: flex; flex-direction: column; gap: 8px; }
         .ship-card__form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #666; min-width: 0; }
         .ship-card__form input {
           width: 100%; min-height: 44px; font-size: 16px; border: 1px solid #e5e5e5;
-          border-radius: 10px; padding: 8px 12px; box-sizing: border-box;
+          border-radius: 10px; padding: 8px 12px; box-sizing: border-box; background: #fff;
         }
         .ship-card__form .ant-btn { min-height: 44px; font-size: 16px; width: 100%; }
-        .ship-card__current { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+        .ship-card__current {
+          font-size: 13px;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+          color: #333;
+          padding: 8px 12px;
+          background: #f3efe6;
+          border-radius: 10px;
+        }
         .ship-card__actions { display: flex; flex-direction: column; gap: 8px; }
         .ship-card__yun.ant-btn { min-height: 44px; width: 100%; }
         .ship-card__hint { margin: 0; font-size: 12px; line-height: 1.5; color: #888; }
-        .ship-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .ship-section {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          min-width: 0;
+          padding: 14px;
+          background: #fff;
+          border: 1px solid #ebe7df;
+          border-radius: 16px;
+        }
+        .ship-section + .ship-section { margin-top: 4px; }
+        .ship-section__title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 15px;
+          font-weight: 600;
+          color: #222;
+        }
+        .ship-section__title::before {
+          content: '';
+          width: 3px;
+          height: 14px;
+          border-radius: 2px;
+          background: #a68b67;
+          flex: 0 0 auto;
+        }
+        .ship-section__desc { margin: 0; font-size: 12px; line-height: 1.5; color: #888; }
         @media (min-width: 768px) {
           .ship-card__form { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) auto; align-items: end; gap: 8px; }
           .ship-card__form .ant-btn { width: auto; min-width: 112px; }
@@ -966,7 +1083,7 @@ const TrackerFollowUpPage: React.FC = () => {
                 <div className="follow-pane">
           <Text type="secondary">待发货先试算渠道再云途发货。已经发出的云途运单可以打面单、改重量、拦截或撤销。手工单号仍可更正。</Text>
           <div className="ship-section">
-            <Text strong>待发货</Text>
+            <div className="ship-section__title">待发货</div>
             <div className="ship-list">
               {shipOrders.length === 0 ? (
                 <Text type="secondary">暂无待发货订单</Text>
@@ -975,59 +1092,63 @@ const TrackerFollowUpPage: React.FC = () => {
                 const draft = shipDrafts[order.baseInfo.id] || { tracking: '', carrier: '' };
                 return (
                   <div key={order.baseInfo.id} className="ship-card">
-                    <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
-                    <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
-                    <div className="ship-card__addr">
-                      {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。已在订单群里请客户填写，也可以先录入物流单号。'}
+                    <div className="ship-card__head">
+                      <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                      <span className="ship-card__customer">{order.baseInfo.customerName || '客户'}</span>
                     </div>
-                    <div className="ship-card__form">
-                      <label>
-                        承运商（可选）
-                        <input
-                          value={draft.carrier}
-                          autoComplete="off"
-                          placeholder="DHL / FedEx / UPS"
-                          onChange={(event) => patchShipDraft(order.baseInfo.id, { carrier: event.target.value })}
+                    <div className="ship-card__body">
+                      <div className="ship-card__addr">
+                        {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。已在订单群里请客户填写，也可以先录入物流单号。'}
+                      </div>
+                      <div className="ship-card__form">
+                        <label>
+                          承运商（可选）
+                          <input
+                            value={draft.carrier}
+                            autoComplete="off"
+                            placeholder="DHL / FedEx / UPS"
+                            onChange={(event) => patchShipDraft(order.baseInfo.id, { carrier: event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          国际物流单号
+                          <input
+                            value={draft.tracking}
+                            autoComplete="off"
+                            inputMode="text"
+                            placeholder="物流单号"
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') void submitShip(order.baseInfo.id);
+                            }}
+                            onChange={(event) => patchShipDraft(order.baseInfo.id, { tracking: event.target.value })}
+                          />
+                        </label>
+                        <Button
+                          type="primary"
+                          loading={shippingBusyId === order.baseInfo.id}
+                          onClick={() => void submitShip(order.baseInfo.id)}
+                        >
+                          确认发货
+                        </Button>
+                      </div>
+                      {lines.length > 0 ? (
+                        <YunexpressDesk
+                          orderId={order.baseInfo.id}
+                          hasAddress
+                          onUpdated={() => { void loadShipping(); }}
                         />
-                      </label>
-                      <label>
-                        国际物流单号
-                        <input
-                          value={draft.tracking}
-                          autoComplete="off"
-                          inputMode="text"
-                          placeholder="物流单号"
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') void submitShip(order.baseInfo.id);
-                          }}
-                          onChange={(event) => patchShipDraft(order.baseInfo.id, { tracking: event.target.value })}
-                        />
-                      </label>
-                      <Button
-                        type="primary"
-                        loading={shippingBusyId === order.baseInfo.id}
-                        onClick={() => void submitShip(order.baseInfo.id)}
-                      >
-                        确认发货
-                      </Button>
+                      ) : (
+                        <p className="ship-card__hint">客户还没填写收货信息，暂不能使用云途快捷发货。</p>
+                      )}
                     </div>
-                    {lines.length > 0 ? (
-                      <YunexpressDesk
-                        orderId={order.baseInfo.id}
-                        hasAddress
-                        onUpdated={() => { void loadShipping(); }}
-                      />
-                    ) : (
-                      <p className="ship-card__hint">客户还没填写收货信息，暂不能使用云途快捷发货。</p>
-                    )}
                   </div>
                 );
               })}
             </div>
           </div>
           <div className="ship-section">
-            <Text strong>已发货</Text>
-            <Text type="secondary">保存更正只改当前这一条物流，承运商留空表示不改。重新发货用于发错货，必须填新单号；承运商留空则自动识别。订单不会退回生产中。</Text>
+            <div className="ship-section__title">已发货</div>
+            <p className="ship-section__desc">保存更正只改当前这一条物流，承运商留空表示不改。重新发货用于发错货，必须填新单号；承运商留空则自动识别。订单不会退回生产中。</p>
             <div className="ship-list">
               {shippedOrders.length === 0 ? (
                 <Text type="secondary">暂无已发货订单</Text>
@@ -1040,62 +1161,66 @@ const TrackerFollowUpPage: React.FC = () => {
                 const orderId = order.baseInfo.id;
                 return (
                   <div key={orderId} className="ship-card">
-                    <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
-                    <Text type="secondary">{order.baseInfo.customerName || '客户'}</Text>
-                    <div className="ship-card__current">
-                      当前单号：{order.shipment?.trackingNumber || '—'}
-                      {order.shipment?.carrierName ? ` · ${order.shipment.carrierName}` : ''}
+                    <div className="ship-card__head">
+                      <div className="finish-row__no">{order.baseInfo.orderNumber}</div>
+                      <span className="ship-card__customer">{order.baseInfo.customerName || '客户'}</span>
                     </div>
-                    <div className="ship-card__addr">
-                      {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。'}
-                    </div>
-                    {(order.shipment?.carrierName === '云途' || (order.shipment?.carrierName || '').toLowerCase() === 'yunexpress') && (
-                      <YunexpressDesk
-                        orderId={orderId}
-                        hasAddress={lines.length > 0}
-                        shipment={order.shipment}
-                        onUpdated={() => { void loadShipping(); }}
-                      />
-                    )}
-                    <div className="ship-card__form ship-card__form--shipped">
-                      <label>
-                        承运商（可选）
-                        <input
-                          value={draft.carrier}
-                          autoComplete="off"
-                          placeholder="DHL / FedEx / UPS"
-                          onChange={(event) => patchShippedDraft(orderId, { carrier: event.target.value })}
+                    <div className="ship-card__body">
+                      <div className="ship-card__current">
+                        当前单号：{order.shipment?.trackingNumber || '—'}
+                        {order.shipment?.carrierName ? ` · ${order.shipment.carrierName}` : ''}
+                      </div>
+                      <div className="ship-card__addr">
+                        {lines.length > 0 ? lines.join('\n') : '客户还没填写收货信息。'}
+                      </div>
+                      {(order.shipment?.carrierName === '云途' || (order.shipment?.carrierName || '').toLowerCase() === 'yunexpress') && (
+                        <YunexpressDesk
+                          orderId={orderId}
+                          hasAddress={lines.length > 0}
+                          shipment={order.shipment}
+                          onUpdated={() => { void loadShipping(); }}
                         />
-                      </label>
-                      <label>
-                        国际物流单号
-                        <input
-                          value={draft.tracking}
-                          autoComplete="off"
-                          inputMode="text"
-                          placeholder="物流单号"
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') void submitCorrectShipment(orderId);
-                          }}
-                          onChange={(event) => patchShippedDraft(orderId, { tracking: event.target.value })}
-                        />
-                      </label>
-                      <div className="ship-card__actions">
-                        <Button
-                          type="primary"
-                          loading={shipmentEditBusy === `correct:${orderId}`}
-                          disabled={shipmentEditBusy != null && shipmentEditBusy !== `correct:${orderId}`}
-                          onClick={() => void submitCorrectShipment(orderId)}
-                        >
-                          保存更正
-                        </Button>
-                        <Button
-                          loading={shipmentEditBusy === `reship:${orderId}`}
-                          disabled={shipmentEditBusy != null && shipmentEditBusy !== `reship:${orderId}`}
-                          onClick={() => confirmReship(orderId)}
-                        >
-                          手工重新发货
-                        </Button>
+                      )}
+                      <div className="ship-card__form ship-card__form--shipped">
+                        <label>
+                          承运商（可选）
+                          <input
+                            value={draft.carrier}
+                            autoComplete="off"
+                            placeholder="DHL / FedEx / UPS"
+                            onChange={(event) => patchShippedDraft(orderId, { carrier: event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          国际物流单号
+                          <input
+                            value={draft.tracking}
+                            autoComplete="off"
+                            inputMode="text"
+                            placeholder="物流单号"
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') void submitCorrectShipment(orderId);
+                            }}
+                            onChange={(event) => patchShippedDraft(orderId, { tracking: event.target.value })}
+                          />
+                        </label>
+                        <div className="ship-card__actions">
+                          <Button
+                            type="primary"
+                            loading={shipmentEditBusy === `correct:${orderId}`}
+                            disabled={shipmentEditBusy != null && shipmentEditBusy !== `correct:${orderId}`}
+                            onClick={() => void submitCorrectShipment(orderId)}
+                          >
+                            保存更正
+                          </Button>
+                          <Button
+                            loading={shipmentEditBusy === `reship:${orderId}`}
+                            disabled={shipmentEditBusy != null && shipmentEditBusy !== `reship:${orderId}`}
+                            onClick={() => confirmReship(orderId)}
+                          >
+                            手工重新发货
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1177,10 +1302,16 @@ const TrackerFollowUpPage: React.FC = () => {
           <div className="follow-sync__bar">
             <Button onClick={backToProcess}>返回</Button>
             <Title level={4} style={{ margin: 0 }}>{processLabel}进度同步</Title>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadBoard(processCode)} />
+            <Button
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => void loadBoard(processCode, {
+                soft: pieces.length > 0 || photos.length > 0,
+              })}
+            />
           </div>
           <Text type="secondary">把下方照片拖到对应的建模图上。拖完后这件在本工序不再出现，并会通知客户。点单件可看这件的过程记录。</Text>
-          {loading ? <Spin /> : (
+          {loading && pieces.length === 0 && photos.length === 0 ? <Spin /> : (
             <>
               <div className="piece-row">
                 {pieces.length === 0 ? <Empty description="这一工序没有待同步的单件" /> : pieces.map((piece) => {

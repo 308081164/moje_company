@@ -27,6 +27,7 @@ public class OrderConfigurationService {
     private static final String KEY_CERT_FEE = "price.appraisal.certificate.fee";
     private static final String KEY_SILVER = "price.silver.margin";
     private static final String KEY_GOLD = "price.gold.margin";
+    private static final String KEY_CNY_PER_USD = "fx.cnyPerUsd";
 
     private final SysConfigRepository sysConfigRepository;
     private final MaterialConfigRepository materialConfigRepository;
@@ -39,7 +40,15 @@ public class OrderConfigurationService {
         dto.setCertificatePrice(parseDouble(readValue(KEY_CERT_FEE, "300"), 300));
         dto.setSilverPriceFormula(readValue(KEY_SILVER, "0.035"));
         dto.setGoldPriceFormula(readValue(KEY_GOLD, "10"));
+        dto.setCnyPerUsd(cnyPerUsd().doubleValue());
         return dto;
+    }
+
+    /** 当前人民币/美元汇率（1 USD = 返回值 CNY）。 */
+    @Transactional(readOnly = true)
+    public BigDecimal cnyPerUsd() {
+        return CurrencyExchange.normalizeRate(
+                toBigDecimalOrNull(readValue(KEY_CNY_PER_USD, CurrencyExchange.DEFAULT_CNY_PER_USD.toPlainString())));
     }
 
     @Transactional
@@ -56,7 +65,22 @@ public class OrderConfigurationService {
         if (body.containsKey("goldPriceFormula")) {
             upsertString(KEY_GOLD, String.valueOf(body.get("goldPriceFormula")), "金价加价金额");
         }
+        if (body.containsKey("cnyPerUsd")) {
+            upsertNumber(KEY_CNY_PER_USD, CurrencyExchange.normalizeRate(toBigDecimal(body.get("cnyPerUsd"))),
+                    "人民币对美元汇率（1美元=多少人民币）");
+        }
         return getOrderSystemConfig();
+    }
+
+    private BigDecimal toBigDecimalOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

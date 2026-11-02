@@ -39,7 +39,23 @@ declare global {
       log: (level: 'info' | 'warn' | 'error', message: string, meta?: any) => void;
       checkForUpdates: () => Promise<{ checked: boolean; reason?: string }>;
       quitAndInstallUpdate: () => Promise<void>;
+      shareFilesForWeChat?: (
+        files: { name: string; data: number[] }[],
+        batchId?: string
+      ) => Promise<{
+        ok: boolean;
+        method?: string;
+        message?: string;
+        paths?: string[];
+        batchId?: string;
+        batchDir?: string;
+      }>;
     };
+
+    /** 员工 App（Flutter 壳）注入：把文件交给系统 Intent，优先直达个人微信选聊天 */
+    __mojeNativeShareFiles?: (
+      files: { name: string; mime: string; data: string }[]
+    ) => boolean | Promise<boolean>;
   }
 }
 

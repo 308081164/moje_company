@@ -59,6 +59,32 @@ public class CustomerOrderPublicDto {
     /** 寄售买家实付售价（非寄售单为 null） */
     private BigDecimal salePrice;
 
+    /** 订单定金（已支付） */
+    private BigDecimal deposit;
+
+    /** 建议全额退款金额（定金 + 已付协助费 + 已付尾款） */
+    private BigDecimal refundableAmount;
+
+    /** 是否在设计/建模排队中 */
+    private Boolean inQueue;
+    /** 前方还有多少单在等待处理 */
+    private Long queueAheadCount;
+    /** 是否已支付加急 */
+    private Boolean rushPaid;
+    /** 是否可支付加急 */
+    private Boolean rushEligible;
+    /** 加急费用（USD 字符串，如 50） */
+    private String rushFee;
+
     /** 按件进度（设计/建模确认与图片） */
     private List<CustomerOrderPublicPieceDto> pieces;
+
+    /** 定制问卷是否已提交 */
+    private Boolean briefCompleted;
+
+    /** Workspace 顶部条阶段：NEED_BRIEF / QUEUED / DESIGNING / MODELING / PRODUCING / NONE */
+    private String bannerPhase;
+
+    /** 是否已填写收货地址（尾款前需确认） */
+    private Boolean shippingAddressReady;
 }

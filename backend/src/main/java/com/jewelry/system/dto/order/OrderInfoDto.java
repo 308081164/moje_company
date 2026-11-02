@@ -23,10 +23,29 @@ public class OrderInfoDto {
     private java.util.List<OrderPieceDto> pieces;
     /** 工作台列表：有单件被客户驳回且尚未再次确认 */
     private Boolean pieceCustomerRevisionPending;
+    /** 建模工艺/质量评审（最新一条 MODEL） */
     private OrderReviewBlockDto reviewInfo;
+    /** 设计质量评审（最新一条 DESIGN） */
+    private OrderReviewBlockDto designReviewInfo;
     private OrderQuotationBlockDto quotationInfo;
     /** 客户定金所选金属，以及下单后问卷 */
     private CustomerBriefViewDto customerBrief;
+    /** 尾款报价是否已推送给客户（BALANCE_PAYMENT 或 quotation.finalized） */
+    private Boolean balanceQuoteSent;
+    /** 客户是否已支付尾款（BALANCE_PAID） */
+    private Boolean balancePaid;
+    /**
+     * 待建模评审且跟单已通过：系统已发给客户，等待客户确认建模稿。
+     */
+    private Boolean awaitingCustomerModelConfirm;
+    /**
+     * 待设计评审且跟单已通过：系统已发给客户，等待客户确认设计稿。
+     */
+    private Boolean awaitingCustomerDesignConfirm;
+    /** 质量审核待办类型：DESIGN / MODEL（列表用） */
+    private String qualityReviewKind;
+    /** 待发送生产且客户尚未付清尾款：禁止跟单转发 STL */
+    private Boolean balanceUnpaidPendingProduction;
     /** 跟单「已发货」列表附带的当前物流；其它接口一般为 null。 */
     private OrderShipmentDto shipment;
 
@@ -69,5 +88,7 @@ public class OrderInfoDto {
         private String shippingPostalCode;
         private String serviceType;
         private Boolean designerAssistPaid;
+        /** 是否已支付加急（列表置顶标识） */
+        private Boolean rushPaid;
     }
 }

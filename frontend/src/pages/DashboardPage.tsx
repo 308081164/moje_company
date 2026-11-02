@@ -175,7 +175,7 @@ function buildPendingOption(
   tier: ViewportTier
 ): EChartsOption {
   const phone = tier === 'phone';
-  const labels = ['设计', '建模', '工艺验证', '报价', '生产'];
+  const labels = ['设计', '建模', '工艺评审', '报价', '生产'];
   const values = [
     pending.pendingDesign,
     pending.pendingModel,
@@ -238,7 +238,7 @@ function buildFunnelOption(stats: OrderStatistics, tier: ViewportTier): EChartsO
   const data = [
     { name: '设计', value: stats.pendingDesignOrders + stats.designingOrders },
     { name: '建模', value: stats.pendingModelOrders + stats.modelingOrders },
-    { name: '工艺验证', value: stats.pendingReviewOrders },
+    { name: '工艺评审', value: stats.pendingReviewOrders },
     { name: '生产', value: stats.pendingProductionOrders + stats.producingOrders },
     { name: '完成', value: stats.completedOrders },
   ];

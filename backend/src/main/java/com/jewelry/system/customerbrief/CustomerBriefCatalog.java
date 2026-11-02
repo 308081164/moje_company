@@ -150,6 +150,9 @@ public final class CustomerBriefCatalog {
             if (!"YES".equals(normalize(piece.getEnamel())) && !"NO".equals(normalize(piece.getEnamel()))) {
                 throw bad("请选择是否需要珐琅");
             }
+            if (!"YES".equals(normalize(piece.getEngraving())) && !"NO".equals(normalize(piece.getEngraving()))) {
+                throw bad("请选择是否需要刻字");
+            }
             if (!inlayAllowed) {
                 if (StringUtils.hasText(piece.getInlay()) && !"NO".equals(normalize(piece.getInlay()))) {
                     throw bad("足金和足银无法做宝石镶嵌");
@@ -174,9 +177,16 @@ public final class CustomerBriefCatalog {
             piece.setHairKind(normalize(piece.getHairKind()));
             piece.setPlating(normalize(piece.getPlating()));
             piece.setEnamel(normalize(piece.getEnamel()));
+            piece.setEngraving(normalize(piece.getEngraving()));
             piece.setInlay(normalize(piece.getInlay()));
             piece.setStoneCategory(normalize(piece.getStoneCategory()));
             piece.setStoneColor(normalize(piece.getStoneColor()));
+            requireOtherText(piece.getJewelryType(), piece.getJewelryTypeOther(), "选了「其他」品类请填写说明");
+            requireOtherText(piece.getChainStyle(), piece.getChainStyleOther(), "选了「其他」链子请填写说明");
+            requireOtherText(piece.getPlating(), piece.getPlatingOther(), "选了「其他」电镀请填写说明");
+            requireOtherText(piece.getHairKind(), piece.getHairKindOther(), "选了「其他」发饰请填写说明");
+            requireOtherText(piece.getStoneCategory(), piece.getStoneCategoryOther(), "选了「其他」石头请填写说明");
+            requireOtherText(piece.getStoneColor(), piece.getStoneColorOther(), "选了「其他」颜色请填写说明");
         }
     }
 
@@ -185,10 +195,10 @@ public final class CustomerBriefCatalog {
             return "";
         }
         return switch (normalize(band)) {
-            case "UNDER_5K" -> "5,000 元以内";
-            case "FROM_5K_10K" -> "5,000–10,000 元";
-            case "FROM_10K_30K" -> "10,000–30,000 元";
-            case "OVER_30K" -> "30,000 元以上";
+            case "UNDER_5K" -> "5,000 美元以内";
+            case "FROM_5K_10K" -> "5,000–10,000 美元";
+            case "FROM_10K_30K" -> "10,000–30,000 美元";
+            case "OVER_30K" -> "30,000 美元以上";
             case "UNSURE" -> "还不确定，请按效果建议";
             default -> band.trim();
         };
@@ -206,33 +216,57 @@ public final class CustomerBriefCatalog {
         };
     }
 
+    public static boolean wantsEngraving(CustomerBriefSubmitRequest.Piece piece) {
+        return piece != null && "YES".equals(normalize(piece.getEngraving()));
+    }
+
+    private static void requireOtherText(String code, String note, String message) {
+        if (!"OTHER".equals(normalize(code))) {
+            return;
+        }
+        if (!StringUtils.hasText(note) || note.trim().length() > 200) {
+            throw bad(StringUtils.hasText(note) ? "说明请控制在 200 字以内" : message);
+        }
+    }
+
+    private static String otherSuffix(String code, String note) {
+        if (!"OTHER".equals(normalize(code)) || !StringUtils.hasText(note)) {
+            return "";
+        }
+        return "（" + note.trim() + "）";
+    }
+
     public static String summarizePiece(CustomerBriefSubmitRequest.Piece piece) {
         if (piece == null) {
             return "";
         }
         JewelryType type = JewelryType.parse(piece.getJewelryType());
-        StringBuilder sb = new StringBuilder(typeLabel(type));
+        StringBuilder sb = new StringBuilder(typeLabel(type)).append(otherSuffix(piece.getJewelryType(), piece.getJewelryTypeOther()));
         switch (type == null ? JewelryType.OTHER : type) {
             case RING -> sb.append("，圈号 ").append(unitLabel(piece.getRingUnit())).append(" ").append(empty(piece.getRingSize()));
             case NECKLACE -> {
                 if (Boolean.TRUE.equals(piece.getWithChain())) {
-                    sb.append("，配链：").append(chainLabel(piece.getChainStyle()));
+                    sb.append("，配链：").append(chainLabel(piece.getChainStyle()))
+                            .append(otherSuffix(piece.getChainStyle(), piece.getChainStyleOther()));
                 } else {
                     sb.append("，不配链");
                 }
             }
-            case COLLARBONE -> sb.append("，样式：").append(chainLabel(piece.getChainStyle()));
+            case COLLARBONE -> sb.append("，样式：").append(chainLabel(piece.getChainStyle()))
+                    .append(otherSuffix(piece.getChainStyle(), piece.getChainStyleOther()));
             case BRACELET -> sb.append("，").append(braceletMeasureLabel(piece.getBraceletMeasure()))
                     .append(" ").append(empty(piece.getBraceletValue()));
-            case HAIR -> sb.append("，").append(hairLabel(piece.getHairKind()));
+            case HAIR -> sb.append("，").append(hairLabel(piece.getHairKind()))
+                    .append(otherSuffix(piece.getHairKind(), piece.getHairKindOther()));
             default -> {
             }
         }
         String plating = platingLabel(piece.getPlating());
         if (StringUtils.hasText(plating)) {
-            sb.append("；").append(plating);
+            sb.append("；").append(plating).append(otherSuffix(piece.getPlating(), piece.getPlatingOther()));
         }
         sb.append("；珐琅：").append("YES".equals(normalize(piece.getEnamel())) ? "需要" : "不需要");
+        sb.append("；刻字：").append(wantsEngraving(piece) ? "需要" : "不需要");
         sb.append("；镶石：").append(inlayLabel(piece));
         return sb.toString();
     }
@@ -274,25 +308,36 @@ public final class CustomerBriefCatalog {
         };
     }
 
-    private static String sizeOnly(CustomerBriefSubmitRequest.Piece piece) {
+    /** 单件自身的尺寸/规格文案（不含单件名称，供写入该件 design_info.hand_size）。 */
+    public static String sizeOnly(CustomerBriefSubmitRequest.Piece piece) {
+        if (piece == null) {
+            return "";
+        }
         JewelryType type = JewelryType.parse(piece.getJewelryType());
         if (type == null) {
             return "";
         }
-        return switch (type) {
-            case RING -> unitLabel(piece.getRingUnit()) + " " + empty(piece.getRingSize());
+        String text = switch (type) {
+            case RING -> (unitLabel(piece.getRingUnit()) + " " + empty(piece.getRingSize())).trim();
             case NECKLACE -> Boolean.TRUE.equals(piece.getWithChain())
                     ? "配链 " + chainLabel(piece.getChainStyle()) : "不配链";
             case COLLARBONE -> chainLabel(piece.getChainStyle());
-            case BRACELET -> braceletMeasureLabel(piece.getBraceletMeasure()) + " " + empty(piece.getBraceletValue());
+            case BRACELET -> (braceletMeasureLabel(piece.getBraceletMeasure()) + " " + empty(piece.getBraceletValue())).trim();
             case HAIR -> hairLabel(piece.getHairKind());
             default -> "";
         };
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        return text.length() > 120 ? text.substring(0, 120) : text;
     }
 
     private static String inlayLabel(CustomerBriefSubmitRequest.Piece piece) {
+        if ("YES".equals(normalize(piece.getInlay()))) {
+            return stoneLabel(piece.getStoneCategory()) + otherSuffix(piece.getStoneCategory(), piece.getStoneCategoryOther())
+                    + " / " + colorLabel(piece.getStoneColor()) + otherSuffix(piece.getStoneColor(), piece.getStoneColorOther());
+        }
         return switch (normalize(piece.getInlay())) {
-            case "YES" -> stoneLabel(piece.getStoneCategory()) + " / " + colorLabel(piece.getStoneColor());
             case "DESIGNER" -> "让设计师决定";
             default -> "不镶石";
         };

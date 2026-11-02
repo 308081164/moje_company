@@ -27,12 +27,15 @@ public class OrderDesignUpdateRequest {
     /** 版本备注，如「客户驳回后修改」 */
     private String versionLabel;
     /**
-     * 是否向客户发起设计确认。为 true 时按整单提交所有尚未确认的单件（每件一张卡片）；
-     * 已确认的件跳过。未传时：有 designImages 则视为提交（兼容旧客户端）；显式 false 则仅保存当前件草稿。
+     * 是否向客户发起设计确认（管理员旁路）。设计师须先 submitToTracker。
      */
     private Boolean submitToCustomer;
     /**
      * 建模师驳回后的修改：不发给客户，直接交回建模师。
      */
     private Boolean submitToModeler;
+    /**
+     * 设计完成后提交跟单质量评审（新主路径）。
+     */
+    private Boolean submitToTracker;
 }

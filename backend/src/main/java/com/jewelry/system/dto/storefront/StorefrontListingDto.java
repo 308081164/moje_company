@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -27,4 +28,15 @@ public class StorefrontListingDto {
     /** 买家是否需填写规格（手寸/链长等） */
     private Boolean buyerSizeRequired;
     private Boolean buyerSizeVisible;
+    /** 详情页图集：设计图 / 建模效果图 / 实拍或参考图（仅详情接口填充） */
+    private List<String> designImages;
+    private List<String> modelEffectImages;
+    private List<String> photoImages;
+    /** 详情页：材质、电镀、克重、字印（来自源订单） */
+    private String materialLabel;
+    private String platingLabel;
+    private String weightLabel;
+    private String engravingText;
+    private List<StorefrontStoneLineDto> stones;
+    private List<StorefrontProcessLineDto> processes;
 }

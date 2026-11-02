@@ -69,6 +69,8 @@ class _WebShellPageState extends State<WebShellPage> {
     '/social-publish',
   };
 
+  Timer? _sharePollTimer;
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +78,17 @@ class _WebShellPageState extends State<WebShellPage> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            unawaited(_injectShareBridge());
+          },
+        ),
+      )
       ..loadRequest(uri);
+    _sharePollTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
+      unawaited(_pollShareRequest());
+    });
     if (_controller.platform is AndroidWebViewController) {
       final android = _controller.platform as AndroidWebViewController;
       android.setAllowFileAccess(true);
@@ -110,6 +122,86 @@ class _WebShellPageState extends State<WebShellPage> {
         }
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _sharePollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 网页调用 window.__mojeNativeShareFiles([{name,mime,data(base64)}]) 后排队，由原生 Intent 直达微信选聊天。
+  Future<void> _injectShareBridge() async {
+    try {
+      await _controller.runJavaScript('''
+(function(){
+  if (window.__mojeNativeShareFilesInstalled) return;
+  window.__mojeNativeShareFilesInstalled = true;
+  window.__mojeSharePending = null;
+  window.__mojeNativeShareFiles = function(files) {
+    try {
+      if (!files || !files.length) return false;
+      window.__mojeSharePending = files;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+})();
+''');
+    } catch (_) {}
+  }
+
+  Future<void> _pollShareRequest() async {
+    if (!mounted) return;
+    try {
+      final flag = await _evalString(
+        'window.__mojeSharePending && window.__mojeSharePending.length ? String(window.__mojeSharePending.length) : ""',
+      );
+      if (flag.isEmpty) return;
+      final count = int.tryParse(flag) ?? 0;
+      if (count <= 0) return;
+      // 先搬走队列，避免重复处理
+      await _controller.runJavaScript(
+        'window.__mojeShareActive = window.__mojeSharePending; window.__mojeSharePending = null;',
+      );
+      final paths = <String>[];
+      for (var i = 0; i < count; i++) {
+        final name = await _evalString(
+          'window.__mojeShareActive && window.__mojeShareActive[$i] ? (window.__mojeShareActive[$i].name || "model.stl") : ""',
+        );
+        final lenText = await _evalString(
+          'window.__mojeShareActive && window.__mojeShareActive[$i] && window.__mojeShareActive[$i].data ? String(window.__mojeShareActive[$i].data.length) : "0"',
+        );
+        final totalLen = int.tryParse(lenText) ?? 0;
+        if (totalLen <= 0 || name.isEmpty) continue;
+        final buffer = StringBuffer();
+        const chunk = 120000;
+        for (var start = 0; start < totalLen; start += chunk) {
+          final end = start + chunk < totalLen ? start + chunk : totalLen;
+          final part = await _evalString(
+            'window.__mojeShareActive[$i].data.substring($start,$end)',
+          );
+          buffer.write(part);
+        }
+        final b64 = buffer.toString();
+        if (b64.isEmpty) continue;
+        final bytes = base64Decode(b64);
+        if (bytes.isEmpty) continue;
+        final safeName = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+        final dir = Directory('${Directory.systemTemp.path}/moje_wechat_share')
+          ..createSync(recursive: true);
+        final file = File('${dir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName');
+        await file.writeAsBytes(bytes, flush: true);
+        paths.add(file.path);
+      }
+      await _controller.runJavaScript('window.__mojeShareActive = null;');
+      if (paths.isEmpty) return;
+      await _fileChannel.invokeMethod<dynamic>('shareFiles', {
+        'paths': paths,
+        'preferWeChat': true,
+      });
+    } catch (_) {}
   }
 
   String _jsString(Object? raw) {

@@ -45,6 +45,7 @@ public final class OrderApiMapper {
                 .shippingPostalCode(o.getShippingPostalCode())
                 .serviceType(o.getServiceType() != null ? o.getServiceType().name() : null)
                 .designerAssistPaid(Boolean.TRUE.equals(o.getDesignerAssistPaid()))
+                .rushPaid(OrderQueueService.isRush(o))
                 .build();
 
         User salesMid = o.getSalesMid();

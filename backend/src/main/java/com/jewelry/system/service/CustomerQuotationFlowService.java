@@ -104,13 +104,21 @@ public class CustomerQuotationFlowService {
         q.setConfidential(confidential);
 
         BigDecimal total = sumBaseAmount(q).add(buyoutFee).add(certFee);
+        // 与生产选项一致：不保密（允许宣传）时限时减免尾款 USD 15
+        boolean publicityDiscount = !confidential;
+        if (publicityDiscount) {
+            total = total.subtract(PortalDepositPricing.PUBLICITY_ALLOW_DISCOUNT_USD);
+            if (total.compareTo(BigDecimal.ZERO) < 0) {
+                total = BigDecimal.ZERO;
+            }
+        }
         q.setSubtotal(total);
         q.setTotalAmount(total);
         q.setFinalized(true);
         q.setFinalizedTime(LocalDateTime.now());
         quotationRepository.save(q);
 
-        String quoteContent = buildQuoteSummary(q, buyout, cert, confidential);
+        String quoteContent = buildQuoteSummary(q, buyout, cert, confidential, publicityDiscount);
         User salesMid = order.getSalesMid();
         Long staffId = salesMid != null ? salesMid.getId() : null;
         String staffRole = "SALES_MID";
@@ -156,7 +164,8 @@ public class CustomerQuotationFlowService {
         return v != null ? v : BigDecimal.ZERO;
     }
 
-    private static String buildQuoteSummary(Quotation q, boolean buyout, boolean cert, boolean confidential) {
+    private static String buildQuoteSummary(Quotation q, boolean buyout, boolean cert,
+                                            boolean confidential, boolean publicityDiscount) {
         StringBuilder sb = new StringBuilder();
         sb.append("工费及附加工费 ¥").append(sumBaseAmount(q).setScale(2, RoundingMode.HALF_UP).toPlainString());
         if (buyout) {
@@ -167,6 +176,9 @@ public class CustomerQuotationFlowService {
         }
         if (confidential) {
             sb.append("；保密不宣传：是");
+        } else if (publicityDiscount) {
+            sb.append("；公开宣传限时优惠 -USD ")
+                    .append(PortalDepositPricing.PUBLICITY_ALLOW_DISCOUNT_USD.stripTrailingZeros().toPlainString());
         }
         sb.append("；合计 ¥").append(nz(q.getTotalAmount()).setScale(2, RoundingMode.HALF_UP).toPlainString());
         return sb.toString();

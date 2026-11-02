@@ -58,6 +58,7 @@ class CustomerBriefCatalogTest {
         piece.setPieceId(1L);
         piece.setPlating("WHITE");
         piece.setEnamel("NO");
+        piece.setEngraving("NO");
         piece.setInlay("NO");
         return piece;
     }

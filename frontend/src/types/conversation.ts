@@ -5,6 +5,10 @@ export interface Conversation {
   title?: string;
   orderStatus?: string;
   orderStatusLabel?: string;
+  /** REQUESTED | REFUNDED */
+  refundStatus?: string | null;
+  refundStatusLabel?: string | null;
+  rushPaid?: boolean | null;
   serviceType?: string;
   serviceTypeLabel?: string;
   lastMessage?: string;

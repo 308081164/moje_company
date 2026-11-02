@@ -1,3 +1,29 @@
+.workbench-page > .ant-card {
+  background: transparent;
+  box-shadow: none;
+}
+
+.workbench-page > .ant-card > .ant-card-body {
+  padding: 12px 8px 8px;
+}
+
+.workbench-page .ant-tabs {
+  margin-top: 8px !important;
+}
+
+.workbench-order-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #e6ebe8;
+  border-radius: 12px;
+  background: #f7faf8;
+}
+
 .workbench-head {
   display: flex;
   align-items: center;

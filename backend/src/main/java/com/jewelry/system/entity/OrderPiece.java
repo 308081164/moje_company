@@ -40,6 +40,14 @@ public class OrderPiece {
     @Column(name = "model_confirmed", nullable = false)
     private Boolean modelConfirmed = false;
 
+    /** 跟单设计质量评审按件通过 */
+    @Column(name = "design_quality_passed", nullable = false)
+    private Boolean designQualityPassed = false;
+
+    /** 跟单建模质量评审按件通过 */
+    @Column(name = "model_quality_passed", nullable = false)
+    private Boolean modelQualityPassed = false;
+
     @Column(name = "reference_images", columnDefinition = "json")
     private String referenceImagesJson;
 

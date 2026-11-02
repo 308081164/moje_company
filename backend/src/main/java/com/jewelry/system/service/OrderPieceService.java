@@ -55,6 +55,8 @@ public class OrderPieceService {
             piece.setName(defaultPieceName(seq, pieceCount));
             piece.setDesignConfirmed(false);
             piece.setModelConfirmed(false);
+            piece.setDesignQualityPassed(false);
+            piece.setModelQualityPassed(false);
             piece = orderPieceRepository.save(piece);
             ensurePieceDesignAndModelRows(orderId, piece.getId());
         }
@@ -80,6 +82,8 @@ public class OrderPieceService {
         piece.setName("主件");
         piece.setDesignConfirmed(false);
         piece.setModelConfirmed(false);
+        piece.setDesignQualityPassed(false);
+        piece.setModelQualityPassed(false);
         piece = orderPieceRepository.save(piece);
         ensurePieceDesignAndModelRows(orderId, piece.getId());
         return piece;
@@ -119,6 +123,8 @@ public class OrderPieceService {
         piece.setJewelryType(jewelryType);
         piece.setDesignConfirmed(false);
         piece.setModelConfirmed(false);
+        piece.setDesignQualityPassed(false);
+        piece.setModelQualityPassed(false);
         piece = orderPieceRepository.save(piece);
         ensurePieceDesignAndModelRows(orderId, piece.getId());
         return piece;
@@ -201,6 +207,38 @@ public class OrderPieceService {
     public void markModelConfirmed(long orderId, long pieceId) {
         OrderPiece piece = requirePiece(orderId, pieceId);
         piece.setModelConfirmed(true);
+        orderPieceRepository.save(piece);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean allDesignQualityPassed(long orderId) {
+        List<OrderPiece> pieces = listByOrderId(orderId);
+        if (pieces.isEmpty()) {
+            return false;
+        }
+        return pieces.stream().allMatch(p -> Boolean.TRUE.equals(p.getDesignQualityPassed()));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean allModelQualityPassed(long orderId) {
+        List<OrderPiece> pieces = listByOrderId(orderId);
+        if (pieces.isEmpty()) {
+            return false;
+        }
+        return pieces.stream().allMatch(p -> Boolean.TRUE.equals(p.getModelQualityPassed()));
+    }
+
+    @Transactional
+    public void markDesignQualityPassed(long orderId, long pieceId, boolean passed) {
+        OrderPiece piece = requirePiece(orderId, pieceId);
+        piece.setDesignQualityPassed(passed);
+        orderPieceRepository.save(piece);
+    }
+
+    @Transactional
+    public void markModelQualityPassed(long orderId, long pieceId, boolean passed) {
+        OrderPiece piece = requirePiece(orderId, pieceId);
+        piece.setModelQualityPassed(passed);
         orderPieceRepository.save(piece);
     }
 

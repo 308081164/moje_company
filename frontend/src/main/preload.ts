@@ -78,6 +78,17 @@ const electronAPI = {
   onUpdateDownloadProgress: (handler: (progress: any) => void) => ipcRenderer.on('update-download-progress', handler),
   onUpdateDownloaded: (handler: (info: any) => void) => ipcRenderer.on('update-downloaded', handler),
 
+  /** 电脑端分享建模文件到个人微信（每次独立批次文件夹） */
+  shareFilesForWeChat: (files: { name: string; data: number[] }[], batchId?: string) =>
+    ipcRenderer.invoke('share-files-for-wechat', { files, batchId }) as Promise<{
+      ok: boolean;
+      method?: string;
+      message?: string;
+      paths?: string[];
+      batchId?: string;
+      batchDir?: string;
+    }>,
+
   log: (level: 'info' | 'warn' | 'error', message: string, meta?: any) => {
     ipcRenderer.send('renderer-log', { level, message, meta });
   },

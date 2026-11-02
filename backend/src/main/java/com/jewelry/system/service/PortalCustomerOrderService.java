@@ -47,6 +47,8 @@ public class PortalCustomerOrderService {
     private final ReferralService referralService;
     private final ObjectMapper objectMapper;
     private final OrderPieceService orderPieceService;
+    private final OrderQueueService orderQueueService;
+
     @Transactional
     public PortalCustomerOrderCreateResponse createOrder(PortalCustomerOrderCreateRequest req) {
         Long accountId = SecurityUtils.currentPortalCustomerId()
@@ -110,11 +112,7 @@ public class PortalCustomerOrderService {
         // 个人推广码（选填）：以定金为佣金基数，统一 5%
         referralService.bindOnOrder(accountId, req.getReferralCode(), order, order.getDeposit());
 
-        if (type == ServiceType.CUSTOM_IMAGE) {
-            autoAssignmentService.autoAssignC2cImageOrder(order.getId());
-        } else {
-            autoAssignmentService.autoAssignAll(order.getId());
-        }
+        autoAssignmentService.assignSalesMidOnly(order.getId());
 
         // 参考图写入默认单件（与设计师稿分离）
         if (req.getReferenceImages() != null && !req.getReferenceImages().isEmpty()) {
@@ -136,6 +134,9 @@ public class PortalCustomerOrderService {
                 .orderNumber(order.getOrderNumber())
                 .conversationId(conversation.getId())
                 .serviceType(type.name())
+                .queueAheadCount(orderQueueService.countAhead(order))
+                .rushEligible(orderQueueService.canPayRush(order))
+                .rushFee(OrderQueueService.RUSH_FEE_USD.stripTrailingZeros().toPlainString())
                 .build();
     }
 

@@ -61,6 +61,19 @@ public class Quotation {
     @Column(name = "total_amount", precision = 10, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
+    /** 跟单录入的人民币报价；totalAmount 为换算并优惠后的美元应付。 */
+    @Column(name = "staff_amount_cny", precision = 12, scale = 2)
+    private BigDecimal staffAmountCny;
+
+    @Column(name = "fx_cny_per_usd", precision = 12, scale = 4)
+    private BigDecimal fxCnyPerUsd;
+
+    @Column(name = "usd_before_discount", precision = 12, scale = 2)
+    private BigDecimal usdBeforeDiscount;
+
+    @Column(name = "publicity_discount_usd", precision = 12, scale = 2)
+    private BigDecimal publicityDiscountUsd;
+
     @Column(name = "is_finalized")
     private Boolean finalized = false;
 

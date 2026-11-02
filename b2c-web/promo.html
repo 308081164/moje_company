@@ -8,35 +8,79 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261027b">
+  <link rel="stylesheet" href="css/style.css?v=20261102promo">
   <style>
-    /* 个人推广页（scoped） */
-    .pm-share { display: grid; grid-template-columns: 300px 1fr; gap: 24px; margin: 24px 0 32px; }
-    .pm-qr { background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 18px; text-align: center; }
-    .pm-qr img { width: 100%; aspect-ratio: 1; display: block; }
-    .pm-qr__tip { margin-top: 10px; font-size: 0.78rem; color: var(--text-muted-dark); }
-    .pm-card { background: linear-gradient(150deg, #191510, #2b2318 60%, #1c1811); color: #f3e9d2; border-radius: var(--radius-lg); padding: 26px 28px; display: flex; flex-direction: column; gap: 14px; }
-    .pm-card__brand { font-family: var(--font-serif); font-size: 1rem; letter-spacing: 0.35em; text-transform: uppercase; color: #c9a85c; }
-    .pm-card__label { font-size: 0.8rem; color: rgba(243, 233, 210, 0.72); }
-    .pm-card__code { font-family: var(--font-serif); font-size: 2.6rem; letter-spacing: 0.28em; color: #e9cf8f; line-height: 1.1; }
-    .pm-card__rate { font-size: 0.9rem; color: #f3e9d2; }
+    /* 个人推广页（scoped）— 与 Studio 推广赚佣对齐 */
+    #promoBody { max-width: 980px; }
+    .pm-page-head { margin: 8px 0 22px; max-width: 40em; }
+    .pm-page-head__eyebrow { margin: 0 0 8px; font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: #a68545; }
+    .pm-page-head__title { margin: 0 0 8px; font-family: var(--font-serif); font-size: clamp(1.7rem, 2.6vw, 2.2rem); color: #1f1a14; line-height: 1.15; }
+    .pm-page-head__sub { margin: 0; color: #6d655b; line-height: 1.65; font-size: 0.95rem; }
+    .pm-share { display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); gap: 20px; margin: 0 0 22px; align-items: stretch; }
+    .pm-qr { background: #fff; border: 1px solid rgba(201, 169, 110, 0.28); border-radius: 18px; padding: 16px; text-align: center; box-shadow: 0 10px 28px rgba(70, 48, 18, 0.06); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .pm-qr img { width: 100%; max-width: 208px; aspect-ratio: 1; display: block; border-radius: 8px; }
+    .pm-qr__tip { margin-top: 12px; font-size: 0.75rem; letter-spacing: 0.06em; color: #8a8072; }
+    .pm-card { background: linear-gradient(145deg, #17140f 0%, #2a2319 55%, #1a1611 100%); color: #f3e9d2; border-radius: 18px; padding: 24px 26px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 36px rgba(40, 28, 12, 0.18); min-height: 100%; }
+    .pm-card__brand { font-family: var(--font-serif); font-size: 0.95rem; letter-spacing: 0.32em; text-transform: uppercase; color: #c9a85c; }
+    .pm-card__label { font-size: 0.78rem; letter-spacing: 0.08em; color: rgba(243, 233, 210, 0.62); margin-bottom: 4px; }
+    .pm-card__code { font-family: var(--font-serif); font-size: clamp(1.8rem, 3vw, 2.45rem); letter-spacing: 0.2em; color: #e9cf8f; line-height: 1.1; word-break: break-all; }
+    .pm-card__rate { display: inline-flex; align-self: flex-start; padding: 5px 12px; border-radius: 999px; font-size: 0.8rem; letter-spacing: 0.04em; color: #1a1814; background: linear-gradient(180deg, #e4c47a, #c9a85c); font-weight: 600; }
     .pm-card__row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
-    .pm-btn { padding: 9px 18px; border-radius: 8px; font-size: 0.84rem; cursor: pointer; border: 1px solid rgba(201, 168, 92, 0.65); background: transparent; color: #e9cf8f; }
-    .pm-btn:hover { background: rgba(201, 168, 92, 0.16); }
-    .pm-btn--gold { background: #c9a85c; border-color: #c9a85c; color: #1a1814; font-weight: 600; }
-    .pm-btn--gold:hover { background: #dabb77; }
-    .pm-link { word-break: break-all; font-size: 0.8rem; color: rgba(243, 233, 210, 0.6); }
-    .pm-poster { margin: 0 0 32px; }
-    .pm-poster__frame { max-width: 360px; border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; background: #14110d; }
+    .pm-btn { padding: 10px 18px; border-radius: 999px; font-size: 0.84rem; cursor: pointer; border: 1px solid rgba(201, 168, 92, 0.55); background: transparent; color: #e9cf8f; transition: background 0.15s, transform 0.15s; }
+    .pm-btn:hover { background: rgba(201, 168, 92, 0.14); transform: translateY(-1px); }
+    .pm-btn--gold { background: linear-gradient(180deg, #d4b36a, #c9a85c); border-color: #c9a85c; color: #1a1814; font-weight: 600; }
+    .pm-btn--gold:hover { filter: brightness(1.05); }
+    .pm-link { word-break: break-all; font-size: 0.78rem; line-height: 1.5; color: rgba(243, 233, 210, 0.55); padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(201, 168, 92, 0.18); }
+    .pm-poster { margin: 0 0 28px; }
+    .pm-poster__frame { max-width: 360px; border: 1px solid rgba(201, 169, 110, 0.28); border-radius: 18px; overflow: hidden; background: #14110d; }
     .pm-poster__frame canvas { width: 100%; display: block; }
-    .pm-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
+    .pm-stats, .seller-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0 0 18px; }
+    .pm-stat, .seller-kpi {
+      background: #fff;
+      border: 1px solid rgba(201, 169, 110, 0.28);
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 22px rgba(70, 48, 18, 0.05);
+    }
+    .pm-stat span, .seller-kpi span {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #7a7165;
+    }
+    .pm-stat strong, .seller-kpi strong {
+      display: block;
+      margin-top: 8px;
+      font-family: var(--font-serif);
+      font-size: 1.55rem;
+      font-weight: 600;
+      color: #1f1a14;
+      letter-spacing: 0.02em;
+    }
+    .pm-stat--accent strong { color: #9a7428; }
+    .pm-cashout {
+      display: flex; gap: 12px; align-items: stretch; max-width: 520px; margin: 0 0 12px;
+      padding: 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(201, 169, 110, 0.22);
+    }
+    .pm-cashout input {
+      flex: 1; min-width: 0; background: #fff; border: 1.5px solid rgba(184, 134, 11, 0.35);
+      color: #1f1a14; border-radius: 10px; padding: 0 14px; min-height: 46px; font-size: 0.95rem;
+    }
+    .pm-cashout input::placeholder { color: #9a9084; }
+    .pm-cashout .btn, .pm-cashout .sl-btn { flex: none; min-width: 88px; border-radius: 10px; }
     .pm-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.04em; }
     .pm-badge--pending { background: rgba(217, 119, 6, 0.14); color: #b45309; }
     .pm-badge--settled { background: rgba(46, 125, 78, 0.14); color: #2e7d4e; }
     .pm-badge--cancelled { background: rgba(107, 114, 128, 0.16); color: #6b7280; }
-    .pm-amount--in { color: #2e7d4e; font-weight: 600; }
+    .pm-amount--in { color: #8a6a22; font-weight: 600; font-family: var(--font-serif); }
     .pm-amount--out { color: #b45309; font-weight: 600; }
-    @media (max-width: 760px) { .pm-share, .pm-stats { grid-template-columns: 1fr; } }
+    .seller-h { margin: 28px 0 12px; font-family: var(--font-serif); font-size: 1.25rem; color: #1f1a14; }
+    @media (max-width: 760px) {
+      .pm-share, .pm-stats, .seller-kpis { grid-template-columns: 1fr; }
+      .pm-cashout { flex-direction: column; max-width: none; }
+    }
   </style>
 </head>
 <body class="storefront-page">
@@ -46,7 +90,6 @@
     <a href="index.html" class="brand"><span class="brand__name">duxury</span></a>
     <nav class="nav" id="nav">
       <a href="index.html" class="nav__link" data-i18n="nav.home">Home</a>
-      <a href="works.html" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
       <a href="shop.html" class="nav__link" data-i18n="nav.shop">Shop</a>
       <a href="order-workspace.html" class="nav__link" data-i18n="nav.orders">Orders</a>
       <a href="seller.html" class="nav__link" data-i18n="nav.studio">Studio</a>
@@ -100,9 +143,9 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261027b"></script>
+<script src="js/i18n.js?v=20261102en"></script>
 <script src="js/api.js?v=20261026d"></script>
 <script src="js/main.js?v=20261027b"></script>
-<script src="js/promo.js?v=20261019r"></script>
+<script src="js/promo.js?v=20261102copy"></script>
 </body>
 </html>

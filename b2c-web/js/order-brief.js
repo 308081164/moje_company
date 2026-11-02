@@ -6,7 +6,6 @@
   var orderId = params.get('orderId');
   var form = null;
   var stepIndex = 0;
-  var guideKey = '';
 
   function t(key) { return window.I18N.t(key); }
 
@@ -279,6 +278,21 @@
           choice('NO', '不需要', '不需要', 'No', '只有金属和镶石。', '只有金屬和鑲石。', 'Metal and stones only.', 'metal')
         ]
       });
+      list.push({
+        id: meta.pieceId + ':engraving',
+        pieceId: meta.pieceId,
+        field: 'engraving',
+        art: 'engraving',
+        kicker: who,
+        title: L('需要刻字吗？', '需要刻字嗎？', 'Do you want engraving?'),
+        lead: L('刻字是在金属表面留下文字或图案。具体字印内容由设计师与您确认；若选需要，建模师会单独上传刻字生产文件。', '刻字是在金屬表面留下文字或圖案。具體字印內容由設計師與您確認；若選需要，建模師會單獨上傳刻字生產文件。', 'Engraving adds text or symbols on the metal. Your designer confirms the wording; if yes, our modeler uploads separate engraving production files.'),
+        guideTitle: L('和字印不是同一步', '和字印不是同一步', 'Not the same as final wording'),
+        guideBody: L('这里只表示「要不要刻字」这项工艺。选「需要」后，设计师会填写最终字印，建模师会上传工厂用的刻字文件。', '這裡只表示「要不要刻字」這項工藝。選「需要」後，設計師會填寫最終字印，建模師會上傳工廠用的刻字文件。', 'This step is only whether you want engraving. If yes, the designer sets the final text and the modeler uploads factory files.'),
+        choices: [
+          choice('YES', '需要', '需要', 'Yes', '要做刻字/字印。', '要做刻字/字印。', 'Include engraving.', 'engraving'),
+          choice('NO', '不需要', '不需要', 'No', '表面不做字印。', '表面不做字印。', 'No engraving.', 'metal')
+        ]
+      });
       if (form.inlayAllowed !== false) {
         list.push({
           id: meta.pieceId + ':inlay',
@@ -333,9 +347,9 @@
       lead: t('brief.budget.note'),
       guideTitle: L('请自己填写金额', '請自己填寫金額', 'Enter the amount yourself'),
       guideBody: L(
-        '不设固定档位。写下您心里的成品预算，单位是人民币元，例如 8000，或 1.2万。我们会在这个金额附近做成能呈现的最好效果。更高的预算可以支持更复杂的结构、更精细的刻面，以及更考究的表面。这不是最终报价。',
-        '不設固定檔位。寫下您心裡的成品預算，單位是人民幣元，例如 8000，或 1.2萬。我們會在這個金額附近做成能呈現的最好效果。更高的預算可以支持更複雜的結構、更精細的刻面，以及更考究的表面。這不是最終報價。',
-        'Type the finished budget in CNY, for example 8000. We will aim for the best result around that amount. This is not the final quote.'
+        '不设固定档位。写下您心里的成品预算，单位为美元（USD），例如 800 或 1.2k。我们会在这个金额附近做成能呈现的最好效果。更高的预算可以支持更复杂的结构、更精细的刻面，以及更考究的表面。这不是最终报价。',
+        '不設固定檔位。寫下您心裡的成品預算，單位為美元（USD），例如 800 或 1.2k。我們會在這個金額附近做成能呈現的最好效果。更高的預算可以支持更複雜的結構、更精細的刻面，以及更考究的表面。這不是最終報價。',
+        'Enter your target finished budget in US dollars (USD), for example 800 or 1.2k. We will aim for the best result around that amount. A higher budget supports more complex structure, finer facets and richer surface work. This is not the final quote.'
       )
     });
     list.push({
@@ -370,6 +384,35 @@
     return stepsFor();
   }
 
+  function stepHasOtherChoice(step) {
+    return !!(step.choices && step.choices.some(function (c) { return c.value === 'OTHER'; }));
+  }
+
+  function otherTextKey(step) {
+    return step.field ? step.field + 'Other' : '';
+  }
+
+  function needsOtherTextInput(step) {
+    if (!step.pieceId || !stepHasOtherChoice(step) || readValue(step) !== 'OTHER') return false;
+    if (step.textField) return false;
+    return !!otherTextKey(step);
+  }
+
+  function otherInputLabel(step) {
+    return L('请具体说明', '請具體說明', 'Please describe');
+  }
+
+  function otherInputPh(step) {
+    var field = step.field || '';
+    if (field === 'jewelryType') return L('例如：脚链、袖扣…', '例如：腳鏈、袖扣…', 'e.g. anklet, cufflinks…');
+    if (field === 'chainStyle') return L('例如：盒仔链、蛇骨链…', '例如：盒仔鏈、蛇骨鏈…', 'e.g. box chain, snake chain…');
+    if (field === 'plating') return L('例如：黑金、渐变…', '例如：黑金、漸變…', 'e.g. black gold, gradient…');
+    if (field === 'hairKind') return L('例如：发梳、发冠…', '例如：髮梳、髮冠…', 'e.g. comb, hair crown…');
+    if (field === 'stoneCategory') return L('例如：培育红宝石…', '例如：培育紅寶石…', 'e.g. lab ruby…');
+    if (field === 'stoneColor') return L('例如：浅紫、渐变…', '例如：淺紫、漸變…', 'e.g. light purple…');
+    return L('请填写', '請填寫', 'Your note');
+  }
+
   function readValue(step) {
     if (step.id === 'budget') return form.budgetBand || '';
     if (!step.pieceId) return '';
@@ -390,6 +433,9 @@
     var piece = answerOf(step.pieceId);
     if (step.field === 'withChain') piece.withChain = value === 'YES';
     else piece[step.field] = value;
+    if (step.field && value !== 'OTHER') {
+      piece[step.field + 'Other'] = '';
+    }
     if (step.field === 'jewelryType') {
       piece.ringUnit = '';
       piece.ringSize = '';
@@ -412,6 +458,12 @@
       return '';
     }
     if (!readValue(step)) return t('brief.missing');
+    if (needsOtherTextInput(step)) {
+      var pieceOther = answerOf(step.pieceId);
+      if (!String(pieceOther[otherTextKey(step)] || '').trim()) {
+        return L('选了「其他」请填写说明', '選了「其他」請填寫說明', 'Please describe your “Other” choice');
+      }
+    }
     if (step.textField) {
       var piece = answerOf(step.pieceId);
       if (!String(piece[step.textField] || '').trim()) return t('brief.missing');
@@ -436,22 +488,28 @@
         choice('CHARM', '小挂件', '小掛件', 'Charm', '', '', ''),
         choice('OTHER', '其他', '其他', 'Other', '', '', '')
       ], piece.jewelryType);
-      if (type) bits.push(type);
+      if (type) bits.push(type + (piece.jewelryType === 'OTHER' && piece.jewelryTypeOther ? '（' + piece.jewelryTypeOther + '）' : ''));
       if (piece.jewelryType === 'RING' && piece.ringSize) bits.push((piece.ringUnit || '') + ' ' + piece.ringSize);
       if (piece.withChain === true) bits.push(L('配链', '配鏈', 'chain'));
       if (piece.withChain === false) bits.push(L('不配链', '不配鏈', 'no chain'));
-      if (piece.chainStyle) bits.push(labelOf(chainChoices(), piece.chainStyle));
+      if (piece.chainStyle) bits.push(labelOf(chainChoices(), piece.chainStyle) + (piece.chainStyle === 'OTHER' && piece.chainStyleOther ? '（' + piece.chainStyleOther + '）' : ''));
       if (piece.braceletValue) bits.push(piece.braceletValue);
       if (piece.plating) {
         var platingName = { NONE: L('不电镀', '不電鍍', 'no plating'), WHITE: L('电镀白', '電鍍白', 'white'), YELLOW: L('电镀黄', '電鍍黃', 'yellow'), ROSE: L('玫瑰金', '玫瑰金', 'rose'), SPLIT: L('分色', '分色', 'two-tone'), OTHER: L('其他电镀', '其他電鍍', 'other plating') };
-        bits.push(platingName[piece.plating] || piece.plating);
+        bits.push((platingName[piece.plating] || piece.plating) + (piece.plating === 'OTHER' && piece.platingOther ? '（' + piece.platingOther + '）' : ''));
       }
       if (piece.enamel) bits.push(piece.enamel === 'YES' ? L('要珐琅', '要琺瑯', 'enamel') : L('不要珐琅', '不要琺瑯', 'no enamel'));
+      if (piece.engraving) bits.push(piece.engraving === 'YES' ? L('要刻字', '要刻字', 'engraving') : L('不要刻字', '不要刻字', 'no engraving'));
       if (piece.inlay === 'DESIGNER') bits.push(L('镶石交给设计师', '鑲石交給設計師', 'designer chooses stones'));
-      if (piece.inlay === 'YES') bits.push((piece.stoneCategory || '') + ' ' + (piece.stoneColor || ''));
+      if (piece.inlay === 'YES') {
+        var stone = (piece.stoneCategory || '') + ' ' + (piece.stoneColor || '');
+        if (piece.stoneCategory === 'OTHER' && piece.stoneCategoryOther) stone = piece.stoneCategoryOther + ' ' + (piece.stoneColor || '');
+        if (piece.stoneColor === 'OTHER' && piece.stoneColorOther) stone = (stone.trim() + ' ' + piece.stoneColorOther).trim();
+        bits.push(stone.trim());
+      }
       lines.push(bits.filter(Boolean).join(' · '));
     });
-    if (form.budgetBand) lines.push(L('预算 ', '預算 ', 'Budget ') + form.budgetBand);
+    if (form.budgetBand) lines.push(L('预算（USD） ', '預算（USD） ', 'Budget (USD) ') + form.budgetBand);
     return lines;
   }
 
@@ -464,7 +522,8 @@
           pieceId: Number(meta.pieceId),
           jewelryType: piece.jewelryType,
           plating: piece.plating,
-          enamel: piece.enamel
+          enamel: piece.enamel,
+          engraving: piece.engraving
         };
         if (piece.jewelryType === 'RING') {
           item.ringUnit = piece.ringUnit;
@@ -479,13 +538,21 @@
           item.braceletMeasure = piece.braceletMeasure;
           item.braceletValue = piece.braceletValue;
         }
-        if (piece.jewelryType === 'HAIR') item.hairKind = piece.hairKind;
+        if (piece.jewelryType === 'HAIR') {
+          item.hairKind = piece.hairKind;
+          if (item.hairKind === 'OTHER') item.hairKindOther = piece.hairKindOther || '';
+        }
+        if (piece.jewelryType === 'OTHER') item.jewelryTypeOther = piece.jewelryTypeOther || '';
+        if (item.plating === 'OTHER') item.platingOther = piece.platingOther || '';
+        if (item.chainStyle === 'OTHER') item.chainStyleOther = piece.chainStyleOther || '';
         if (form.inlayAllowed === false) item.inlay = 'NO';
         else {
           item.inlay = piece.inlay;
           if (item.inlay === 'YES') {
             item.stoneCategory = piece.stoneCategory;
             item.stoneColor = piece.stoneColor;
+            if (item.stoneCategory === 'OTHER') item.stoneCategoryOther = piece.stoneCategoryOther || '';
+            if (item.stoneColor === 'OTHER') item.stoneColorOther = piece.stoneColorOther || '';
           }
         }
         return item;
@@ -544,6 +611,7 @@
       step.choices.forEach(function (item) {
         var card = el('button', 'wiz__choice' + (item.value === selected ? ' is-on' : ''));
         card.type = 'button';
+        card.setAttribute('aria-pressed', item.value === selected ? 'true' : 'false');
         var glyph = el('span', 'wiz__glyph');
         glyph.innerHTML = window.BRIEF_ART.mark(item.art || 'other');
         if (step.field === 'stoneColor') {
@@ -555,12 +623,6 @@
         text.appendChild(el('strong', '', item.label));
         text.appendChild(el('small', '', item.note));
         card.appendChild(text);
-        function focusChoice() {
-          guideKey = item.value;
-          showGuide(item.art || step.art, item.label, item.note);
-        }
-        card.addEventListener('mouseenter', focusChoice);
-        card.addEventListener('focus', focusChoice);
         card.addEventListener('click', function () {
           writeValue(step, item.value);
           render();
@@ -568,6 +630,19 @@
         grid.appendChild(card);
       });
       ask.appendChild(grid);
+      if (needsOtherTextInput(step)) {
+        var pieceOther = answerOf(step.pieceId);
+        var otherWrap = el('label', 'wiz__input wiz__input--other');
+        otherWrap.appendChild(el('span', '', otherInputLabel(step)));
+        var otherInput = document.createElement('input');
+        otherInput.value = pieceOther[otherTextKey(step)] || '';
+        otherInput.placeholder = otherInputPh(step);
+        otherInput.addEventListener('input', function () {
+          pieceOther[otherTextKey(step)] = otherInput.value;
+        });
+        otherWrap.appendChild(otherInput);
+        ask.appendChild(otherWrap);
+      }
     }
 
     if (step.textField) {
@@ -585,16 +660,16 @@
     }
     if (step.kind === 'amount') {
       var money = el('label', 'wiz__input wiz__input--money');
-      money.appendChild(el('span', '', L('成品预算', '成品預算', 'Finished budget')));
+      money.appendChild(el('span', '', L('成品预算（USD）', '成品預算（USD）', 'Finished budget (USD)')));
       var amount = document.createElement('input');
       amount.maxLength = 80;
-      amount.placeholder = L('例如 8000 或 1.2万', '例如 8000 或 1.2萬', 'e.g. 8000');
+      amount.placeholder = L('例如 800 或 1.2k（USD）', '例如 800 或 1.2k（USD）', 'e.g. 800 or 1.2k (USD)');
       amount.value = form.budgetBand || '';
       amount.addEventListener('input', function () {
         form.budgetBand = amount.value.trim();
       });
       money.appendChild(amount);
-      money.appendChild(el('small', '', L('单位是人民币元，按您心里的成品价填写。', '單位是人民幣元，按您心裡的成品價填寫。', 'In CNY, for the finished piece.')));
+      money.appendChild(el('small', '', L('单位为美元 USD，按您心里的成品价填写。', '單位為美元 USD，按您心裡的成品價填寫。', 'Amount in US dollars (USD) for the finished piece.')));
       ask.appendChild(money);
     }
     var error = el('p', 'wiz__error');
@@ -608,7 +683,6 @@
     back.disabled = stepIndex === 0;
     back.addEventListener('click', function () {
       stepIndex -= 1;
-      guideKey = '';
       render();
     });
     var next = el('button', 'wiz__next', step.kind === 'review' ? t('brief.submit') : L('下一步', '下一步', 'Next'));
@@ -633,16 +707,26 @@
       var same = nextSteps.findIndex(function (item) { return item.id === id; });
       if (same >= 0) stepIndex = same + 1;
       if (stepIndex >= nextSteps.length) stepIndex = nextSteps.length - 1;
-      guideKey = '';
       render();
     });
     footer.appendChild(back);
     footer.appendChild(next);
     shell.appendChild(footer);
     app.appendChild(shell);
-    var active = (step.choices || []).find(function (item) { return item.value === (guideKey || readValue(step)); });
-    if (active) showGuide(active.art || step.art, active.label, active.note);
-    else showGuide(step.art, step.guideTitle, step.guideBody);
+    var selectedValue = readValue(step);
+    var active = (step.choices || []).find(function (item) { return item.value === selectedValue; });
+    if (active) {
+      var body = active.note;
+      if (selectedValue === 'OTHER' && step.pieceId) {
+        var note = answerOf(step.pieceId)[otherTextKey(step)];
+        if (String(note || '').trim()) {
+          body = String(note).trim() + '\n\n' + (active.note || '');
+        }
+      }
+      showGuide(active.art || step.art, active.label, body);
+    } else {
+      showGuide(step.art, step.guideTitle, step.guideBody);
+    }
     stage.classList.add('is-in');
   }
 

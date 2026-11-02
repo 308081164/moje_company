@@ -10,6 +10,8 @@ import java.util.List;
 public class OrderReviewBlockDto {
     private Long id;
     private Long orderId;
+    /** DESIGN / MODEL */
+    private String reviewKind;
     private Long trackerId;
     private String trackerName;
     private String reviewNotes;

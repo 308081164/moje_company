@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="view-transition" content="same-origin">
   <title>duxury &middot; Bespoke Jewelry</title>
   <link rel="icon" href="data:,">
   <meta name="description" content="duxury &mdash; bespoke jewelry, from design to delivery. Commission our atelier or publish your own designs on the maker marketplace.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261028e">
+  <link rel="stylesheet" href="css/style.css?v=20261031hero1">
 </head>
 <body>
 
-<header class="header" id="header">
+<header class="header scrolled" id="header">
   <div class="header__inner">
-    <a href="#hero" class="brand">
+    <a href="#services" class="brand">
       <span class="brand__name">duxury</span>
     </a>
     <nav class="nav" id="nav">
-      <a href="#hero" class="nav__link nav__link--active" data-i18n="nav.home">Home</a>
-      <a href="works.html" class="nav__link" data-i18n="nav.portfolio">Portfolio</a>
+      <a href="#services" class="nav__link nav__link--active" data-i18n="nav.home">Home</a>
       <a href="shop.html" class="nav__link" data-i18n="nav.shop">Shop</a>
       <a href="order-workspace.html" class="nav__link" data-i18n="nav.orders">Orders</a>
       <a href="seller.html" class="nav__link" data-i18n="nav.studio">Studio</a>
@@ -41,26 +41,6 @@
     </button>
   </div>
 </header>
-
-<section class="hero" id="hero">
-  <div class="hero__bg">
-    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Luxury%20custom%20diamond%20ring%20on%20dark%20velvet%2C%20editorial%20jewelry%20photography%2C%20warm%20golden%20light%2C%20premium%20artisanal%20feel&image_size=landscape_16_9" alt="Bespoke jewelry" class="hero__img" loading="eager">
-    <div class="hero__overlay"></div>
-  </div>
-  <div class="hero__content">
-    <p class="hero__eyebrow" data-i18n="hero.eyebrow">BESPOKE JEWELRY</p>
-    <h1 class="hero__title"><span data-i18n="hero.title1">Every piece</span><br><span data-i18n="hero.title2">born for you</span></h1>
-    <p class="hero__desc" data-i18n="hero.desc">From inspiration to delivery, transparent online communication throughout. Pay a deposit to begin your bespoke journey.</p>
-    <div class="hero__actions">
-      <a href="#services" class="btn btn--gold" data-i18n="hero.cta1">Consult a Designer</a>
-      <a href="works.html" class="btn btn--ghost" data-i18n="hero.cta2">View Portfolio</a>
-    </div>
-  </div>
-  <div class="hero__scroll">
-    <span data-i18n="hero.scroll">Scroll</span>
-    <div class="hero__scroll-line"></div>
-  </div>
-</section>
 
 <section class="section paths" id="services">
   <div class="container">
@@ -193,62 +173,34 @@
   </div>
 </section>
 
-<section class="craft" id="craft">
-  <div class="craft__bg">
-    <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=Master%20jeweler%20hands%20crafting%20custom%20ring%20in%20workshop%2C%20warm%20lighting%2C%20artisan%20tools%2C%20close-up&image_size=landscape_4_3" alt="Master jeweler" loading="lazy">
-    <div class="craft__overlay"></div>
-  </div>
-  <div class="craft__content reveal">
-    <p class="section__eyebrow section__eyebrow--light" data-i18n="craft.eyebrow">CRAFTSMANSHIP</p>
-    <h2 class="section__title section__title--light" data-i18n="craft.title">Heritage of Craft</h2>
-    <p class="craft__text" data-i18n="craft.text">Every piece is forged by hand by master artisans &mdash; from stone selection to setting, through dozens of steps. True luxury lies not in a label, but in the perfection of every detail.</p>
-  </div>
-</section>
-
-<section class="shop-spot" id="shop-spot">
-  <div class="shop-spot__inner">
-    <div class="shop-spot__bg">
-      <div class="shop-wall" id="homeShopWall" aria-hidden="true">
-        <div class="shop-wall__row shop-wall__row--a" data-shop-row="a"></div>
-        <div class="shop-wall__row shop-wall__row--b" data-shop-row="b"></div>
-        <div class="shop-wall__row shop-wall__row--c" data-shop-row="c"></div>
+<section class="section feed" id="feed">
+  <div class="container">
+    <div class="section__head reveal">
+      <p class="section__eyebrow" data-i18n="feed.eyebrow">MARKETPLACE FEED</p>
+      <h2 class="section__title" data-i18n="feed.title">Discover maker pieces</h2>
+      <p class="section__sub" data-i18n="feed.sub">A living wall of designs published on our independent shop — tap any card for details.</p>
+      <div class="feed-search reveal" id="homeFeedSearch">
+        <label class="feed-search__box" id="homeFeedSearchBox" for="homeFeedSearchInput">
+          <svg class="feed-search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="search"
+            id="homeFeedSearchInput"
+            class="feed-search__input"
+            data-i18n-placeholder="feed.search.ph"
+            placeholder="Search the shop…"
+            autocomplete="off"
+            enterkeyhint="search"
+            readonly
+            aria-label="Search shop"
+          >
+          <span class="feed-search__hint" data-i18n="feed.search.hint">Tap to search in shop</span>
+        </label>
       </div>
-      <div class="shop-spot__overlay"></div>
     </div>
-    <div class="shop-spot__content reveal">
-      <p class="section__eyebrow" data-i18n="shopsp.eyebrow">MAKER SHOP</p>
-      <h2 class="shop-spot__title" data-i18n="shopsp.title">Enter the independent marketplace</h2>
-      <p class="shop-spot__desc" data-i18n="shopsp.desc">Browse pieces published by our clients. We produce and ship every order.</p>
-      <a href="shop.html" class="btn btn--gold btn--lg" data-i18n="shopsp.cta" data-i18n-aria="shopsp.aria">Shop now</a>
-      <p class="shop-spot__hint" data-i18n="shopsp.hint">Cards flip through more pieces — click any card to open details, then return to the shop.</p>
-    </div>
-  </div>
-</section>
-
-<section class="section partner" id="partner">
-  <div class="container partner__grid">
-    <div class="partner__intro reveal">
-      <p class="section__eyebrow" data-i18n="partner.eyebrow">PARTNER WITH US</p>
-      <h2 class="section__title" data-i18n="partner.title">We craft it. You can also monetize it.</h2>
-      <p class="section__sub" data-i18n="partner.sub">duxury is more than a bespoke atelier. Once your design and sample are confirmed, publish it on our independent shop at your own price &mdash; we produce and ship, you earn the margin.</p>
-      <a href="seller.html" class="btn btn--ghost-dark" data-i18n="partner.cta">Open seller studio</a>
-    </div>
-    <div class="partner__steps">
-      <div class="partner-step reveal">
-        <span class="partner-step__num">01</span>
-        <h3 data-i18n="partner.s1.title">Create</h3>
-        <p data-i18n="partner.s1.desc">Start a custom order or bring your own drawing. Confirm design and sample with our team.</p>
-      </div>
-      <div class="partner-step reveal">
-        <span class="partner-step__num">02</span>
-        <h3 data-i18n="partner.s2.title">Publish</h3>
-        <p data-i18n="partner.s2.desc">One click lists your piece on the duxury shop at the price you set, with production and shipping ranges shown up front.</p>
-      </div>
-      <div class="partner-step reveal">
-        <span class="partner-step__num">03</span>
-        <h3 data-i18n="partner.s3.title">Earn</h3>
-        <p data-i18n="partner.s3.desc">Buyers order from the marketplace; we produce and ship. Track sales and withdrawable balance in your seller studio.</p>
-      </div>
+    <div class="xhs-feed" id="homeFeed" aria-live="polite"></div>
+    <div class="feed__more reveal" id="homeFeedMore" hidden>
+      <button type="button" class="btn btn--ghost-dark" id="homeFeedLoadMore" data-i18n="feed.loadMore">Show more</button>
+      <a href="shop.html" class="btn btn--ghost-dark" id="homeFeedShopLink" data-i18n="feed.more">Browse full shop</a>
     </div>
   </div>
 </section>
@@ -277,10 +229,8 @@
     <div class="footer__links">
       <div class="footer__col">
         <h4 data-i18n="footer.explore">Explore</h4>
-        <a href="#hero" data-i18n="nav.home">Home</a>
-        <a href="works.html" data-i18n="nav.portfolio">Portfolio</a>
+        <a href="#services" data-i18n="nav.home">Home</a>
         <a href="shop.html" data-i18n="nav.shop">Shop</a>
-        <a href="#partner" data-i18n="nav.partner">Partners</a>
       </div>
       <div class="footer__col">
         <h4 data-i18n="footer.service">Service</h4>
@@ -301,37 +251,6 @@
     <p>&copy; 2026 duxury. All rights reserved.</p>
   </div>
 </footer>
-
-<button class="chat-fab" id="chatFab" aria-label="AI assistant">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  </svg>
-  <span class="chat-fab__pulse"></span>
-</button>
-
-<div class="chat-panel" id="chatPanel">
-  <div class="chat-panel__head" id="chatPanelHead">
-    <span class="chat-panel__grip" aria-hidden="true"></span>
-    <div>
-      <h3 class="chat-panel__title" data-i18n="ai.title">AI Assistant</h3>
-      <p class="chat-panel__status">
-        <span class="ws-dot ws-dot--active"></span>
-        <span data-i18n="ai.status">AI online &middot; instant reply</span>
-      </p>
-    </div>
-    <button class="chat-panel__close" id="chatClose" aria-label="Close">&times;</button>
-  </div>
-  <div class="chat-panel__body" id="panelChatBody">
-    <div class="ws-msg ws-msg--in">
-      <p class="ws-msg__bubble" data-i18n="ai.welcome">Hi! I'm the duxury AI assistant. I can answer questions about services, deposits and the process before you order.</p>
-      <span class="ws-msg__time">Just now</span>
-    </div>
-  </div>
-  <div class="chat-panel__input">
-    <input type="text" placeholder="Type a message..." data-i18n-placeholder="ws.input" id="panelChatInput">
-    <button class="chat-panel__send" id="panelChatSend" aria-label="Send" data-i18n="ws.send">Send</button>
-  </div>
-</div>
 
 <!-- Login modal -->
 <div class="modal" id="loginModal" aria-hidden="true">
@@ -415,10 +334,74 @@
   </div>
 </div>
 
-<script src="js/i18n.js?v=20261028d"></script>
-<script src="js/jewelryType.js?v=20261020b"></script>
+<button type="button" class="fab-custom" id="fabCustom" aria-haspopup="dialog" aria-controls="pathsModal">
+  <span class="fab-custom__icon" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 6 0.1-4.8 3.6 1.8 5.7-4.9-3.5-4.9 3.5 1.8-5.7-4.8-3.6 6-0.1z"/></svg>
+  </span>
+  <span class="fab-custom__label" data-i18n="fab.custom">Custom</span>
+</button>
+
+<div class="modal modal--paths" id="pathsModal" aria-hidden="true">
+  <div class="modal__backdrop" data-modal-close></div>
+  <div class="paths-modal" role="dialog" aria-modal="true" aria-labelledby="pathsModalTitle">
+    <button class="paths-modal__close" data-modal-close aria-label="Close">&times;</button>
+    <div class="paths-modal__head">
+      <p class="paths-modal__eyebrow" data-i18n="svc.eyebrow">OUR SERVICES</p>
+      <h2 class="paths-modal__title" id="pathsModalTitle" data-i18n="svc.title">Choose Your Way</h2>
+      <p class="paths-modal__sub" data-i18n="svc.sub">Two clear paths — modeling from your drawings, or full design with our atelier</p>
+    </div>
+    <div class="paths-modal__grid">
+      <article class="paths-modal__card">
+        <div class="paths-modal__card-top">
+          <div class="paths-modal__icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+          </div>
+          <div class="paths-modal__price">
+            <strong data-i18n="svc.custom.price">$99</strong>
+            <span data-i18n="svc.deposit">deposit</span>
+          </div>
+        </div>
+        <h3 data-i18n="svc.custom.title">Bring Your Design</h3>
+        <p data-i18n="svc.custom.desc">You already have drawings. We model and produce — no designer consultation included.</p>
+        <ol class="paths-modal__steps">
+          <li><em>01</em><span data-i18n="path.custom.s1.title">Share drawings</span></li>
+          <li><em>02</em><span data-i18n="path.custom.s2.title">Pay deposit</span></li>
+          <li><em>03</em><span data-i18n="path.custom.s3.title">Modeling confirm</span></li>
+          <li><em>04</em><span data-i18n="path.custom.s4.title">Produce &amp; deliver</span></li>
+        </ol>
+        <button type="button" class="btn btn--gold service-card__btn" data-service="custom" data-i18n="svc.select">Select &amp; Pay</button>
+      </article>
+      <article class="paths-modal__card paths-modal__card--featured">
+        <span class="paths-modal__badge" data-i18n="svc.popular">Most popular</span>
+        <div class="paths-modal__card-top">
+          <div class="paths-modal__icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 6 0.1-4.8 3.6 1.8 5.7-4.9-3.5-4.9 3.5 1.8-5.7-4.8-3.6 6-0.1z"/></svg>
+          </div>
+          <div class="paths-modal__price">
+            <strong data-i18n="svc.designer.price">$199</strong>
+            <span data-i18n="svc.deposit">deposit</span>
+          </div>
+        </div>
+        <h3 data-i18n="svc.designer.title">Designer Design</h3>
+        <p data-i18n="svc.designer.desc">Start from inspiration. A designer shapes the piece with you before modeling.</p>
+        <ol class="paths-modal__steps">
+          <li><em>01</em><span data-i18n="path.designer.s1.title">Pay deposit</span></li>
+          <li><em>02</em><span data-i18n="path.designer.s2.title">Consult</span></li>
+          <li><em>03</em><span data-i18n="path.designer.s3.title">Design confirm</span></li>
+          <li><em>04</em><span data-i18n="path.designer.s4.title">Model &amp; produce</span></li>
+          <li><em>05</em><span data-i18n="path.designer.s5.title">Deliver</span></li>
+        </ol>
+        <button type="button" class="btn btn--gold service-card__btn" data-service="designer" data-i18n="svc.select">Select &amp; Pay</button>
+      </article>
+    </div>
+    <p class="paths-modal__guarantee" data-i18n="svc.guarantee">Fully refundable before production starts</p>
+  </div>
+</div>
+
+<script src="js/i18n.js?v=20261102en"></script>
+<script src="js/jewelryType.js?v=20261028gallery"></script>
 <script src="js/api.js?v=20261026d"></script>
-<script src="js/main.js?v=20261028d"></script>
-<script src="js/storefront.js?v=20261028e"></script>
+<script src="js/main.js?v=20261028feed"></script>
+<script src="js/storefront.js?v=20261102feed60"></script>
 </body>
 </html>
