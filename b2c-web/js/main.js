@@ -1,7 +1,38 @@
 (function () {
   'use strict';
 
-  try { localStorage.removeItem('duxury-ref'); } catch (e) { /* 旧版会把链接里的推广码存下来自动填入，这里清掉 */ }
+  var REF_STORAGE_KEY = 'duxury-ref';
+
+  function normalizeReferralCode(raw) {
+    if (raw == null || raw === '') return '';
+    return String(raw).trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  }
+
+  /** 从分享链接 ?ref=CODE 写入 sessionStorage，供定制下单弹窗预填 */
+  function captureReferralFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var ref = normalizeReferralCode(params.get('ref') || params.get('referral') || '');
+      if (!ref) return;
+      sessionStorage.setItem(REF_STORAGE_KEY, ref);
+      if (params.has('ref') && window.history && window.history.replaceState) {
+        params.delete('ref');
+        var qs = params.toString();
+        var next = window.location.pathname + (qs ? '?' + qs : '') + (window.location.hash || '');
+        window.history.replaceState({}, '', next);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function getStoredReferralCode() {
+    try {
+      return normalizeReferralCode(sessionStorage.getItem(REF_STORAGE_KEY) || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  captureReferralFromUrl();
 
   /* ============================================================
      Workspace gate: orders page requires email sign-in
@@ -175,11 +206,16 @@
   var nav = document.getElementById('nav');
 
   if (header) {
-    window.addEventListener('scroll', function () {
-      var y = window.scrollY;
-      if (y > 60) header.classList.add('scrolled');
-      else header.classList.remove('scrolled');
-    });
+    var hasHero = !!document.getElementById('hero');
+    if (!hasHero) {
+      header.classList.add('scrolled');
+    } else {
+      window.addEventListener('scroll', function () {
+        var y = window.scrollY;
+        if (y > 60) header.classList.add('scrolled');
+        else header.classList.remove('scrolled');
+      });
+    }
   }
 
   if (menuToggle) {
@@ -688,7 +724,7 @@
     var reqBox = document.getElementById('checkoutRequirements');
     if (reqBox) reqBox.style.display = '';
     var refInput = document.getElementById('referralCodeInput');
-    if (refInput) refInput.value = '';
+    if (refInput) refInput.value = getStoredReferralCode();
     selectedImages = [];
     renderImagePreview();
     openModal(checkoutModal);
